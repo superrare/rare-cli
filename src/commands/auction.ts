@@ -8,6 +8,88 @@ import { tokenAbi } from '../contracts/abis/token.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
+const approvalAbi = [
+  {
+    inputs: [{ name: 'owner', type: 'address' }, { name: 'operator', type: 'address' }],
+    name: 'isApprovedForAll',
+    outputs: [{ name: '', type: 'bool' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: 'operator', type: 'address' }, { name: 'approved', type: 'bool' }],
+    name: 'setApprovalForAll',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+] as const;
+
+const auctionFunctionsAbi = [
+  {
+    inputs: [
+      { name: 'contractAddress', type: 'address' },
+      { name: 'tokenId', type: 'uint256' },
+      { name: 'startingPrice', type: 'uint256' },
+      { name: 'duration', type: 'uint256' },
+      { name: 'currency', type: 'address' },
+    ],
+    name: 'configureAuction',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'contractAddress', type: 'address' },
+      { name: 'tokenId', type: 'uint256' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    name: 'bid',
+    outputs: [],
+    stateMutability: 'payable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'contractAddress', type: 'address' },
+      { name: 'tokenId', type: 'uint256' },
+    ],
+    name: 'settleAuction',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'contractAddress', type: 'address' },
+      { name: 'tokenId', type: 'uint256' },
+    ],
+    name: 'cancelAuction',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: 'contractAddress', type: 'address' },
+      { name: 'tokenId', type: 'uint256' },
+    ],
+    name: 'getAuctionDetails',
+    outputs: [
+      { name: 'seller', type: 'address' },
+      { name: 'startingPrice', type: 'uint256' },
+      { name: 'currentBid', type: 'uint256' },
+      { name: 'currentBidder', type: 'address' },
+      { name: 'endTime', type: 'uint256' },
+      { name: 'currency', type: 'address' },
+      { name: 'settled', type: 'bool' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
 export function auctionCommand(): Command {
   const cmd = new Command('auction');
   cmd.description('Auction subcommands (create, bid, settle, cancel, status)');
@@ -40,7 +122,7 @@ export function auctionCommand(): Command {
       const nftAddress = opts.contract as `0x${string}`;
       const isApproved = await publicClient.readContract({
         address: nftAddress,
-        abi: tokenAbi,
+        abi: approvalAbi,
         functionName: 'isApprovedForAll',
         args: [account.address, auctionAddress],
       });
@@ -49,7 +131,7 @@ export function auctionCommand(): Command {
         console.log('\nApproval required. Requesting setApprovalForAll...');
         const approveTxHash = await client.writeContract({
           address: nftAddress,
-          abi: tokenAbi,
+          abi: approvalAbi,
           functionName: 'setApprovalForAll',
           args: [auctionAddress, true],
           account,
@@ -64,7 +146,7 @@ export function auctionCommand(): Command {
 
       const txHash = await client.writeContract({
         address: auctionAddress,
-        abi: auctionAbi,
+        abi: auctionFunctionsAbi,
         functionName: 'configureAuction',
         args: [
           opts.contract as `0x${string}`,
@@ -107,7 +189,7 @@ export function auctionCommand(): Command {
 
       const txHash = await client.writeContract({
         address: auctionAddress,
-        abi: auctionAbi,
+        abi: auctionFunctionsAbi,
         functionName: 'bid',
         args: [opts.contract as `0x${string}`, BigInt(opts.tokenId), bidAmount],
         account,
@@ -137,7 +219,7 @@ export function auctionCommand(): Command {
 
       const txHash = await client.writeContract({
         address: auctionAddress,
-        abi: auctionAbi,
+        abi: auctionFunctionsAbi,
         functionName: 'settleAuction',
         args: [opts.contract as `0x${string}`, BigInt(opts.tokenId)],
         account,
@@ -166,7 +248,7 @@ export function auctionCommand(): Command {
 
       const txHash = await client.writeContract({
         address: auctionAddress,
-        abi: auctionAbi,
+        abi: auctionFunctionsAbi,
         functionName: 'cancelAuction',
         args: [opts.contract as `0x${string}`, BigInt(opts.tokenId)],
         account,
@@ -192,7 +274,7 @@ export function auctionCommand(): Command {
 
       const result = await publicClient.readContract({
         address: auctionAddress,
-        abi: auctionAbi,
+        abi: auctionFunctionsAbi,
         functionName: 'getAuctionDetails',
         args: [opts.contract as `0x${string}`, BigInt(opts.tokenId)],
       });

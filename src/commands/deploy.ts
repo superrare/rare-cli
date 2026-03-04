@@ -4,6 +4,36 @@ import { getPublicClient, getWalletClient } from '../client.js';
 import { contractAddresses } from '../contracts/addresses.js';
 import { factoryAbi } from '../contracts/abis/factory.js';
 
+const createNFTAbi = [
+  {
+    inputs: [{ name: '_name', type: 'string' }, { name: '_symbol', type: 'string' }],
+    name: 'createSovereignNFTContract',
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: '_name', type: 'string' },
+      { name: '_symbol', type: 'string' },
+      { name: '_maxTokens', type: 'uint256' },
+    ],
+    name: 'createSovereignNFTContract',
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: 'contractAddress', type: 'address' },
+      { indexed: true, name: 'owner', type: 'address' },
+    ],
+    name: 'SovereignNFTContractCreated',
+    type: 'event',
+  },
+] as const;
+
 export function deployCommand(): Command {
   const cmd = new Command('deploy');
   cmd.description('Deploy a new NFT contract via the RARE factory');
@@ -13,7 +43,7 @@ export function deployCommand(): Command {
     .argument('<symbol>', 'symbol of the NFT collection')
     .option('--max-tokens <number>', 'maximum number of tokens (optional)')
     .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
-    .action(async (name, symbol, opts) => {
+    .action(async (name: string, symbol: string, opts: { maxTokens?: string; chain?: string }) => {
       const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
@@ -29,8 +59,8 @@ export function deployCommand(): Command {
       if (opts.maxTokens) {
         txHash = await client.writeContract({
           address: factoryAddress,
-          abi: factoryAbi,
-          functionName: 'createSovereignNFTContractWithMaxTokens',
+          abi: createNFTAbi,
+          functionName: 'createSovereignNFTContract',
           args: [name, symbol, BigInt(opts.maxTokens)],
           account,
           chain: undefined,
@@ -38,7 +68,7 @@ export function deployCommand(): Command {
       } else {
         txHash = await client.writeContract({
           address: factoryAddress,
-          abi: factoryAbi,
+          abi: createNFTAbi,
           functionName: 'createSovereignNFTContract',
           args: [name, symbol],
           account,
@@ -54,7 +84,7 @@ export function deployCommand(): Command {
       // Parse the SovereignNFTContractCreated event to get deployed address
       const { parseEventLogs } = await import('viem');
       const logs = parseEventLogs({
-        abi: factoryAbi,
+        abi: createNFTAbi,
         logs: receipt.logs,
         eventName: 'SovereignNFTContractCreated',
       });
