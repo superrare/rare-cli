@@ -144,22 +144,39 @@ export function auctionCommand(): Command {
         console.log('(Already approved)\n');
       }
 
-      const txHash = await client.writeContract({
-        address: auctionAddress,
-        abi: auctionFunctionsAbi,
-        functionName: 'configureAuction',
-        args: [
-          opts.contract as `0x${string}`,
-          BigInt(opts.tokenId),
-          parseEther(opts.startingPrice),
-          BigInt(opts.duration),
-          currency,
-        ],
-        account,
-        chain: undefined,
-      });
+      const tokenId = BigInt(opts.tokenId);
+      const startingPrice = parseEther(opts.startingPrice);
+      const duration = BigInt(opts.duration);
 
-      console.log(`Transaction sent: ${txHash}`);
+      console.log('\nTransaction details:');
+      console.log(`  NFT: ${nftAddress}`);
+      console.log(`  Token ID: ${tokenId}`);
+      console.log(`  Starting price: ${opts.startingPrice} ETH (${startingPrice}wei)`);
+      console.log(`  Duration: ${duration}s`);
+      console.log(`  Currency: ${currency === ETH_ADDRESS ? 'ETH' : currency}`);
+
+      let txHash: `0x${string}`;
+      try {
+        txHash = await client.writeContract({
+          address: auctionAddress,
+          abi: auctionFunctionsAbi,
+          functionName: 'configureAuction',
+          args: [nftAddress, tokenId, startingPrice, duration, currency],
+          account,
+          chain: undefined,
+        });
+      } catch (error) {
+        if (error instanceof Error) {
+          console.error('\nTransaction failed:');
+          console.error(`  Error: ${error.message}`);
+          if ('details' in error) {
+            console.error(`  Details: ${(error as { details: string }).details}`);
+          }
+        }
+        throw error;
+      }
+
+      console.log(`\nTransaction sent: ${txHash}`);
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       console.log(`Auction created! Block: ${receipt.blockNumber}`);
     });
@@ -187,17 +204,29 @@ export function auctionCommand(): Command {
       console.log(`  Token ID: ${opts.tokenId}`);
       console.log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : opts.currency}`);
 
-      const txHash = await client.writeContract({
-        address: auctionAddress,
-        abi: auctionFunctionsAbi,
-        functionName: 'bid',
-        args: [opts.contract as `0x${string}`, BigInt(opts.tokenId), bidAmount],
-        account,
-        chain: undefined,
-        value: isEth ? bidAmount : 0n,
-      });
+      let txHash: `0x${string}`;
+      try {
+        txHash = await client.writeContract({
+          address: auctionAddress,
+          abi: auctionFunctionsAbi,
+          functionName: 'bid',
+          args: [opts.contract as `0x${string}`, BigInt(opts.tokenId), bidAmount],
+          account,
+          chain: undefined,
+          value: isEth ? bidAmount : 0n,
+        });
+      } catch (error) {
+        if (error instanceof Error) {
+          console.error('\nTransaction failed:');
+          console.error(`  Error: ${error.message}`);
+          if ('details' in error) {
+            console.error(`  Details: ${(error as { details: string }).details}`);
+          }
+        }
+        throw error;
+      }
 
-      console.log(`Transaction sent: ${txHash}`);
+      console.log(`\nTransaction sent: ${txHash}`);
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       console.log(`Bid placed! Block: ${receipt.blockNumber}`);
     });
