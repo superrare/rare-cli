@@ -4,6 +4,7 @@ import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { contractAddresses } from '../contracts/addresses.js';
 import { auctionAbi } from '../contracts/abis/auction.js';
+import { tokenAbi } from '../contracts/abis/token.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
@@ -34,6 +35,32 @@ export function auctionCommand(): Command {
       console.log(`  Token ID: ${opts.tokenId}`);
       console.log(`  Starting price: ${opts.startingPrice} ETH`);
       console.log(`  Duration: ${opts.duration} seconds`);
+
+      // Check if approval is needed
+      const nftAddress = opts.contract as `0x${string}`;
+      const isApproved = await publicClient.readContract({
+        address: nftAddress,
+        abi: tokenAbi,
+        functionName: 'isApprovedForAll',
+        args: [account.address, auctionAddress],
+      });
+
+      if (!isApproved) {
+        console.log('\nApproval required. Requesting setApprovalForAll...');
+        const approveTxHash = await client.writeContract({
+          address: nftAddress,
+          abi: tokenAbi,
+          functionName: 'setApprovalForAll',
+          args: [auctionAddress, true],
+          account,
+          chain: undefined,
+        });
+        console.log(`Approval tx sent: ${approveTxHash}`);
+        await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
+        console.log('Approval confirmed.\n');
+      } else {
+        console.log('(Already approved)\n');
+      }
 
       const txHash = await client.writeContract({
         address: auctionAddress,

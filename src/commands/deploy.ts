@@ -9,11 +9,11 @@ export function deployCommand(): Command {
   cmd.description('Deploy a new NFT contract via the RARE factory');
 
   cmd
-    .requiredOption('--name <name>', 'name of the NFT collection')
-    .requiredOption('--symbol <symbol>', 'symbol of the NFT collection')
+    .argument('<name>', 'name of the NFT collection')
+    .argument('<symbol>', 'symbol of the NFT collection')
     .option('--max-tokens <number>', 'maximum number of tokens (optional)')
     .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
-    .action(async (opts) => {
+    .action(async (name, symbol, opts) => {
       const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
@@ -21,8 +21,8 @@ export function deployCommand(): Command {
 
       console.log(`Deploying NFT contract on ${chain}...`);
       console.log(`  Factory: ${factoryAddress}`);
-      console.log(`  Name: ${opts.name}`);
-      console.log(`  Symbol: ${opts.symbol}`);
+      console.log(`  Name: ${name}`);
+      console.log(`  Symbol: ${symbol}`);
       if (opts.maxTokens) console.log(`  Max tokens: ${opts.maxTokens}`);
 
       let txHash: `0x${string}`;
@@ -31,7 +31,7 @@ export function deployCommand(): Command {
           address: factoryAddress,
           abi: factoryAbi,
           functionName: 'createSovereignNFTContractWithMaxTokens',
-          args: [opts.name, opts.symbol, BigInt(opts.maxTokens)],
+          args: [name, symbol, BigInt(opts.maxTokens)],
           account,
           chain: undefined,
         });
@@ -40,7 +40,7 @@ export function deployCommand(): Command {
           address: factoryAddress,
           abi: factoryAbi,
           functionName: 'createSovereignNFTContract',
-          args: [opts.name, opts.symbol],
+          args: [name, symbol],
           account,
           chain: undefined,
         });

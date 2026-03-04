@@ -11,46 +11,31 @@ export function mintCommand(): Command {
     .requiredOption('--contract <address>', 'token contract address')
     .requiredOption('--uri <uri>', 'token metadata URI')
     .option('--to <address>', 'recipient address (defaults to caller)')
-    .option('--royalty-receiver <address>', 'royalty receiver address')
+    .option('--royalty-receiver <address>', 'royalty receiver address (defaults to caller)')
     .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const contractAddress = opts.contract as `0x${string}`;
+      const useMintTo = opts.to || opts.royaltyReceiver;
 
       console.log(`Minting NFT on ${chain}...`);
       console.log(`  Contract: ${contractAddress}`);
       console.log(`  URI: ${opts.uri}`);
-      if (opts.to) console.log(`  To: ${opts.to}`);
-      if (opts.royaltyReceiver) console.log(`  Royalty receiver: ${opts.royaltyReceiver}`);
 
       let txHash: `0x${string}`;
 
-      if (opts.to && opts.royaltyReceiver) {
-        txHash = await client.writeContract({
-          address: contractAddress,
-          abi: tokenAbi,
-          functionName: 'mintToWithRoyaltyRecipient',
-          args: [opts.to as `0x${string}`, opts.uri, opts.royaltyReceiver as `0x${string}`],
-          account,
-          chain: undefined,
-        });
-      } else if (opts.to) {
+      if (useMintTo) {
+        const receiver = (opts.to ?? account.address) as `0x${string}`;
+        const royaltyReceiver = (opts.royaltyReceiver ?? account.address) as `0x${string}`;
+        console.log(`  To: ${receiver}`);
+        console.log(`  Royalty receiver: ${royaltyReceiver}`);
         txHash = await client.writeContract({
           address: contractAddress,
           abi: tokenAbi,
           functionName: 'mintTo',
-          args: [opts.to as `0x${string}`, opts.uri],
-          account,
-          chain: undefined,
-        });
-      } else if (opts.royaltyReceiver) {
-        txHash = await client.writeContract({
-          address: contractAddress,
-          abi: tokenAbi,
-          functionName: 'addNewTokenWithRoyaltyRecipient',
-          args: [opts.uri, opts.royaltyReceiver as `0x${string}`],
+          args: [opts.uri, receiver, royaltyReceiver],
           account,
           chain: undefined,
         });
@@ -70,7 +55,6 @@ export function mintCommand(): Command {
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
-      // Parse Transfer event to get token ID
       const { parseEventLogs } = await import('viem');
       const logs = parseEventLogs({
         abi: tokenAbi,
@@ -79,8 +63,7 @@ export function mintCommand(): Command {
       });
 
       if (logs.length > 0) {
-        const tokenId = logs[0].args.tokenId;
-        console.log(`\nNFT minted! Token ID: ${tokenId}`);
+        console.log(`\nNFT minted! Token ID: ${logs[0].args.tokenId}`);
       } else {
         console.log(`\nTransaction confirmed. Block: ${receipt.blockNumber}`);
       }
