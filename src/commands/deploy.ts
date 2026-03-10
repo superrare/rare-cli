@@ -2,7 +2,6 @@ import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { contractAddresses } from '../contracts/addresses.js';
-import { factoryAbi } from '../contracts/abis/factory.js';
 
 const createNFTAbi = [
   {
@@ -34,9 +33,9 @@ const createNFTAbi = [
   },
 ] as const;
 
-export function deployCommand(): Command {
-  const cmd = new Command('deploy');
-  cmd.description('Deploy a new NFT contract via the RARE factory');
+function deployErc721Command(): Command {
+  const cmd = new Command('erc721');
+  cmd.description('Deploy a new ERC-721 NFT contract via the RARE factory');
 
   cmd
     .argument('<name>', 'name of the NFT collection')
@@ -49,7 +48,7 @@ export function deployCommand(): Command {
       const publicClient = getPublicClient(chain);
       const factoryAddress = contractAddresses[chain].factory;
 
-      console.log(`Deploying NFT contract on ${chain}...`);
+      console.log(`Deploying ERC-721 contract on ${chain}...`);
       console.log(`  Factory: ${factoryAddress}`);
       console.log(`  Name: ${name}`);
       console.log(`  Symbol: ${symbol}`);
@@ -81,7 +80,6 @@ export function deployCommand(): Command {
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
-      // Parse the SovereignNFTContractCreated event to get deployed address
       const { parseEventLogs } = await import('viem');
       const logs = parseEventLogs({
         abi: createNFTAbi,
@@ -91,12 +89,21 @@ export function deployCommand(): Command {
 
       if (logs.length > 0) {
         const deployedAddress = logs[0].args.contractAddress;
-        console.log(`\nNFT contract deployed at: ${deployedAddress}`);
+        console.log(`\nERC-721 contract deployed at: ${deployedAddress}`);
       } else {
         console.log(`\nTransaction confirmed. Block: ${receipt.blockNumber}`);
         console.log('Could not parse deployed address from logs.');
       }
     });
+
+  return cmd;
+}
+
+export function deployCommand(): Command {
+  const cmd = new Command('deploy');
+  cmd.description('Deploy a new contract via the RARE protocol');
+
+  cmd.addCommand(deployErc721Command());
 
   return cmd;
 }

@@ -1,8 +1,8 @@
 import { createPublicClient, createWalletClient, http } from 'viem';
 import { sepolia, mainnet } from 'viem/chains';
-import { privateKeyToAccount } from 'viem/accounts';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import type { SupportedChain } from './contracts/addresses.js';
-import { getChainConfig } from './config.js';
+import { getChainConfig, readConfig, writeConfig } from './config.js';
 
 const viemChains = {
   sepolia,
@@ -26,10 +26,23 @@ export function getPublicClient(chain: SupportedChain) {
 export function getWalletClient(chain: SupportedChain) {
   const chainConfig = getChainConfig(chain);
   if (!chainConfig.privateKey) {
-    console.error(
-      `Error: no private key configured for chain "${chain}". Run: rare configure --chain ${chain} --private-key 0x...`
-    );
-    process.exit(1);
+    console.log(`No private key configured for chain "${chain}". Generating a new wallet...`);
+    const privateKey = generatePrivateKey();
+    const newAccount = privateKeyToAccount(privateKey);
+    console.log(`  Address:     ${newAccount.address}`);
+    console.log(`  Private Key: ${privateKey}`);
+    console.log('');
+    console.log('⚠ Store your private key securely. It will not be shown again.');
+    console.log('');
+
+    const config = readConfig();
+    if (!config.chains[chain]) {
+      config.chains[chain] = {};
+    }
+    config.chains[chain]!.privateKey = privateKey;
+    writeConfig(config);
+    console.log(`Private key saved to config for chain: ${chain}\n`);
+    chainConfig.privateKey = privateKey;
   }
   if (!chainConfig.rpcUrl) {
     console.warn(

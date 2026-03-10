@@ -4,7 +4,7 @@ import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { contractAddresses } from '../contracts/addresses.js';
 import { auctionAbi } from '../contracts/abis/auction.js';
-import { tokenAbi } from '../contracts/abis/token.js';
+import { printContractError } from '../errors.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
@@ -25,70 +25,7 @@ const approvalAbi = [
   },
 ] as const;
 
-const auctionFunctionsAbi = [
-  {
-    inputs: [
-      { name: 'contractAddress', type: 'address' },
-      { name: 'tokenId', type: 'uint256' },
-      { name: 'startingPrice', type: 'uint256' },
-      { name: 'duration', type: 'uint256' },
-      { name: 'currency', type: 'address' },
-    ],
-    name: 'configureAuction',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { name: 'contractAddress', type: 'address' },
-      { name: 'tokenId', type: 'uint256' },
-      { name: 'amount', type: 'uint256' },
-    ],
-    name: 'bid',
-    outputs: [],
-    stateMutability: 'payable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { name: 'contractAddress', type: 'address' },
-      { name: 'tokenId', type: 'uint256' },
-    ],
-    name: 'settleAuction',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { name: 'contractAddress', type: 'address' },
-      { name: 'tokenId', type: 'uint256' },
-    ],
-    name: 'cancelAuction',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { name: 'contractAddress', type: 'address' },
-      { name: 'tokenId', type: 'uint256' },
-    ],
-    name: 'getAuctionDetails',
-    outputs: [
-      { name: 'seller', type: 'address' },
-      { name: 'startingPrice', type: 'uint256' },
-      { name: 'currentBid', type: 'uint256' },
-      { name: 'currentBidder', type: 'address' },
-      { name: 'endTime', type: 'uint256' },
-      { name: 'currency', type: 'address' },
-      { name: 'settled', type: 'bool' },
-    ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-] as const;
+
 
 export function auctionCommand(): Command {
   const cmd = new Command('auction');
@@ -147,6 +84,13 @@ export function auctionCommand(): Command {
       const tokenId = BigInt(opts.tokenId);
       const startingPrice = parseEther(opts.startingPrice);
       const duration = BigInt(opts.duration);
+      const auctionType = await publicClient.readContract({
+        address: auctionAddress,
+        abi: auctionAbi,
+        functionName: 'COLDIE_AUCTION',
+      });
+      const splitAddresses = [account.address];
+      const splitRatios = [100];
 
       console.log('\nTransaction details:');
       console.log(`  NFT: ${nftAddress}`);
@@ -159,21 +103,24 @@ export function auctionCommand(): Command {
       try {
         txHash = await client.writeContract({
           address: auctionAddress,
-          abi: auctionFunctionsAbi,
+          abi: auctionAbi,
           functionName: 'configureAuction',
-          args: [nftAddress, tokenId, startingPrice, duration, currency],
+          args: [
+            auctionType,
+            nftAddress,
+            tokenId,
+            startingPrice,
+            currency,
+            duration,
+            0n,
+            splitAddresses,
+            splitRatios,
+          ],
           account,
           chain: undefined,
         });
       } catch (error) {
-        if (error instanceof Error) {
-          console.error('\nTransaction failed:');
-          console.error(`  Error: ${error.message}`);
-          if ('details' in error) {
-            console.error(`  Details: ${(error as { details: string }).details}`);
-          }
-        }
-        throw error;
+        printContractError(error);
       }
 
       console.log(`\nTransaction sent: ${txHash}`);
@@ -195,35 +142,29 @@ export function auctionCommand(): Command {
       const { client, account } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const auctionAddress = contractAddresses[chain].auction;
-      const isEth = !opts.currency || opts.currency === ETH_ADDRESS;
+      const currency = (opts.currency ?? ETH_ADDRESS) as `0x${string}`;
+      const isEth = currency === ETH_ADDRESS;
       const bidAmount = parseEther(opts.amount);
 
       console.log(`Placing bid on ${chain}...`);
       console.log(`  Auction contract: ${auctionAddress}`);
       console.log(`  NFT contract: ${opts.contract}`);
       console.log(`  Token ID: ${opts.tokenId}`);
-      console.log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : opts.currency}`);
+      console.log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
 
       let txHash: `0x${string}`;
       try {
         txHash = await client.writeContract({
           address: auctionAddress,
-          abi: auctionFunctionsAbi,
+          abi: auctionAbi,
           functionName: 'bid',
-          args: [opts.contract as `0x${string}`, BigInt(opts.tokenId), bidAmount],
+          args: [opts.contract as `0x${string}`, BigInt(opts.tokenId), currency, bidAmount],
           account,
           chain: undefined,
           value: isEth ? bidAmount : 0n,
         });
       } catch (error) {
-        if (error instanceof Error) {
-          console.error('\nTransaction failed:');
-          console.error(`  Error: ${error.message}`);
-          if ('details' in error) {
-            console.error(`  Details: ${(error as { details: string }).details}`);
-          }
-        }
-        throw error;
+        printContractError(error);
       }
 
       console.log(`\nTransaction sent: ${txHash}`);
@@ -248,7 +189,7 @@ export function auctionCommand(): Command {
 
       const txHash = await client.writeContract({
         address: auctionAddress,
-        abi: auctionFunctionsAbi,
+        abi: auctionAbi,
         functionName: 'settleAuction',
         args: [opts.contract as `0x${string}`, BigInt(opts.tokenId)],
         account,
@@ -277,7 +218,7 @@ export function auctionCommand(): Command {
 
       const txHash = await client.writeContract({
         address: auctionAddress,
-        abi: auctionFunctionsAbi,
+        abi: auctionAbi,
         functionName: 'cancelAuction',
         args: [opts.contract as `0x${string}`, BigInt(opts.tokenId)],
         account,
@@ -303,13 +244,12 @@ export function auctionCommand(): Command {
 
       const result = await publicClient.readContract({
         address: auctionAddress,
-        abi: auctionFunctionsAbi,
+        abi: auctionAbi,
         functionName: 'getAuctionDetails',
         args: [opts.contract as `0x${string}`, BigInt(opts.tokenId)],
       });
 
-      const [seller, startingPrice, currentBid, currentBidder, endTime, currency, settled] =
-        result;
+      const [seller, startingPrice, currentBid, endTime, currency, , auctionType] = result;
       const isEth = currency === ETH_ADDRESS;
       const endDate = new Date(Number(endTime) * 1000);
 
@@ -317,10 +257,9 @@ export function auctionCommand(): Command {
       console.log(`  Seller:         ${seller}`);
       console.log(`  Starting price: ${formatEther(startingPrice)} ${isEth ? 'ETH' : currency}`);
       console.log(`  Current bid:    ${formatEther(currentBid)} ${isEth ? 'ETH' : currency}`);
-      console.log(`  Current bidder: ${currentBidder}`);
       console.log(`  End time:       ${endDate.toISOString()} (${endTime})`);
       console.log(`  Currency:       ${isEth ? 'ETH' : currency}`);
-      console.log(`  Settled:        ${settled}`);
+      console.log(`  Auction type:   ${auctionType}`);
     });
 
   return cmd;
