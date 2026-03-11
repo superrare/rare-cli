@@ -72,6 +72,19 @@ rare auction cancel --contract <addr> --token-id <id>
 rare auction status --contract <addr> --token-id <id>
 ```
 
+### Search
+
+```bash
+# List NFTs owned by your wallet
+rare search tokens [--query <text>] [--take <n>] [--cursor <n>] [--chain <chain>]
+
+# List NFTs with auctions (defaults to RUNNING; accepts PENDING, RUNNING, SETTLED, UNSETTLED)
+rare search auctions [--state <states...>] [--owner <address>] [--query <text>] [--take <n>] [--cursor <n>] [--chain <chain>]
+
+# List collections owned by your wallet
+rare search collections [--query <text>] [--take <n>] [--cursor <n>] [--chain <chain>]
+```
+
 ### Query Status (read-only)
 
 ```bash
