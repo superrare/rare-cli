@@ -6,6 +6,7 @@ import { auctionCommand } from './commands/auction.js';
 import { statusCommand } from './commands/status.js';
 import { walletCommand } from './commands/wallet.js';
 import { searchCommand } from './commands/search.js';
+import { listCollectionsCommand } from './commands/list-collections.js';
 
 const program = new Command();
 
@@ -21,6 +22,7 @@ program.addCommand(auctionCommand());
 program.addCommand(statusCommand());
 program.addCommand(walletCommand());
 program.addCommand(searchCommand());
+program.addCommand(listCollectionsCommand());
 
 program.parseAsync(process.argv).catch((err) => {
   // Only print here if not already handled (printContractError calls process.exit)
