@@ -41,8 +41,16 @@ Deploys via RARE factory. Outputs the new contract address.
 
 ### Mint
 
+With local media upload (uploads image/video to IPFS, builds metadata, then mints):
+
 ```bash
-rare mint --contract <address> --uri <ipfs://...> [--to <address>] [--royalty-receiver <address>] [--chain <chain>]
+rare mint --contract <address> --name "My NFT" --description "A description" --image ./art.png [--video ./animation.mp4] [--tag art --tag digital] [--attribute "Base=Starfish" --attribute '{"trait_type":"Power","value":40,"display_type":"boost_number"}'] [--to <address>] [--royalty-receiver <address>] [--chain <chain>]
+```
+
+With a pre-built metadata URI:
+
+```bash
+rare mint --contract <address> --token-uri <ipfs://...> [--to <address>] [--royalty-receiver <address>] [--chain <chain>]
 ```
 
 ### Auction Lifecycle
