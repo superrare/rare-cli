@@ -55,26 +55,39 @@ export function searchCommand(): Command {
   // --- rare search tokens ---
   cmd
     .command('tokens')
-    .description('List NFTs owned by your wallet')
+    .description('Search NFTs')
     .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
     .option('--query <text>', 'text search query', '')
+    .option('--owner <address>', 'filter by owner address')
+    .option('--mine', 'filter by your configured wallet address')
     .option('--take <n>', 'number of results per page', '24')
     .option('--cursor <n>', 'pagination cursor', '0')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
-      const address = getWalletAddress(chain);
 
-      console.log(`Searching NFTs owned by ${address} on ${chain}...`);
+      const ownerAddresses: string[] = opts.mine
+        ? [getWalletAddress(chain)]
+        : opts.owner
+          ? [opts.owner]
+          : [];
+
+      const label = opts.mine
+        ? `NFTs owned by ${ownerAddresses[0]}`
+        : opts.owner
+          ? `NFTs owned by ${opts.owner}`
+          : 'NFTs';
+
+      console.log(`Searching ${label} on ${chain}...`);
 
       const page = await searchNfts({
         query: opts.query,
         take: parseInt(opts.take, 10),
         cursor: parseInt(opts.cursor, 10),
-        ownerAddresses: [address],
+        ownerAddresses,
         chainIds: [CHAIN_IDS[chain]],
       });
 
-      printPage('Owned NFTs', page.items, page.total, page.hasNextPage, formatNftRow);
+      printPage(label, page.items, page.total, page.hasNextPage, formatNftRow);
     });
 
   // --- rare search auctions ---
@@ -82,22 +95,21 @@ export function searchCommand(): Command {
     .command('auctions')
     .description('List NFTs with active or configured auctions')
     .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
-    .option('--state <states...>', 'auction states to filter (PENDING, RUNNING, SETTLED, UNSETTLED)', ['RUNNING'])
-    .option('--owner <address>', 'filter by owner address (defaults to your wallet)')
+    .option('--state <states...>', 'auction states to filter (PENDING, RUNNING, SETTLED, UNSETTLED)', ['PENDING', 'RUNNING'])
+    .option('--owner <address>', 'filter by owner address (optional)')
     .option('--query <text>', 'text search query', '')
     .option('--take <n>', 'number of results per page', '24')
     .option('--cursor <n>', 'pagination cursor', '0')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
-      const ownerAddress = opts.owner ?? getWalletAddress(chain);
 
-      console.log(`Searching auctions (${opts.state.join(', ')}) for ${ownerAddress} on ${chain}...`);
+      console.log(`Searching auctions (${opts.state.join(', ')}) on ${chain}...`);
 
       const page = await searchNfts({
         query: opts.query,
         take: parseInt(opts.take, 10),
         cursor: parseInt(opts.cursor, 10),
-        ownerAddresses: [ownerAddress],
+        ownerAddresses: opts.owner ? [opts.owner] : [],
         auctionStates: opts.state,
         chainIds: [CHAIN_IDS[chain]],
       });

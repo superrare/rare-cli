@@ -1,7 +1,8 @@
 import { basename, extname } from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
 
-const API_BASE_URL = 'https://api.superrare.org';
+// const API_BASE_URL = 'https://api.superrare.org';
+const API_BASE_URL = 'http://localhost:5173';
 
 // --- Types ---
 

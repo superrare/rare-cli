@@ -78,7 +78,7 @@ rare auction status --contract <addr> --token-id <id>
 # List NFTs owned by your wallet
 rare search tokens [--query <text>] [--take <n>] [--cursor <n>] [--chain <chain>]
 
-# List NFTs with auctions (defaults to RUNNING; accepts PENDING, RUNNING, SETTLED, UNSETTLED)
+# List NFTs with auctions (defaults to PENDING, RUNNING; accepts PENDING, RUNNING, SETTLED, UNSETTLED)
 rare search auctions [--state <states...>] [--owner <address>] [--query <text>] [--take <n>] [--cursor <n>] [--chain <chain>]
 
 # List collections owned by your wallet
