@@ -28,6 +28,8 @@ Import an existing private key:
 rare configure --chain sepolia --private-key 0xYourPrivateKeyHere
 ```
 
+> **Security note:** Your private key is stored in plaintext at `~/.rare/config.json`. Keep this file secure and never commit it to version control.
+
 Or generate a new wallet:
 
 ```bash
@@ -68,9 +70,9 @@ Private keys are masked in the output.
 
 All commands accept `--chain` to select a network. Defaults to `sepolia`.
 
-Supported chains: `mainnet`, `sepolia`, `base`, `base-sepolia`, `arbitrum`, `arbitrum-sepolia`, `optimism`, `optimism-sepolia`, `zora`, `zora-sepolia`
+Supported chains: `mainnet`, `sepolia`, `base`, `base-sepolia`
 
-> **Note:** RARE Protocol contracts (deploy, auction) are currently deployed on `mainnet` and `sepolia` only. Other chains support wallet, search, and status operations.
+> **Note:** RARE Protocol deploy and auction commands are currently available on `mainnet` and `sepolia` only.
 
 ### Deploy an NFT Collection
 
@@ -214,7 +216,7 @@ rare configure --show
 
 - **Use sepolia for testing.** Default to sepolia and only switch to mainnet when you're ready.
 - **Set a reliable RPC endpoint.** Public endpoints throttle and drop requests. Services like Alchemy or Infura provide free tiers.
-- **Don't share your private key.** The config file at `~/.rare/config.json` contains your key in plaintext. Keep it secure and never commit it to version control.
+- **Don't share your private key.** Keep `~/.rare/config.json` secure and never commit it to version control.
 - **Check status before transacting.** Use `rare status` and `rare auction status` to inspect on-chain state before sending transactions.
 - **Back up your wallet.** If you lose your private key, you lose access to your assets. Store a copy somewhere safe.
 
