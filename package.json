@@ -1,14 +1,37 @@
 {
-  "name": "rare",
+  "name": "@rare-protocol/cli",
   "version": "0.1.0",
   "description": "CLI tool for interacting with the RARE protocol smart contracts",
   "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/superrare/rare-cli.git"
+  },
+  "homepage": "https://github.com/superrare/rare-cli#readme",
+  "keywords": [
+    "rare",
+    "superrare",
+    "nft",
+    "ethereum",
+    "cli",
+    "auction",
+    "erc721"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "LICENSE"
+  ],
   "bin": {
     "rare": "./dist/index.js"
   },
   "scripts": {
     "build": "tsup",
-    "dev": "tsup --watch"
+    "dev": "tsup --watch",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "commander": "^12.0.0",
