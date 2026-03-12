@@ -5,7 +5,7 @@
 A command-line tool for interacting with the RARE Protocol smart contracts on Ethereum. It allows users to deploy NFT contracts, mint NFTs, and manage auctions — all from the terminal.
 
 **Version:** 0.1.0
-**Runtime:** Node.js 24
+**Runtime:** Node.js 22+
 **Blockchain Library:** Viem v2
 **Supported Networks:** Ethereum Mainnet, Sepolia Testnet
 

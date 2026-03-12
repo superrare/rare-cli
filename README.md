@@ -10,7 +10,15 @@ npm install -g @rareprotocol/rare-cli
 
 This makes the `rare` command available globally.
 
+Verify installation:
+
+```bash
+rare --help
+```
+
 ## Getting Started
+
+All examples below assume you installed the CLI globally and are running `rare` directly.
 
 ### 1. Configure a wallet
 
@@ -69,6 +77,20 @@ Supported chains: `mainnet`, `sepolia`, `base`, `base-sepolia`, `arbitrum`, `arb
 ```bash
 rare deploy erc721 "My Collection" "MC"
 rare deploy erc721 "My Collection" "MC" --max-tokens 1000
+```
+
+### Import an Existing Collection
+
+Import an existing ERC-721 contract into the RARE Protocol registry:
+
+```bash
+rare import erc721 --contract 0x...
+```
+
+You can also specify a chain explicitly:
+
+```bash
+rare import erc721 --contract 0x... --chain sepolia
 ```
 
 ### Mint an NFT
@@ -203,7 +225,10 @@ rare configure --show
 | Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` |
 | Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` |
 
-## Contributing
+## Development (Optional)
+
+Most users should use the globally installed package and run `rare ...` commands directly.
+The steps below are only for contributors working on this repository.
 
 ```bash
 git clone https://github.com/superrare/rare-cli.git
@@ -218,7 +243,7 @@ For development with auto-rebuild:
 npm run dev
 ```
 
-To test the CLI locally without a global install:
+To test local source changes without publishing a package:
 
 ```bash
 node dist/index.js --help
@@ -227,7 +252,7 @@ npm link
 rare --help
 ```
 
-Requires Node.js 24+. Built with [Commander](https://github.com/tj/commander.js) and [Viem](https://viem.sh).
+Requires Node.js 22+. Built with [Commander](https://github.com/tj/commander.js) and [Viem](https://viem.sh).
 
 ## License
 
