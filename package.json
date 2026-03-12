@@ -1,5 +1,5 @@
 {
-  "name": "@rare-protocol/cli",
+  "name": "@rareprotocol/rare-cli",
   "version": "0.1.0",
   "description": "CLI tool for interacting with the RARE protocol smart contracts",
   "type": "module",
