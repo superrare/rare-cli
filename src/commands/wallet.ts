@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { readConfig, writeConfig } from '../config.js';
+import { readConfig, writeConfig, getActiveChain } from '../config.js';
+import { getWalletClient } from '../client.js';
 import type { SupportedChain } from '../contracts/addresses.js';
 
 export function walletCommand(): Command {
@@ -36,6 +37,16 @@ export function walletCommand(): Command {
         writeConfig(config);
         console.log(`\nPrivate key saved to config for chain: ${chain}`);
       }
+    });
+
+  cmd
+    .command('address')
+    .description('Show the Ethereum address of the configured wallet')
+    .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
+    .action((opts) => {
+      const chain = getActiveChain(opts.chain);
+      const { account } = getWalletClient(chain);
+      console.log(account.address);
     });
 
   return cmd;

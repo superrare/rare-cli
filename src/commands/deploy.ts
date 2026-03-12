@@ -2,36 +2,7 @@ import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { contractAddresses } from '../contracts/addresses.js';
-
-const createNFTAbi = [
-  {
-    inputs: [{ name: '_name', type: 'string' }, { name: '_symbol', type: 'string' }],
-    name: 'createSovereignNFTContract',
-    outputs: [{ name: '', type: 'address' }],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { name: '_name', type: 'string' },
-      { name: '_symbol', type: 'string' },
-      { name: '_maxTokens', type: 'uint256' },
-    ],
-    name: 'createSovereignNFTContract',
-    outputs: [{ name: '', type: 'address' }],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    anonymous: false,
-    inputs: [
-      { indexed: true, name: 'contractAddress', type: 'address' },
-      { indexed: true, name: 'owner', type: 'address' },
-    ],
-    name: 'SovereignNFTContractCreated',
-    type: 'event',
-  },
-] as const;
+import { factoryAbi } from '../contracts/abis/factory.js';
 
 function deployErc721Command(): Command {
   const cmd = new Command('erc721');
@@ -58,8 +29,8 @@ function deployErc721Command(): Command {
       if (opts.maxTokens) {
         txHash = await client.writeContract({
           address: factoryAddress,
-          abi: createNFTAbi,
-          functionName: 'createSovereignNFTContract',
+          abi: factoryAbi,
+          functionName: 'createSovereignBatchMint',
           args: [name, symbol, BigInt(opts.maxTokens)],
           account,
           chain: undefined,
@@ -67,8 +38,8 @@ function deployErc721Command(): Command {
       } else {
         txHash = await client.writeContract({
           address: factoryAddress,
-          abi: createNFTAbi,
-          functionName: 'createSovereignNFTContract',
+          abi: factoryAbi,
+          functionName: 'createSovereignBatchMint',
           args: [name, symbol],
           account,
           chain: undefined,
@@ -82,9 +53,9 @@ function deployErc721Command(): Command {
 
       const { parseEventLogs } = await import('viem');
       const logs = parseEventLogs({
-        abi: createNFTAbi,
+        abi: factoryAbi,
         logs: receipt.logs,
-        eventName: 'SovereignNFTContractCreated',
+        eventName: 'SovereignBatchMintCreated',
       });
 
       if (logs.length > 0) {
