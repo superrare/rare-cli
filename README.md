@@ -58,7 +58,11 @@ Private keys are masked in the output.
 
 ## Usage
 
-All commands accept `--chain <sepolia|mainnet>` to select a network. Defaults to `sepolia`.
+All commands accept `--chain` to select a network. Defaults to `sepolia`.
+
+Supported chains: `mainnet`, `sepolia`, `base`, `base-sepolia`, `arbitrum`, `arbitrum-sepolia`, `optimism`, `optimism-sepolia`, `zora`, `zora-sepolia`
+
+> **Note:** RARE Protocol contracts (deploy, auction) are currently deployed on `mainnet` and `sepolia` only. Other chains support wallet, search, and status operations.
 
 ### Deploy an NFT Collection
 
@@ -167,11 +171,15 @@ rare status --contract 0x... --token-id 1
 
 ## Configuration
 
-Config is stored at `~/.rare/config.json`.
+Config is stored at `~/.rare/config.json`. Each chain has its own private key and RPC URL.
 
 ```bash
 # Set private key and RPC for a chain
 rare configure --chain sepolia --private-key 0x... --rpc-url https://...
+
+# Configure multiple chains
+rare configure --chain base --rpc-url https://your-base-rpc.com
+rare configure --chain arbitrum --private-key 0x... --rpc-url https://your-arb-rpc.com
 
 # Change default network
 rare configure --default-chain mainnet

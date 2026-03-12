@@ -1,18 +1,7 @@
 import { createPublicClient, createWalletClient, http } from 'viem';
-import { sepolia, mainnet } from 'viem/chains';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import type { SupportedChain } from './contracts/addresses.js';
+import { viemChains, defaultRpcUrls, type SupportedChain } from './contracts/addresses.js';
 import { getChainConfig, readConfig, writeConfig } from './config.js';
-
-const viemChains = {
-  sepolia,
-  mainnet,
-} as const;
-
-const defaultRpcUrls: Record<SupportedChain, string> = {
-  sepolia: 'https://rpc.sepolia.org',
-  mainnet: 'https://eth.llamarpc.com',
-};
 
 export function getPublicClient(chain: SupportedChain) {
   const chainConfig = getChainConfig(chain);
@@ -45,10 +34,17 @@ export function getWalletClient(chain: SupportedChain) {
     chainConfig.privateKey = privateKey;
   }
   if (!chainConfig.rpcUrl) {
-    console.warn(
-      `Warning: no RPC URL configured for "${chain}", using public endpoint (may be unreliable).\n` +
-        `  Run: rare configure --chain ${chain} --rpc-url <your-node-url>\n`
-    );
+    const fallback = defaultRpcUrls[chain];
+    if (fallback) {
+      console.warn(
+        `Warning: no RPC URL configured for "${chain}", using public endpoint (may be unreliable).\n` +
+          `  Run: rare configure --chain ${chain} --rpc-url <your-node-url>\n`
+      );
+    } else {
+      console.error(`Error: no RPC URL configured for "${chain}" and no public default is available.`);
+      console.error(`  Run: rare configure --chain ${chain} --rpc-url <your-node-url>`);
+      process.exit(1);
+    }
   }
   const rpcUrl = chainConfig.rpcUrl ?? defaultRpcUrls[chain];
   const account = privateKeyToAccount(chainConfig.privateKey as `0x${string}`);

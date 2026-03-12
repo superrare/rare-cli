@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { contractAddresses } from '../contracts/addresses.js';
+import { getContractAddresses } from '../contracts/addresses.js';
 import { factoryAbi } from '../contracts/abis/factory.js';
 
 function deployErc721Command(): Command {
@@ -17,7 +17,7 @@ function deployErc721Command(): Command {
       const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
-      const factoryAddress = contractAddresses[chain].factory;
+      const factoryAddress = getContractAddresses(chain).factory;
 
       console.log(`Deploying ERC-721 contract on ${chain}...`);
       console.log(`  Factory: ${factoryAddress}`);

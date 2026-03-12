@@ -7,7 +7,8 @@ CLI tool for interacting with RARE Protocol smart contracts on Ethereum. Deploy 
 Binary: `rare` (after `npm link`) or `node dist/index.js`
 Runtime: Node.js 24+
 Config: `~/.rare/config.json`
-Networks: `sepolia` (default), `mainnet`
+Networks: `mainnet`, `sepolia`, `base`, `base-sepolia`, `arbitrum`, `arbitrum-sepolia`, `optimism`, `optimism-sepolia`, `zora`, `zora-sepolia`
+RARE contracts deployed on: `mainnet`, `sepolia`
 
 ## Build
 
