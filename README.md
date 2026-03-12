@@ -225,6 +225,14 @@ rare configure --show
 | Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` |
 | Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` |
 
+## Underlying Solidity Contracts
+
+If you want to inspect the on-chain contracts used by this CLI:
+
+- Token contract used when minting NFTs: [`SovereignBatchMint.sol`](https://github.com/superrare/core/blob/main/src/v2/token/ERC721/sovereign/SovereignBatchMint.sol)
+- Factory used for collection deployments: [`SovereignBatchMintFactory.sol`](https://github.com/superrare/core/blob/main/src/v2/token/ERC721/sovereign/SovereignBatchMintFactory.sol)
+- Auction/market contract used for auction operations: [`SuperRareBazaar.sol`](https://github.com/superrare/core/blob/main/src/bazaar/SuperRareBazaar.sol)
+
 ## Development (Optional)
 
 Most users should use the globally installed package and run `rare ...` commands directly.
