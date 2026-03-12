@@ -1,5 +1,4 @@
-// const API_BASE_URL = 'https://api.superrare.org';
-const API_BASE_URL = 'http://localhost:5173';
+const API_BASE_URL = 'https://api.superrare.org';
 
 export type SearchPageResponse = {
   items: Record<string, unknown>[];
