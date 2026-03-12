@@ -5,7 +5,7 @@ CLI tool for interacting with RARE Protocol smart contracts on Ethereum. Deploy 
 ## Quick Reference
 
 Binary: `rare` (after `npm link`) or `node dist/index.js`
-Runtime: Node.js 24+
+Runtime: Node.js 22+
 Config: `~/.rare/config.json`
 Networks: `mainnet`, `sepolia`, `base`, `base-sepolia`, `arbitrum`, `arbitrum-sepolia`, `optimism`, `optimism-sepolia`, `zora`, `zora-sepolia`
 RARE contracts deployed on: `mainnet`, `sepolia`
@@ -39,6 +39,14 @@ rare deploy erc721 "<name>" "<symbol>" [--max-tokens <n>] [--chain <chain>]
 ```
 
 Deploys via RARE factory. Outputs the new contract address.
+
+### Import ERC-721
+
+```bash
+rare import erc721 --contract <address> [--chain <chain>]
+```
+
+Imports an existing ERC-721 contract into the RARE Protocol registry.
 
 ### Mint
 

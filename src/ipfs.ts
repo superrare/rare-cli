@@ -1,5 +1,6 @@
 import { basename, extname } from 'node:path';
 import { readFile, stat } from 'node:fs/promises';
+import { isAddress } from 'viem';
 
 const API_BASE_URL = 'https://api.superrare.org';
 
@@ -74,6 +75,18 @@ const MIME_TYPES: Record<string, string> = {
 function inferMimeType(filename: string): string {
   const ext = extname(filename).toLowerCase();
   return MIME_TYPES[ext] ?? 'application/octet-stream';
+}
+
+function assertPositiveInteger(value: number, fieldName: string): void {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${fieldName} must be a positive integer`);
+  }
+}
+
+function assertEvmAddress(value: string, fieldName: string): void {
+  if (!isAddress(value)) {
+    throw new Error(`${fieldName} must be a valid EVM address`);
+  }
 }
 
 function parseDimensions(dimensions: string | undefined): { width: number; height: number } | undefined {
@@ -196,6 +209,32 @@ export async function uploadMedia(filePath: string, label: string): Promise<NftM
 /**
  * Pins NFT metadata to IPFS and returns the metadata URI.
  */
+/**
+ * Registers an ERC-721 contract in the backend pipelines contract registry.
+ */
+export async function importErc721(opts: {
+  chainId: number;
+  contractAddress: string;
+  ownerAddress: string;
+}): Promise<void> {
+  assertPositiveInteger(opts.chainId, 'chainId');
+  assertEvmAddress(opts.contractAddress, 'contractAddress');
+  assertEvmAddress(opts.ownerAddress, 'ownerAddress');
+
+  const normalizedContractAddress = opts.contractAddress.toLowerCase();
+  const normalizedOwnerAddress = opts.ownerAddress.toLowerCase();
+
+  const result = await apiPost<{ ok: boolean }>('/api/nft/import-erc721', {
+    chainId: opts.chainId,
+    contractAddress: normalizedContractAddress,
+    ownerAddress: normalizedOwnerAddress,
+  });
+
+  if (result.ok !== true) {
+    throw new Error('Unexpected response from /api/nft/import-erc721');
+  }
+}
+
 export async function pinMetadata(opts: {
   name: string;
   description: string;
