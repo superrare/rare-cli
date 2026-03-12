@@ -14,11 +14,19 @@ This makes the `rare` command available globally.
 
 ### 1. Configure a wallet
 
-The CLI auto-generates a wallet on first use, or you can create one explicitly:
+Import an existing private key:
+
+```bash
+rare configure --chain sepolia --private-key 0xYourPrivateKeyHere
+```
+
+Or generate a new wallet:
 
 ```bash
 rare wallet generate --save
 ```
+
+If you skip this step, the CLI auto-generates a wallet on first use.
 
 Check your address anytime:
 
@@ -32,6 +40,12 @@ Public RPC endpoints are rate-limited and unreliable. Use your own:
 
 ```bash
 rare configure --chain sepolia --rpc-url https://your-rpc-endpoint.com
+```
+
+You can set both at once:
+
+```bash
+rare configure --chain sepolia --private-key 0x... --rpc-url https://your-rpc-endpoint.com
 ```
 
 ### 3. View your config
