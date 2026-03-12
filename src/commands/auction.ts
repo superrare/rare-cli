@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { parseEther, formatEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { contractAddresses } from '../contracts/addresses.js';
+import { getContractAddresses } from '../contracts/addresses.js';
 import { auctionAbi } from '../contracts/abis/auction.js';
 import { printContractError } from '../errors.js';
 
@@ -45,7 +45,7 @@ export function auctionCommand(): Command {
       const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
-      const auctionAddress = contractAddresses[chain].auction;
+      const auctionAddress = getContractAddresses(chain).auction;
       const currency = (opts.currency ?? ETH_ADDRESS) as `0x${string}`;
 
       console.log(`Creating auction on ${chain}...`);
@@ -141,7 +141,7 @@ export function auctionCommand(): Command {
       const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
-      const auctionAddress = contractAddresses[chain].auction;
+      const auctionAddress = getContractAddresses(chain).auction;
       const currency = (opts.currency ?? ETH_ADDRESS) as `0x${string}`;
       const isEth = currency === ETH_ADDRESS;
       const bidAmount = parseEther(opts.amount);
@@ -183,7 +183,7 @@ export function auctionCommand(): Command {
       const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
-      const auctionAddress = contractAddresses[chain].auction;
+      const auctionAddress = getContractAddresses(chain).auction;
 
       console.log(`Settling auction on ${chain}...`);
 
@@ -212,7 +212,7 @@ export function auctionCommand(): Command {
       const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
-      const auctionAddress = contractAddresses[chain].auction;
+      const auctionAddress = getContractAddresses(chain).auction;
 
       console.log(`Cancelling auction on ${chain}...`);
 
@@ -240,7 +240,7 @@ export function auctionCommand(): Command {
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
       const publicClient = getPublicClient(chain);
-      const auctionAddress = contractAddresses[chain].auction;
+      const auctionAddress = getContractAddresses(chain).auction;
 
       const result = await publicClient.readContract({
         address: auctionAddress,

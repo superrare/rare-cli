@@ -2,12 +2,7 @@ import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getWalletClient } from '../client.js';
 import { searchNfts, searchCollections } from '../search.js';
-import type { SupportedChain } from '../contracts/addresses.js';
-
-const CHAIN_IDS: Record<SupportedChain, number> = {
-  sepolia: 11155111,
-  mainnet: 1,
-};
+import { chainIds, type SupportedChain } from '../contracts/addresses.js';
 
 function formatNftRow(item: Record<string, unknown>): string {
   const name = item.name ?? item.tokenName ?? 'Untitled';
@@ -84,7 +79,7 @@ export function searchCommand(): Command {
         take: parseInt(opts.take, 10),
         cursor: parseInt(opts.cursor, 10),
         ownerAddresses,
-        chainIds: [CHAIN_IDS[chain]],
+        chainIds: [chainIds[chain]],
       });
 
       printPage(label, page.items, page.total, page.hasNextPage, formatNftRow);
@@ -111,7 +106,7 @@ export function searchCommand(): Command {
         cursor: parseInt(opts.cursor, 10),
         ownerAddresses: opts.owner ? [opts.owner] : [],
         auctionStates: opts.state,
-        chainIds: [CHAIN_IDS[chain]],
+        chainIds: [chainIds[chain]],
       });
 
       printPage(`Auctions (${opts.state.join(', ')})`, page.items, page.total, page.hasNextPage, formatNftRow);

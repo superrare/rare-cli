@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import type { SupportedChain } from './contracts/addresses.js';
+import { supportedChains, isSupportedChain, type SupportedChain } from './contracts/addresses.js';
 
 export interface ChainConfig {
   privateKey?: string;
@@ -32,11 +32,12 @@ export function writeConfig(config: Config): void {
 
 export function getActiveChain(chainFlag?: string): SupportedChain {
   if (chainFlag) {
-    if (chainFlag !== 'sepolia' && chainFlag !== 'mainnet') {
-      console.error(`Error: unsupported chain "${chainFlag}". Use "sepolia" or "mainnet".`);
+    if (!isSupportedChain(chainFlag)) {
+      console.error(`Error: unsupported chain "${chainFlag}".`);
+      console.error(`Supported chains: ${supportedChains.join(', ')}`);
       process.exit(1);
     }
-    return chainFlag as SupportedChain;
+    return chainFlag;
   }
   const config = readConfig();
   return config.defaultChain ?? 'sepolia';
