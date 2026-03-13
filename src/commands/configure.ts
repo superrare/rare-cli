@@ -1,13 +1,14 @@
 import { Command } from 'commander';
 import { readConfig, writeConfig } from '../config.js';
-import type { SupportedChain } from '../contracts/addresses.js';
+import { isSupportedChain, supportedChains, type SupportedChain } from '../contracts/addresses.js';
 
 export function configureCommand(): Command {
   const cmd = new Command('configure');
+  const supportedChainsText = supportedChains.join(', ');
   cmd.description('Set or view configuration');
 
   cmd
-    .option('--chain <chain>', 'chain to configure (sepolia or mainnet)')
+    .option('--chain <chain>', `chain to configure (${supportedChainsText})`)
     .option('--private-key <key>', 'private key for the specified chain')
     .option('--rpc-url <url>', 'custom RPC URL for the specified chain')
     .option('--default-chain <chain>', 'set the default chain')
@@ -35,8 +36,8 @@ export function configureCommand(): Command {
       }
 
       if (opts.defaultChain) {
-        if (opts.defaultChain !== 'sepolia' && opts.defaultChain !== 'mainnet') {
-          console.error('Error: --default-chain must be "sepolia" or "mainnet"');
+        if (!isSupportedChain(opts.defaultChain)) {
+          console.error(`Error: --default-chain must be one of: ${supportedChainsText}`);
           process.exit(1);
         }
         config.defaultChain = opts.defaultChain as SupportedChain;
@@ -45,11 +46,11 @@ export function configureCommand(): Command {
       }
 
       if (opts.chain) {
-        const chain = opts.chain as SupportedChain;
-        if (chain !== 'sepolia' && chain !== 'mainnet') {
-          console.error('Error: --chain must be "sepolia" or "mainnet"');
+        if (!isSupportedChain(opts.chain)) {
+          console.error(`Error: --chain must be one of: ${supportedChainsText}`);
           process.exit(1);
         }
+        const chain = opts.chain as SupportedChain;
         if (!config.chains[chain]) {
           config.chains[chain] = {};
         }

@@ -40,7 +40,7 @@ export function auctionCommand(): Command {
     .requiredOption('--starting-price <amount>', 'starting price in ETH (or token units)')
     .requiredOption('--duration <seconds>', 'auction duration in seconds')
     .option('--currency <address>', 'ERC20 currency address (defaults to ETH)')
-    .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
@@ -136,7 +136,7 @@ export function auctionCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID')
     .requiredOption('--amount <amount>', 'bid amount in ETH (or token units)')
     .option('--currency <address>', 'ERC20 currency address (defaults to ETH)')
-    .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
@@ -178,7 +178,7 @@ export function auctionCommand(): Command {
     .description('Settle a completed auction')
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
-    .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
@@ -207,7 +207,7 @@ export function auctionCommand(): Command {
     .description('Cancel an auction')
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
-    .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
@@ -236,7 +236,7 @@ export function auctionCommand(): Command {
     .description('Get auction details (read-only)')
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
-    .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
       const publicClient = getPublicClient(chain);

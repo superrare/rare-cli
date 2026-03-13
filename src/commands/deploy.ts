@@ -12,7 +12,7 @@ function deployErc721Command(): Command {
     .argument('<name>', 'name of the NFT collection')
     .argument('<symbol>', 'symbol of the NFT collection')
     .option('--max-tokens <number>', 'maximum number of tokens (optional)')
-    .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (name: string, symbol: string, opts: { maxTokens?: string; chain?: string }) => {
       const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
