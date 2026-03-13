@@ -13,7 +13,7 @@ export function listCollectionsCommand(): Command {
   const cmd = new Command('list-collections');
   cmd
     .description('List all collections owned by your wallet')
-    .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--query <text>', 'text search filter', '')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);

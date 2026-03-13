@@ -1,4 +1,4 @@
-import { sepolia, mainnet, base, baseSepolia, arbitrum, arbitrumSepolia, optimism, optimismSepolia, zora, zoraSepolia } from 'viem/chains';
+import { sepolia, mainnet, base, baseSepolia } from 'viem/chains';
 import type { Chain } from 'viem';
 
 export const supportedChains = [
@@ -6,12 +6,6 @@ export const supportedChains = [
   'sepolia',
   'base',
   'base-sepolia',
-  'arbitrum',
-  'arbitrum-sepolia',
-  'optimism',
-  'optimism-sepolia',
-  'zora',
-  'zora-sepolia',
 ] as const;
 
 export type SupportedChain = (typeof supportedChains)[number];
@@ -21,12 +15,6 @@ export const viemChains: Record<SupportedChain, Chain> = {
   sepolia,
   base,
   'base-sepolia': baseSepolia,
-  arbitrum,
-  'arbitrum-sepolia': arbitrumSepolia,
-  optimism,
-  'optimism-sepolia': optimismSepolia,
-  zora,
-  'zora-sepolia': zoraSepolia,
 };
 
 export const chainIds: Record<SupportedChain, number> = {
@@ -34,12 +22,6 @@ export const chainIds: Record<SupportedChain, number> = {
   sepolia: 11155111,
   base: 8453,
   'base-sepolia': 84532,
-  arbitrum: 42161,
-  'arbitrum-sepolia': 421614,
-  optimism: 10,
-  'optimism-sepolia': 11155420,
-  zora: 7777777,
-  'zora-sepolia': 999999999,
 };
 
 export const defaultRpcUrls: Partial<Record<SupportedChain, string>> = {
@@ -47,12 +29,6 @@ export const defaultRpcUrls: Partial<Record<SupportedChain, string>> = {
   sepolia: 'https://rpc.sepolia.org',
   base: 'https://mainnet.base.org',
   'base-sepolia': 'https://sepolia.base.org',
-  arbitrum: 'https://arb1.arbitrum.io/rpc',
-  'arbitrum-sepolia': 'https://sepolia-rollup.arbitrum.io/rpc',
-  optimism: 'https://mainnet.optimism.io',
-  'optimism-sepolia': 'https://sepolia.optimism.io',
-  zora: 'https://rpc.zora.energy',
-  'zora-sepolia': 'https://sepolia.rpc.zora.energy',
 };
 
 type ContractSet = { factory: `0x${string}`; auction: `0x${string}` };
@@ -71,9 +47,9 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
 export function getContractAddresses(chain: SupportedChain): ContractSet {
   const addresses = contractAddresses[chain];
   if (!addresses) {
-    console.error(`Error: RARE Protocol contracts are not deployed on "${chain}".`);
-    console.error(`Supported chains: ${Object.keys(contractAddresses).join(', ')}`);
-    process.exit(1);
+    throw new Error(
+      `RARE Protocol contracts are not deployed on "${chain}". Supported chains: ${Object.keys(contractAddresses).join(', ')}`
+    );
   }
   return addresses;
 }

@@ -10,7 +10,7 @@ export function statusCommand(): Command {
   cmd
     .requiredOption('--contract <address>', 'token contract address')
     .option('--token-id <id>', 'token ID to query (optional)')
-    .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
       const publicClient = getPublicClient(chain);

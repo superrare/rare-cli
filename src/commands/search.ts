@@ -51,7 +51,7 @@ export function searchCommand(): Command {
   cmd
     .command('tokens')
     .description('Search NFTs')
-    .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--query <text>', 'text search query', '')
     .option('--owner <address>', 'filter by owner address')
     .option('--mine', 'filter by your configured wallet address')
@@ -89,7 +89,7 @@ export function searchCommand(): Command {
   cmd
     .command('auctions')
     .description('List NFTs with active or configured auctions')
-    .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--state <states...>', 'auction states to filter (PENDING, RUNNING, SETTLED, UNSETTLED)', ['PENDING', 'RUNNING'])
     .option('--owner <address>', 'filter by owner address (optional)')
     .option('--query <text>', 'text search query', '')
@@ -116,7 +116,7 @@ export function searchCommand(): Command {
   cmd
     .command('collections')
     .description('List collections owned by your wallet')
-    .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--query <text>', 'text search query', '')
     .option('--take <n>', 'number of results per page', '24')
     .option('--cursor <n>', 'pagination cursor', '0')

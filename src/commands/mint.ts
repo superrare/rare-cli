@@ -46,7 +46,7 @@ export function mintCommand(): Command {
     .option('--attribute <attr>', 'attribute as "trait=value" or JSON (repeatable)', (val: string, acc: string[]) => [...acc, val], [] as string[])
     .option('--to <address>', 'recipient address (defaults to caller)')
     .option('--royalty-receiver <address>', 'royalty receiver address (defaults to caller)')
-    .option('--chain <chain>', 'chain to use (sepolia or mainnet)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
       let tokenUri: string;
 
