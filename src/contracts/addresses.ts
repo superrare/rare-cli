@@ -42,6 +42,14 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
     factory: '0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1',
     auction: '0x6D7c44773C52D396F43c2D511B81aa168E9a7a42',
   },
+  base: {
+    factory: '0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd',
+    auction: '0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2',
+  },
+  'base-sepolia': {
+    factory: '0x2b181ae0f1aea6fed75591b04991b1a3f9868d51',
+    auction: '0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2',
+  },
 };
 
 export function getContractAddresses(chain: SupportedChain): ContractSet {

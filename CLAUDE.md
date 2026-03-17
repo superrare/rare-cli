@@ -8,7 +8,7 @@ Binary: `rare` (after `npm link`) or `node dist/index.js`
 Runtime: Node.js 22+
 Config: `~/.rare/config.json`
 Networks: `mainnet`, `sepolia`, `base`, `base-sepolia`, `arbitrum`, `arbitrum-sepolia`, `optimism`, `optimism-sepolia`, `zora`, `zora-sepolia`
-RARE contracts deployed on: `mainnet`, `sepolia`
+RARE contracts deployed on: `mainnet`, `sepolia`, `base`, `base-sepolia`
 
 ## Build
 
@@ -102,10 +102,10 @@ rare status --contract <addr> [--token-id <id>] [--chain <chain>]
 
 ## Contract Addresses
 
-| Contract | Sepolia | Mainnet |
-|----------|---------|---------|
-| Factory  | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` |
-| Auction  | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` |
+| Contract | Sepolia | Mainnet | Base Sepolia | Base |
+|----------|---------|---------|--------------|------|
+| Factory  | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` |
+| Auction  | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` |
 
 ## Development
 
