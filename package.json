@@ -1,6 +1,6 @@
 {
   "name": "@rareprotocol/rare-cli",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "CLI tool for interacting with the RARE protocol smart contracts",
   "type": "module",
   "license": "MIT",
