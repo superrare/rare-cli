@@ -249,16 +249,23 @@ export function auctionCommand(): Command {
         args: [opts.contract as `0x${string}`, BigInt(opts.tokenId)],
       });
 
-      const [seller, startingPrice, currentBid, endTime, currency, , auctionType] = result;
+      const [seller, creationBlock, startingTime, lengthOfAuction, currency, minimumBid, auctionType] = result;
       const isEth = currency === ETH_ADDRESS;
-      const endDate = new Date(Number(endTime) * 1000);
+      const started = Number(startingTime) > 0;
+      const endTime = started ? Number(startingTime) + Number(lengthOfAuction) : null;
+      const endDate = endTime ? new Date(endTime * 1000) : null;
 
       console.log('\nAuction Details:');
       console.log(`  Seller:         ${seller}`);
-      console.log(`  Starting price: ${formatEther(startingPrice)} ${isEth ? 'ETH' : currency}`);
-      console.log(`  Current bid:    ${formatEther(currentBid)} ${isEth ? 'ETH' : currency}`);
-      console.log(`  End time:       ${endDate.toISOString()} (${endTime})`);
+      console.log(`  Minimum bid:    ${formatEther(minimumBid)} ${isEth ? 'ETH' : currency}`);
       console.log(`  Currency:       ${isEth ? 'ETH' : currency}`);
+      console.log(`  Duration:       ${lengthOfAuction}s`);
+      console.log(`  Status:         ${started ? 'RUNNING' : 'PENDING'}`);
+      if (started) {
+        console.log(`  Started at:     ${new Date(Number(startingTime) * 1000).toISOString()}`);
+        console.log(`  Ends at:        ${endDate!.toISOString()}`);
+      }
+      console.log(`  Creation block: ${creationBlock}`);
       console.log(`  Auction type:   ${auctionType}`);
     });
 
