@@ -70,9 +70,7 @@ Private keys are masked in the output.
 
 All commands accept `--chain` to select a network. Defaults to `sepolia`.
 
-Supported chains: `mainnet`, `sepolia`, `base`, `base-sepolia`
-
-> **Note:** RARE Protocol deploy and auction commands are currently available on `mainnet` and `sepolia` only.
+Supported chains (including deploy, mint, import, and auction flows): `mainnet`, `sepolia`, `base`, `base-sepolia`
 
 ### Deploy an NFT Collection
 
@@ -203,7 +201,7 @@ rare configure --chain sepolia --private-key 0x... --rpc-url https://...
 
 # Configure multiple chains
 rare configure --chain base --rpc-url https://your-base-rpc.com
-rare configure --chain arbitrum --private-key 0x... --rpc-url https://your-arb-rpc.com
+rare configure --chain base-sepolia --private-key 0x... --rpc-url https://your-base-sepolia-rpc.com
 
 # Change default network
 rare configure --default-chain mainnet
@@ -226,6 +224,8 @@ rare configure --show
 |---|---|---|
 | Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` |
 | Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` |
+| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` |
+| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` |
 
 ## Underlying Solidity Contracts
 
