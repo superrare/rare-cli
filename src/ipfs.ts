@@ -254,10 +254,8 @@ export async function pinMetadata(opts: {
     name: opts.name,
     description: opts.description,
     nftMedia,
+    tags: opts.tags ?? [],
   };
-  if (opts.tags && opts.tags.length > 0) {
-    payload.tags = opts.tags;
-  }
   if (opts.attributes && opts.attributes.length > 0) {
     payload.attributes = opts.attributes;
   }
