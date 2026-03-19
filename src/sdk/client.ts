@@ -46,6 +46,7 @@ const approvalAbi = [
 
 type IntegerInput = bigint | number | string;
 type AmountInput = bigint | number | string;
+type WalletAccount = NonNullable<WalletClient['account']>;
 
 export interface RareClientConfig {
   publicClient: PublicClient;
@@ -195,17 +196,42 @@ function resolveChainFromPublicClient(publicClient: PublicClient): SupportedChai
   throw new Error(`Unsupported chain id: ${chainId}. Supported chain ids: ${Object.values(chainIds).join(', ')}`);
 }
 
-function requireWallet(config: RareClientConfig): { walletClient: WalletClient; account: Address } {
+function requireWallet(config: RareClientConfig): {
+  walletClient: WalletClient;
+  account: Address | WalletAccount;
+  accountAddress: Address;
+} {
   if (!config.walletClient) {
     throw new Error('walletClient is required for write operations.');
   }
 
-  const account = config.account ?? config.walletClient.account?.address;
-  if (!account) {
+  const walletAccount = config.walletClient.account;
+
+  if (config.account) {
+    if (walletAccount && walletAccount.address.toLowerCase() === config.account.toLowerCase()) {
+      return {
+        walletClient: config.walletClient,
+        account: walletAccount,
+        accountAddress: walletAccount.address,
+      };
+    }
+
+    return {
+      walletClient: config.walletClient,
+      account: config.account,
+      accountAddress: config.account,
+    };
+  }
+
+  if (!walletAccount) {
     throw new Error('No account available for write operations. Pass config.account or provide walletClient with an account.');
   }
 
-  return { walletClient: config.walletClient, account };
+  return {
+    walletClient: config.walletClient,
+    account: walletAccount,
+    accountAddress: walletAccount.address,
+  };
 }
 
 function toInteger(value: IntegerInput, field: string): bigint {
@@ -286,13 +312,13 @@ export function createRareClient(config: RareClientConfig): RareClient {
     },
     mint: {
       async mintTo(params) {
-        const { walletClient, account } = requireWallet(config);
+        const { walletClient, account, accountAddress } = requireWallet(config);
         const useMintTo = Boolean(params.to || params.royaltyReceiver);
 
         let txHash: Hash;
         if (useMintTo) {
-          const receiver = params.to ?? account;
-          const royaltyReceiver = params.royaltyReceiver ?? account;
+          const receiver = params.to ?? accountAddress;
+          const royaltyReceiver = params.royaltyReceiver ?? accountAddress;
           txHash = await walletClient.writeContract({
             address: params.contract,
             abi: tokenAbi,
@@ -328,14 +354,14 @@ export function createRareClient(config: RareClientConfig): RareClient {
     },
     auction: {
       async create(params) {
-        const { walletClient, account } = requireWallet(config);
+        const { walletClient, account, accountAddress } = requireWallet(config);
 
         const nftAddress = params.contract;
         const currency = params.currency ?? ETH_ADDRESS;
         const tokenId = toInteger(params.tokenId, 'tokenId');
         const startingPrice = toWei(params.startingPrice);
         const duration = toInteger(params.duration, 'duration');
-        const splitAddresses = params.splitAddresses ?? [account];
+        const splitAddresses = params.splitAddresses ?? [accountAddress];
         const splitRatios = params.splitRatios ?? [100];
 
         let approvalTxHash: Hash | undefined;
@@ -344,7 +370,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
             address: nftAddress,
             abi: approvalAbi,
             functionName: 'isApprovedForAll',
-            args: [account, addresses.auction],
+            args: [accountAddress, addresses.auction],
           });
 
           if (!isApproved) {
