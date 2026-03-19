@@ -37,6 +37,13 @@
       "types": "./dist/client.d.ts"
     }
   },
+  "typesVersions": {
+    "*": {
+      "client": [
+        "dist/client.d.ts"
+      ]
+    }
+  },
   "bin": {
     "rare": "./dist/index.js"
   },
