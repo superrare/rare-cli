@@ -1,8 +1,7 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { getContractAddresses } from '../contracts/addresses.js';
-import { factoryAbi } from '../contracts/abis/factory.js';
+import { createRareClient } from '../sdk/client.js';
 
 function deployErc721Command(): Command {
   const cmd = new Command('erc721');
@@ -15,54 +14,28 @@ function deployErc721Command(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (name: string, symbol: string, opts: { maxTokens?: string; chain?: string }) => {
       const chain = getActiveChain(opts.chain);
-      const { client, account } = getWalletClient(chain);
+      const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
-      const factoryAddress = getContractAddresses(chain).factory;
+      const rare = createRareClient({ publicClient, walletClient: client });
 
       console.log(`Deploying ERC-721 contract on ${chain}...`);
-      console.log(`  Factory: ${factoryAddress}`);
+      console.log(`  Factory: ${rare.contracts.factory}`);
       console.log(`  Name: ${name}`);
       console.log(`  Symbol: ${symbol}`);
       if (opts.maxTokens) console.log(`  Max tokens: ${opts.maxTokens}`);
-
-      let txHash: `0x${string}`;
-      if (opts.maxTokens) {
-        txHash = await client.writeContract({
-          address: factoryAddress,
-          abi: factoryAbi,
-          functionName: 'createSovereignBatchMint',
-          args: [name, symbol, BigInt(opts.maxTokens)],
-          account,
-          chain: undefined,
-        });
-      } else {
-        txHash = await client.writeContract({
-          address: factoryAddress,
-          abi: factoryAbi,
-          functionName: 'createSovereignBatchMint',
-          args: [name, symbol],
-          account,
-          chain: undefined,
-        });
-      }
-
-      console.log(`Transaction sent: ${txHash}`);
       console.log('Waiting for confirmation...');
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-
-      const { parseEventLogs } = await import('viem');
-      const logs = parseEventLogs({
-        abi: factoryAbi,
-        logs: receipt.logs,
-        eventName: 'SovereignBatchMintCreated',
+      const result = await rare.deploy.erc721({
+        name,
+        symbol,
+        maxTokens: opts.maxTokens,
       });
+      console.log(`Transaction sent: ${result.txHash}`);
 
-      if (logs.length > 0) {
-        const deployedAddress = logs[0].args.contractAddress;
-        console.log(`\nERC-721 contract deployed at: ${deployedAddress}`);
+      if (result.contract) {
+        console.log(`\nERC-721 contract deployed at: ${result.contract}`);
       } else {
-        console.log(`\nTransaction confirmed. Block: ${receipt.blockNumber}`);
+        console.log(`\nTransaction confirmed. Block: ${result.receipt.blockNumber}`);
         console.log('Could not parse deployed address from logs.');
       }
     });

@@ -1,8 +1,8 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { tokenAbi } from '../contracts/abis/token.js';
 import { uploadMedia, pinMetadata, type NftAttribute } from '../ipfs.js';
+import { createRareClient } from '../sdk/client.js';
 
 function parseAttribute(raw: string): NftAttribute {
   // Try JSON first: --attribute '{"trait_type":"Power","value":40,"display_type":"boost_number"}'
@@ -87,55 +87,32 @@ export function mintCommand(): Command {
       const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
+      const rare = createRareClient({ publicClient, walletClient: client });
       const contractAddress = opts.contract as `0x${string}`;
-      const useMintTo = opts.to || opts.royaltyReceiver;
 
       console.log(`\nMinting NFT on ${chain}...`);
       console.log(`  Contract: ${contractAddress}`);
       console.log(`  URI: ${tokenUri}`);
-
-      let txHash: `0x${string}`;
-
-      if (useMintTo) {
+      if (opts.to || opts.royaltyReceiver) {
         const receiver = (opts.to ?? account.address) as `0x${string}`;
         const royaltyReceiver = (opts.royaltyReceiver ?? account.address) as `0x${string}`;
         console.log(`  To: ${receiver}`);
         console.log(`  Royalty receiver: ${royaltyReceiver}`);
-        txHash = await client.writeContract({
-          address: contractAddress,
-          abi: tokenAbi,
-          functionName: 'mintTo',
-          args: [tokenUri, receiver, royaltyReceiver],
-          account,
-          chain: undefined,
-        });
-      } else {
-        txHash = await client.writeContract({
-          address: contractAddress,
-          abi: tokenAbi,
-          functionName: 'addNewToken',
-          args: [tokenUri],
-          account,
-          chain: undefined,
-        });
       }
 
-      console.log(`Transaction sent: ${txHash}`);
       console.log('Waiting for confirmation...');
-
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-
-      const { parseEventLogs } = await import('viem');
-      const logs = parseEventLogs({
-        abi: tokenAbi,
-        logs: receipt.logs,
-        eventName: 'Transfer',
+      const result = await rare.mint.mintTo({
+        contract: contractAddress,
+        tokenUri,
+        to: opts.to as `0x${string}` | undefined,
+        royaltyReceiver: opts.royaltyReceiver as `0x${string}` | undefined,
       });
+      console.log(`Transaction sent: ${result.txHash}`);
 
-      if (logs.length > 0) {
-        console.log(`\nNFT minted! Token ID: ${logs[0].args.tokenId}`);
+      if (result.tokenId !== undefined) {
+        console.log(`\nNFT minted! Token ID: ${result.tokenId}`);
       } else {
-        console.log(`\nTransaction confirmed. Block: ${receipt.blockNumber}`);
+        console.log(`\nTransaction confirmed. Block: ${result.receipt.blockNumber}`);
       }
     });
 
