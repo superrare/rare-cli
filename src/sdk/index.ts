@@ -1,5 +1,14 @@
 export { createRareClient } from './client.js';
 export type { RareClient, RareClientConfig } from './client.js';
+export type {
+  CollectionSearchParams,
+  ImportErc721Params,
+  NftAttribute,
+  NftMediaEntry,
+  NftSearchParams,
+  PinMetadataParams,
+  SearchPageResponse,
+} from './api.js';
 
 export {
   contractAddresses,

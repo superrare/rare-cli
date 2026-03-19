@@ -11,6 +11,19 @@ import { getContractAddresses, chainIds, type SupportedChain } from '../contract
 import { factoryAbi } from '../contracts/abis/factory.js';
 import { tokenAbi } from '../contracts/abis/token.js';
 import { auctionAbi } from '../contracts/abis/auction.js';
+import {
+  importErc721 as importErc721Api,
+  pinMetadata as pinMetadataApi,
+  searchCollections as searchCollectionsApi,
+  searchNfts as searchNftsApi,
+  uploadMedia as uploadMediaApi,
+  type CollectionSearchParams,
+  type ImportErc721Params,
+  type NftSearchParams,
+  type NftMediaEntry,
+  type PinMetadataParams,
+  type SearchPageResponse,
+} from './api.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
@@ -150,6 +163,17 @@ export interface RareClient {
     cancel(params: AuctionCancelParams): Promise<TransactionResult>;
     getStatus(params: AuctionStatusParams): Promise<AuctionStatus>;
   };
+  search: {
+    nfts(params?: NftSearchParams): Promise<SearchPageResponse>;
+    collections(params?: CollectionSearchParams): Promise<SearchPageResponse>;
+  };
+  media: {
+    upload(buffer: Uint8Array, filename: string): Promise<NftMediaEntry>;
+    pinMetadata(opts: PinMetadataParams): Promise<string>;
+  };
+  import: {
+    erc721(params: ImportErc721Params): Promise<void>;
+  };
   token: {
     getContractInfo(params: { contract: Address }): Promise<TokenContractInfo>;
     getTokenInfo(params: { contract: Address; tokenId: IntegerInput }): Promise<TokenInfo>;
@@ -212,11 +236,12 @@ function toWei(value: AmountInput): bigint {
 export function createRareClient(config: RareClientConfig): RareClient {
   const { publicClient } = config;
   const chain = resolveChainFromPublicClient(publicClient);
+  const chainId = chainIds[chain];
   const addresses = getContractAddresses(chain);
 
   return {
     chain,
-    chainId: chainIds[chain],
+    chainId,
     contracts: {
       factory: addresses.factory,
       auction: addresses.auction,
@@ -466,6 +491,39 @@ export function createRareClient(config: RareClientConfig): RareClient {
           endTime,
           status,
         };
+      },
+    },
+    search: {
+      async nfts(params = {}) {
+        const requestParams = params.chainIds ? params : { ...params, chainIds: [chainId] };
+        return searchNftsApi(requestParams);
+      },
+
+      async collections(params = {}) {
+        return searchCollectionsApi(params);
+      },
+    },
+    media: {
+      async upload(buffer, filename) {
+        return uploadMediaApi(buffer, filename);
+      },
+
+      async pinMetadata(opts) {
+        return pinMetadataApi(opts);
+      },
+    },
+    import: {
+      async erc721(params) {
+        const owner = params.owner ?? config.account ?? config.walletClient?.account?.address;
+        if (!owner) {
+          throw new Error('No owner available for import. Pass params.owner or provide config.account/walletClient with an account.');
+        }
+
+        await importErc721Api({
+          chainId,
+          contract: params.contract,
+          owner,
+        });
       },
     },
     token: {
