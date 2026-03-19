@@ -1,6 +1,6 @@
 {
   "name": "@rareprotocol/rare-cli",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "CLI tool for interacting with the RARE protocol smart contracts",
   "type": "module",
   "license": "MIT",
@@ -28,12 +28,29 @@
     "dist",
     "LICENSE"
   ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "import": "./dist/client.js",
+      "types": "./dist/client.d.ts"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "client": [
+        "dist/client.d.ts"
+      ]
+    }
+  },
   "bin": {
     "rare": "./dist/index.js"
   },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {

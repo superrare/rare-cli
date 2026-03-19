@@ -1,31 +1,11 @@
 import { Command } from 'commander';
-import { parseEther, formatEther } from 'viem';
+import { formatEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { getContractAddresses } from '../contracts/addresses.js';
-import { auctionAbi } from '../contracts/abis/auction.js';
 import { printContractError } from '../errors.js';
+import { createRareClient } from '../sdk/client.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
-
-const approvalAbi = [
-  {
-    inputs: [{ name: 'owner', type: 'address' }, { name: 'operator', type: 'address' }],
-    name: 'isApprovedForAll',
-    outputs: [{ name: '', type: 'bool' }],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [{ name: 'operator', type: 'address' }, { name: 'approved', type: 'bool' }],
-    name: 'setApprovalForAll',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-] as const;
-
-
 
 export function auctionCommand(): Command {
   const cmd = new Command('auction');
@@ -43,89 +23,36 @@ export function auctionCommand(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
-      const { client, account } = getWalletClient(chain);
+      const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
-      const auctionAddress = getContractAddresses(chain).auction;
+      const rare = createRareClient({ publicClient, walletClient: client });
       const currency = (opts.currency ?? ETH_ADDRESS) as `0x${string}`;
 
       console.log(`Creating auction on ${chain}...`);
-      console.log(`  Auction contract: ${auctionAddress}`);
+      console.log(`  Auction contract: ${rare.contracts.auction}`);
       console.log(`  NFT contract: ${opts.contract}`);
       console.log(`  Token ID: ${opts.tokenId}`);
       console.log(`  Starting price: ${opts.startingPrice} ETH`);
       console.log(`  Duration: ${opts.duration} seconds`);
-
-      // Check if approval is needed
-      const nftAddress = opts.contract as `0x${string}`;
-      const isApproved = await publicClient.readContract({
-        address: nftAddress,
-        abi: approvalAbi,
-        functionName: 'isApprovedForAll',
-        args: [account.address, auctionAddress],
-      });
-
-      if (!isApproved) {
-        console.log('\nApproval required. Requesting setApprovalForAll...');
-        const approveTxHash = await client.writeContract({
-          address: nftAddress,
-          abi: approvalAbi,
-          functionName: 'setApprovalForAll',
-          args: [auctionAddress, true],
-          account,
-          chain: undefined,
-        });
-        console.log(`Approval tx sent: ${approveTxHash}`);
-        await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
-        console.log('Approval confirmed.\n');
-      } else {
-        console.log('(Already approved)\n');
-      }
-
-      const tokenId = BigInt(opts.tokenId);
-      const startingPrice = parseEther(opts.startingPrice);
-      const duration = BigInt(opts.duration);
-      const auctionType = await publicClient.readContract({
-        address: auctionAddress,
-        abi: auctionAbi,
-        functionName: 'COLDIE_AUCTION',
-      });
-      const splitAddresses = [account.address];
-      const splitRatios = [100];
-
-      console.log('\nTransaction details:');
-      console.log(`  NFT: ${nftAddress}`);
-      console.log(`  Token ID: ${tokenId}`);
-      console.log(`  Starting price: ${opts.startingPrice} ETH (${startingPrice}wei)`);
-      console.log(`  Duration: ${duration}s`);
       console.log(`  Currency: ${currency === ETH_ADDRESS ? 'ETH' : currency}`);
 
-      let txHash: `0x${string}`;
       try {
-        txHash = await client.writeContract({
-          address: auctionAddress,
-          abi: auctionAbi,
-          functionName: 'configureAuction',
-          args: [
-            auctionType,
-            nftAddress,
-            tokenId,
-            startingPrice,
-            currency,
-            duration,
-            0n,
-            splitAddresses,
-            splitRatios,
-          ],
-          account,
-          chain: undefined,
+        const result = await rare.auction.create({
+          contract: opts.contract as `0x${string}`,
+          tokenId: opts.tokenId,
+          startingPrice: opts.startingPrice,
+          duration: opts.duration,
+          currency,
         });
+
+        if (result.approvalTxHash) {
+          console.log(`Approval tx sent: ${result.approvalTxHash}`);
+        }
+        console.log(`\nTransaction sent: ${result.txHash}`);
+        console.log(`Auction created! Block: ${result.receipt.blockNumber}`);
       } catch (error) {
         printContractError(error);
       }
-
-      console.log(`\nTransaction sent: ${txHash}`);
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      console.log(`Auction created! Block: ${receipt.blockNumber}`);
     });
 
   // auction bid
@@ -139,37 +66,31 @@ export function auctionCommand(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
-      const { client, account } = getWalletClient(chain);
+      const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
-      const auctionAddress = getContractAddresses(chain).auction;
+      const rare = createRareClient({ publicClient, walletClient: client });
       const currency = (opts.currency ?? ETH_ADDRESS) as `0x${string}`;
       const isEth = currency === ETH_ADDRESS;
-      const bidAmount = parseEther(opts.amount);
 
       console.log(`Placing bid on ${chain}...`);
-      console.log(`  Auction contract: ${auctionAddress}`);
+      console.log(`  Auction contract: ${rare.contracts.auction}`);
       console.log(`  NFT contract: ${opts.contract}`);
       console.log(`  Token ID: ${opts.tokenId}`);
       console.log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
 
-      let txHash: `0x${string}`;
       try {
-        txHash = await client.writeContract({
-          address: auctionAddress,
-          abi: auctionAbi,
-          functionName: 'bid',
-          args: [opts.contract as `0x${string}`, BigInt(opts.tokenId), currency, bidAmount],
-          account,
-          chain: undefined,
-          value: isEth ? bidAmount : 0n,
+        const result = await rare.auction.bid({
+          contract: opts.contract as `0x${string}`,
+          tokenId: opts.tokenId,
+          amount: opts.amount,
+          currency,
         });
+
+        console.log(`\nTransaction sent: ${result.txHash}`);
+        console.log(`Bid placed! Block: ${result.receipt.blockNumber}`);
       } catch (error) {
         printContractError(error);
       }
-
-      console.log(`\nTransaction sent: ${txHash}`);
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      console.log(`Bid placed! Block: ${receipt.blockNumber}`);
     });
 
   // auction settle
@@ -181,24 +102,23 @@ export function auctionCommand(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
-      const { client, account } = getWalletClient(chain);
+      const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
-      const auctionAddress = getContractAddresses(chain).auction;
+      const rare = createRareClient({ publicClient, walletClient: client });
 
       console.log(`Settling auction on ${chain}...`);
 
-      const txHash = await client.writeContract({
-        address: auctionAddress,
-        abi: auctionAbi,
-        functionName: 'settleAuction',
-        args: [opts.contract as `0x${string}`, BigInt(opts.tokenId)],
-        account,
-        chain: undefined,
-      });
+      try {
+        const result = await rare.auction.settle({
+          contract: opts.contract as `0x${string}`,
+          tokenId: opts.tokenId,
+        });
 
-      console.log(`Transaction sent: ${txHash}`);
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      console.log(`Auction settled! Block: ${receipt.blockNumber}`);
+        console.log(`Transaction sent: ${result.txHash}`);
+        console.log(`Auction settled! Block: ${result.receipt.blockNumber}`);
+      } catch (error) {
+        printContractError(error);
+      }
     });
 
   // auction cancel
@@ -210,24 +130,23 @@ export function auctionCommand(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
-      const { client, account } = getWalletClient(chain);
+      const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
-      const auctionAddress = getContractAddresses(chain).auction;
+      const rare = createRareClient({ publicClient, walletClient: client });
 
       console.log(`Cancelling auction on ${chain}...`);
 
-      const txHash = await client.writeContract({
-        address: auctionAddress,
-        abi: auctionAbi,
-        functionName: 'cancelAuction',
-        args: [opts.contract as `0x${string}`, BigInt(opts.tokenId)],
-        account,
-        chain: undefined,
-      });
+      try {
+        const result = await rare.auction.cancel({
+          contract: opts.contract as `0x${string}`,
+          tokenId: opts.tokenId,
+        });
 
-      console.log(`Transaction sent: ${txHash}`);
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      console.log(`Auction cancelled! Block: ${receipt.blockNumber}`);
+        console.log(`Transaction sent: ${result.txHash}`);
+        console.log(`Auction cancelled! Block: ${result.receipt.blockNumber}`);
+      } catch (error) {
+        printContractError(error);
+      }
     });
 
   // auction status
@@ -240,33 +159,27 @@ export function auctionCommand(): Command {
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
       const publicClient = getPublicClient(chain);
-      const auctionAddress = getContractAddresses(chain).auction;
+      const rare = createRareClient({ publicClient });
 
-      const result = await publicClient.readContract({
-        address: auctionAddress,
-        abi: auctionAbi,
-        functionName: 'getAuctionDetails',
-        args: [opts.contract as `0x${string}`, BigInt(opts.tokenId)],
+      const result = await rare.auction.getStatus({
+        contract: opts.contract as `0x${string}`,
+        tokenId: opts.tokenId,
       });
 
-      const [seller, creationBlock, startingTime, lengthOfAuction, currency, minimumBid, auctionType] = result;
-      const isEth = currency === ETH_ADDRESS;
-      const started = Number(startingTime) > 0;
-      const endTime = started ? Number(startingTime) + Number(lengthOfAuction) : null;
-      const endDate = endTime ? new Date(endTime * 1000) : null;
+      const endDate = result.endTime ? new Date(Number(result.endTime) * 1000) : null;
 
       console.log('\nAuction Details:');
-      console.log(`  Seller:         ${seller}`);
-      console.log(`  Minimum bid:    ${formatEther(minimumBid)} ${isEth ? 'ETH' : currency}`);
-      console.log(`  Currency:       ${isEth ? 'ETH' : currency}`);
-      console.log(`  Duration:       ${lengthOfAuction}s`);
-      console.log(`  Status:         ${started ? 'RUNNING' : 'PENDING'}`);
-      if (started) {
-        console.log(`  Started at:     ${new Date(Number(startingTime) * 1000).toISOString()}`);
+      console.log(`  Seller:         ${result.seller}`);
+      console.log(`  Minimum bid:    ${formatEther(result.minimumBid)} ${result.isEth ? 'ETH' : result.currency}`);
+      console.log(`  Currency:       ${result.isEth ? 'ETH' : result.currency}`);
+      console.log(`  Duration:       ${result.lengthOfAuction}s`);
+      console.log(`  Status:         ${result.status}`);
+      if (result.started) {
+        console.log(`  Started at:     ${new Date(Number(result.startingTime) * 1000).toISOString()}`);
         console.log(`  Ends at:        ${endDate!.toISOString()}`);
       }
-      console.log(`  Creation block: ${creationBlock}`);
-      console.log(`  Auction type:   ${auctionType}`);
+      console.log(`  Creation block: ${result.creationBlock}`);
+      console.log(`  Auction type:   ${result.auctionType}`);
     });
 
   return cmd;

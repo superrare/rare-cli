@@ -191,6 +191,82 @@ rare status --contract 0x...
 rare status --contract 0x... --token-id 1
 ```
 
+## SDK Client Usage
+
+Use the client export when integrating RARE flows directly in your app code.
+
+```bash
+npm install @rareprotocol/rare-cli viem
+```
+
+### Create a client
+
+```ts
+import { createPublicClient, createWalletClient, http } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { sepolia } from 'viem/chains';
+import { createRareClient } from '@rareprotocol/rare-cli/client';
+
+const account = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`);
+const publicClient = createPublicClient({
+  chain: sepolia,
+  transport: http(process.env.RPC_URL),
+});
+
+const walletClient = createWalletClient({
+  account,
+  chain: sepolia,
+  transport: http(process.env.RPC_URL),
+});
+
+const rare = createRareClient({ publicClient, walletClient });
+```
+
+### Search
+
+`search.nfts` auto-applies the client chain unless you pass `chainIds`.
+
+```ts
+const nfts = await rare.search.nfts({ query: 'portrait', take: 10 });
+const collections = await rare.search.collections({ ownerAddresses: [account.address] });
+```
+
+### Upload media and mint
+
+`media.upload` accepts a `Uint8Array` (Node `Buffer` works directly).
+
+```ts
+import { readFile } from 'node:fs/promises';
+
+const imageBytes = await readFile('./art.png');
+const image = await rare.media.upload(imageBytes, 'art.png');
+
+const tokenUri = await rare.media.pinMetadata({
+  name: 'My NFT',
+  description: 'Minted with the SDK client',
+  image,
+  tags: ['art'],
+});
+
+const minted = await rare.mint.mintTo({
+  contract: '0xYourContractAddress',
+  tokenUri,
+  to: '0xRecipientAddress',
+});
+
+console.log(minted.tokenId);
+```
+
+### Import an ERC-721 collection
+
+`import.erc721` derives `chainId` from the client. If `owner` is omitted, it defaults to the configured account.
+
+```ts
+await rare.import.erc721({
+  contract: '0xYourContractAddress',
+});
+```
+
 ## Configuration
 
 Config is stored at `~/.rare/config.json`. Each chain has its own private key and RPC URL.
