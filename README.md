@@ -1,6 +1,6 @@
 # RARE Protocol CLI
 
-Command-line tool for the [RARE Protocol](https://superrare.com) on Ethereum. Deploy NFT contracts, mint tokens, run auctions, and search the network — all from your terminal.
+Command-line tool for the [RARE Protocol](https://superrare.com) on Ethereum. Deploy NFT contracts, mint tokens, run auctions, create offers and listings, and search the network — all from your terminal.
 
 ## Install
 
@@ -147,6 +147,56 @@ rare auction cancel --contract 0x... --token-id 1
 
 # Check auction status (read-only)
 rare auction status --contract 0x... --token-id 1
+```
+
+### Offers
+
+```bash
+# Create an offer on a token
+rare offer create --contract 0x... --token-id 1 --amount 0.5
+
+# Create an offer with ERC20 currency
+rare offer create --contract 0x... --token-id 1 --amount 100 --currency usdc
+
+# Accept an offer on a token you own
+rare offer accept --contract 0x... --token-id 1 --amount 0.5
+
+# Cancel your offer
+rare offer cancel --contract 0x... --token-id 1
+
+# Check offer status (read-only)
+rare offer status --contract 0x... --token-id 1
+```
+
+### Listings
+
+```bash
+# List a token for sale at a fixed price
+rare listing create --contract 0x... --token-id 1 --price 1.0
+
+# List with ERC20 currency or a targeted buyer
+rare listing create --contract 0x... --token-id 1 --price 100 --currency rare --target 0x...buyer
+
+# Buy a listed token
+rare listing buy --contract 0x... --token-id 1 --amount 1.0
+
+# Cancel a listing
+rare listing cancel --contract 0x... --token-id 1
+
+# Check listing status (read-only)
+rare listing status --contract 0x... --token-id 1
+```
+
+### Currencies
+
+All marketplace commands (`auction`, `offer`, `listing`) accept `--currency` to specify a payment token. Named currencies (`eth`, `usdc`, `rare`) are resolved per-chain automatically. You can also pass any ERC20 address directly.
+
+ERC20 allowances are auto-approved when needed for bids, offers, and purchases.
+
+```bash
+# List supported currencies and their addresses
+rare currencies
+rare currencies --chain mainnet
 ```
 
 ### Search
