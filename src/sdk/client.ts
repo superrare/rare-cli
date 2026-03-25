@@ -4,8 +4,10 @@ import {
   type PublicClient,
   type TransactionReceipt,
   type WalletClient,
+  erc20Abi,
   parseEther,
   parseEventLogs,
+  maxUint256,
 } from 'viem';
 import { getContractAddresses, chainIds, type SupportedChain } from '../contracts/addresses.js';
 import { factoryAbi } from '../contracts/abis/factory.js';
@@ -129,6 +131,93 @@ export interface AuctionStatus {
   status: 'PENDING' | 'RUNNING' | 'ENDED';
 }
 
+// Marketplace settings ABI for fee calculation
+const marketplaceSettingsAbi = [
+  {
+    inputs: [{ name: '_amount', type: 'uint256' }],
+    name: 'calculateMarketplaceFee',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
+export interface OfferCreateParams {
+  contract: Address;
+  tokenId: IntegerInput;
+  currency?: Address;
+  amount: AmountInput;
+  convertible?: boolean;
+}
+
+export interface OfferCancelParams {
+  contract: Address;
+  tokenId: IntegerInput;
+  currency?: Address;
+}
+
+export interface OfferAcceptParams {
+  contract: Address;
+  tokenId: IntegerInput;
+  currency?: Address;
+  amount: AmountInput;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+}
+
+export interface OfferStatusParams {
+  contract: Address;
+  tokenId: IntegerInput;
+  currency?: Address;
+}
+
+export interface OfferStatus {
+  buyer: Address;
+  amount: bigint;
+  timestamp: bigint;
+  marketplaceFee: number;
+  convertible: boolean;
+  hasOffer: boolean;
+}
+
+export interface ListingCreateParams {
+  contract: Address;
+  tokenId: IntegerInput;
+  currency?: Address;
+  price: AmountInput;
+  target?: Address;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+  autoApprove?: boolean;
+}
+
+export interface ListingCancelParams {
+  contract: Address;
+  tokenId: IntegerInput;
+  target?: Address;
+}
+
+export interface ListingBuyParams {
+  contract: Address;
+  tokenId: IntegerInput;
+  currency?: Address;
+  amount: AmountInput;
+}
+
+export interface ListingStatusParams {
+  contract: Address;
+  tokenId: IntegerInput;
+  target?: Address;
+}
+
+export interface ListingStatus {
+  seller: Address;
+  currencyAddress: Address;
+  amount: bigint;
+  hasListing: boolean;
+  isEth: boolean;
+}
+
 export interface TokenContractInfo {
   contract: Address;
   chain: SupportedChain;
@@ -163,6 +252,18 @@ export interface RareClient {
     settle(params: AuctionSettleParams): Promise<TransactionResult>;
     cancel(params: AuctionCancelParams): Promise<TransactionResult>;
     getStatus(params: AuctionStatusParams): Promise<AuctionStatus>;
+  };
+  offer: {
+    create(params: OfferCreateParams): Promise<TransactionResult>;
+    cancel(params: OfferCancelParams): Promise<TransactionResult>;
+    accept(params: OfferAcceptParams): Promise<TransactionResult>;
+    getStatus(params: OfferStatusParams): Promise<OfferStatus>;
+  };
+  listing: {
+    create(params: ListingCreateParams): Promise<TransactionResult & { approvalTxHash?: Hash }>;
+    cancel(params: ListingCancelParams): Promise<TransactionResult>;
+    buy(params: ListingBuyParams): Promise<TransactionResult>;
+    getStatus(params: ListingStatusParams): Promise<ListingStatus>;
   };
   search: {
     nfts(params?: NftSearchParams): Promise<SearchPageResponse>;
@@ -422,11 +523,58 @@ export function createRareClient(config: RareClientConfig): RareClient {
       },
 
       async bid(params) {
-        const { walletClient, account } = requireWallet(config);
+        const { walletClient, account, accountAddress } = requireWallet(config);
 
         const currency = params.currency ?? ETH_ADDRESS;
         const amount = toWei(params.amount);
         const isEth = currency === ETH_ADDRESS;
+
+        let value = 0n;
+        if (isEth) {
+          const settingsAddress = await publicClient.readContract({
+            address: addresses.auction,
+            abi: auctionAbi,
+            functionName: 'marketplaceSettings',
+          });
+          const fee = await publicClient.readContract({
+            address: settingsAddress,
+            abi: marketplaceSettingsAbi,
+            functionName: 'calculateMarketplaceFee',
+            args: [amount],
+          });
+          value = amount + fee;
+        } else {
+          try {
+            const allowance = await publicClient.readContract({
+              address: currency,
+              abi: erc20Abi,
+              functionName: 'allowance',
+              args: [accountAddress, addresses.auction],
+            });
+            if (BigInt(allowance as any) < amount) {
+              const approveTx = await walletClient.writeContract({
+                address: currency,
+                abi: erc20Abi,
+                functionName: 'approve',
+                args: [addresses.auction, maxUint256],
+                account,
+                chain: undefined,
+              });
+              await publicClient.waitForTransactionReceipt({ hash: approveTx });
+            }
+          } catch {
+            // If allowance check fails, approve anyway
+            const approveTx = await walletClient.writeContract({
+              address: currency,
+              abi: erc20Abi,
+              functionName: 'approve',
+              args: [addresses.auction, maxUint256],
+              account,
+              chain: undefined,
+            });
+            await publicClient.waitForTransactionReceipt({ hash: approveTx });
+          }
+        }
 
         const txHash = await walletClient.writeContract({
           address: addresses.auction,
@@ -435,7 +583,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
           args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount],
           account,
           chain: undefined,
-          value: isEth ? amount : 0n,
+          value,
         });
 
         const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
@@ -517,6 +665,279 @@ export function createRareClient(config: RareClientConfig): RareClient {
           endTime,
           status,
         };
+      },
+    },
+    offer: {
+      async create(params) {
+        const { walletClient, account, accountAddress } = requireWallet(config);
+
+        const currency = params.currency ?? ETH_ADDRESS;
+        const amount = toWei(params.amount);
+        const isEth = currency === ETH_ADDRESS;
+        const convertible = params.convertible ?? false;
+
+        let value = 0n;
+        if (isEth) {
+          const settingsAddress = await publicClient.readContract({
+            address: addresses.auction,
+            abi: auctionAbi,
+            functionName: 'marketplaceSettings',
+          });
+          const fee = await publicClient.readContract({
+            address: settingsAddress,
+            abi: marketplaceSettingsAbi,
+            functionName: 'calculateMarketplaceFee',
+            args: [amount],
+          });
+          value = amount + fee;
+        } else {
+          try {
+            const allowance = await publicClient.readContract({
+              address: currency,
+              abi: erc20Abi,
+              functionName: 'allowance',
+              args: [accountAddress, addresses.auction],
+            });
+            if (BigInt(allowance as any) < amount) {
+              const approveTx = await walletClient.writeContract({
+                address: currency,
+                abi: erc20Abi,
+                functionName: 'approve',
+                args: [addresses.auction, maxUint256],
+                account,
+                chain: undefined,
+              });
+              await publicClient.waitForTransactionReceipt({ hash: approveTx });
+            }
+          } catch {
+            // If allowance check fails, approve anyway
+            const approveTx = await walletClient.writeContract({
+              address: currency,
+              abi: erc20Abi,
+              functionName: 'approve',
+              args: [addresses.auction, maxUint256],
+              account,
+              chain: undefined,
+            });
+            await publicClient.waitForTransactionReceipt({ hash: approveTx });
+          }
+        }
+
+        const txHash = await walletClient.writeContract({
+          address: addresses.auction,
+          abi: auctionAbi,
+          functionName: 'offer',
+          args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount, convertible],
+          account,
+          chain: undefined,
+          value,
+        });
+
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        return { txHash, receipt };
+      },
+
+      async cancel(params) {
+        const { walletClient, account } = requireWallet(config);
+
+        const currency = params.currency ?? ETH_ADDRESS;
+
+        const txHash = await walletClient.writeContract({
+          address: addresses.auction,
+          abi: auctionAbi,
+          functionName: 'cancelOffer',
+          args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency],
+          account,
+          chain: undefined,
+        });
+
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        return { txHash, receipt };
+      },
+
+      async accept(params) {
+        const { walletClient, account, accountAddress } = requireWallet(config);
+
+        const currency = params.currency ?? ETH_ADDRESS;
+        const amount = toWei(params.amount);
+        const splitAddresses = params.splitAddresses ?? [accountAddress];
+        const splitRatios = params.splitRatios ?? [100];
+
+        const txHash = await walletClient.writeContract({
+          address: addresses.auction,
+          abi: auctionAbi,
+          functionName: 'acceptOffer',
+          args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount, splitAddresses, splitRatios],
+          account,
+          chain: undefined,
+        });
+
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        return { txHash, receipt };
+      },
+
+      async getStatus(params) {
+        const currency = params.currency ?? ETH_ADDRESS;
+
+        const [buyer, amount, timestamp, marketplaceFee, convertible] = await publicClient.readContract({
+          address: addresses.auction,
+          abi: auctionAbi,
+          functionName: 'tokenCurrentOffers',
+          args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency],
+        });
+
+        const hasOffer = amount > 0n;
+
+        return { buyer, amount, timestamp, marketplaceFee, convertible, hasOffer };
+      },
+    },
+    listing: {
+      async create(params) {
+        const { walletClient, account, accountAddress } = requireWallet(config);
+
+        const currency = params.currency ?? ETH_ADDRESS;
+        const price = toWei(params.price);
+        const target = params.target ?? ETH_ADDRESS;
+        const splitAddresses = params.splitAddresses ?? [accountAddress];
+        const splitRatios = params.splitRatios ?? [100];
+        const nftAddress = params.contract;
+
+        let approvalTxHash: Hash | undefined;
+        if (params.autoApprove !== false) {
+          const isApproved = await publicClient.readContract({
+            address: nftAddress,
+            abi: approvalAbi,
+            functionName: 'isApprovedForAll',
+            args: [accountAddress, addresses.auction],
+          });
+
+          if (!isApproved) {
+            approvalTxHash = await walletClient.writeContract({
+              address: nftAddress,
+              abi: approvalAbi,
+              functionName: 'setApprovalForAll',
+              args: [addresses.auction, true],
+              account,
+              chain: undefined,
+            });
+
+            await publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
+          }
+        }
+
+        const txHash = await walletClient.writeContract({
+          address: addresses.auction,
+          abi: auctionAbi,
+          functionName: 'setSalePrice',
+          args: [nftAddress, toInteger(params.tokenId, 'tokenId'), currency, price, target, splitAddresses, splitRatios],
+          account,
+          chain: undefined,
+        });
+
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        return { txHash, receipt, approvalTxHash };
+      },
+
+      async cancel(params) {
+        const { walletClient, account } = requireWallet(config);
+
+        const target = params.target ?? ETH_ADDRESS;
+
+        const txHash = await walletClient.writeContract({
+          address: addresses.auction,
+          abi: auctionAbi,
+          functionName: 'removeSalePrice',
+          args: [params.contract, toInteger(params.tokenId, 'tokenId'), target],
+          account,
+          chain: undefined,
+        });
+
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        return { txHash, receipt };
+      },
+
+      async buy(params) {
+        const { walletClient, account, accountAddress } = requireWallet(config);
+
+        const currency = params.currency ?? ETH_ADDRESS;
+        const amount = toWei(params.amount);
+        const isEth = currency === ETH_ADDRESS;
+
+        let value = 0n;
+        if (isEth) {
+          const settingsAddress = await publicClient.readContract({
+            address: addresses.auction,
+            abi: auctionAbi,
+            functionName: 'marketplaceSettings',
+          });
+          const fee = await publicClient.readContract({
+            address: settingsAddress,
+            abi: marketplaceSettingsAbi,
+            functionName: 'calculateMarketplaceFee',
+            args: [amount],
+          });
+          value = amount + fee;
+        } else {
+          try {
+            const allowance = await publicClient.readContract({
+              address: currency,
+              abi: erc20Abi,
+              functionName: 'allowance',
+              args: [accountAddress, addresses.auction],
+            });
+            if (BigInt(allowance as any) < amount) {
+              const approveTx = await walletClient.writeContract({
+                address: currency,
+                abi: erc20Abi,
+                functionName: 'approve',
+                args: [addresses.auction, maxUint256],
+                account,
+                chain: undefined,
+              });
+              await publicClient.waitForTransactionReceipt({ hash: approveTx });
+            }
+          } catch {
+            // If allowance check fails, approve anyway
+            const approveTx = await walletClient.writeContract({
+              address: currency,
+              abi: erc20Abi,
+              functionName: 'approve',
+              args: [addresses.auction, maxUint256],
+              account,
+              chain: undefined,
+            });
+            await publicClient.waitForTransactionReceipt({ hash: approveTx });
+          }
+        }
+
+        const txHash = await walletClient.writeContract({
+          address: addresses.auction,
+          abi: auctionAbi,
+          functionName: 'buy',
+          args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount],
+          account,
+          chain: undefined,
+          value,
+        });
+
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        return { txHash, receipt };
+      },
+
+      async getStatus(params) {
+        const target = params.target ?? ETH_ADDRESS;
+
+        const [seller, currencyAddress, amount] = await publicClient.readContract({
+          address: addresses.auction,
+          abi: auctionAbi,
+          functionName: 'tokenSalePrices',
+          args: [params.contract, toInteger(params.tokenId, 'tokenId'), target],
+        });
+
+        const hasListing = amount > 0n;
+        const isEth = currencyAddress === ETH_ADDRESS;
+
+        return { seller, currencyAddress, amount, hasListing, isEth };
       },
     },
     search: {

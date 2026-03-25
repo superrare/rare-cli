@@ -52,6 +52,48 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
   },
 };
 
+export type CurrencyName = 'eth' | 'usdc' | 'rare';
+
+const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as `0x${string}`;
+
+const currencyAddresses: Record<CurrencyName, Partial<Record<SupportedChain, `0x${string}`>>> = {
+  eth: {
+    mainnet: ETH_ADDRESS,
+    sepolia: ETH_ADDRESS,
+    base: ETH_ADDRESS,
+    'base-sepolia': ETH_ADDRESS,
+  },
+  rare: {
+    mainnet: '0xba5BDe662c17e2aDFF1075610382B9B691296350',
+    sepolia: '0x197FaeF3f59eC80113e773Bb6206a17d183F97CB',
+    base: '0x691077c8e8de54ea84efd454630439f99bd8c92f',
+    'base-sepolia': '0x8b21bC8571d11F7AdB705ad8F6f6BD1deb79cE01',
+  },
+  usdc: {
+    mainnet: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+    sepolia: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+    base: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    'base-sepolia': '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+  },
+};
+
+export const currencyNames = Object.keys(currencyAddresses) as CurrencyName[];
+
+export function resolveCurrency(input: string, chain: SupportedChain): `0x${string}` {
+  const lower = input.toLowerCase();
+  if (lower in currencyAddresses) {
+    const addr = currencyAddresses[lower as CurrencyName][chain];
+    if (!addr) {
+      throw new Error(`Currency "${lower}" is not available on "${chain}".`);
+    }
+    return addr;
+  }
+  if (input.startsWith('0x')) {
+    return input as `0x${string}`;
+  }
+  throw new Error(`Unknown currency "${input}". Supported: ${currencyNames.join(', ')} or a 0x address.`);
+}
+
 export function getContractAddresses(chain: SupportedChain): ContractSet {
   const addresses = contractAddresses[chain];
   if (!addresses) {
