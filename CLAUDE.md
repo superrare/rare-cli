@@ -1,6 +1,6 @@
 # RARE Protocol CLI
 
-CLI tool for interacting with RARE Protocol smart contracts on Ethereum. Deploy NFT contracts, mint tokens, and manage auctions.
+CLI tool for interacting with RARE Protocol smart contracts on Ethereum. Deploy NFT contracts, mint tokens, manage auctions, create offers and listings.
 
 ## Quick Reference
 
@@ -81,6 +81,47 @@ rare auction cancel --contract <addr> --token-id <id>
 rare auction status --contract <addr> --token-id <id>
 ```
 
+### Offers
+
+```bash
+# Create an offer on a token
+rare offer create --contract <addr> --token-id <id> --amount <eth> [--currency <currency>] [--convertible]
+
+# Cancel an offer
+rare offer cancel --contract <addr> --token-id <id> [--currency <currency>]
+
+# Accept an offer on a token you own
+rare offer accept --contract <addr> --token-id <id> --amount <eth> [--currency <currency>]
+
+# Check offer status (read-only)
+rare offer status --contract <addr> --token-id <id> [--currency <currency>]
+```
+
+### Listings
+
+```bash
+# Create a listing (set sale price; auto-approves if needed)
+rare listing create --contract <addr> --token-id <id> --price <eth> [--currency <currency>] [--target <address>]
+
+# Cancel a listing
+rare listing cancel --contract <addr> --token-id <id> [--target <address>]
+
+# Buy a listed token
+rare listing buy --contract <addr> --token-id <id> --amount <eth> [--currency <currency>]
+
+# Check listing status (read-only)
+rare listing status --contract <addr> --token-id <id> [--target <address>]
+```
+
+### Currencies
+
+All marketplace commands (`auction`, `offer`, `listing`) accept `--currency` with a named token (`eth`, `usdc`, `rare`) or an ERC20 address. ERC20 allowances are auto-approved when needed.
+
+```bash
+# List supported currencies and addresses for the active chain
+rare currencies [--chain <chain>]
+```
+
 ### Search
 
 ```bash
@@ -127,4 +168,6 @@ When operating as an autonomous agent using this CLI:
 5. **Capture output:** All commands print structured output. Parse contract addresses, token IDs, and tx hashes from stdout.
 6. **Error handling:** Contract errors include revert reasons. If a tx fails, read the error message before retrying.
 7. **Auction flow:** The full lifecycle is: deploy -> mint -> auction create -> bid -> settle. Each step requires the output of the previous step.
-8. **Approval is automatic:** `auction create` handles NFT approval automatically — no separate approval step needed.
+8. **Approval is automatic:** `auction create` and `listing create` handle NFT approval automatically — no separate approval step needed.
+9. **ERC20 approval is automatic:** When using `--currency` with an ERC20 token, the CLI auto-approves allowances for bids, offers, and purchases.
+10. **Offer/listing flow:** Offers and listings are alternatives to auctions. A seller can list at a fixed price (`listing create`) or a buyer can make an offer (`offer create`).

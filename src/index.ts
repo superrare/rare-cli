@@ -17,7 +17,7 @@ const program = new Command();
 program
   .name('rare')
   .description('CLI tool for interacting with the RARE protocol smart contracts')
-  .version('0.4.0');
+  .version('0.4.1');
 
 program.addCommand(configureCommand());
 program.addCommand(deployCommand());
