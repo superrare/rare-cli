@@ -4,6 +4,7 @@ import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { printContractError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
+import { resolveCurrency } from '../contracts/addresses.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
@@ -19,14 +20,14 @@ export function auctionCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID to auction')
     .requiredOption('--starting-price <amount>', 'starting price in ETH (or token units)')
     .requiredOption('--duration <seconds>', 'auction duration in seconds')
-    .option('--currency <address>', 'ERC20 currency address (defaults to ETH)')
+    .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
-      const currency = (opts.currency ?? ETH_ADDRESS) as `0x${string}`;
+      const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
 
       console.log(`Creating auction on ${chain}...`);
       console.log(`  Auction contract: ${rare.contracts.auction}`);
@@ -62,14 +63,14 @@ export function auctionCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
     .requiredOption('--amount <amount>', 'bid amount in ETH (or token units)')
-    .option('--currency <address>', 'ERC20 currency address (defaults to ETH)')
+    .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
-      const currency = (opts.currency ?? ETH_ADDRESS) as `0x${string}`;
+      const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
 
       console.log(`Placing bid on ${chain}...`);
