@@ -8,6 +8,11 @@ export type {
   NftSearchParams,
   PinMetadataParams,
   SearchPageResponse,
+  Nft,
+  Collection,
+  NftEvent,
+  UserProfile,
+  Pagination,
 } from './api.js';
 
 export {

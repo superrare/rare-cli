@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { resolveCurrency, currencyNames } from '../contracts/addresses.js';
+import { output } from '../output.js';
 
 export function currenciesCommand(): Command {
   const cmd = new Command('currencies');
@@ -10,11 +11,17 @@ export function currenciesCommand(): Command {
     .action((opts) => {
       const chain = getActiveChain(opts.chain);
 
-      console.log(`\nSupported currencies on ${chain}:\n`);
-      for (const name of currencyNames) {
-        const address = resolveCurrency(name, chain);
-        console.log(`  ${name.toUpperCase().padEnd(6)} ${address}`);
-      }
+      const currencies = currencyNames.map((name) => ({
+        name: name.toUpperCase(),
+        address: resolveCurrency(name, chain),
+      }));
+
+      output(currencies, () => {
+        console.log(`\nSupported currencies on ${chain}:\n`);
+        for (const c of currencies) {
+          console.log(`  ${c.name.padEnd(6)} ${c.address}`);
+        }
+      });
     });
 
   return cmd;

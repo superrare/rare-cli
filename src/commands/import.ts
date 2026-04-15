@@ -2,7 +2,8 @@ import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getWalletClient } from '../client.js';
 import { chainIds } from '../contracts/addresses.js';
-import { importErc721 } from '../ipfs.js';
+import { importErc721 } from '../sdk/api.js';
+import { output, log } from '../output.js';
 
 export function importCommand(): Command {
   const cmd = new Command('import');
@@ -19,18 +20,23 @@ export function importCommand(): Command {
       const contractAddress = opts.contract as string;
       const chainId = chainIds[chain];
 
-      console.log(`Importing ERC-721 contract...`);
-      console.log(`  Chain:    ${chain} (${chainId})`);
-      console.log(`  Contract: ${contractAddress}`);
-      console.log(`  Owner:    ${ownerAddress}`);
+      log(`Importing ERC-721 contract...`);
+      log(`  Chain:    ${chain} (${chainId})`);
+      log(`  Contract: ${contractAddress}`);
+      log(`  Owner:    ${ownerAddress}`);
 
       await importErc721({
         chainId,
-        contractAddress,
-        ownerAddress,
+        contract: contractAddress as `0x${string}`,
+        owner: ownerAddress as `0x${string}`,
       });
 
-      console.log(`\nContract imported successfully.`);
+      output(
+        { imported: true, chain, chainId, contract: contractAddress, owner: ownerAddress },
+        () => {
+          console.log(`\nContract imported successfully.`);
+        },
+      );
     });
 
   return cmd;

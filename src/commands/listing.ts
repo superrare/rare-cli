@@ -5,6 +5,7 @@ import { getPublicClient, getWalletClient } from '../client.js';
 import { printContractError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import { resolveCurrency } from '../contracts/addresses.js';
+import { output, log } from '../output.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
@@ -31,12 +32,12 @@ export function listingCommand(): Command {
       const isEth = currency === ETH_ADDRESS;
       const target = (opts.target ?? ETH_ADDRESS) as `0x${string}`;
 
-      console.log(`Creating listing on ${chain}...`);
-      console.log(`  Marketplace contract: ${rare.contracts.auction}`);
-      console.log(`  NFT contract: ${opts.contract}`);
-      console.log(`  Token ID: ${opts.tokenId}`);
-      console.log(`  Price: ${opts.price} ${isEth ? 'ETH' : currency}`);
-      console.log(`  Target: ${target === ETH_ADDRESS ? 'public' : target}`);
+      log(`Creating listing on ${chain}...`);
+      log(`  Marketplace contract: ${rare.contracts.auction}`);
+      log(`  NFT contract: ${opts.contract}`);
+      log(`  Token ID: ${opts.tokenId}`);
+      log(`  Price: ${opts.price} ${isEth ? 'ETH' : currency}`);
+      log(`  Target: ${target === ETH_ADDRESS ? 'public' : target}`);
 
       try {
         const result = await rare.listing.create({
@@ -47,11 +48,20 @@ export function listingCommand(): Command {
           target,
         });
 
-        if (result.approvalTxHash) {
-          console.log(`Approval tx sent: ${result.approvalTxHash}`);
-        }
-        console.log(`\nTransaction sent: ${result.txHash}`);
-        console.log(`Listing created! Block: ${result.receipt.blockNumber}`);
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            approvalTxHash: result.approvalTxHash ?? null,
+          },
+          () => {
+            if (result.approvalTxHash) {
+              console.log(`Approval tx sent: ${result.approvalTxHash}`);
+            }
+            console.log(`\nTransaction sent: ${result.txHash}`);
+            console.log(`Listing created! Block: ${result.receipt.blockNumber}`);
+          },
+        );
       } catch (error) {
         printContractError(error);
       }
@@ -72,7 +82,7 @@ export function listingCommand(): Command {
       const rare = createRareClient({ publicClient, walletClient: client });
       const target = (opts.target ?? ETH_ADDRESS) as `0x${string}`;
 
-      console.log(`Cancelling listing on ${chain}...`);
+      log(`Cancelling listing on ${chain}...`);
 
       try {
         const result = await rare.listing.cancel({
@@ -81,8 +91,13 @@ export function listingCommand(): Command {
           target,
         });
 
-        console.log(`Transaction sent: ${result.txHash}`);
-        console.log(`Listing cancelled! Block: ${result.receipt.blockNumber}`);
+        output(
+          { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Listing cancelled! Block: ${result.receipt.blockNumber}`);
+          },
+        );
       } catch (error) {
         printContractError(error);
       }
@@ -105,11 +120,11 @@ export function listingCommand(): Command {
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
 
-      console.log(`Buying token on ${chain}...`);
-      console.log(`  Marketplace contract: ${rare.contracts.auction}`);
-      console.log(`  NFT contract: ${opts.contract}`);
-      console.log(`  Token ID: ${opts.tokenId}`);
-      console.log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
+      log(`Buying token on ${chain}...`);
+      log(`  Marketplace contract: ${rare.contracts.auction}`);
+      log(`  NFT contract: ${opts.contract}`);
+      log(`  Token ID: ${opts.tokenId}`);
+      log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
 
       try {
         const result = await rare.listing.buy({
@@ -119,8 +134,13 @@ export function listingCommand(): Command {
           currency,
         });
 
-        console.log(`\nTransaction sent: ${result.txHash}`);
-        console.log(`Token purchased! Block: ${result.receipt.blockNumber}`);
+        output(
+          { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
+          () => {
+            console.log(`\nTransaction sent: ${result.txHash}`);
+            console.log(`Token purchased! Block: ${result.receipt.blockNumber}`);
+          },
+        );
       } catch (error) {
         printContractError(error);
       }
@@ -146,14 +166,16 @@ export function listingCommand(): Command {
         target,
       });
 
-      console.log('\nListing Details:');
-      if (!result.hasListing) {
-        console.log('  No active listing found.');
-      } else {
-        console.log(`  Seller:   ${result.seller}`);
-        console.log(`  Amount:   ${formatEther(result.amount)} ${result.isEth ? 'ETH' : result.currencyAddress}`);
-        console.log(`  Currency: ${result.isEth ? 'ETH' : result.currencyAddress}`);
-      }
+      output(result, () => {
+        console.log('\nListing Details:');
+        if (!result.hasListing) {
+          console.log('  No active listing found.');
+        } else {
+          console.log(`  Seller:   ${result.seller}`);
+          console.log(`  Amount:   ${formatEther(result.amount)} ${result.isEth ? 'ETH' : result.currencyAddress}`);
+          console.log(`  Currency: ${result.isEth ? 'ETH' : result.currencyAddress}`);
+        }
+      });
     });
 
   return cmd;
