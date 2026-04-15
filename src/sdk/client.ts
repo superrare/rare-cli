@@ -19,12 +19,24 @@ import {
   searchCollections as searchCollectionsApi,
   searchNfts as searchNftsApi,
   uploadMedia as uploadMediaApi,
+  getNft as getNftApi,
+  getNftEvents as getNftEventsApi,
+  getCollection as getCollectionApi,
+  getCollectionEvents as getCollectionEventsApi,
+  getUser as getUserApi,
+  getTokenPrice as getTokenPriceApi,
   type CollectionSearchParams,
   type ImportErc721Params,
   type NftSearchParams,
   type NftMediaEntry,
+  type NftAttribute,
   type PinMetadataParams,
   type SearchPageResponse,
+  type Nft,
+  type Collection,
+  type NftEvent,
+  type UserProfile,
+  type Pagination,
 } from './api.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
@@ -266,8 +278,19 @@ export interface RareClient {
     getStatus(params: ListingStatusParams): Promise<ListingStatus>;
   };
   search: {
-    nfts(params?: NftSearchParams): Promise<SearchPageResponse>;
-    collections(params?: CollectionSearchParams): Promise<SearchPageResponse>;
+    nfts(params?: NftSearchParams): Promise<SearchPageResponse<Nft>>;
+    collections(params?: CollectionSearchParams): Promise<SearchPageResponse<Collection>>;
+  };
+  nft: {
+    get(universalTokenId: string): Promise<Nft>;
+    events(universalTokenId: string, opts?: { page?: number; perPage?: number; eventType?: string | string[]; sortBy?: 'newest' | 'oldest' }): Promise<SearchPageResponse<NftEvent>>;
+  };
+  collection: {
+    get(id: string): Promise<Collection>;
+    events(id: string, opts?: { page?: number; perPage?: number; eventType?: string | string[]; sortBy?: 'newest' | 'oldest' }): Promise<SearchPageResponse<NftEvent>>;
+  };
+  user: {
+    get(address: string): Promise<UserProfile>;
   };
   media: {
     upload(buffer: Uint8Array, filename: string): Promise<NftMediaEntry>;
@@ -279,6 +302,7 @@ export interface RareClient {
   token: {
     getContractInfo(params: { contract: Address }): Promise<TokenContractInfo>;
     getTokenInfo(params: { contract: Address; tokenId: IntegerInput }): Promise<TokenInfo>;
+    getPrice(symbol: string): Promise<{ symbol: string; priceUsd: number; decimals: number; chainId: number; address: string }>;
   };
 }
 
@@ -942,12 +966,33 @@ export function createRareClient(config: RareClientConfig): RareClient {
     },
     search: {
       async nfts(params = {}) {
-        const requestParams = params.chainIds ? params : { ...params, chainIds: [chainId] };
+        const requestParams = params.chainId ? params : { ...params, chainId };
         return searchNftsApi(requestParams);
       },
 
       async collections(params = {}) {
         return searchCollectionsApi(params);
+      },
+    },
+    nft: {
+      async get(universalTokenId) {
+        return getNftApi(universalTokenId);
+      },
+      async events(universalTokenId, opts) {
+        return getNftEventsApi(universalTokenId, opts);
+      },
+    },
+    collection: {
+      async get(id) {
+        return getCollectionApi(id);
+      },
+      async events(id, opts) {
+        return getCollectionEventsApi(id, opts);
+      },
+    },
+    user: {
+      async get(address) {
+        return getUserApi(address);
       },
     },
     media: {
@@ -1025,6 +1070,10 @@ export function createRareClient(config: RareClientConfig): RareClient {
           owner,
           tokenUri,
         };
+      },
+
+      async getPrice(symbol) {
+        return getTokenPriceApi(symbol);
       },
     },
   };

@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
+import { output, log } from '../output.js';
 
 function deployErc721Command(): Command {
   const cmd = new Command('erc721');
@@ -18,26 +19,35 @@ function deployErc721Command(): Command {
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
 
-      console.log(`Deploying ERC-721 contract on ${chain}...`);
-      console.log(`  Factory: ${rare.contracts.factory}`);
-      console.log(`  Name: ${name}`);
-      console.log(`  Symbol: ${symbol}`);
-      if (opts.maxTokens) console.log(`  Max tokens: ${opts.maxTokens}`);
-      console.log('Waiting for confirmation...');
+      log(`Deploying ERC-721 contract on ${chain}...`);
+      log(`  Factory: ${rare.contracts.factory}`);
+      log(`  Name: ${name}`);
+      log(`  Symbol: ${symbol}`);
+      if (opts.maxTokens) log(`  Max tokens: ${opts.maxTokens}`);
+      log('Waiting for confirmation...');
 
       const result = await rare.deploy.erc721({
         name,
         symbol,
         maxTokens: opts.maxTokens,
       });
-      console.log(`Transaction sent: ${result.txHash}`);
 
-      if (result.contract) {
-        console.log(`\nERC-721 contract deployed at: ${result.contract}`);
-      } else {
-        console.log(`\nTransaction confirmed. Block: ${result.receipt.blockNumber}`);
-        console.log('Could not parse deployed address from logs.');
-      }
+      output(
+        {
+          txHash: result.txHash,
+          blockNumber: result.receipt.blockNumber.toString(),
+          contract: result.contract ?? null,
+        },
+        () => {
+          console.log(`Transaction sent: ${result.txHash}`);
+          if (result.contract) {
+            console.log(`\nERC-721 contract deployed at: ${result.contract}`);
+          } else {
+            console.log(`\nTransaction confirmed. Block: ${result.receipt.blockNumber}`);
+            console.log('Could not parse deployed address from logs.');
+          }
+        },
+      );
     });
 
   return cmd;

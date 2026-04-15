@@ -3,6 +3,7 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { readConfig, writeConfig, getActiveChain } from '../config.js';
 import { getWalletClient } from '../client.js';
 import { isSupportedChain, supportedChains, type SupportedChain } from '../contracts/addresses.js';
+import { output } from '../output.js';
 
 export function walletCommand(): Command {
   const cmd = new Command('wallet');
@@ -18,11 +19,13 @@ export function walletCommand(): Command {
       const privateKey = generatePrivateKey();
       const account = privateKeyToAccount(privateKey);
 
-      console.log('Generated new wallet:');
-      console.log(`  Address:     ${account.address}`);
-      console.log(`  Private Key: ${privateKey}`);
-      console.log('');
-      console.log('⚠ Store your private key securely. It will not be shown again.');
+      output({ address: account.address, privateKey }, () => {
+        console.log('Generated new wallet:');
+        console.log(`  Address:     ${account.address}`);
+        console.log(`  Private Key: ${privateKey}`);
+        console.log('');
+        console.log('⚠ Store your private key securely. It will not be shown again.');
+      });
 
       if (opts.save) {
         const selectedChain = opts.chain ?? 'sepolia';

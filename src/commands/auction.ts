@@ -5,6 +5,7 @@ import { getPublicClient, getWalletClient } from '../client.js';
 import { printContractError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import { resolveCurrency } from '../contracts/addresses.js';
+import { output, log } from '../output.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
@@ -29,13 +30,13 @@ export function auctionCommand(): Command {
       const rare = createRareClient({ publicClient, walletClient: client });
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
 
-      console.log(`Creating auction on ${chain}...`);
-      console.log(`  Auction contract: ${rare.contracts.auction}`);
-      console.log(`  NFT contract: ${opts.contract}`);
-      console.log(`  Token ID: ${opts.tokenId}`);
-      console.log(`  Starting price: ${opts.startingPrice} ETH`);
-      console.log(`  Duration: ${opts.duration} seconds`);
-      console.log(`  Currency: ${currency === ETH_ADDRESS ? 'ETH' : currency}`);
+      log(`Creating auction on ${chain}...`);
+      log(`  Auction contract: ${rare.contracts.auction}`);
+      log(`  NFT contract: ${opts.contract}`);
+      log(`  Token ID: ${opts.tokenId}`);
+      log(`  Starting price: ${opts.startingPrice} ETH`);
+      log(`  Duration: ${opts.duration} seconds`);
+      log(`  Currency: ${currency === ETH_ADDRESS ? 'ETH' : currency}`);
 
       try {
         const result = await rare.auction.create({
@@ -46,11 +47,20 @@ export function auctionCommand(): Command {
           currency,
         });
 
-        if (result.approvalTxHash) {
-          console.log(`Approval tx sent: ${result.approvalTxHash}`);
-        }
-        console.log(`\nTransaction sent: ${result.txHash}`);
-        console.log(`Auction created! Block: ${result.receipt.blockNumber}`);
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            approvalTxHash: result.approvalTxHash ?? null,
+          },
+          () => {
+            if (result.approvalTxHash) {
+              console.log(`Approval tx sent: ${result.approvalTxHash}`);
+            }
+            console.log(`\nTransaction sent: ${result.txHash}`);
+            console.log(`Auction created! Block: ${result.receipt.blockNumber}`);
+          },
+        );
       } catch (error) {
         printContractError(error);
       }
@@ -73,11 +83,11 @@ export function auctionCommand(): Command {
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
 
-      console.log(`Placing bid on ${chain}...`);
-      console.log(`  Auction contract: ${rare.contracts.auction}`);
-      console.log(`  NFT contract: ${opts.contract}`);
-      console.log(`  Token ID: ${opts.tokenId}`);
-      console.log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
+      log(`Placing bid on ${chain}...`);
+      log(`  Auction contract: ${rare.contracts.auction}`);
+      log(`  NFT contract: ${opts.contract}`);
+      log(`  Token ID: ${opts.tokenId}`);
+      log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
 
       try {
         const result = await rare.auction.bid({
@@ -87,8 +97,13 @@ export function auctionCommand(): Command {
           currency,
         });
 
-        console.log(`\nTransaction sent: ${result.txHash}`);
-        console.log(`Bid placed! Block: ${result.receipt.blockNumber}`);
+        output(
+          { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
+          () => {
+            console.log(`\nTransaction sent: ${result.txHash}`);
+            console.log(`Bid placed! Block: ${result.receipt.blockNumber}`);
+          },
+        );
       } catch (error) {
         printContractError(error);
       }
@@ -107,7 +122,7 @@ export function auctionCommand(): Command {
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
 
-      console.log(`Settling auction on ${chain}...`);
+      log(`Settling auction on ${chain}...`);
 
       try {
         const result = await rare.auction.settle({
@@ -115,8 +130,13 @@ export function auctionCommand(): Command {
           tokenId: opts.tokenId,
         });
 
-        console.log(`Transaction sent: ${result.txHash}`);
-        console.log(`Auction settled! Block: ${result.receipt.blockNumber}`);
+        output(
+          { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Auction settled! Block: ${result.receipt.blockNumber}`);
+          },
+        );
       } catch (error) {
         printContractError(error);
       }
@@ -135,7 +155,7 @@ export function auctionCommand(): Command {
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
 
-      console.log(`Cancelling auction on ${chain}...`);
+      log(`Cancelling auction on ${chain}...`);
 
       try {
         const result = await rare.auction.cancel({
@@ -143,8 +163,13 @@ export function auctionCommand(): Command {
           tokenId: opts.tokenId,
         });
 
-        console.log(`Transaction sent: ${result.txHash}`);
-        console.log(`Auction cancelled! Block: ${result.receipt.blockNumber}`);
+        output(
+          { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Auction cancelled! Block: ${result.receipt.blockNumber}`);
+          },
+        );
       } catch (error) {
         printContractError(error);
       }
@@ -169,18 +194,20 @@ export function auctionCommand(): Command {
 
       const endDate = result.endTime ? new Date(Number(result.endTime) * 1000) : null;
 
-      console.log('\nAuction Details:');
-      console.log(`  Seller:         ${result.seller}`);
-      console.log(`  Minimum bid:    ${formatEther(result.minimumBid)} ${result.isEth ? 'ETH' : result.currency}`);
-      console.log(`  Currency:       ${result.isEth ? 'ETH' : result.currency}`);
-      console.log(`  Duration:       ${result.lengthOfAuction}s`);
-      console.log(`  Status:         ${result.status}`);
-      if (result.started) {
-        console.log(`  Started at:     ${new Date(Number(result.startingTime) * 1000).toISOString()}`);
-        console.log(`  Ends at:        ${endDate!.toISOString()}`);
-      }
-      console.log(`  Creation block: ${result.creationBlock}`);
-      console.log(`  Auction type:   ${result.auctionType}`);
+      output(result, () => {
+        console.log('\nAuction Details:');
+        console.log(`  Seller:         ${result.seller}`);
+        console.log(`  Minimum bid:    ${formatEther(result.minimumBid)} ${result.isEth ? 'ETH' : result.currency}`);
+        console.log(`  Currency:       ${result.isEth ? 'ETH' : result.currency}`);
+        console.log(`  Duration:       ${result.lengthOfAuction}s`);
+        console.log(`  Status:         ${result.status}`);
+        if (result.started) {
+          console.log(`  Started at:     ${new Date(Number(result.startingTime) * 1000).toISOString()}`);
+          console.log(`  Ends at:        ${endDate!.toISOString()}`);
+        }
+        console.log(`  Creation block: ${result.creationBlock}`);
+        console.log(`  Auction type:   ${result.auctionType}`);
+      });
     });
 
   return cmd;

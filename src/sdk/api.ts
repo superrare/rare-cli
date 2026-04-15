@@ -1,57 +1,23 @@
 import { isAddress, type Address } from 'viem';
-import type { CollectionSearchParams, NftSearchParams, SearchPageResponse } from '../search.js';
+import { createApiClient, type ApiClient } from '../data-access/index.js';
+import type { components } from '../data-access/schema.js';
 
-const API_BASE_URL = 'https://api.superrare.org';
+let _client: ApiClient | undefined;
 
-type MediaUploadUrlResponse = {
-  uploadId: string;
-  key: string;
-  bucket: string;
-  partSize: number;
-  presignedUrls: string[];
-  gatewayBaseUrl: string;
-};
+function getClient(): ApiClient {
+  _client ??= createApiClient();
+  return _client;
+}
 
-type MultipartUploadPart = {
-  ETag: string;
-  PartNumber: number;
-};
+// --- Re-exported types from OpenAPI schema ---
 
-type MediaUploadCompleteResponse = {
-  cid: string;
-  ipfsUrl: string;
-  gatewayUrl: string;
-};
+export type Nft = components['schemas']['Nft'];
+export type Collection = components['schemas']['Collection'];
+export type NftEvent = components['schemas']['NftEvent'];
+export type UserProfile = components['schemas']['UserProfile'];
+export type Pagination = components['schemas']['Pagination'];
 
-type MediaGenerateResponse = {
-  media: {
-    uri: string;
-    mimeType: string;
-    size?: number;
-    dimensions?: string;
-  };
-};
-
-type MetadataResponse = {
-  ipfsUrl: string;
-  gatewayUrl: string;
-  metadata: Record<string, unknown>;
-};
-
-const MIME_TYPES: Record<string, string> = {
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.svg': 'image/svg+xml',
-  '.mp4': 'video/mp4',
-  '.mov': 'video/quicktime',
-  '.webm': 'video/webm',
-  '.glb': 'model/gltf-binary',
-  '.gltf': 'model/gltf+json',
-  '.html': 'text/html',
-};
+// --- Types for media/metadata (kept for SDK compatibility) ---
 
 export type NftMediaEntry = {
   url: string;
@@ -85,6 +51,55 @@ type ImportErc721RequestParams = {
   chainId: number;
   contract: Address;
   owner: Address;
+};
+
+// --- Search types (new API uses GET with query params + pagination) ---
+
+export type NftSearchParams = {
+  query?: string;
+  page?: number;
+  perPage?: number;
+  sortBy?: 'newest' | 'oldest' | 'priceAsc' | 'priceDesc' | 'recentlySold' | 'auctionEndingSoon' | 'recentActivity' | 'bidAsc' | 'bidDesc';
+  ownerAddress?: string;
+  creatorAddress?: string;
+  contractAddress?: string;
+  collectionId?: string;
+  chainId?: number;
+  hasAuction?: boolean;
+  auctionState?: 'PENDING' | 'RUNNING' | 'UNSETTLED';
+  hasListing?: boolean;
+  hasOffer?: boolean;
+  tags?: string[];
+  mediaType?: 'IMAGE' | 'VIDEO' | 'GIF' | '3D' | 'HTML' | 'AUDIO';
+};
+
+export type CollectionSearchParams = {
+  query?: string;
+  page?: number;
+  perPage?: number;
+  sortBy?: 'newest' | 'oldest';
+};
+
+export type SearchPageResponse<T> = {
+  data: T[];
+  pagination: Pagination;
+};
+
+// --- MIME types ---
+
+const MIME_TYPES: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.mp4': 'video/mp4',
+  '.mov': 'video/quicktime',
+  '.webm': 'video/webm',
+  '.glb': 'model/gltf-binary',
+  '.gltf': 'model/gltf+json',
+  '.html': 'text/html',
 };
 
 function inferMimeType(filename: string): string {
@@ -123,24 +138,12 @@ function parseDimensions(dimensions: string | undefined): { width: number; heigh
   return { width, height };
 }
 
-async function apiPost<T>(path: string, payload: Record<string, unknown>): Promise<T> {
-  const url = `${API_BASE_URL}${path}`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
+// --- Multipart upload (uses presigned URLs directly, not via openapi-fetch) ---
 
-  const text = await response.text();
-  const json = text ? JSON.parse(text) : {};
-
-  if (!response.ok) {
-    const message = (json as Record<string, unknown>).error ?? text;
-    throw new Error(`API error ${response.status} on ${path}: ${String(message)}`);
-  }
-
-  return json as T;
-}
+type MultipartUploadPart = {
+  ETag: string;
+  PartNumber: number;
+};
 
 async function uploadParts(
   fileBuffer: Uint8Array,
@@ -174,28 +177,35 @@ async function uploadParts(
   return parts;
 }
 
+// --- Public API functions ---
+
 export async function uploadMedia(buffer: Uint8Array, filename: string): Promise<NftMediaEntry> {
+  const client = getClient();
   const fileSize = buffer.byteLength;
   const safeFilename = normalizeFilename(filename);
   const mimeType = inferMimeType(safeFilename);
 
-  const init = await apiPost<MediaUploadUrlResponse>('/api/nft/media-upload-url', {
-    fileSize,
-    filename: safeFilename,
+  const { data: init } = await client.POST('/v1/nfts/metadata/media/uploads', {
+    body: { fileSize, filename: safeFilename },
   });
+  if (!init) throw new Error('Failed to initiate media upload');
 
   const parts = await uploadParts(buffer, init.partSize, init.presignedUrls);
-  const complete = await apiPost<MediaUploadCompleteResponse>('/api/nft/media-upload-complete', {
-    key: init.key,
-    uploadId: init.uploadId,
-    bucket: init.bucket,
-    parts,
-  });
 
-  const generated = await apiPost<MediaGenerateResponse>('/api/nft/media-generate', {
-    uri: complete.ipfsUrl,
-    mimeType,
+  const { data: complete } = await client.POST('/v1/nfts/metadata/media/uploads/complete', {
+    body: {
+      key: init.key,
+      uploadId: init.uploadId,
+      bucket: init.bucket,
+      parts,
+    },
   });
+  if (!complete) throw new Error('Failed to complete media upload');
+
+  const { data: generated } = await client.POST('/v1/nfts/metadata/media/generate', {
+    body: { uri: complete.ipfsUrl, mimeType },
+  });
+  if (!generated) throw new Error('Failed to generate media metadata');
 
   const dimensions = parseDimensions(generated.media.dimensions);
   return {
@@ -207,24 +217,24 @@ export async function uploadMedia(buffer: Uint8Array, filename: string): Promise
 }
 
 export async function pinMetadata(opts: PinMetadataParams): Promise<string> {
-  const nftMedia: Record<string, NftMediaEntry> = {
-    image: opts.image,
-  };
+  const client = getClient();
+
+  const nftMedia: Record<string, NftMediaEntry> = { image: opts.image };
   if (opts.video) {
     nftMedia.video = opts.video;
   }
 
-  const payload: Record<string, unknown> = {
-    name: opts.name,
-    description: opts.description,
-    nftMedia,
-    tags: opts.tags ?? [],
-  };
-  if (opts.attributes && opts.attributes.length > 0) {
-    payload.attributes = opts.attributes;
-  }
+  const { data: result } = await client.POST('/v1/nfts/metadata', {
+    body: {
+      name: opts.name,
+      description: opts.description,
+      nftMedia: nftMedia as any,
+      tags: opts.tags ?? [],
+      ...(opts.attributes?.length ? { attributes: opts.attributes as any } : {}),
+    },
+  });
+  if (!result) throw new Error('Failed to pin metadata');
 
-  const result = await apiPost<MetadataResponse>('/api/nft/metadata', payload);
   return result.ipfsUrl;
 }
 
@@ -233,44 +243,147 @@ export async function importErc721(opts: ImportErc721RequestParams): Promise<voi
   assertEvmAddress(opts.contract, 'contract');
   assertEvmAddress(opts.owner, 'owner');
 
-  const result = await apiPost<{ ok: boolean }>('/api/nft/import-erc721', {
-    chainId: opts.chainId,
-    contractAddress: opts.contract.toLowerCase(),
-    ownerAddress: opts.owner.toLowerCase(),
-  });
-
-  if (result.ok !== true) {
-    throw new Error('Unexpected response from /api/nft/import-erc721');
-  }
-}
-
-async function searchPost(path: string, payload: Record<string, unknown>): Promise<SearchPageResponse> {
-  return apiPost<SearchPageResponse>(path, payload);
-}
-
-export async function searchNfts(params: NftSearchParams = {}): Promise<SearchPageResponse> {
-  return searchPost('/api/search/nfts', {
-    query: params.query ?? '',
-    take: params.take ?? 24,
-    cursor: params.cursor ?? 0,
-    sortBy: params.sortBy ?? 'RECENT_ACTIVITY_DESC',
-    ownerAddresses: params.ownerAddresses ?? [],
-    creatorAddresses: params.creatorAddresses ?? [],
-    collectionIds: params.collectionIds ?? [],
-    contractAddresses: params.contractAddresses ?? [],
-    ...(params.auctionStates ? { auctionStates: params.auctionStates } : {}),
-    ...(params.chainIds ? { chainIds: params.chainIds } : {}),
+  const client = getClient();
+  await client.POST('/v1/collections/import', {
+    body: {
+      chainId: opts.chainId,
+      contractAddress: opts.contract.toLowerCase(),
+      ownerAddress: opts.owner.toLowerCase(),
+    },
   });
 }
 
-export async function searchCollections(params: CollectionSearchParams = {}): Promise<SearchPageResponse> {
-  return searchPost('/api/search/collections', {
-    query: params.query ?? '',
-    take: params.take ?? 24,
-    cursor: params.cursor ?? 0,
-    sortBy: params.sortBy ?? 'NEWEST',
-    ownerAddresses: params.ownerAddresses ?? [],
+export async function searchNfts(params: NftSearchParams = {}): Promise<SearchPageResponse<Nft>> {
+  const client = getClient();
+
+  const { data } = await client.GET('/v1/nfts', {
+    params: {
+      query: {
+        q: params.query,
+        page: params.page ?? 1,
+        perPage: params.perPage ?? 24,
+        sortBy: params.sortBy ?? 'recentActivity',
+        ownerAddress: params.ownerAddress,
+        creatorAddress: params.creatorAddress,
+        contractAddress: params.contractAddress as any,
+        collectionId: params.collectionId,
+        chainId: params.chainId,
+        hasAuction: params.hasAuction,
+        auctionState: params.auctionState,
+        hasListing: params.hasListing,
+        hasOffer: params.hasOffer,
+        tags: params.tags,
+        mediaType: params.mediaType,
+      },
+    },
   });
+  if (!data) throw new Error('Failed to search NFTs');
+
+  return data;
 }
 
-export type { CollectionSearchParams, NftSearchParams, SearchPageResponse } from '../search.js';
+export async function searchCollections(params: CollectionSearchParams = {}): Promise<SearchPageResponse<Collection>> {
+  const client = getClient();
+
+  const { data } = await client.GET('/v1/collections', {
+    params: {
+      query: {
+        q: params.query,
+        page: params.page ?? 1,
+        perPage: params.perPage ?? 24,
+        sortBy: params.sortBy ?? 'newest',
+      },
+    },
+  });
+  if (!data) throw new Error('Failed to search collections');
+
+  return data;
+}
+
+export async function getNft(universalTokenId: string): Promise<Nft> {
+  const client = getClient();
+
+  const { data } = await client.GET('/v1/nfts/{universalTokenId}', {
+    params: { path: { universalTokenId } },
+  });
+  if (!data) throw new Error(`NFT not found: ${universalTokenId}`);
+
+  return data.data;
+}
+
+export async function getNftEvents(
+  universalTokenId: string,
+  opts?: { page?: number; perPage?: number; eventType?: string | string[]; sortBy?: 'newest' | 'oldest' },
+): Promise<SearchPageResponse<NftEvent>> {
+  const client = getClient();
+
+  const { data } = await client.GET('/v1/nfts/{universalTokenId}/events', {
+    params: {
+      path: { universalTokenId },
+      query: {
+        page: opts?.page,
+        perPage: opts?.perPage,
+        eventType: opts?.eventType as any,
+        sortBy: opts?.sortBy,
+      },
+    },
+  });
+  if (!data) throw new Error(`Failed to get events for NFT: ${universalTokenId}`);
+
+  return data;
+}
+
+export async function getCollection(id: string): Promise<Collection> {
+  const client = getClient();
+
+  const { data } = await client.GET('/v1/collections/{id}', {
+    params: { path: { id } },
+  });
+  if (!data) throw new Error(`Collection not found: ${id}`);
+
+  return data.data;
+}
+
+export async function getCollectionEvents(
+  id: string,
+  opts?: { page?: number; perPage?: number; eventType?: string | string[]; sortBy?: 'newest' | 'oldest' },
+): Promise<SearchPageResponse<NftEvent>> {
+  const client = getClient();
+
+  const { data } = await client.GET('/v1/collections/{id}/events', {
+    params: {
+      path: { id },
+      query: {
+        page: opts?.page,
+        perPage: opts?.perPage,
+        eventType: opts?.eventType as any,
+        sortBy: opts?.sortBy,
+      },
+    },
+  });
+  if (!data) throw new Error(`Failed to get events for collection: ${id}`);
+
+  return data;
+}
+
+export async function getUser(address: string): Promise<UserProfile> {
+  const client = getClient();
+
+  const { data } = await client.GET('/v1/users/{address}', {
+    params: { path: { address } },
+  });
+  if (!data) throw new Error(`User not found: ${address}`);
+
+  return data.data;
+}
+
+export async function getTokenPrice(symbol: string): Promise<{ symbol: string; priceUsd: number; decimals: number; chainId: number; address: string }> {
+  const client = getClient();
+
+  const { data } = await client.GET('/v1/tokens/price/{symbol}', {
+    params: { path: { symbol } },
+  });
+  if (!data) throw new Error(`Token price not found: ${symbol}`);
+
+  return data.data;
+}
