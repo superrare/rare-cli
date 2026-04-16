@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
+import { printError } from '../errors.js';
 import { output, log } from '../output.js';
 
 function deployErc721Command(): Command {
@@ -26,28 +27,27 @@ function deployErc721Command(): Command {
       if (opts.maxTokens) log(`  Max tokens: ${opts.maxTokens}`);
       log('Waiting for confirmation...');
 
-      const result = await rare.deploy.erc721({
-        name,
-        symbol,
-        maxTokens: opts.maxTokens,
-      });
+      try {
+        const result = await rare.deploy.erc721({
+          name,
+          symbol,
+          maxTokens: opts.maxTokens,
+        });
 
-      output(
-        {
-          txHash: result.txHash,
-          blockNumber: result.receipt.blockNumber.toString(),
-          contract: result.contract ?? null,
-        },
-        () => {
-          console.log(`Transaction sent: ${result.txHash}`);
-          if (result.contract) {
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            contract: result.contract,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
             console.log(`\nERC-721 contract deployed at: ${result.contract}`);
-          } else {
-            console.log(`\nTransaction confirmed. Block: ${result.receipt.blockNumber}`);
-            console.log('Could not parse deployed address from logs.');
-          }
-        },
-      );
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
     });
 
   return cmd;

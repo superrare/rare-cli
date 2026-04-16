@@ -12,6 +12,7 @@ import { offerCommand } from './commands/offer.js';
 import { listingCommand } from './commands/listing.js';
 import { currenciesCommand } from './commands/currencies.js';
 import { setJsonMode } from './output.js';
+import { printError } from './errors.js';
 
 const program = new Command();
 
@@ -41,7 +42,5 @@ program.addCommand(listingCommand());
 program.addCommand(currenciesCommand());
 
 program.parseAsync(process.argv).catch((err) => {
-  // Only print here if not already handled (printContractError calls process.exit)
-  console.error('Error:', err.message ?? err);
-  process.exit(1);
+  printError(err);
 });
