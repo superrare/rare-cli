@@ -3,6 +3,7 @@ import { getActiveChain } from '../config.js';
 import { getWalletClient } from '../client.js';
 import { chainIds } from '../contracts/addresses.js';
 import { importErc721 } from '../sdk/api.js';
+import { printError } from '../errors.js';
 import { output, log } from '../output.js';
 
 export function importCommand(): Command {
@@ -25,18 +26,22 @@ export function importCommand(): Command {
       log(`  Contract: ${contractAddress}`);
       log(`  Owner:    ${ownerAddress}`);
 
-      await importErc721({
-        chainId,
-        contract: contractAddress as `0x${string}`,
-        owner: ownerAddress as `0x${string}`,
-      });
+      try {
+        await importErc721({
+          chainId,
+          contract: contractAddress as `0x${string}`,
+          owner: ownerAddress as `0x${string}`,
+        });
 
-      output(
-        { imported: true, chain, chainId, contract: contractAddress, owner: ownerAddress },
-        () => {
-          console.log(`\nContract imported successfully.`);
-        },
-      );
+        output(
+          { imported: true, chain, chainId, contract: contractAddress, owner: ownerAddress },
+          () => {
+            console.log(`\nContract imported successfully.`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
     });
 
   return cmd;
