@@ -57,3 +57,29 @@ export function getWalletClient(chain: SupportedChain) {
     account,
   };
 }
+
+export function getWalletClientStrict(chain: SupportedChain) {
+  const chainConfig = getChainConfig(chain);
+  if (!chainConfig.privateKey) {
+    throw new Error(
+      `No private key configured for "${chain}". Run: rare configure --chain ${chain} --private-key 0x...`
+    );
+  }
+
+  if (!chainConfig.rpcUrl) {
+    throw new Error(
+      `No RPC URL configured for "${chain}". Run: rare configure --chain ${chain} --rpc-url <your-node-url>`
+    );
+  }
+
+  const account = privateKeyToAccount(chainConfig.privateKey as `0x${string}`);
+  return {
+    client: createWalletClient({
+      chain: viemChains[chain],
+      transport: http(chainConfig.rpcUrl),
+      account,
+    }),
+    account,
+    rpcUrl: chainConfig.rpcUrl,
+  };
+}

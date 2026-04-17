@@ -9,7 +9,12 @@ import {
   parseEventLogs,
   maxUint256,
 } from 'viem';
-import { getContractAddresses, chainIds, type SupportedChain } from '../contracts/addresses.js';
+import {
+  getContractAddresses,
+  chainIds,
+  supportedChainFromChainId,
+  type SupportedChain,
+} from '../contracts/addresses.js';
 import { factoryAbi } from '../contracts/abis/factory.js';
 import { tokenAbi } from '../contracts/abis/token.js';
 import { auctionAbi } from '../contracts/abis/auction.js';
@@ -38,6 +43,17 @@ import {
   type UserProfile,
   type Pagination,
 } from './api.js';
+import {
+  createPreservationUploadSession,
+  finalizeTokenPreservation,
+  quoteTokenPreservation as quoteTokenPreservationApi,
+  uploadPreservationAssets,
+  paymentNetworkForChain,
+  type PreservationQuote,
+  type PreservationReceipt,
+} from './backup-service.js';
+import { parseUniversalTokenId, resolveTokenPreservation } from './backup-resolver.js';
+import { createX402PaymentFetch } from './x402-client.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
@@ -245,6 +261,32 @@ export interface TokenInfo {
   tokenUri: string;
 }
 
+export type BackupPublicClientResolver = (chain: SupportedChain) => PublicClient;
+
+export interface QuoteTokenPreservationParams {
+  serviceUrl: string;
+  contract?: Address;
+  tokenId?: IntegerInput;
+  universalTokenId?: string;
+  sourceChain?: SupportedChain;
+  paymentChain?: SupportedChain;
+  gatewayUrl?: string;
+  maxBytes?: number;
+  fetchImpl?: typeof fetch;
+  publicClientResolver?: BackupPublicClientResolver;
+}
+
+export interface PreserveTokenParams extends QuoteTokenPreservationParams {
+  paymentWalletClient?: WalletClient;
+  paymentRpcUrl?: string;
+  paymentFetch?: typeof fetch;
+}
+
+export interface PreserveTokenResult {
+  quote: PreservationQuote;
+  receipt: PreservationReceipt;
+}
+
 export interface RareClient {
   chain: SupportedChain;
   chainId: number;
@@ -295,6 +337,10 @@ export interface RareClient {
   media: {
     upload(buffer: Uint8Array, filename: string): Promise<NftMediaEntry>;
     pinMetadata(opts: PinMetadataParams): Promise<string>;
+  };
+  backup: {
+    quoteTokenPreservation(params: QuoteTokenPreservationParams): Promise<PreservationQuote>;
+    preserveToken(params: PreserveTokenParams): Promise<PreserveTokenResult>;
   };
   import: {
     erc721(params: ImportErc721Params): Promise<void>;
@@ -382,6 +428,72 @@ function toWei(value: AmountInput): bigint {
   }
 
   return parseEther(String(value));
+}
+
+function resolveBackupSourceChain(params: QuoteTokenPreservationParams, defaultChain: SupportedChain): SupportedChain {
+  if (params.universalTokenId) {
+    return parseUniversalTokenId(params.universalTokenId).chain;
+  }
+
+  return params.sourceChain ?? defaultChain;
+}
+
+function resolveBackupPublicClient(
+  config: RareClientConfig,
+  params: QuoteTokenPreservationParams,
+  sourceChain: SupportedChain,
+): PublicClient {
+  if (sourceChain === resolveChainFromPublicClient(config.publicClient)) {
+    return config.publicClient;
+  }
+
+  const resolved = params.publicClientResolver?.(sourceChain);
+  if (!resolved) {
+    throw new Error(
+      `No public client available for "${sourceChain}". Pass params.publicClientResolver(chain) to use backup flows across chains.`
+    );
+  }
+
+  return resolved;
+}
+
+function resolveBackupPaymentAccount(
+  config: RareClientConfig,
+  params: PreserveTokenParams,
+  paymentChain: SupportedChain,
+): { account: WalletAccount; rpcUrl: string } {
+  const walletClient = params.paymentWalletClient ?? config.walletClient;
+  if (!walletClient) {
+    throw new Error('paymentWalletClient is required for preservation payments.');
+  }
+
+  const account = walletClient.account;
+  if (!account) {
+    throw new Error('paymentWalletClient must include an account for preservation payments.');
+  }
+
+  const configuredChain = walletClient.chain?.id ? supportedChainFromChainId(walletClient.chain.id) : undefined;
+  if (configuredChain && configuredChain !== paymentChain) {
+    throw new Error(
+      `paymentWalletClient is configured for "${configuredChain}", but preservation payment chain is "${paymentChain}".`
+    );
+  }
+
+  const rpcUrl = params.paymentRpcUrl ?? extractRpcUrl(walletClient);
+  if (!rpcUrl) {
+    throw new Error(
+      `No RPC URL available for preservation payment chain "${paymentChain}". Pass params.paymentRpcUrl.`
+    );
+  }
+
+  return { account, rpcUrl };
+}
+
+function extractRpcUrl(walletClient: WalletClient): string | undefined {
+  const transport = walletClient.transport as
+    | { url?: string; value?: { url?: string }; config?: { url?: string } }
+    | undefined;
+  return transport?.url ?? transport?.value?.url ?? transport?.config?.url;
 }
 
 export function createRareClient(config: RareClientConfig): RareClient {
@@ -1002,6 +1114,117 @@ export function createRareClient(config: RareClientConfig): RareClient {
 
       async pinMetadata(opts) {
         return pinMetadataApi(opts);
+      },
+    },
+    backup: {
+      async quoteTokenPreservation(params) {
+        const sourceChain = resolveBackupSourceChain(params, chain);
+        const paymentChain = params.paymentChain ?? sourceChain;
+        const sourcePublicClient = resolveBackupPublicClient(config, params, sourceChain);
+        const resolved = await resolveTokenPreservation({
+          publicClient: sourcePublicClient,
+          chain: sourceChain,
+          contract: params.contract,
+          tokenId: params.tokenId,
+          universalTokenId: params.universalTokenId,
+          gatewayUrl: params.gatewayUrl,
+          maxBytes: params.maxBytes,
+          fetchImpl: params.fetchImpl,
+        });
+
+        return quoteTokenPreservationApi({
+          serviceUrl: params.serviceUrl,
+          request: {
+            source: resolved.source,
+            assets: resolved.assets.map(({ assetId, role, originalUri, filename, mimeType, size, sha256 }) => ({
+              assetId,
+              role,
+              originalUri,
+              filename,
+              mimeType,
+              size,
+              sha256,
+            })),
+            preferredPaymentChain: paymentChain,
+          },
+          fetchImpl: params.fetchImpl,
+        });
+      },
+
+      async preserveToken(params) {
+        const sourceChain = resolveBackupSourceChain(params, chain);
+        const paymentChain = params.paymentChain ?? sourceChain;
+        const sourcePublicClient = resolveBackupPublicClient(config, params, sourceChain);
+        const resolved = await resolveTokenPreservation({
+          publicClient: sourcePublicClient,
+          chain: sourceChain,
+          contract: params.contract,
+          tokenId: params.tokenId,
+          universalTokenId: params.universalTokenId,
+          gatewayUrl: params.gatewayUrl,
+          maxBytes: params.maxBytes,
+          fetchImpl: params.fetchImpl,
+        });
+
+        const quote = await quoteTokenPreservationApi({
+          serviceUrl: params.serviceUrl,
+          request: {
+            source: resolved.source,
+            assets: resolved.assets.map(({ assetId, role, originalUri, filename, mimeType, size, sha256 }) => ({
+              assetId,
+              role,
+              originalUri,
+              filename,
+              mimeType,
+              size,
+              sha256,
+            })),
+            preferredPaymentChain: paymentChain,
+          },
+          fetchImpl: params.fetchImpl,
+        });
+
+        const selectedNetwork = paymentNetworkForChain(paymentChain);
+        if (!quote.acceptedPayments.some((option) => option.network === selectedNetwork)) {
+          throw new Error(
+            `Preservation service does not advertise a payment option for "${paymentChain}" (${selectedNetwork}).`
+          );
+        }
+
+        const { account, rpcUrl } = resolveBackupPaymentAccount(config, params, paymentChain);
+        const paymentFetch =
+          params.paymentFetch ??
+          createX402PaymentFetch({
+            paymentChain,
+            rpcUrl,
+            account,
+            fetchImpl: params.fetchImpl,
+          });
+
+        const uploadSession = await createPreservationUploadSession({
+          serviceUrl: params.serviceUrl,
+          quoteId: quote.quoteId,
+          fetchImpl: paymentFetch,
+        });
+
+        await uploadPreservationAssets(
+          params.serviceUrl,
+          uploadSession,
+          resolved.assets,
+          params.fetchImpl,
+        );
+
+        const receipt = await finalizeTokenPreservation({
+          serviceUrl: params.serviceUrl,
+          quoteId: quote.quoteId,
+          uploadToken: uploadSession.uploadToken,
+          fetchImpl: params.fetchImpl,
+        });
+
+        return {
+          quote,
+          receipt,
+        };
       },
     },
     import: {

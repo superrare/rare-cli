@@ -126,6 +126,45 @@ rare mint \
   --royalty-receiver 0x...
 ```
 
+### Back Up an Existing NFT
+
+Resolve an existing token's `tokenURI`, fetch its metadata and directly referenced media locally, request a hosted preservation quote, and optionally pay/pin via x402 using `RARE`.
+
+```bash
+# Quote only
+rare backup token \
+  --contract 0x... \
+  --token-id 1 \
+  --chain sepolia \
+  --quote-only
+
+# Full preserve flow
+rare backup token \
+  --contract 0x... \
+  --token-id 1 \
+  --chain mainnet \
+  --payment-chain base
+
+# Or resolve by universal token ID
+rare backup token \
+  --universal-token-id 1-0x...-1
+```
+
+Useful options:
+
+```bash
+rare backup token \
+  --contract 0x... \
+  --token-id 1 \
+  --service-url https://your-preservation-service.com \
+  --gateway https://ipfs.io \
+  --max-bytes 1073741824
+```
+
+The CLI defaults to `http://localhost:6969` for preservation requests. Use `--service-url` or `rare configure --backup-service-url <url>` to point at another seller.
+
+For paid preserves, the selected `--payment-chain` must have both a private key and RPC URL configured. The backup flow does not auto-generate wallets.
+
 ### Auctions
 
 ```bash
@@ -317,6 +356,21 @@ await rare.import.erc721({
 });
 ```
 
+### Quote or preserve an existing NFT
+
+`backup.quoteTokenPreservation` resolves metadata/media locally, computes exact byte counts and hashes, then requests a hosted quote. `backup.preserveToken` continues through upload session creation, uploads the staged bytes, and finalizes the receipt.
+
+```ts
+const quote = await rare.backup.quoteTokenPreservation({
+  serviceUrl: 'https://your-preservation-service.com',
+  contract: '0xYourContractAddress',
+  tokenId: '1',
+  sourceChain: 'sepolia',
+});
+
+console.log(quote.billableBytes, quote.tokenAmount);
+```
+
 ## Configuration
 
 Config is stored at `~/.rare/config.json`. Each chain has its own private key and RPC URL.
@@ -334,6 +388,12 @@ rare configure --default-chain mainnet
 
 # View current config
 rare configure --show
+
+# Override preservation defaults
+rare configure --backup-service-url https://your-preservation-service.com
+rare configure --backup-payment-chain base
+rare configure --backup-gateway-url https://ipfs.io
+rare configure --backup-max-bytes 1073741824
 ```
 
 ## Best Practices
