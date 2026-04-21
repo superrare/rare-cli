@@ -161,9 +161,11 @@ rare backup token \
   --max-bytes 1073741824
 ```
 
-The CLI defaults to `http://localhost:6969` for preservation requests. Use `--service-url` or `rare configure --backup-service-url <url>` to point at another seller.
+The CLI defaults to `http://localhost:8005` for preservation requests. Use `--service-url` or `rare configure --backup-service-url <url>` to point at another seller.
 
-For paid preserves, the selected `--payment-chain` must have both a private key and RPC URL configured. The backup flow does not auto-generate wallets.
+For paid preserves, the selected `--payment-chain` must have both a private key and RPC URL configured. The backup flow does not auto-generate wallets. Before any payment-capable request, the CLI now prints the quote and asks for confirmation. Use `--yes` to skip the prompt in automation.
+
+Preservation currently only supports CID-backed IPFS metadata and media references. Use `ipfs://...` URIs or IPFS gateway URLs like `https://ipfs.io/ipfs/<cid>...`.
 
 ### Auctions
 

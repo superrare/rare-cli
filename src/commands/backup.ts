@@ -1,17 +1,27 @@
+import process from 'node:process';
+import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
 import { formatEther } from 'viem';
 import { getWalletClientStrict, getPublicClient } from '../client.js';
 import { getActiveChain, getPreservationConfig } from '../config.js';
 import { supportedChainFromChainId, type SupportedChain } from '../contracts/addresses.js';
-import type { PreservationQuote, PreservationReceipt } from '../sdk/backup-service.js';
+import { output, log, isJsonMode } from '../output.js';
+import { parseUniversalTokenId, resolveTokenPreservation, type ResolvedTokenPreservation } from '../sdk/backup-resolver.js';
 import {
   DEFAULT_PRESERVATION_GATEWAY_URL,
   DEFAULT_PRESERVATION_MAX_BYTES,
   DEFAULT_PRESERVATION_SERVICE_URL,
+  createPreservationUploadSession,
+  finalizeTokenPreservation,
+  paymentNetworkForChain,
+  quoteTokenPreservation as quoteTokenPreservationApi,
+  uploadPreservationAssets,
+  type PreservationAsset,
+  type PreservationQuote,
+  type PreservationReceipt,
 } from '../sdk/backup-service.js';
-import { parseUniversalTokenId } from '../sdk/backup-resolver.js';
 import { createRareClient } from '../sdk/client.js';
-import { output, log } from '../output.js';
+import { createX402PaymentFetch } from '../sdk/x402-client.js';
 
 export function backupCommand(): Command {
   const cmd = new Command('backup');
@@ -26,7 +36,8 @@ export function backupCommand(): Command {
     .option('--chain <chain>', 'chain to use for on-chain tokenURI resolution')
     .option('--payment-chain <chain>', 'chain to use for RARE/x402 payment')
     .option('--quote-only', 'resolve bytes and request a quote without paying')
-    .option('--service-url <url>', 'override the preservation service URL (default: http://localhost:6969)')
+    .option('-y, --yes', 'approve the quoted preservation cost without prompting')
+    .option('--service-url <url>', 'override the preservation service URL (default: http://localhost:8005)')
     .option('--gateway <url>', 'override the IPFS gateway used for asset fetches')
     .option('--max-bytes <bytes>', 'maximum bytes to preserve before aborting')
     .action(async (opts) => {
@@ -50,10 +61,6 @@ export function backupCommand(): Command {
         return created;
       };
 
-      const rare = createRareClient({
-        publicClient: publicClientResolver(sourceChain),
-      });
-
       const backupParams = {
         serviceUrl,
         contract: opts.contract as `0x${string}` | undefined,
@@ -67,6 +74,9 @@ export function backupCommand(): Command {
       };
 
       if (opts.quoteOnly) {
+        const rare = createRareClient({
+          publicClient: publicClientResolver(sourceChain),
+        });
         log(`Resolving NFT and requesting a preservation quote on ${sourceChain}...`);
         const quote = await rare.backup.quoteTokenPreservation(backupParams);
         output(quote, () => {
@@ -76,11 +86,38 @@ export function backupCommand(): Command {
       }
 
       const paymentWallet = getWalletClientStrict(paymentChain);
-      log(`Resolving NFT on ${sourceChain} and preparing preservation payment on ${paymentChain}...`);
-      const result = await rare.backup.preserveToken({
-        ...backupParams,
-        paymentWalletClient: paymentWallet.client,
-        paymentRpcUrl: paymentWallet.rpcUrl,
+      log(`Resolving NFT and requesting a preservation quote on ${sourceChain}...`);
+      const resolved = await resolveTokenPreservation({
+        publicClient: publicClientResolver(sourceChain),
+        chain: sourceChain,
+        contract: backupParams.contract,
+        tokenId: backupParams.tokenId,
+        universalTokenId: backupParams.universalTokenId,
+        gatewayUrl: backupParams.gatewayUrl,
+        maxBytes: backupParams.maxBytes,
+      });
+      const quote = await quoteTokenPreservationApi({
+        serviceUrl,
+        request: createQuoteRequest(resolved, paymentChain),
+      });
+
+      const confirmed = await confirmPreservationQuote({
+        quote,
+        paymentChain,
+        assumeYes: Boolean(opts.yes),
+      });
+      if (!confirmed) {
+        log('Preservation cancelled.');
+        return;
+      }
+
+      log(`Preparing preservation payment on ${paymentChain}...`);
+      const result = await preserveQuotedToken({
+        serviceUrl,
+        paymentChain,
+        paymentWallet,
+        quote,
+        resolved,
       });
 
       output(result, () => {
@@ -148,6 +185,130 @@ function parseMaxBytes(rawValue: string | undefined, configuredValue: number | u
   return value;
 }
 
+function createQuoteRequest(
+  resolved: ResolvedTokenPreservation,
+  paymentChain: SupportedChain,
+): {
+  source: PreservationQuote['source'];
+  assets: PreservationQuote['assets'];
+  preferredPaymentChain: SupportedChain;
+} {
+  return {
+    source: resolved.source,
+    assets: resolved.assets.map(({ assetId, role, originalUri, filename, mimeType, size, sha256 }) => ({
+      assetId,
+      role,
+      originalUri,
+      filename,
+      mimeType,
+      size,
+      sha256,
+    })),
+    preferredPaymentChain: paymentChain,
+  };
+}
+
+async function confirmPreservationQuote(opts: {
+  quote: PreservationQuote;
+  paymentChain: SupportedChain;
+  assumeYes: boolean;
+}): Promise<boolean> {
+  if (!isJsonMode()) {
+    printQuote(opts.quote, opts.paymentChain);
+  }
+
+  if (opts.assumeYes) {
+    return true;
+  }
+
+  if (isJsonMode()) {
+    throw new Error(
+      'Preservation payments now require confirmation. Re-run without --json to confirm interactively, or pass --yes to accept the quoted cost.'
+    );
+  }
+
+  if (!hasInteractiveTerminal()) {
+    throw new Error(
+      'Preservation payment requires confirmation, but no interactive terminal is available. Re-run with --yes to accept the quoted cost, or use --quote-only.'
+    );
+  }
+
+  const answer = await askQuestion(
+    `\nProceed with preservation payment of ${formatRareAmount(opts.quote.tokenAmount)} on ${displayChainName(opts.paymentChain)}? [y/N] `
+  );
+
+  return isAffirmativeAnswer(answer);
+}
+
+function hasInteractiveTerminal(): boolean {
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY);
+}
+
+async function askQuestion(question: string): Promise<string> {
+  const readline = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  try {
+    return await readline.question(question);
+  } finally {
+    readline.close();
+  }
+}
+
+function isAffirmativeAnswer(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'y' || normalized === 'yes';
+}
+
+async function preserveQuotedToken(opts: {
+  serviceUrl: string;
+  paymentChain: SupportedChain;
+  paymentWallet: ReturnType<typeof getWalletClientStrict>;
+  quote: PreservationQuote;
+  resolved: ResolvedTokenPreservation;
+}): Promise<{
+  quote: PreservationQuote;
+  receipt: PreservationReceipt;
+}> {
+  const selectedNetwork = paymentNetworkForChain(opts.paymentChain);
+  if (!opts.quote.acceptedPayments.some((option) => option.network === selectedNetwork)) {
+    throw new Error(
+      `Preservation service does not advertise a payment option for "${opts.paymentChain}" (${selectedNetwork}).`
+    );
+  }
+
+  const paymentFetch = createX402PaymentFetch({
+    paymentChain: opts.paymentChain,
+    rpcUrl: opts.paymentWallet.rpcUrl,
+    account: opts.paymentWallet.account,
+  });
+
+  const uploadSession = await createPreservationUploadSession({
+    serviceUrl: opts.serviceUrl,
+    quoteId: opts.quote.quoteId,
+    fetchImpl: paymentFetch,
+  });
+
+  await uploadPreservationAssets(
+    opts.serviceUrl,
+    uploadSession,
+    opts.resolved.assets,
+  );
+
+  const receipt = await finalizeTokenPreservation({
+    serviceUrl: opts.serviceUrl,
+    quoteId: opts.quote.quoteId,
+    uploadToken: uploadSession.uploadToken,
+  });
+
+  return {
+    quote: opts.quote,
+    receipt,
+  };
+}
+
 function printQuote(quote: PreservationQuote, paymentChain: SupportedChain): void {
   console.log('\nPreservation quote:');
   console.log(`  Quote ID:       ${quote.quoteId}`);
@@ -185,13 +346,23 @@ function printReceipt(
   if (settlementTx) {
     console.log(`  Settlement tx:  ${settlementTx}`);
   }
-  console.log(`  Record CID:     ${receipt.manifestCid}`);
-  console.log(`  Record URI:     ${receipt.manifestIpfsUrl}`);
   const manifestGatewayUrl = resolveManifestGatewayUrl(receipt, opts.gatewayUrl);
   if (manifestGatewayUrl) {
-    console.log(`  Record link:    ${manifestGatewayUrl}`);
+    console.log(`  Your Receipt:   ${manifestGatewayUrl}`);
   }
   console.log(`  Assets pinned:  ${receipt.assets.length}`);
+  const pinnedAssetLinks = receipt.assets
+    .map((asset) => ({
+      label: formatPinnedAssetLabel(asset),
+      url: resolvePreservedAssetGatewayUrl(asset, opts.gatewayUrl),
+    }))
+    .filter((asset): asset is { label: string; url: string } => asset.url !== null);
+  if (pinnedAssetLinks.length > 0) {
+    console.log('  Asset links:');
+    for (const asset of pinnedAssetLinks) {
+      console.log(`    ${asset.label}: ${asset.url}`);
+    }
+  }
 }
 
 function formatRareAmount(tokenAmount: string): string {
@@ -260,6 +431,27 @@ function resolveManifestGatewayUrl(
 
   const normalizedGatewayUrl = gatewayUrl.replace(/\/+$/, '');
   return `${normalizedGatewayUrl}/ipfs/${receipt.manifestCid}`;
+}
+
+function resolvePreservedAssetGatewayUrl(
+  asset: PreservationAsset,
+  gatewayUrl?: string,
+): string | null {
+  if (asset.gatewayUrl) {
+    return asset.gatewayUrl;
+  }
+
+  if (!gatewayUrl || !asset.cid) {
+    return null;
+  }
+
+  const normalizedGatewayUrl = gatewayUrl.replace(/\/+$/, '');
+  return `${normalizedGatewayUrl}/ipfs/${asset.cid}`;
+}
+
+function formatPinnedAssetLabel(asset: PreservationAsset): string {
+  const label = asset.filename || asset.assetId;
+  return asset.role ? `${asset.role} (${label})` : label;
 }
 
 function extractTransactionFromResponse(response: unknown): string | null {

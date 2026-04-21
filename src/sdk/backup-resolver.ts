@@ -32,6 +32,10 @@ const EXTENSION_MIME_TYPES: Record<string, string> = {
   '.ogg': 'audio/ogg',
 };
 
+const CID_V0_REGEX = /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/;
+const CID_V1_REGEX =
+  /^(b[A-Za-z2-7]{58,}|B[A-Z2-7]{58,}|z[1-9A-HJ-NP-Za-km-z]{48,}|F[0-9A-F]{50,})$/;
+
 type MetadataCandidate = {
   role: string;
   uri: string;
@@ -41,7 +45,6 @@ type ResolvedUri = {
   originalUri: string;
   normalizedUri: string;
   fetchUrl: string | null;
-  dataUri?: string;
 };
 
 type DownloadedAsset = {
@@ -142,13 +145,13 @@ export async function resolveTokenPreservation(
   let totalBytes = stagedAssets[0].size;
   assertWithinByteCap(totalBytes, maxBytes);
 
-  const metadataFetchUrl = metadataDownload.fetchUrl;
+  const metadataBaseUri = metadataDownload.normalizedUri;
   const candidates = collectMetadataCandidates(metadata);
   const seenUris = new Set<string>();
   let assetIndex = 1;
 
   for (const candidate of candidates) {
-    const resolvedUri = resolveUri(candidate.uri, gatewayUrl, metadataFetchUrl);
+    const resolvedUri = resolveUri(candidate.uri, gatewayUrl, metadataBaseUri);
     if (seenUris.has(resolvedUri.normalizedUri)) {
       continue;
     }
@@ -159,7 +162,7 @@ export async function resolveTokenPreservation(
       uri: resolvedUri.originalUri,
       gatewayUrl,
       fetchImpl,
-      metadataFetchUrl,
+      metadataBaseUri,
     });
 
     const staged = toStagedAsset({
@@ -239,6 +242,13 @@ function collectMetadataCandidates(metadata: unknown): MetadataCandidate[] {
   pushStringCandidate(candidates, 'model', root.model);
   pushStringCandidate(candidates, 'background_image', root.background_image);
 
+  const media = root.media;
+  if (media && typeof media === 'object') {
+    const mediaRecord = media as Record<string, unknown>;
+    pushStringCandidate(candidates, 'media.uri', mediaRecord.uri);
+    pushStringCandidate(candidates, 'media.url', mediaRecord.url);
+  }
+
   const properties = root.properties;
   if (properties && typeof properties === 'object') {
     const propertiesRecord = properties as Record<string, unknown>;
@@ -258,7 +268,44 @@ function collectMetadataCandidates(metadata: unknown): MetadataCandidate[] {
     }
   }
 
+  collectNestedAbsoluteIpfsCandidates(metadata, null, candidates);
+
   return candidates;
+}
+
+function collectNestedAbsoluteIpfsCandidates(
+  value: unknown,
+  role: string | null,
+  target: MetadataCandidate[],
+): void {
+  if (typeof value === 'string') {
+    if (!role) return;
+    pushAbsoluteIpfsCandidate(target, role, value);
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) => {
+      collectNestedAbsoluteIpfsCandidates(entry, role ? `${role}[${index}]` : `[${index}]`, target);
+    });
+    return;
+  }
+
+  if (!value || typeof value !== 'object') {
+    return;
+  }
+
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    collectNestedAbsoluteIpfsCandidates(entry, role ? `${role}.${key}` : key, target);
+  }
+}
+
+function pushAbsoluteIpfsCandidate(target: MetadataCandidate[], role: string, value: unknown): void {
+  if (typeof value !== 'string') return;
+  const trimmed = value.trim();
+  if (!trimmed) return;
+  if (!looksLikeSupportedAbsolutePreservationUri(trimmed)) return;
+  target.push({ role, uri: trimmed });
 }
 
 function pushStringCandidate(target: MetadataCandidate[], role: string, value: unknown): void {
@@ -274,20 +321,9 @@ async function downloadAsset(opts: {
   uri: string;
   gatewayUrl: string;
   fetchImpl: typeof fetch;
-  metadataFetchUrl?: string | null;
+  metadataBaseUri?: string | null;
 }): Promise<DownloadedAsset> {
-  const resolved = resolveUri(opts.uri, opts.gatewayUrl, opts.metadataFetchUrl ?? null);
-  if (resolved.dataUri) {
-    const parsed = parseDataUri(resolved.dataUri);
-    return {
-      originalUri: resolved.originalUri,
-      normalizedUri: resolved.normalizedUri,
-      fetchUrl: null,
-      bytes: parsed.bytes,
-      mimeType: parsed.mimeType,
-    };
-  }
-
+  const resolved = resolveUri(opts.uri, opts.gatewayUrl, opts.metadataBaseUri ?? null);
   if (!resolved.fetchUrl) {
     throw new Error(`Unable to resolve "${opts.uri}" for preservation.`);
   }
@@ -311,61 +347,9 @@ async function downloadAsset(opts: {
   };
 }
 
-function resolveUri(rawValue: string, gatewayUrl: string, metadataFetchUrl?: string | null): ResolvedUri {
-  const value = rawValue.trim();
-  if (!value) {
-    throw new Error('Encountered an empty metadata URI while resolving preservation assets.');
-  }
-
-  if (value.startsWith('data:')) {
-    return {
-      originalUri: value,
-      normalizedUri: value,
-      fetchUrl: null,
-      dataUri: value,
-    };
-  }
-
-  if (value.startsWith('ipfs://')) {
-    const path = normalizeIpfsPath(value.slice('ipfs://'.length));
-    return {
-      originalUri: `ipfs://${path}`,
-      normalizedUri: `ipfs://${path}`,
-      fetchUrl: `${gatewayUrl}/ipfs/${path}`,
-    };
-  }
-
-  if (value.startsWith('ar://')) {
-    const arPath = value.slice('ar://'.length).replace(/^\/+/, '');
-    if (!arPath) {
-      throw new Error(`Invalid Arweave URI: "${value}"`);
-    }
-    return {
-      originalUri: `ar://${arPath}`,
-      normalizedUri: `ar://${arPath}`,
-      fetchUrl: `https://arweave.net/${arPath}`,
-    };
-  }
-
-  if (/^https?:\/\//i.test(value)) {
-    const normalized = new URL(value).toString();
-    return {
-      originalUri: normalized,
-      normalizedUri: normalized,
-      fetchUrl: normalized,
-    };
-  }
-
-  if (metadataFetchUrl) {
-    const normalized = new URL(value, metadataFetchUrl).toString();
-    return {
-      originalUri: normalized,
-      normalizedUri: normalized,
-      fetchUrl: normalized,
-    };
-  }
-
-  throw new Error(`Unsupported URI scheme for preservation: "${value}"`);
+function resolveUri(rawValue: string, gatewayUrl: string, metadataBaseUri?: string | null): ResolvedUri {
+  const canonicalUri = canonicalizeIpfsUri(rawValue, metadataBaseUri);
+  return toIpfsResolvedUri(extractIpfsPathFromCanonicalUri(canonicalUri), gatewayUrl);
 }
 
 function normalizeIpfsPath(value: string): string {
@@ -380,20 +364,154 @@ function normalizeGatewayUrl(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
-function parseDataUri(uri: string): { bytes: Uint8Array; mimeType: string } {
-  const match = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(uri);
-  if (!match) {
-    throw new Error(`Invalid data URI: "${uri.slice(0, 32)}..."`);
+function canonicalizeIpfsUri(rawValue: string, metadataBaseUri?: string | null): string {
+  const value = rawValue.trim();
+  if (!value) {
+    throw new Error('Encountered an empty metadata URI while resolving preservation assets.');
   }
 
-  const mimeType = match[1] || 'application/octet-stream';
-  const isBase64 = Boolean(match[2]);
-  const payload = match[3] ?? '';
-  const bytes = isBase64
-    ? Uint8Array.from(Buffer.from(payload, 'base64'))
-    : Uint8Array.from(Buffer.from(decodeURIComponent(payload), 'utf-8'));
+  if (value.startsWith('data:')) {
+    throw new Error(
+      'Preservation only supports CID-backed IPFS URIs. Embedded data: URIs are not eligible for preservation.'
+    );
+  }
 
-  return { bytes, mimeType };
+  if (value.startsWith('ar://')) {
+    throw new Error(
+      `Preservation only supports CID-backed IPFS URIs. Found Arweave URI "${value}". Preservation does not rewrite tokenURI or metadata references, so ar:// assets are not eligible.`
+    );
+  }
+
+  const absoluteUri = tryCanonicalizeAbsoluteIpfsUri(value);
+  if (absoluteUri) {
+    return absoluteUri;
+  }
+
+  if (hasUriScheme(value)) {
+    throw unsupportedPreservationUri(value);
+  }
+
+  if (metadataBaseUri) {
+    return resolveRelativeIpfsUri(value, metadataBaseUri);
+  }
+
+  throw unsupportedPreservationUri(value);
+}
+
+function looksLikeSupportedAbsolutePreservationUri(value: string): boolean {
+  try {
+    return tryCanonicalizeAbsoluteIpfsUri(value) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function tryCanonicalizeAbsoluteIpfsUri(value: string): string | null {
+  if (value.startsWith('ipfs://')) {
+    return `ipfs://${normalizeIpfsPath(stripQueryAndFragment(value.slice('ipfs://'.length)))}`;
+  }
+
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const ipfsPath = extractIpfsPathFromHttpUrl(new URL(value));
+      return ipfsPath ? `ipfs://${ipfsPath}` : null;
+    } catch {
+      return null;
+    }
+  }
+
+  const bareIpfsPath = extractIpfsPathFromBareValue(value);
+  return bareIpfsPath ? `ipfs://${bareIpfsPath}` : null;
+}
+
+function resolveRelativeIpfsUri(value: string, metadataBaseUri: string): string {
+  const metadataBasePath = extractIpfsPathFromCanonicalUri(metadataBaseUri);
+  const baseSegments = metadataBasePath.split('/').filter(Boolean);
+  const resolvedSegments = [...(baseSegments.length > 1 ? baseSegments.slice(0, -1) : baseSegments)];
+  const relativePath = stripQueryAndFragment(value).replace(/^\/+/, '');
+
+  if (!relativePath) {
+    throw unsupportedPreservationUri(value);
+  }
+
+  for (const segment of relativePath.split('/')) {
+    if (!segment || segment === '.') {
+      continue;
+    }
+
+    if (segment === '..') {
+      if (resolvedSegments.length > 1) {
+        resolvedSegments.pop();
+      }
+      continue;
+    }
+
+    resolvedSegments.push(segment);
+  }
+
+  return `ipfs://${normalizeIpfsPath(resolvedSegments.join('/'))}`;
+}
+
+function hasUriScheme(value: string): boolean {
+  return /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(value);
+}
+
+function stripQueryAndFragment(value: string): string {
+  return value.replace(/[?#].*$/, '');
+}
+
+function extractIpfsPathFromBareValue(value: string): string | null {
+  const candidate = stripQueryAndFragment(value).replace(/^\/+/, '');
+  if (!candidate) {
+    return null;
+  }
+
+  const normalized = normalizeIpfsPath(candidate);
+  const [cid] = normalized.split('/');
+  return cid && isLikelyCid(cid) ? normalized : null;
+}
+
+function isLikelyCid(value: string): boolean {
+  return CID_V0_REGEX.test(value) || CID_V1_REGEX.test(value);
+}
+
+function extractIpfsPathFromHttpUrl(url: URL): string | null {
+  const pathMatch = /^\/ipfs\/(.+)$/.exec(url.pathname);
+  if (pathMatch) {
+    return normalizeIpfsPath(pathMatch[1]);
+  }
+
+  const subdomainMatch = /^([^.]+)\.ipfs\./i.exec(url.hostname);
+  if (subdomainMatch) {
+    const pathSuffix = url.pathname.replace(/^\/+/, '');
+    return normalizeIpfsPath(
+      pathSuffix.length > 0 ? `${subdomainMatch[1]}/${pathSuffix}` : subdomainMatch[1]
+    );
+  }
+
+  return null;
+}
+
+function extractIpfsPathFromCanonicalUri(uri: string): string {
+  if (!uri.startsWith('ipfs://')) {
+    throw new Error(`Expected an ipfs:// URI, received "${uri}".`);
+  }
+
+  return normalizeIpfsPath(uri.slice('ipfs://'.length));
+}
+
+function toIpfsResolvedUri(path: string, gatewayUrl: string): ResolvedUri {
+  return {
+    originalUri: `ipfs://${path}`,
+    normalizedUri: `ipfs://${path}`,
+    fetchUrl: `${gatewayUrl}/ipfs/${path}`,
+  };
+}
+
+function unsupportedPreservationUri(value: string): Error {
+  return new Error(
+    `Preservation only supports CID-backed IPFS URIs. Found "${value}". Use ipfs://<cid>/..., a bare <cid>/... path, or an IPFS gateway URL like https://ipfs.io/ipfs/<cid>/...`
+  );
 }
 
 function toStagedAsset(opts: {

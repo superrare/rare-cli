@@ -3,8 +3,10 @@ import { chainIds, type SupportedChain } from '../contracts/addresses.js';
 
 export const DEFAULT_PRESERVATION_GATEWAY_URL = 'https://ipfs.io';
 export const DEFAULT_PRESERVATION_MAX_BYTES = 1_073_741_824;
-export const DEFAULT_PRESERVATION_SERVICE_URL = 'http://localhost:6969';
+export const DEFAULT_PRESERVATION_SERVICE_URL = 'http://localhost:8005';
 export const RARE_RATE_PER_BYTE_ATOMIC = 69_690_000_000n;
+const FINALIZE_POLL_INTERVAL_MS = 1_000;
+const FINALIZE_POLL_TIMEOUT_MS = 300_000;
 
 export interface TokenPreservationSource {
   chain: SupportedChain;
@@ -95,6 +97,24 @@ export interface PreservationReceipt {
   assets: PreservationAsset[];
   source: TokenPreservationSource;
   createdAt: string;
+}
+
+export type PreservationFinalizeJobState =
+  | 'queued'
+  | 'processing'
+  | 'completed'
+  | 'failed';
+
+interface PreservationFinalizeJobStatus {
+  jobId: string | null;
+  quoteId: string;
+  status: PreservationFinalizeJobState;
+  attempts: number;
+  submittedAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  errorMessage: string | null;
+  receipt: PreservationReceipt | null;
 }
 
 export interface QuoteTokenPreservationOptions {
@@ -199,7 +219,8 @@ export async function uploadPreservationAssets(
 export async function finalizeTokenPreservation(
   opts: FinalizeTokenPreservationOptions,
 ): Promise<PreservationReceipt> {
-  const response = await (opts.fetchImpl ?? fetch)(
+  const fetchImpl = opts.fetchImpl ?? fetch;
+  const response = await fetchImpl(
     serviceUrl(`/v1/preservations/quotes/${encodeURIComponent(opts.quoteId)}/finalize`, opts.serviceUrl),
     {
       method: 'POST',
@@ -208,7 +229,14 @@ export async function finalizeTokenPreservation(
     },
   );
 
-  return normalizePreservationReceipt(await parseServiceJson<unknown>(response, 'Failed to finalize preservation'));
+  const initialStatus = normalizeFinalizeJobStatus(
+    await parseServiceJson<unknown>(response, 'Failed to finalize preservation'),
+  );
+  return await waitForFinalizeReceipt({
+    initialStatus,
+    serviceUrl: opts.serviceUrl,
+    fetchImpl,
+  });
 }
 
 async function parseServiceJson<T>(response: Response, fallbackMessage: string): Promise<T> {
@@ -270,6 +298,37 @@ function normalizePreservationReceipt(body: unknown): PreservationReceipt {
   };
 }
 
+function normalizeFinalizeJobStatus(body: unknown): PreservationFinalizeJobStatus {
+  if (!body || typeof body !== 'object') {
+    throw new Error('Failed to finalize preservation: invalid finalize job response');
+  }
+
+  const record = body as Record<string, unknown>;
+  const status = normalizeFinalizeJobState(record.status);
+  const receipt =
+    record.receipt && typeof record.receipt === 'object'
+      ? normalizePreservationReceipt(record.receipt)
+      : null;
+
+  return {
+    ...(record as unknown as PreservationFinalizeJobStatus),
+    status,
+    receipt,
+  };
+}
+
+function normalizeFinalizeJobState(value: unknown): PreservationFinalizeJobState {
+  switch (value) {
+    case 'queued':
+    case 'processing':
+    case 'completed':
+    case 'failed':
+      return value;
+    default:
+      throw new Error('Failed to finalize preservation: invalid finalize job status');
+  }
+}
+
 function normalizePreservationPaymentSummary(
   payment: Record<string, unknown>,
 ): PreservationPaymentSummary {
@@ -289,6 +348,92 @@ function normalizeTokenAmount(
   }
 
   return value;
+}
+
+async function waitForFinalizeReceipt(opts: {
+  initialStatus: PreservationFinalizeJobStatus;
+  serviceUrl: string;
+  fetchImpl: typeof fetch;
+}): Promise<PreservationReceipt> {
+  let jobStatus = opts.initialStatus;
+
+  if (jobStatus.status === 'completed') {
+    return requireFinalizeReceipt(jobStatus);
+  }
+
+  if (jobStatus.status === 'failed') {
+    throw buildFinalizeFailure(jobStatus);
+  }
+
+  if (!jobStatus.jobId) {
+    throw new Error(
+      'Failed to finalize preservation: seller returned a queued finalize job without a jobId',
+    );
+  }
+
+  const jobId = jobStatus.jobId;
+  const deadline = Date.now() + FINALIZE_POLL_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await delay(FINALIZE_POLL_INTERVAL_MS);
+    jobStatus = await getFinalizeJobStatus({
+      serviceUrl: opts.serviceUrl,
+      jobId,
+      fetchImpl: opts.fetchImpl,
+    });
+
+    if (jobStatus.status === 'completed') {
+      return requireFinalizeReceipt(jobStatus);
+    }
+
+    if (jobStatus.status === 'failed') {
+      throw buildFinalizeFailure(jobStatus);
+    }
+  }
+
+  throw new Error(
+    `Preservation finalization timed out after ${Math.round(FINALIZE_POLL_TIMEOUT_MS / 1000)} seconds (job ${jobId}).`,
+  );
+}
+
+async function getFinalizeJobStatus(opts: {
+  serviceUrl: string;
+  jobId: string;
+  fetchImpl: typeof fetch;
+}): Promise<PreservationFinalizeJobStatus> {
+  const response = await opts.fetchImpl(
+    serviceUrl(
+      `/v1/preservations/finalize-jobs/${encodeURIComponent(opts.jobId)}`,
+      opts.serviceUrl,
+    ),
+  );
+  return normalizeFinalizeJobStatus(
+    await parseServiceJson<unknown>(
+      response,
+      'Failed to fetch preservation finalize job status',
+    ),
+  );
+}
+
+function requireFinalizeReceipt(
+  jobStatus: PreservationFinalizeJobStatus,
+): PreservationReceipt {
+  if (jobStatus.receipt) {
+    return jobStatus.receipt;
+  }
+
+  throw new Error(
+    'Failed to finalize preservation: completed finalize job did not include a receipt',
+  );
+}
+
+function buildFinalizeFailure(jobStatus: PreservationFinalizeJobStatus): Error {
+  const suffix = jobStatus.jobId ? ` (job ${jobStatus.jobId})` : '';
+  const detail = jobStatus.errorMessage ? `: ${jobStatus.errorMessage}` : '';
+  return new Error(`Preservation finalization failed${suffix}${detail}`);
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function serviceUrl(pathname: string, rawBaseUrl: string): string {
