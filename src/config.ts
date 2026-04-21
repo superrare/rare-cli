@@ -8,17 +8,9 @@ export interface ChainConfig {
   rpcUrl?: string;
 }
 
-export interface PreservationConfig {
-  serviceUrl?: string;
-  defaultPaymentChain?: SupportedChain;
-  gatewayUrl?: string;
-  maxBytes?: number;
-}
-
 export interface Config {
   defaultChain?: SupportedChain;
   chains: Partial<Record<SupportedChain, ChainConfig>>;
-  preservation?: PreservationConfig;
 }
 
 const CONFIG_DIR = path.join(os.homedir(), '.rare');
@@ -29,7 +21,7 @@ export function readConfig(): Config {
     const raw = fs.readFileSync(CONFIG_FILE, 'utf-8');
     return JSON.parse(raw) as Config;
   } catch {
-    return { chains: {}, preservation: {} };
+    return { chains: {} };
   }
 }
 
@@ -54,9 +46,4 @@ export function getActiveChain(chainFlag?: string): SupportedChain {
 export function getChainConfig(chain: SupportedChain): ChainConfig {
   const config = readConfig();
   return config.chains[chain] ?? {};
-}
-
-export function getPreservationConfig(): PreservationConfig {
-  const config = readConfig();
-  return config.preservation ?? {};
 }

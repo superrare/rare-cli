@@ -157,11 +157,10 @@ rare backup token \
   --contract 0x... \
   --token-id 1 \
   --service-url https://your-preservation-service.com \
-  --gateway https://ipfs.io \
   --max-bytes 1073741824
 ```
 
-The CLI defaults to `http://localhost:8005` for preservation requests. Use `--service-url` or `rare configure --backup-service-url <url>` to point at another seller.
+The CLI defaults to `https://api.superrare.com` for preservation requests and uses `https://superrare.myfilebase.com` as its IPFS gateway. Use `--service-url` only when you need to point the backup flow at a different API host.
 
 For paid preserves, the selected `--payment-chain` must have both a private key and RPC URL configured. The backup flow does not auto-generate wallets. Before any payment-capable request, the CLI now prints the quote and asks for confirmation. Use `--yes` to skip the prompt in automation.
 
@@ -390,13 +389,6 @@ rare configure --default-chain mainnet
 
 # View current config
 rare configure --show
-
-# Override preservation defaults
-rare configure --backup-service-url https://your-preservation-service.com
-rare configure --backup-payment-chain base
-rare configure --backup-gateway-url https://ipfs.io
-rare configure --backup-max-bytes 1073741824
-```
 
 ## Best Practices
 

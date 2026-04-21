@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
 import { formatEther } from 'viem';
 import { getWalletClientStrict, getPublicClient } from '../client.js';
-import { getActiveChain, getPreservationConfig } from '../config.js';
+import { getActiveChain } from '../config.js';
 import { supportedChainFromChainId, type SupportedChain } from '../contracts/addresses.js';
 import { output, log, isJsonMode } from '../output.js';
 import { parseUniversalTokenId, resolveTokenPreservation, type ResolvedTokenPreservation } from '../sdk/backup-resolver.js';
@@ -37,18 +37,17 @@ export function backupCommand(): Command {
     .option('--payment-chain <chain>', 'chain to use for RARE/x402 payment')
     .option('--quote-only', 'resolve bytes and request a quote without paying')
     .option('-y, --yes', 'approve the quoted preservation cost without prompting')
-    .option('--service-url <url>', 'override the preservation service URL (default: http://localhost:8005)')
+    .option('--service-url <url>', `override the preservation service URL (default: ${DEFAULT_PRESERVATION_SERVICE_URL})`)
     .option('--gateway <url>', 'override the IPFS gateway used for asset fetches')
     .option('--max-bytes <bytes>', 'maximum bytes to preserve before aborting')
     .action(async (opts) => {
       validateTargetOptions(opts);
 
-      const preservationConfig = getPreservationConfig();
       const sourceChain = resolveSourceChain(opts);
-      const paymentChain = resolvePaymentChain(opts, preservationConfig.defaultPaymentChain, sourceChain);
-      const gatewayUrl = opts.gateway ?? preservationConfig.gatewayUrl ?? DEFAULT_PRESERVATION_GATEWAY_URL;
-      const maxBytes = parseMaxBytes(opts.maxBytes, preservationConfig.maxBytes);
-      const serviceUrl = opts.serviceUrl ?? preservationConfig.serviceUrl ?? DEFAULT_PRESERVATION_SERVICE_URL;
+      const paymentChain = resolvePaymentChain(opts, sourceChain);
+      const gatewayUrl = opts.gateway ?? DEFAULT_PRESERVATION_GATEWAY_URL;
+      const maxBytes = parseMaxBytes(opts.maxBytes);
+      const serviceUrl = opts.serviceUrl ?? DEFAULT_PRESERVATION_SERVICE_URL;
 
       const sourceClients = new Map<SupportedChain, ReturnType<typeof getPublicClient>>([
         [sourceChain, getPublicClient(sourceChain)],
@@ -162,19 +161,18 @@ function resolveSourceChain(opts: { chain?: string; universalTokenId?: string })
 
 function resolvePaymentChain(
   opts: { paymentChain?: string },
-  configuredPaymentChain: SupportedChain | undefined,
   sourceChain: SupportedChain,
 ): SupportedChain {
   if (opts.paymentChain) {
     return getActiveChain(opts.paymentChain);
   }
 
-  return configuredPaymentChain ?? sourceChain;
+  return sourceChain;
 }
 
-function parseMaxBytes(rawValue: string | undefined, configuredValue: number | undefined): number {
+function parseMaxBytes(rawValue: string | undefined): number {
   if (rawValue === undefined) {
-    return configuredValue ?? DEFAULT_PRESERVATION_MAX_BYTES;
+    return DEFAULT_PRESERVATION_MAX_BYTES;
   }
 
   const value = Number.parseInt(rawValue, 10);

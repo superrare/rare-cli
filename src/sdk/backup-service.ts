@@ -1,9 +1,10 @@
 import type { Address, Hash } from 'viem';
 import { chainIds, type SupportedChain } from '../contracts/addresses.js';
+import { DEFAULT_BASE_URL } from '../data-access/client.js';
 
-export const DEFAULT_PRESERVATION_GATEWAY_URL = 'https://ipfs.io';
+export const DEFAULT_PRESERVATION_GATEWAY_URL = 'https://superrare.myfilebase.com';
 export const DEFAULT_PRESERVATION_MAX_BYTES = 1_073_741_824;
-export const DEFAULT_PRESERVATION_SERVICE_URL = 'http://localhost:8005';
+export const DEFAULT_PRESERVATION_SERVICE_URL = DEFAULT_BASE_URL;
 export const RARE_RATE_PER_BYTE_ATOMIC = 69_690_000_000n;
 const FINALIZE_POLL_INTERVAL_MS = 1_000;
 const FINALIZE_POLL_TIMEOUT_MS = 300_000;
