@@ -49,6 +49,8 @@ import {
   quoteTokenPreservation as quoteTokenPreservationApi,
   uploadPreservationAssets,
   paymentNetworkForChain,
+  type PreservationFinalizeJobStatus,
+  type PreservationUploadProgress,
   type PreservationQuote,
   type PreservationReceipt,
 } from './backup-service.js';
@@ -280,6 +282,8 @@ export interface PreserveTokenParams extends QuoteTokenPreservationParams {
   paymentWalletClient?: WalletClient;
   paymentRpcUrl?: string;
   paymentFetch?: typeof fetch;
+  onUploadProgress?: (progress: PreservationUploadProgress) => void;
+  onFinalizeStatusUpdate?: (status: PreservationFinalizeJobStatus) => void;
 }
 
 export interface PreserveTokenResult {
@@ -1212,6 +1216,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
           uploadSession,
           resolved.assets,
           params.fetchImpl,
+          params.onUploadProgress,
         );
 
         const receipt = await finalizeTokenPreservation({
@@ -1219,6 +1224,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
           quoteId: quote.quoteId,
           uploadToken: uploadSession.uploadToken,
           fetchImpl: params.fetchImpl,
+          onStatusUpdate: params.onFinalizeStatusUpdate,
         });
 
         return {

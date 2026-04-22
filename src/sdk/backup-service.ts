@@ -74,9 +74,17 @@ export interface PreservationQuote {
 
 export interface PreservationUploadTarget {
   assetId: string;
+  uploadTransport: 'google-cloud-storage-xml-multipart';
+  partSizeBytes: number;
+  uploadParts: PreservationUploadPartTarget[];
+  completeUrl: string;
+  completeMethod: 'POST';
+}
+
+export interface PreservationUploadPartTarget {
+  partNumber: number;
   uploadUrl: string;
-  method?: 'PUT' | 'POST';
-  headers?: Record<string, string>;
+  method: 'PUT';
 }
 
 export interface PreservationUploadSession {
@@ -106,7 +114,7 @@ export type PreservationFinalizeJobState =
   | 'completed'
   | 'failed';
 
-interface PreservationFinalizeJobStatus {
+export interface PreservationFinalizeJobStatus {
   jobId: string | null;
   quoteId: string;
   status: PreservationFinalizeJobState;
@@ -116,6 +124,17 @@ interface PreservationFinalizeJobStatus {
   completedAt: string | null;
   errorMessage: string | null;
   receipt: PreservationReceipt | null;
+}
+
+export interface PreservationUploadProgress {
+  phase: 'asset-started' | 'part-completed' | 'asset-completed';
+  assetId: string;
+  assetIndex: number;
+  assetCount: number;
+  partNumber: number | null;
+  partCount: number | null;
+  uploadedBytes: number;
+  totalBytes: number;
 }
 
 export interface QuoteTokenPreservationOptions {
@@ -135,6 +154,7 @@ export interface FinalizeTokenPreservationOptions {
   quoteId: string;
   uploadToken: string;
   fetchImpl?: typeof fetch;
+  onStatusUpdate?: (status: PreservationFinalizeJobStatus) => void;
 }
 
 export interface UploadAssetLike {
@@ -186,34 +206,108 @@ export async function uploadPreservationAssets(
   uploadSession: PreservationUploadSession,
   assets: UploadAssetLike[],
   fetchImpl: typeof fetch = fetch,
+  onProgress?: (progress: PreservationUploadProgress) => void,
 ): Promise<void> {
   const targets = new Map(uploadSession.uploadTargets.map((target) => [target.assetId, target]));
 
-  for (const asset of assets) {
+  for (const [assetIndex, asset] of assets.entries()) {
     const target = targets.get(asset.assetId);
     if (!target) {
       throw new Error(`No upload target returned for asset "${asset.assetId}".`);
     }
 
-    const method = target.method ?? 'PUT';
-    const headers = new Headers(target.headers ?? {});
-    if (!headers.has('content-type')) {
-      headers.set('content-type', asset.mimeType);
-    }
-
-    const response = await fetchImpl(resolveUploadTargetUrl(target.uploadUrl, serviceBaseUrl), {
-      method,
-      headers,
-      body: asset.bytes as unknown as BodyInit,
-    });
-
-    if (!response.ok) {
-      throw new PreservationServiceError(
-        `Upload failed for asset "${asset.assetId}" with status ${response.status}`,
-        response.status,
-        await safeJson(response),
+    if (target.uploadTransport !== 'google-cloud-storage-xml-multipart') {
+      throw new Error(
+        `Unsupported upload transport "${target.uploadTransport}" for asset "${asset.assetId}".`,
       );
     }
+
+    const sortedUploadParts = sortUploadParts(target.uploadParts);
+    const expectedPartCount = getMultipartPartCount(asset.bytes.byteLength, target.partSizeBytes);
+    if (sortedUploadParts.length !== expectedPartCount) {
+      throw new Error(
+        `Upload target for asset "${asset.assetId}" returned ${sortedUploadParts.length} part URLs; expected ${expectedPartCount}.`,
+      );
+    }
+
+    onProgress?.({
+      phase: 'asset-started',
+      assetId: asset.assetId,
+      assetIndex,
+      assetCount: assets.length,
+      partNumber: null,
+      partCount: sortedUploadParts.length,
+      uploadedBytes: 0,
+      totalBytes: asset.bytes.byteLength,
+    });
+
+    let uploadedBytes = 0;
+    for (const uploadPart of sortedUploadParts) {
+      const partOffset = (uploadPart.partNumber - 1) * target.partSizeBytes;
+      const partBytes = asset.bytes.subarray(
+        partOffset,
+        Math.min(partOffset + target.partSizeBytes, asset.bytes.byteLength),
+      );
+      if (partBytes.byteLength === 0) {
+        throw new Error(
+          `Upload target for asset "${asset.assetId}" included an empty part ${uploadPart.partNumber}.`,
+        );
+      }
+
+      const response = await fetchImpl(
+        resolveUploadTargetUrl(uploadPart.uploadUrl, serviceBaseUrl),
+        {
+          method: uploadPart.method,
+          body: new Uint8Array(partBytes),
+        },
+      );
+
+      if (!response.ok) {
+        throw new PreservationServiceError(
+          `Upload failed for asset "${asset.assetId}" part ${uploadPart.partNumber}/${sortedUploadParts.length} with status ${response.status}`,
+          response.status,
+          await safeJson(response),
+        );
+      }
+
+      uploadedBytes += partBytes.byteLength;
+      onProgress?.({
+        phase: 'part-completed',
+        assetId: asset.assetId,
+        assetIndex,
+        assetCount: assets.length,
+        partNumber: uploadPart.partNumber,
+        partCount: sortedUploadParts.length,
+        uploadedBytes,
+        totalBytes: asset.bytes.byteLength,
+      });
+    }
+
+    const completeResponse = await fetchImpl(
+      resolveUploadTargetUrl(target.completeUrl, serviceBaseUrl),
+      {
+        method: target.completeMethod,
+      },
+    );
+
+    if (!completeResponse.ok) {
+      throw new PreservationServiceError(
+        `Upload completion failed for asset "${asset.assetId}" with status ${completeResponse.status}`,
+        completeResponse.status,
+        await safeJson(completeResponse),
+      );
+    }
+
+    onProgress?.({
+      phase: 'asset-completed',
+      assetId: asset.assetId,
+      assetIndex,
+      assetCount: assets.length,
+      partNumber: sortedUploadParts.length,
+      partCount: sortedUploadParts.length,
+      uploadedBytes,
+      totalBytes: asset.bytes.byteLength,
+    });
   }
 }
 
@@ -237,6 +331,7 @@ export async function finalizeTokenPreservation(
     initialStatus,
     serviceUrl: opts.serviceUrl,
     fetchImpl,
+    onStatusUpdate: opts.onStatusUpdate,
   });
 }
 
@@ -355,8 +450,10 @@ async function waitForFinalizeReceipt(opts: {
   initialStatus: PreservationFinalizeJobStatus;
   serviceUrl: string;
   fetchImpl: typeof fetch;
+  onStatusUpdate?: (status: PreservationFinalizeJobStatus) => void;
 }): Promise<PreservationReceipt> {
   let jobStatus = opts.initialStatus;
+  opts.onStatusUpdate?.(jobStatus);
 
   if (jobStatus.status === 'completed') {
     return requireFinalizeReceipt(jobStatus);
@@ -381,6 +478,7 @@ async function waitForFinalizeReceipt(opts: {
       jobId,
       fetchImpl: opts.fetchImpl,
     });
+    opts.onStatusUpdate?.(jobStatus);
 
     if (jobStatus.status === 'completed') {
       return requireFinalizeReceipt(jobStatus);
@@ -448,4 +546,31 @@ function resolveUploadTargetUrl(targetUrl: string, rawBaseUrl: string): string {
   } catch {
     return serviceUrl(targetUrl, rawBaseUrl);
   }
+}
+
+function sortUploadParts(
+  uploadParts: PreservationUploadPartTarget[],
+): PreservationUploadPartTarget[] {
+  const sortedUploadParts = [...uploadParts].sort(
+    (left, right) => left.partNumber - right.partNumber,
+  );
+
+  for (const [index, uploadPart] of sortedUploadParts.entries()) {
+    const expectedPartNumber = index + 1;
+    if (uploadPart.partNumber !== expectedPartNumber) {
+      throw new Error(
+        `Upload session returned non-consecutive part numbers; expected ${expectedPartNumber}, received ${uploadPart.partNumber}.`,
+      );
+    }
+  }
+
+  return sortedUploadParts;
+}
+
+function getMultipartPartCount(totalBytes: number, partSizeBytes: number): number {
+  if (!Number.isInteger(partSizeBytes) || partSizeBytes <= 0) {
+    throw new Error(`Invalid preservation multipart part size: ${partSizeBytes}`);
+  }
+
+  return Math.ceil(totalBytes / partSizeBytes);
 }

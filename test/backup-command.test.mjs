@@ -101,6 +101,9 @@ test('backup token preserves successfully with --yes in non-interactive mode', a
     assert.equal(result.code, 0);
     assert.match(result.stdout, /Preservation quote:/);
     assert.match(result.stdout, /Assets:\s+4/);
+    assert.match(result.stdout, /Uploading quoted assets directly to preservation storage\.\.\./);
+    assert.match(result.stdout, /Waiting for preservation finalization\.\.\./);
+    assert.match(result.stdout, /Preservation finalize job completed\./);
     assert.match(result.stdout, /Preservation complete:/);
     assert.doesNotMatch(result.stdout, /Record CID:/);
     assert.doesNotMatch(result.stdout, /Record URI:/);
@@ -117,7 +120,8 @@ test('backup token preserves successfully with --yes in non-interactive mode', a
     assert.equal(server.counters.quoteRequests, 1);
     assert.equal(server.counters.uploadSessionRequests, 1);
     assert.equal(server.counters.finalizeRequests, 1);
-    assert.equal(server.counters.uploadRequests, 4);
+    assert.ok(server.counters.uploadRequests > 4);
+    assert.equal(server.counters.uploadCompleteRequests, 4);
   } finally {
     server.close();
     rmSync(homeDir, { recursive: true, force: true });
@@ -172,11 +176,14 @@ function runCli(args, opts = {}) {
 async function startPreservationServer() {
   let baseUrl = '';
   const uploaded = new Map();
+  const pendingUploads = new Map();
+  let quotedAssets = [];
   const counters = {
     quoteRequests: 0,
     uploadSessionRequests: 0,
     finalizeRequests: 0,
     uploadRequests: 0,
+    uploadCompleteRequests: 0,
   };
   const metadataCid = 'bafytestmetadata';
   const imagePath = `${metadataCid}/image.png`;
@@ -268,6 +275,7 @@ async function startPreservationServer() {
     if (url.pathname === '/v1/preservations/quotes' && req.method === 'POST') {
       counters.quoteRequests += 1;
       const body = await readJson(req);
+      quotedAssets = body.assets;
       res.setHeader('content-type', 'application/json');
       res.end(
         JSON.stringify({
@@ -302,22 +310,53 @@ async function startPreservationServer() {
           quoteId: 'quote_test',
           uploadToken: 'upload_token',
           expiresAt: '2026-01-01T00:05:00.000Z',
-          uploadTargets: [
-            { assetId: 'asset_0000', uploadUrl: `${baseUrl}/upload/asset_0000` },
-            { assetId: 'asset_0001', uploadUrl: `${baseUrl}/upload/asset_0001` },
-            { assetId: 'asset_0002', uploadUrl: `${baseUrl}/upload/asset_0002` },
-            { assetId: 'asset_0003', uploadUrl: `${baseUrl}/upload/asset_0003` },
-          ],
+          uploadTargets: quotedAssets.map((asset) =>
+            buildMultipartUploadTarget(baseUrl, 'upload_token', asset)
+          ),
         }),
       );
       return;
     }
 
-    if (url.pathname.startsWith('/upload/') && req.method === 'PUT') {
+    const uploadMatch = url.pathname.match(/^\/upload\/([^/]+)\/parts\/(\d+)$/);
+    if (uploadMatch && req.method === 'PUT') {
       counters.uploadRequests += 1;
-      uploaded.set(url.pathname.split('/').pop(), await readBuffer(req));
+      const [, assetId, rawPartNumber] = uploadMatch;
+      storeMultipartUploadPart(
+        pendingUploads,
+        assetId,
+        Number.parseInt(rawPartNumber, 10),
+        await readBuffer(req),
+      );
       res.statusCode = 204;
       res.end();
+      return;
+    }
+
+    const completeMatch = url.pathname.match(
+      /^\/v1\/preservations\/uploads\/upload_token\/([^/]+)\/complete$/,
+    );
+    if (completeMatch && req.method === 'POST') {
+      counters.uploadCompleteRequests += 1;
+      const [, assetId] = completeMatch;
+      const completed = completeMultipartUpload(pendingUploads, uploaded, assetId);
+      if (!completed) {
+        res.statusCode = 409;
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify({ error: 'upload_incomplete' }));
+        return;
+      }
+
+      res.setHeader('content-type', 'application/json');
+      res.end(
+        JSON.stringify({
+          assetId,
+          quoteId: 'quote_test',
+          size: uploaded.get(assetId)?.length ?? 0,
+          sha256: 'verified',
+          verifiedAt: '2026-01-01T00:07:00.000Z',
+        }),
+      );
       return;
     }
 
@@ -451,4 +490,43 @@ function escapeRegex(value) {
 
 async function readJson(req) {
   return JSON.parse((await readBuffer(req)).toString('utf8'));
+}
+
+function buildMultipartUploadTarget(baseUrl, uploadToken, asset, partSizeBytes = 4) {
+  const partCount = Math.ceil(asset.size / partSizeBytes);
+  return {
+    assetId: asset.assetId,
+    uploadTransport: 'google-cloud-storage-xml-multipart',
+    partSizeBytes,
+    uploadParts: Array.from({ length: partCount }, (_, index) => ({
+      partNumber: index + 1,
+      uploadUrl: `${baseUrl}/upload/${asset.assetId}/parts/${index + 1}`,
+      method: 'PUT',
+    })),
+    completeUrl: `/v1/preservations/uploads/${uploadToken}/${asset.assetId}/complete`,
+    completeMethod: 'POST',
+  };
+}
+
+function storeMultipartUploadPart(pendingUploads, assetId, partNumber, buffer) {
+  const existingParts = pendingUploads.get(assetId) ?? new Map();
+  existingParts.set(partNumber, buffer);
+  pendingUploads.set(assetId, existingParts);
+}
+
+function completeMultipartUpload(pendingUploads, uploaded, assetId) {
+  const parts = pendingUploads.get(assetId);
+  if (!parts) {
+    return false;
+  }
+
+  const assembled = Buffer.concat(
+    [...parts.entries()]
+      .sort(([leftPartNumber], [rightPartNumber]) => leftPartNumber - rightPartNumber)
+      .map(([, buffer]) => buffer),
+  );
+
+  uploaded.set(assetId, assembled);
+  pendingUploads.delete(assetId);
+  return true;
 }

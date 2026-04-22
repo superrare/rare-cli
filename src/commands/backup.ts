@@ -17,6 +17,8 @@ import {
   quoteTokenPreservation as quoteTokenPreservationApi,
   uploadPreservationAssets,
   type PreservationAsset,
+  type PreservationFinalizeJobStatus,
+  type PreservationUploadProgress,
   type PreservationQuote,
   type PreservationReceipt,
 } from '../sdk/backup-service.js';
@@ -289,16 +291,21 @@ async function preserveQuotedToken(opts: {
     fetchImpl: paymentFetch,
   });
 
+  log('Uploading quoted assets directly to preservation storage...');
   await uploadPreservationAssets(
     opts.serviceUrl,
     uploadSession,
     opts.resolved.assets,
+    fetch,
+    createPreservationUploadLogger(),
   );
 
+  log('Waiting for preservation finalization...');
   const receipt = await finalizeTokenPreservation({
     serviceUrl: opts.serviceUrl,
     quoteId: opts.quote.quoteId,
     uploadToken: uploadSession.uploadToken,
+    onStatusUpdate: createFinalizeStatusLogger(),
   });
 
   return {
@@ -317,6 +324,72 @@ function printQuote(quote: PreservationQuote, paymentChain: SupportedChain): voi
   console.log(`  Amount:         ${formatRareAmount(quote.tokenAmount)}`);
   console.log(`  Expires:        ${quote.expiresAt}`);
   console.log(`  Assets:         ${quote.assets.length}`);
+}
+
+function createPreservationUploadLogger(): (progress: PreservationUploadProgress) => void {
+  return (progress) => {
+    const assetLabel = `${progress.assetIndex + 1}/${progress.assetCount} (${progress.assetId})`;
+
+    if (progress.phase === 'asset-started') {
+      log(`Uploading preservation asset ${assetLabel} (${progress.totalBytes} bytes)...`);
+      return;
+    }
+
+    if (progress.phase === 'part-completed') {
+      if ((progress.partCount ?? 0) > 1 && progress.partNumber !== null) {
+        log(
+          `Uploaded preservation asset ${assetLabel} part ${progress.partNumber}/${progress.partCount} (${progress.uploadedBytes}/${progress.totalBytes} bytes).`,
+        );
+      }
+      return;
+    }
+
+    log(`Verified preservation upload for asset ${assetLabel}.`);
+  };
+}
+
+function createFinalizeStatusLogger(): (status: PreservationFinalizeJobStatus) => void {
+  let previousStatus: PreservationFinalizeJobStatus['status'] | null = null;
+
+  return (status) => {
+    if (status.status === previousStatus) {
+      return;
+    }
+
+    previousStatus = status.status;
+    if (status.status === 'queued') {
+      log(
+        status.jobId
+          ? `Preservation finalize job queued (${status.jobId}).`
+          : 'Preservation finalize job queued.',
+      );
+      return;
+    }
+
+    if (status.status === 'processing') {
+      log(
+        status.jobId
+          ? `Preservation finalize job processing (${status.jobId}).`
+          : 'Preservation finalize job processing.',
+      );
+      return;
+    }
+
+    if (status.status === 'completed') {
+      log(
+        status.jobId
+          ? `Preservation finalize job completed (${status.jobId}).`
+          : 'Preservation finalize job completed.',
+      );
+      return;
+    }
+
+    log(
+      status.jobId
+        ? `Preservation finalize job failed (${status.jobId}).`
+        : 'Preservation finalize job failed.',
+    );
+  };
 }
 
 function printReceipt(
