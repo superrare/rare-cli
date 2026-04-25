@@ -1,5 +1,7 @@
 import type { Address } from 'viem';
 
+export { getQuotedRecipientAmount } from './trade-core.js';
+
 const DEFAULT_UNISWAP_TRADE_API_BASE_URL = 'https://trade-api.gateway.uniswap.org/v1';
 
 export interface UniswapTransactionRequest {
@@ -211,26 +213,4 @@ export async function requestUniswapSwap(params: {
   });
 
   return parseJsonResponse<UniswapSwapResponse>(response);
-}
-
-export function getQuotedRecipientAmount(quote: UniswapQuotePayload, recipient: Address): {
-  estimatedAmountOut: bigint;
-  minAmountOut: bigint;
-} {
-  const normalizedRecipient = recipient.toLowerCase();
-  const recipientOutput = quote.aggregatedOutputs?.find(
-    (output) => output.recipient.toLowerCase() === normalizedRecipient,
-  );
-
-  if (recipientOutput) {
-    return {
-      estimatedAmountOut: BigInt(recipientOutput.amount),
-      minAmountOut: BigInt(recipientOutput.minAmount),
-    };
-  }
-
-  return {
-    estimatedAmountOut: BigInt(quote.output.amount),
-    minAmountOut: BigInt(quote.output.amount),
-  };
 }

@@ -3,53 +3,31 @@ import { basename } from 'node:path';
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import type { NftAttribute } from '../sdk/api.js';
 import { createRareClient } from '../sdk/client.js';
 import {
   buildCurvePreview,
   parseCurveConfig,
-  type CurvePresetKey,
   type LiquidCurvePreview,
   type LiquidCurveSegment,
 } from '../liquid/curve-config.js';
 import { runLiquidCurveWizard } from '../liquid/wizard.js';
 import { output, log } from '../output.js';
+import {
+  formatCurvePreview,
+  isCurvePresetKey,
+  parseAttribute,
+  parseRarePriceUsdOverride,
+  resolveCurveSourceMode,
+} from './deploy-core.js';
 
-function parseAttribute(raw: string): NftAttribute {
-  if (raw.startsWith('{')) {
-    const parsed = JSON.parse(raw);
-    if (parsed.value === undefined) {
-      throw new Error(`Attribute JSON must include "value": ${raw}`);
-    }
-    return parsed as NftAttribute;
-  }
-
-  const eqIndex = raw.indexOf('=');
-  if (eqIndex === -1) {
-    return { value: raw };
-  }
-
-  const trait_type = raw.slice(0, eqIndex);
-  const rawValue = raw.slice(eqIndex + 1);
-  const numValue = Number(rawValue);
-  const value = rawValue.length > 0 && !Number.isNaN(numValue) ? numValue : rawValue;
-  return { trait_type, value };
-}
-
-function isCurvePresetKey(value: string): value is CurvePresetKey {
-  return value === 'low-demand' || value === 'medium-demand' || value === 'high-demand';
-}
+export { formatCurvePreview, resolveCurveSourceMode } from './deploy-core.js';
 
 async function resolveRarePriceUsd(
   rare: ReturnType<typeof createRareClient>,
   provided?: string,
 ): Promise<number> {
   if (provided !== undefined) {
-    const parsed = Number(provided);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
-      throw new Error('--rare-price-usd must be a positive number.');
-    }
-    return parsed;
+    return parseRarePriceUsdOverride(provided)!;
   }
 
   return (await rare.token.getPrice('RARE')).priceUsd;
@@ -124,44 +102,6 @@ async function writeGeneratedCurves(path: string | undefined, curves: LiquidCurv
   log(`Wrote generated curves to ${path}`);
 }
 
-export function resolveCurveSourceMode(
-  opts: { curvesFile?: string; curvePreset?: string },
-  isTty: boolean,
-): 'file' | 'preset' | 'wizard' {
-  if (opts.curvesFile) return 'file';
-  if (opts.curvePreset) return 'preset';
-  if (isTty) return 'wizard';
-  throw new Error('When --curves-file is omitted, provide --curve-preset or run the command in a TTY for the interactive curve wizard.');
-}
-
-export function formatCurvePreview(preview: LiquidCurvePreview, source: string): string[] {
-  const lines = [
-    `Curve source: ${source}`,
-    `Curve pool supply: ${preview.curvePoolSupplyTokens}`,
-    `Max total supply: ${preview.maxTotalSupplyTokens}`,
-    `Creator launch reward: ${preview.creatorLaunchRewardTokens}`,
-    `Total positions: ${preview.totalPositions}`,
-    `Share sum: ${preview.totalShare}`,
-  ];
-  if (preview.rarePriceUsd !== undefined) {
-    lines.push(`RARE/USD: ${preview.rarePriceUsd}`);
-  }
-
-  lines.push('');
-  lines.push('Curves:');
-  for (const [index, segment] of preview.segments.entries()) {
-    const usdRange =
-      segment.startTokenPriceUsd !== undefined && segment.endTokenPriceUsd !== undefined
-        ? ` | approx USD ${segment.startTokenPriceUsd.toFixed(4)} -> ${segment.endTokenPriceUsd.toFixed(4)}`
-        : '';
-    lines.push(
-      `  ${index + 1}. ticks ${segment.tickLower} -> ${segment.tickUpper} | positions ${segment.numPositions} | share ${segment.shares}${usdRange}`,
-    );
-  }
-
-  return lines;
-}
-
 function printCurvePreview(preview: LiquidCurvePreview, source: string): void {
   for (const line of formatCurvePreview(preview, source)) {
     console.log(line);
@@ -217,7 +157,7 @@ async function resolveCurves(
 
   const wizard = await runLiquidCurveWizard({
     factoryConfig,
-    rarePriceUsd: opts.rarePriceUsd ? Number(opts.rarePriceUsd) : undefined,
+    rarePriceUsd: parseRarePriceUsdOverride(opts.rarePriceUsd),
     getRarePriceUsd: async () => (await rare.token.getPrice('RARE')).priceUsd,
   });
   await writeGeneratedCurves(opts.writeCurvesFile, wizard.curves);

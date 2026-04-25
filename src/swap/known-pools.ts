@@ -6,6 +6,7 @@ import {
   getV4QuoterAddress,
   resolveCurrency,
 } from '../contracts/addresses.js';
+import { normalizeAddress } from './pool-core.js';
 import type { PoolKey } from './route-types.js';
 
 const wrappedEthAddresses: Partial<Record<SupportedChain, Address>> = {
@@ -23,10 +24,6 @@ function poolToKey(pool: ReturnType<typeof getCanonicalRareEthPool>): PoolKey {
     tickSpacing: pool.tickSpacing,
     hooks: pool.hooks,
   };
-}
-
-function normalizeAddress(value: Address): string {
-  return value.toLowerCase();
 }
 
 export function getCanonicalRareEthPoolKey(chain: SupportedChain): PoolKey {

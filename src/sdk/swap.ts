@@ -1,13 +1,11 @@
 import { type Address, type Hash } from 'viem';
 import { ETH_ADDRESS, type SupportedChain } from '../contracts/addresses.js';
 import { liquidRouterAbi } from '../contracts/abis/liquid-router.js';
-import { buildCanonicalTokenBuyRoute, buildCanonicalTokenSellRoute } from '../swap/build-route.js';
 import { getKnownCanonicalEthPoolKey, getRareAddress } from '../swap/known-pools.js';
 import { getLiquidTokenPoolKey } from '../swap/liquid-token.js';
 import { quoteRoute } from '../swap/quoter.js';
 import { encodeRoute } from '../swap/route-encoding.js';
 import {
-  getQuotedRecipientAmount,
   requestUniswapApproval,
   requestUniswapQuote,
   requestUniswapSwap,
@@ -15,15 +13,12 @@ import {
 } from '../swap/uniswap-api.js';
 import type { ResolvedRoute } from '../swap/route-types.js';
 import {
-  computeMinAmountOut,
-  computeSlippageBpsFromAmounts,
   ensureTokenAllowance,
   getConfiguredAccountAddress,
   getTokenDecimals,
   requireConfiguredAddress,
   requireWallet,
   resolveDeadline,
-  resolveSlippageBps,
   sendPreparedTransaction,
   toInteger,
   toTokenAmount,
@@ -31,6 +26,20 @@ import {
   validateRouterPayload,
   type RareClientConfig,
 } from './internal.js';
+import {
+  assertRecipientSupportedForUniswapFallback,
+  assertRequotedMinAmountOut,
+  assertRequestedMinAmountOut,
+  assertSupportedUniswapRouting,
+  buildBuyRareQuoteFromTokenQuote,
+  buildCanonicalEthTradeRoute,
+  buildLiquidRouterTradeQuote,
+  buildUniswapTradeQuote,
+  computeMinAmountOut,
+  computeSlippageBpsFromAmounts,
+  getQuotedRecipientAmount,
+  resolveSlippageBps,
+} from '../swap/trade-core.js';
 import type {
   BuyRareParams,
   BuyRareQuote,
@@ -65,9 +74,13 @@ async function resolveCanonicalEthTradeRoute(
 ): Promise<ResolvedRoute | null> {
   const knownPoolKey = getKnownCanonicalEthPoolKey(chain, token);
   if (knownPoolKey) {
-    return direction === 'buy'
-      ? buildCanonicalTokenBuyRoute(chain, token, knownPoolKey, 'known-pool')
-      : buildCanonicalTokenSellRoute(chain, token, knownPoolKey, 'known-pool');
+    return buildCanonicalEthTradeRoute({
+      chain,
+      token,
+      direction,
+      poolKey: knownPoolKey,
+      routeSource: 'known-pool',
+    });
   }
 
   const liquidPoolKey = await getLiquidTokenPoolKey(publicClient, token);
@@ -75,9 +88,13 @@ async function resolveCanonicalEthTradeRoute(
     return null;
   }
 
-  return direction === 'buy'
-    ? buildCanonicalTokenBuyRoute(chain, token, liquidPoolKey, 'liquid-edition')
-    : buildCanonicalTokenSellRoute(chain, token, liquidPoolKey, 'liquid-edition');
+  return buildCanonicalEthTradeRoute({
+    chain,
+    token,
+    direction,
+    poolKey: liquidPoolKey,
+    routeSource: 'liquid-edition',
+  });
 }
 
 async function buildLocalTokenTradeQuote(
@@ -114,26 +131,20 @@ async function buildLocalTokenTradeQuote(
 
     return {
       kind: 'local',
-      quote: {
+      quote: buildLiquidRouterTradeQuote({
         amountIn,
-        estimatedAmountOut: routeQuote.amountOut,
+        route,
+        routeQuote,
         minAmountOut,
-        tokenIn: route.tokenIn,
-        tokenOut: route.tokenOut,
         inputDecimals: await getTokenDecimals(publicClient, route.tokenIn),
         outputDecimals: await getTokenDecimals(publicClient, route.tokenOut),
-        slippageBps:
-          params.direction === 'buy' && params.minTokensOut !== undefined
-            ? computeSlippageBpsFromAmounts(routeQuote.amountOut, minAmountOut)
-            : params.direction === 'sell' && params.minEthOut !== undefined
-              ? computeSlippageBpsFromAmounts(routeQuote.amountOut, minAmountOut)
-              : defaultSlippageBps,
-        routeSource: route.routeSource,
-        execution: 'liquid-router',
-        routeDescription: route.routeDescription,
+        defaultSlippageBps,
+        usedMinAmountOutOverride:
+          (params.direction === 'buy' && params.minTokensOut !== undefined) ||
+          (params.direction === 'sell' && params.minEthOut !== undefined),
         commands,
         inputs,
-      },
+      }),
     };
   } catch {
     return null;
@@ -149,9 +160,7 @@ async function buildUniswapFallbackTradeQuote(
     | ({ direction: 'buy' } & Pick<BuyTokenParams, 'ethAmount' | 'minTokensOut' | 'slippageBps' | 'recipient'>)
     | ({ direction: 'sell' } & Pick<SellTokenParams, 'tokenAmount' | 'minEthOut' | 'slippageBps' | 'recipient'>),
 ): Promise<UniswapTokenTradeQuoteDetails> {
-  if (params.recipient && params.recipient.toLowerCase() !== accountAddress.toLowerCase()) {
-    throw new Error('recipient override is not supported for Uniswap API fallback routes.');
-  }
+  assertRecipientSupportedForUniswapFallback(params.recipient, accountAddress);
 
   const tokenIn = params.direction === 'buy' ? ETH_ADDRESS : token;
   const tokenOut = params.direction === 'buy' ? token : ETH_ADDRESS;
@@ -178,16 +187,11 @@ async function buildUniswapFallbackTradeQuote(
     slippageBps: defaultSlippageBps,
   });
 
-  const supportedRoutings = new Set(['CLASSIC', 'WRAP', 'UNWRAP']);
-  if (!supportedRoutings.has(quoteResponse.routing)) {
-    throw new Error(`Unsupported Uniswap routing mode: ${quoteResponse.routing}`);
-  }
+  assertSupportedUniswapRouting(quoteResponse.routing);
 
   if (requestedMinAmountOut !== undefined) {
     const quotedAmounts = getQuotedRecipientAmount(quoteResponse.quote, accountAddress);
-    if (requestedMinAmountOut > quotedAmounts.estimatedAmountOut) {
-      throw new Error('Requested minimum output exceeds the current quoted output.');
-    }
+    assertRequestedMinAmountOut(quotedAmounts.estimatedAmountOut, requestedMinAmountOut);
 
     const derivedSlippageBps = computeSlippageBpsFromAmounts(quotedAmounts.estimatedAmountOut, requestedMinAmountOut);
     quoteResponse = await requestUniswapQuote({
@@ -200,31 +204,24 @@ async function buildUniswapFallbackTradeQuote(
     });
 
     const requotedAmounts = getQuotedRecipientAmount(quoteResponse.quote, accountAddress);
-    if (requotedAmounts.minAmountOut < requestedMinAmountOut) {
-      throw new Error('Unable to satisfy the requested minimum output with the Uniswap fallback route.');
-    }
+    assertRequotedMinAmountOut(requotedAmounts.minAmountOut, requestedMinAmountOut);
   }
-
-  const { estimatedAmountOut, minAmountOut } = getQuotedRecipientAmount(quoteResponse.quote, accountAddress);
 
   return {
     kind: 'uniswap',
     rawQuote: quoteResponse.quote,
     tokenIn,
     tokenOut,
-    quote: {
+    quote: buildUniswapTradeQuote({
       amountIn,
-      estimatedAmountOut,
-      minAmountOut,
+      quote: quoteResponse.quote,
+      recipient: accountAddress,
       tokenIn,
       tokenOut,
       inputDecimals: await getTokenDecimals(publicClient, tokenIn),
       outputDecimals: await getTokenDecimals(publicClient, tokenOut),
-      slippageBps: computeSlippageBpsFromAmounts(estimatedAmountOut, minAmountOut),
-      routeSource: 'uniswap-api',
-      execution: 'uniswap-api',
-      routeDescription: quoteResponse.quote.routeString ?? quoteResponse.routing,
-    },
+      routing: quoteResponse.routing,
+    }),
   };
 }
 
@@ -265,19 +262,11 @@ async function buildBuyRareQuote(
     slippageBps: params.slippageBps,
   });
 
-  if (!tokenQuote || tokenQuote.quote.execution !== 'liquid-router' || !tokenQuote.quote.commands || !tokenQuote.quote.inputs) {
+  if (!tokenQuote) {
     throw new Error('Failed to build the canonical RARE route.');
   }
 
-  return {
-    ethAmount: tokenQuote.quote.amountIn,
-    rareAddress,
-    estimatedRareOut: tokenQuote.quote.estimatedAmountOut,
-    minRareOut: tokenQuote.quote.minAmountOut,
-    slippageBps: tokenQuote.quote.slippageBps,
-    commands: tokenQuote.quote.commands,
-    inputs: tokenQuote.quote.inputs,
-  };
+  return buildBuyRareQuoteFromTokenQuote(rareAddress, tokenQuote.quote);
 }
 
 export function createSwapNamespace(

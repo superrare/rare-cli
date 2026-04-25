@@ -7,8 +7,8 @@ import {
   isAffirmativeResponse,
   parseInputsJson,
   shouldPromptForConfirmation,
-} from '../src/commands/swap.js';
-import { formatCurvePreview, resolveCurveSourceMode } from '../src/commands/deploy.js';
+} from '../src/commands/swap-core.js';
+import { formatCurvePreview, parseRarePriceUsdOverride, resolveCurveSourceMode } from '../src/commands/deploy-core.js';
 
 test('resolveCurveSourceMode rejects omitted curves outside a TTY', () => {
   assert.throws(() => resolveCurveSourceMode({}, false), /interactive curve wizard/i);
@@ -16,6 +16,12 @@ test('resolveCurveSourceMode rejects omitted curves outside a TTY', () => {
 
 test('resolveCurveSourceMode prefers files over presets', () => {
   assert.equal(resolveCurveSourceMode({ curvesFile: './curves.json', curvePreset: 'medium-demand' }, false), 'file');
+});
+
+test('parseRarePriceUsdOverride validates optional price override', () => {
+  assert.equal(parseRarePriceUsdOverride(undefined), undefined);
+  assert.equal(parseRarePriceUsdOverride('1.25'), 1.25);
+  assert.throws(() => parseRarePriceUsdOverride('0'), /positive number/i);
 });
 
 test('formatCurvePreview prints source and segment details', () => {

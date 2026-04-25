@@ -12,6 +12,12 @@ import {
 import { ETH_ADDRESS, chainIds, type SupportedChain } from '../contracts/addresses.js';
 import type { UniswapTransactionRequest } from '../swap/uniswap-api.js';
 
+export {
+  computeMinAmountOut,
+  computeSlippageBpsFromAmounts,
+  resolveSlippageBps,
+} from '../swap/trade-core.js';
+
 export type IntegerInput = bigint | number | string;
 export type AmountInput = bigint | number | string;
 export type WalletAccount = NonNullable<WalletClient['account']>;
@@ -199,25 +205,6 @@ export function validateRouterPayload(commands: `0x${string}`, inputs: readonly 
 
 export function getConfiguredAccountAddress(config: RareClientConfig): Address | undefined {
   return config.account ?? config.walletClient?.account?.address;
-}
-
-export function resolveSlippageBps(value?: IntegerInput): number {
-  const slippageBps = value === undefined ? 50 : Number(toInteger(value, 'slippageBps'));
-  if (!Number.isInteger(slippageBps) || slippageBps < 0 || slippageBps >= 10_000) {
-    throw new Error('slippageBps must be an integer between 0 and 9999.');
-  }
-  return slippageBps;
-}
-
-export function computeMinAmountOut(amountOut: bigint, slippageBps: number): bigint {
-  return (amountOut * BigInt(10_000 - slippageBps)) / 10_000n;
-}
-
-export function computeSlippageBpsFromAmounts(estimatedAmountOut: bigint, minAmountOut: bigint): number {
-  if (estimatedAmountOut <= 0n || minAmountOut >= estimatedAmountOut) {
-    return 0;
-  }
-  return Number(((estimatedAmountOut - minAmountOut) * 10_000n) / estimatedAmountOut);
 }
 
 export function parsePreparedBigInt(value?: string): bigint | undefined {
