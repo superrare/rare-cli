@@ -254,25 +254,6 @@ export function getConfiguredAccountAddress(config: RareClientConfig): Address |
   return config.account ?? config.walletClient?.account?.address;
 }
 
-export function resolveSlippageBps(value?: IntegerInput): number {
-  const slippageBps = value === undefined ? 50 : Number(toInteger(value, 'slippageBps'));
-  if (!Number.isInteger(slippageBps) || slippageBps < 0 || slippageBps >= 10_000) {
-    throw new Error('slippageBps must be an integer between 0 and 9999.');
-  }
-  return slippageBps;
-}
-
-export function computeMinAmountOut(amountOut: bigint, slippageBps: number): bigint {
-  return (amountOut * BigInt(10_000 - slippageBps)) / 10_000n;
-}
-
-export function computeSlippageBpsFromAmounts(estimatedAmountOut: bigint, minAmountOut: bigint): number {
-  if (estimatedAmountOut <= 0n || minAmountOut >= estimatedAmountOut) {
-    return 0;
-  }
-  return Number(((estimatedAmountOut - minAmountOut) * 10_000n) / estimatedAmountOut);
-}
-
 export function parsePreparedBigInt(value?: string): bigint | undefined {
   if (!value) {
     return undefined;

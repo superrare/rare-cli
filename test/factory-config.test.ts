@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deriveLiquidFactoryConfig } from '../src/liquid/factory-config.js';
+import { deriveLiquidFactoryConfig } from '../src/liquid/factory-config-core.js';
 
 test('deriveLiquidFactoryConfig uses maxTotalSupply minus creatorLaunchReward for curve supply', () => {
   const config = deriveLiquidFactoryConfig(
@@ -31,5 +31,19 @@ test('deriveLiquidFactoryConfig rejects creator rewards above max supply', () =>
         { lpTickLower: -60, lpTickUpper: 60, poolTickSpacing: 60 },
       ),
     /creatorLaunchReward exceeds maxTotalSupply/i,
+  );
+});
+
+test('deriveLiquidFactoryConfig rejects ticks that do not align to spacing', () => {
+  assert.throws(
+    () =>
+      deriveLiquidFactoryConfig(
+        '0xba5BDe662c17e2aDFF1075610382B9B691296350',
+        10n ** 18n,
+        0n,
+        0n,
+        { lpTickLower: -50, lpTickUpper: 60, poolTickSpacing: 60 },
+      ),
+    /align to poolTickSpacing/i,
   );
 });

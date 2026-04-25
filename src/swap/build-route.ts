@@ -6,12 +6,8 @@ import {
   getUsdcAddress,
   getWrappedEthAddress,
 } from './known-pools.js';
-import { inferBaseCurrencyAddress } from './liquid-token.js';
+import { inferBaseCurrencyAddress, normalizeAddress } from './pool-core.js';
 import type { PoolKey, ResolvedRoute, ResolvedRouteStep, ResolvedV4RouteStep } from './route-types.js';
-
-function normalizeAddress(value: `0x${string}`): string {
-  return value.toLowerCase();
-}
 
 export function sortCurrencies(tokenA: `0x${string}`, tokenB: `0x${string}`): [`0x${string}`, `0x${string}`] {
   return normalizeAddress(tokenA) < normalizeAddress(tokenB) ? [tokenA, tokenB] : [tokenB, tokenA];
