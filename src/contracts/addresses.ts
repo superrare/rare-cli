@@ -107,3 +107,13 @@ export function getContractAddresses(chain: SupportedChain): ContractSet {
 export function isSupportedChain(value: string): value is SupportedChain {
   return (supportedChains as readonly string[]).includes(value);
 }
+
+export function supportedChainFromChainId(chainId: number): SupportedChain | undefined {
+  for (const [chain, id] of Object.entries(chainIds)) {
+    if (id === chainId) {
+      return chain as SupportedChain;
+    }
+  }
+
+  return undefined;
+}

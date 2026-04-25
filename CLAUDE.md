@@ -62,6 +62,18 @@ With a pre-built metadata URI:
 rare mint --contract <address> --token-uri <ipfs://...> [--to <address>] [--royalty-receiver <address>] [--chain <chain>]
 ```
 
+### Backup
+
+Resolve an existing token, quote its billable bytes, and optionally preserve it through a hosted x402-backed service:
+
+```bash
+rare backup token --contract <addr> --token-id <id> [--chain <chain>] --quote-only
+rare backup token --contract <addr> --token-id <id> [--chain <chain>] --payment-chain <chain>
+rare backup token --universal-token-id <chainId-contract-tokenId> [--payment-chain <chain>]
+```
+
+Backup requests default to `https://api.superrare.com`, and IPFS fetches/receipt links default to `https://superrare.myfilebase.com`.
+
 ### Auction Lifecycle
 
 ```bash

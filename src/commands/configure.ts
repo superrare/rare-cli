@@ -60,11 +60,24 @@ export function configureCommand(): Command {
         if (opts.rpcUrl) {
           config.chains[chain]!.rpcUrl = opts.rpcUrl;
         }
-        writeConfig(config);
-        console.log(`Configuration updated for chain: ${chain}`);
       }
 
-      if (!opts.show && !opts.defaultChain && !opts.chain) {
+      if (
+        opts.defaultChain ||
+        opts.chain
+      ) {
+        writeConfig(config);
+      }
+
+      if (opts.chain) {
+        console.log(`Configuration updated for chain: ${opts.chain}`);
+      }
+
+      if (
+        !opts.show &&
+        !opts.defaultChain &&
+        !opts.chain
+      ) {
         cmd.help();
       }
     });
