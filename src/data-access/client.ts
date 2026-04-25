@@ -2,7 +2,7 @@ import createClient, { type Middleware } from 'openapi-fetch';
 import type { paths } from './schema.js';
 import { RareApiError } from './errors.js';
 
-const DEFAULT_BASE_URL = 'https://rare-api-8426-784573620320.us-east1.run.app';
+const DEFAULT_BASE_URL = 'https://api.superrare.com';
 
 const errorMiddleware: Middleware = {
   async onResponse({ response, request }) {

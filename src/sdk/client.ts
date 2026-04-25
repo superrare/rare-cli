@@ -1,18 +1,16 @@
 import {
   type Address,
   type Hash,
-  type PublicClient,
-  type TransactionReceipt,
-  type WalletClient,
   erc20Abi,
-  parseEther,
-  parseEventLogs,
   maxUint256,
+  parseEventLogs,
 } from 'viem';
-import { getContractAddresses, chainIds, type SupportedChain } from '../contracts/addresses.js';
+import { ETH_ADDRESS, getContractAddresses, chainIds, type SupportedChain } from '../contracts/addresses.js';
 import { factoryAbi } from '../contracts/abis/factory.js';
 import { tokenAbi } from '../contracts/abis/token.js';
 import { auctionAbi } from '../contracts/abis/auction.js';
+import type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
+import type { LiquidFactoryConfig } from '../liquid/factory-config.js';
 import {
   importErc721 as importErc721Api,
   pinMetadata as pinMetadataApi,
@@ -38,8 +36,20 @@ import {
   type UserProfile,
   type Pagination,
 } from './api.js';
+import { createLiquidNamespace } from './liquid.js';
+import { createSwapNamespace } from './swap.js';
+import {
+  resolveChainFromPublicClient,
+  requireWallet,
+  toInteger,
+  toWei,
+  type AmountInput,
+  type IntegerInput,
+  type RareClientConfig,
+  type TransactionResult,
+} from './internal.js';
 
-const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+export type { AmountInput, IntegerInput, RareClientConfig, TransactionResult } from './internal.js';
 
 const approvalAbi = [
   {
@@ -57,21 +67,6 @@ const approvalAbi = [
     type: 'function',
   },
 ] as const;
-
-type IntegerInput = bigint | number | string;
-type AmountInput = bigint | number | string;
-type WalletAccount = NonNullable<WalletClient['account']>;
-
-export interface RareClientConfig {
-  publicClient: PublicClient;
-  walletClient?: WalletClient;
-  account?: Address;
-}
-
-export interface TransactionResult {
-  txHash: Hash;
-  receipt: TransactionReceipt;
-}
 
 export interface DeployErc721Params {
   name: string;
@@ -245,18 +240,165 @@ export interface TokenInfo {
   tokenUri: string;
 }
 
+export interface GeneratePresetCurvesParams {
+  preset: CurvePresetKey;
+  rarePriceUsd: number;
+}
+
+export interface ValidateLiquidCurvesParams {
+  curves: LiquidCurveSegment[];
+}
+
+export interface DeployLiquidMultiCurveParams {
+  name: string;
+  symbol: string;
+  tokenUri: string;
+  initialRareLiquidity?: AmountInput;
+  curves: LiquidCurveSegment[];
+}
+
+export interface DeployLiquidMultiCurveResult extends TransactionResult {
+  contract: Address | undefined;
+  tokenUri: string;
+  curves: LiquidCurveSegment[];
+}
+
+export interface RouterBuyParams {
+  token: Address;
+  ethAmount: AmountInput;
+  minTokensOut: AmountInput;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export interface RouterSellParams {
+  token: Address;
+  tokenAmount: AmountInput;
+  minEthOut: AmountInput;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export interface RouterSwapParams {
+  tokenIn: Address;
+  amountIn: AmountInput;
+  tokenOut: Address;
+  minAmountOut: AmountInput;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export interface BuyRareParams {
+  ethAmount: AmountInput;
+  minRareOut?: AmountInput;
+  slippageBps?: IntegerInput;
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export interface BuyTokenParams {
+  token: Address;
+  ethAmount: AmountInput;
+  minTokensOut?: AmountInput;
+  slippageBps?: IntegerInput;
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export interface SellTokenParams {
+  token: Address;
+  tokenAmount: AmountInput;
+  minEthOut?: AmountInput;
+  slippageBps?: IntegerInput;
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export type TokenTradeRouteSource = 'liquid-edition' | 'known-pool' | 'uniswap-api';
+export type TokenTradeExecution = 'liquid-router' | 'uniswap-api';
+
+export interface TokenTradeQuote {
+  amountIn: bigint;
+  estimatedAmountOut: bigint;
+  minAmountOut: bigint;
+  tokenIn: Address;
+  tokenOut: Address;
+  inputDecimals: number;
+  outputDecimals: number;
+  slippageBps: number;
+  routeSource: TokenTradeRouteSource;
+  execution: TokenTradeExecution;
+  routeDescription: string;
+  commands?: `0x${string}`;
+  inputs?: readonly `0x${string}`[];
+}
+
+export interface TokenTradeResult extends TransactionResult {
+  estimatedAmountOut: bigint;
+  minAmountOut: bigint;
+  routeSource: TokenTradeRouteSource;
+  execution: TokenTradeExecution;
+  commands?: `0x${string}`;
+  inputs?: readonly `0x${string}`[];
+  approvalTxHash?: Hash;
+  approvalResetTxHash?: Hash;
+}
+
+export interface BuyRareQuote {
+  ethAmount: bigint;
+  rareAddress: Address;
+  estimatedRareOut: bigint;
+  minRareOut: bigint;
+  slippageBps: number;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+}
+
+export interface BuyRareResult extends TransactionResult {
+  estimatedRareOut: bigint;
+  minRareOut: bigint;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+}
+
 export interface RareClient {
   chain: SupportedChain;
   chainId: number;
   contracts: {
     factory: Address;
     auction: Address;
+    liquidFactory?: Address;
+    swapRouter?: Address;
+    v4Quoter?: Address;
   };
   deploy: {
     erc721(params: DeployErc721Params): Promise<DeployErc721Result>;
   };
+  liquid: {
+    getFactoryConfig(): Promise<LiquidFactoryConfig>;
+    generatePresetCurves(params: GeneratePresetCurvesParams): Promise<LiquidCurveSegment[]>;
+    validateCurves(params: ValidateLiquidCurvesParams): Promise<LiquidCurvePreview>;
+    deployMultiCurve(params: DeployLiquidMultiCurveParams): Promise<DeployLiquidMultiCurveResult>;
+  };
   mint: {
     mintTo(params: MintToParams): Promise<MintToResult>;
+  };
+  swap: {
+    buy(params: RouterBuyParams): Promise<TransactionResult>;
+    sell(params: RouterSellParams): Promise<TransactionResult>;
+    swap(params: RouterSwapParams): Promise<TransactionResult>;
+    quoteBuyToken(params: BuyTokenParams): Promise<TokenTradeQuote>;
+    buyToken(params: BuyTokenParams): Promise<TokenTradeResult>;
+    quoteSellToken(params: SellTokenParams): Promise<TokenTradeQuote>;
+    sellToken(params: SellTokenParams): Promise<TokenTradeResult>;
+    quoteBuyRare(params: BuyRareParams): Promise<BuyRareQuote>;
+    buyRare(params: BuyRareParams): Promise<BuyRareResult>;
   };
   auction: {
     create(params: AuctionCreateParams): Promise<TransactionResult & { approvalTxHash?: Hash }>;
@@ -306,84 +448,6 @@ export interface RareClient {
   };
 }
 
-function resolveChainFromPublicClient(publicClient: PublicClient): SupportedChain {
-  const chainId = publicClient.chain?.id;
-  if (!chainId) {
-    throw new Error('Unable to resolve chain from publicClient.chain.id. Create your public client with an explicit chain.');
-  }
-
-  for (const [chain, id] of Object.entries(chainIds)) {
-    if (id === chainId) {
-      return chain as SupportedChain;
-    }
-  }
-
-  throw new Error(`Unsupported chain id: ${chainId}. Supported chain ids: ${Object.values(chainIds).join(', ')}`);
-}
-
-function requireWallet(config: RareClientConfig): {
-  walletClient: WalletClient;
-  account: Address | WalletAccount;
-  accountAddress: Address;
-} {
-  if (!config.walletClient) {
-    throw new Error('walletClient is required for write operations.');
-  }
-
-  const walletAccount = config.walletClient.account;
-
-  if (config.account) {
-    if (walletAccount && walletAccount.address.toLowerCase() === config.account.toLowerCase()) {
-      return {
-        walletClient: config.walletClient,
-        account: walletAccount,
-        accountAddress: walletAccount.address,
-      };
-    }
-
-    return {
-      walletClient: config.walletClient,
-      account: config.account,
-      accountAddress: config.account,
-    };
-  }
-
-  if (!walletAccount) {
-    throw new Error('No account available for write operations. Pass config.account or provide walletClient with an account.');
-  }
-
-  return {
-    walletClient: config.walletClient,
-    account: walletAccount,
-    accountAddress: walletAccount.address,
-  };
-}
-
-function toInteger(value: IntegerInput, field: string): bigint {
-  if (typeof value === 'bigint') return value;
-
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value) || !Number.isInteger(value)) {
-      throw new Error(`${field} must be an integer.`);
-    }
-    return BigInt(value);
-  }
-
-  try {
-    return BigInt(value);
-  } catch {
-    throw new Error(`${field} must be an integer.`);
-  }
-}
-
-function toWei(value: AmountInput): bigint {
-  if (typeof value === 'bigint') {
-    return value;
-  }
-
-  return parseEther(String(value));
-}
-
 export function createRareClient(config: RareClientConfig): RareClient {
   const { publicClient } = config;
   const chain = resolveChainFromPublicClient(publicClient);
@@ -396,6 +460,9 @@ export function createRareClient(config: RareClientConfig): RareClient {
     contracts: {
       factory: addresses.factory,
       auction: addresses.auction,
+      liquidFactory: addresses.liquidFactory,
+      swapRouter: addresses.swapRouter,
+      v4Quoter: addresses.v4Quoter,
     },
     deploy: {
       async erc721(params) {
@@ -435,6 +502,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
         };
       },
     },
+    liquid: createLiquidNamespace(config, chain, addresses),
     mint: {
       async mintTo(params) {
         const { walletClient, account, accountAddress } = requireWallet(config);
@@ -477,6 +545,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
         };
       },
     },
+    swap: createSwapNamespace(config, chain, chainId, addresses),
     auction: {
       async create(params) {
         const { walletClient, account, accountAddress } = requireWallet(config);

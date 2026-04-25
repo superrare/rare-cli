@@ -51,6 +51,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "generate:types": "openapi-typescript https://rare-api-8426-784573620320.us-east1.run.app/doc -o src/data-access/schema.d.ts",
+    "test": "tsc -p tsconfig.test.json && node --test .test-dist/test/**/*.test.js",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
@@ -60,6 +61,7 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
+    "@types/node": "^24.6.0",
     "openapi-typescript": "^7.13.0",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0"
