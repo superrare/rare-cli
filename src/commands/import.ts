@@ -1,8 +1,8 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
-import { getWalletClient } from '../client.js';
+import { getPublicClient, getWalletClient } from '../client.js';
 import { chainIds } from '../contracts/addresses.js';
-import { importErc721 } from '../sdk/api.js';
+import { createRareClient } from '../sdk/client.js';
 import { printError } from '../errors.js';
 import { output, log } from '../output.js';
 
@@ -17,7 +17,10 @@ export function importCommand(): Command {
     .option('--chain <chain>', 'chain the contract is deployed on')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
-      const ownerAddress = getWalletClient(chain).account.address;
+      const publicClient = getPublicClient(chain);
+      const { client, account } = getWalletClient(chain);
+      const rare = createRareClient({ publicClient, walletClient: client });
+      const ownerAddress = account.address;
       const contractAddress = opts.contract as string;
       const chainId = chainIds[chain];
 
@@ -27,8 +30,7 @@ export function importCommand(): Command {
       log(`  Owner:    ${ownerAddress}`);
 
       try {
-        await importErc721({
-          chainId,
+        await rare.import.erc721({
           contract: contractAddress as `0x${string}`,
           owner: ownerAddress as `0x${string}`,
         });

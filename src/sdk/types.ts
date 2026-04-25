@@ -1,5 +1,7 @@
 import type { Address, Hash, PublicClient, TransactionReceipt, WalletClient } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
+import type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
+import type { LiquidFactoryConfig } from '../liquid/factory-config.js';
 import type {
   CollectionSearchParams,
   ImportErc721Params,
@@ -189,18 +191,165 @@ export interface TokenInfo {
   tokenUri: string;
 }
 
+export interface GeneratePresetCurvesParams {
+  preset: CurvePresetKey;
+  rarePriceUsd: number;
+}
+
+export interface ValidateLiquidCurvesParams {
+  curves: LiquidCurveSegment[];
+}
+
+export interface DeployLiquidMultiCurveParams {
+  name: string;
+  symbol: string;
+  tokenUri: string;
+  initialRareLiquidity?: AmountInput;
+  curves: LiquidCurveSegment[];
+}
+
+export interface DeployLiquidMultiCurveResult extends TransactionResult {
+  contract: Address | undefined;
+  tokenUri: string;
+  curves: LiquidCurveSegment[];
+}
+
+export interface RouterBuyParams {
+  token: Address;
+  ethAmount: AmountInput;
+  minTokensOut: AmountInput;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export interface RouterSellParams {
+  token: Address;
+  tokenAmount: AmountInput;
+  minEthOut: AmountInput;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export interface RouterSwapParams {
+  tokenIn: Address;
+  amountIn: AmountInput;
+  tokenOut: Address;
+  minAmountOut: AmountInput;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export interface BuyRareParams {
+  ethAmount: AmountInput;
+  minRareOut?: AmountInput;
+  slippageBps?: IntegerInput;
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export interface BuyTokenParams {
+  token: Address;
+  ethAmount: AmountInput;
+  minTokensOut?: AmountInput;
+  slippageBps?: IntegerInput;
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export interface SellTokenParams {
+  token: Address;
+  tokenAmount: AmountInput;
+  minEthOut?: AmountInput;
+  slippageBps?: IntegerInput;
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export type TokenTradeRouteSource = 'liquid-edition' | 'known-pool' | 'uniswap-api';
+export type TokenTradeExecution = 'liquid-router' | 'uniswap-api';
+
+export interface TokenTradeQuote {
+  amountIn: bigint;
+  estimatedAmountOut: bigint;
+  minAmountOut: bigint;
+  tokenIn: Address;
+  tokenOut: Address;
+  inputDecimals: number;
+  outputDecimals: number;
+  slippageBps: number;
+  routeSource: TokenTradeRouteSource;
+  execution: TokenTradeExecution;
+  routeDescription: string;
+  commands?: `0x${string}`;
+  inputs?: readonly `0x${string}`[];
+}
+
+export interface TokenTradeResult extends TransactionResult {
+  estimatedAmountOut: bigint;
+  minAmountOut: bigint;
+  routeSource: TokenTradeRouteSource;
+  execution: TokenTradeExecution;
+  commands?: `0x${string}`;
+  inputs?: readonly `0x${string}`[];
+  approvalTxHash?: Hash;
+  approvalResetTxHash?: Hash;
+}
+
+export interface BuyRareQuote {
+  ethAmount: bigint;
+  rareAddress: Address;
+  estimatedRareOut: bigint;
+  minRareOut: bigint;
+  slippageBps: number;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+}
+
+export interface BuyRareResult extends TransactionResult {
+  estimatedRareOut: bigint;
+  minRareOut: bigint;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+}
+
 export interface RareClient {
   chain: SupportedChain;
   chainId: number;
   contracts: {
     factory: Address;
     auction: Address;
+    liquidFactory?: Address;
+    swapRouter?: Address;
+    v4Quoter?: Address;
   };
   deploy: {
     erc721(params: DeployErc721Params): Promise<DeployErc721Result>;
   };
+  liquid: {
+    getFactoryConfig(): Promise<LiquidFactoryConfig>;
+    generatePresetCurves(params: GeneratePresetCurvesParams): Promise<LiquidCurveSegment[]>;
+    validateCurves(params: ValidateLiquidCurvesParams): Promise<LiquidCurvePreview>;
+    deployMultiCurve(params: DeployLiquidMultiCurveParams): Promise<DeployLiquidMultiCurveResult>;
+  };
   mint: {
     mintTo(params: MintToParams): Promise<MintToResult>;
+  };
+  swap: {
+    buy(params: RouterBuyParams): Promise<TransactionResult>;
+    sell(params: RouterSellParams): Promise<TransactionResult>;
+    swap(params: RouterSwapParams): Promise<TransactionResult>;
+    quoteBuyToken(params: BuyTokenParams): Promise<TokenTradeQuote>;
+    buyToken(params: BuyTokenParams): Promise<TokenTradeResult>;
+    quoteSellToken(params: SellTokenParams): Promise<TokenTradeQuote>;
+    sellToken(params: SellTokenParams): Promise<TokenTradeResult>;
+    quoteBuyRare(params: BuyRareParams): Promise<BuyRareQuote>;
+    buyRare(params: BuyRareParams): Promise<BuyRareResult>;
   };
   auction: {
     create(params: AuctionCreateParams): Promise<TransactionResult & { approvalTxHash?: Hash }>;

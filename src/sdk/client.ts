@@ -19,6 +19,8 @@ import { createAuctionNamespace } from './auction.js';
 import { createOfferNamespace } from './offer.js';
 import { createListingNamespace } from './listing.js';
 import { createTokenNamespace } from './token.js';
+import { createLiquidNamespace } from './liquid.js';
+import { createSwapNamespace } from './swap.js';
 
 export type { RareClientConfig, RareClient } from './types.js';
 
@@ -34,9 +36,14 @@ export function createRareClient(config: RareClientConfig): RareClient {
     contracts: {
       factory: addresses.factory,
       auction: addresses.auction,
+      liquidFactory: addresses.liquidFactory,
+      swapRouter: addresses.swapRouter,
+      v4Quoter: addresses.v4Quoter,
     },
     deploy: createDeployNamespace(publicClient, config, addresses),
+    liquid: createLiquidNamespace(config, chain, addresses),
     mint: createMintNamespace(publicClient, config),
+    swap: createSwapNamespace(config, chain, chainId, addresses),
     auction: createAuctionNamespace(publicClient, config, addresses),
     offer: createOfferNamespace(publicClient, config, addresses),
     listing: createListingNamespace(publicClient, config, addresses),

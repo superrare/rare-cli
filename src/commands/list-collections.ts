@@ -1,8 +1,10 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
-import { searchCollections, type Collection } from '../sdk/api.js';
+import { getPublicClient } from '../client.js';
+import { createRareClient } from '../sdk/client.js';
+import type { Collection } from '../sdk/api.js';
 import { printError } from '../errors.js';
-import { output, log, printCollectionRow, printCollection } from '../output.js';
+import { output, log, printCollection } from '../output.js';
 
 export function listCollectionsCommand(): Command {
   const cmd = new Command('list-collections');
@@ -12,6 +14,7 @@ export function listCollectionsCommand(): Command {
     .option('--query <text>', 'text search filter', '')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
+      const rare = createRareClient({ publicClient: getPublicClient(chain) });
 
       log(`Fetching collections on ${chain}...`);
 
@@ -21,7 +24,7 @@ export function listCollectionsCommand(): Command {
         let hasMore = true;
 
         while (hasMore) {
-          const result = await searchCollections({
+          const result = await rare.search.collections({
             query: opts.query,
             perPage: 100,
             page,
