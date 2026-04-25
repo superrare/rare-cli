@@ -50,6 +50,7 @@ import {
   uploadPreservationAssets,
   paymentNetworkForChain,
   type PreservationFinalizeJobStatus,
+  type PreservationQuotePaymentStatus,
   type PreservationUploadProgress,
   type PreservationQuote,
   type PreservationReceipt,
@@ -283,6 +284,7 @@ export interface PreserveTokenParams extends QuoteTokenPreservationParams {
   paymentRpcUrl?: string;
   paymentFetch?: typeof fetch;
   onUploadProgress?: (progress: PreservationUploadProgress) => void;
+  onPaymentStatusUpdate?: (status: PreservationQuotePaymentStatus) => void;
   onFinalizeStatusUpdate?: (status: PreservationFinalizeJobStatus) => void;
 }
 
@@ -1209,6 +1211,8 @@ export function createRareClient(config: RareClientConfig): RareClient {
           serviceUrl: params.serviceUrl,
           quoteId: quote.quoteId,
           fetchImpl: paymentFetch,
+          statusFetchImpl: params.fetchImpl,
+          onPaymentStatusUpdate: params.onPaymentStatusUpdate,
         });
 
         await uploadPreservationAssets(

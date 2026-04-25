@@ -379,7 +379,11 @@ test('retries upload-session payment when the seller refreshes the x402 challeng
   let baseUrl = '';
   let uploadSessionRequests = 0;
   let paidUploadSessionRequests = 0;
+  let paymentStatusRequests = 0;
   let finalizeJobStatusRequests = 0;
+  let paymentSettled = false;
+  const paymentStatuses = [];
+  const finalizeProgressPhases = [];
   const metadataCid = 'bafyx402metadata';
   const imagePath = `${metadataCid}/image.png`;
 
@@ -451,6 +455,9 @@ test('retries upload-session payment when the seller refreshes the x402 challeng
       }
 
       assert.equal(acceptedTimeout, 59);
+      await delay(1_100);
+      paymentSettled = true;
+      await delay(1_100);
       res.setHeader('content-type', 'application/json');
       res.end(
         JSON.stringify({
@@ -460,6 +467,31 @@ test('retries upload-session payment when the seller refreshes the x402 challeng
           uploadTargets: quotedAssets.map((asset) =>
             buildMultipartUploadTarget(baseUrl, 'upload_retry', asset)
           ),
+        }),
+      );
+      return;
+    }
+
+    if (url.pathname === '/v1/preservations/quotes/quote_retry/payment-status' && req.method === 'GET') {
+      paymentStatusRequests += 1;
+      res.setHeader('content-type', 'application/json');
+      res.end(
+        JSON.stringify({
+          quoteId: 'quote_retry',
+          quoteStatus: paymentSettled ? 'paid' : 'quoted',
+          expiresAt: '2026-01-01T00:00:00.000Z',
+          paymentStatus: paymentSettled ? 'settled' : 'pending',
+          payment: paymentSettled
+            ? {
+              paymentIdentifier: 'pres_retry',
+              network: 'eip155:11155111',
+              tokenAddress: '0x197FaeF3f59eC80113e773Bb6206a17d183F97CB',
+              tokenAmount: '123',
+              payerAddress: '0x2222222222222222222222222222222222222222',
+              transaction: '0xretry123',
+              settledAt: '2026-01-01T00:06:00.000Z',
+            }
+            : null,
         }),
       );
       return;
@@ -513,6 +545,7 @@ test('retries upload-session payment when the seller refreshes the x402 challeng
           quoteId: 'quote_retry',
           jobId: 'job_retry',
           status: 'queued',
+          progressPhase: 'queued',
           attempts: 0,
           submittedAt: '2026-01-01T00:07:00.000Z',
           startedAt: null,
@@ -527,17 +560,19 @@ test('retries upload-session payment when the seller refreshes the x402 challeng
     if (url.pathname === '/v1/preservations/finalize-jobs/job_retry' && req.method === 'GET') {
       finalizeJobStatusRequests += 1;
       res.setHeader('content-type', 'application/json');
+      const isCompleted = finalizeJobStatusRequests > 1;
       res.end(
         JSON.stringify({
           jobId: 'job_retry',
           quoteId: 'quote_retry',
-          status: 'completed',
+          status: isCompleted ? 'completed' : 'processing',
+          progressPhase: isCompleted ? 'completed' : 'pinning_manifest',
           attempts: 1,
           submittedAt: '2026-01-01T00:07:00.000Z',
           startedAt: '2026-01-01T00:07:01.000Z',
-          completedAt: '2026-01-01T00:07:02.000Z',
+          completedAt: isCompleted ? '2026-01-01T00:07:02.000Z' : null,
           errorMessage: null,
-          receipt: {
+          receipt: isCompleted ? {
             receiptId: 'receipt_retry',
             quoteId: 'quote_retry',
             expiresAt: '2026-01-01T00:10:00.000Z',
@@ -589,7 +624,7 @@ test('retries upload-session payment when the seller refreshes the x402 challeng
               tokenUri: `ipfs://${metadataCid}/metadata.json`,
             },
             createdAt: '2026-01-01T00:07:00.000Z',
-          },
+          } : null,
         }),
       );
       return;
@@ -633,12 +668,21 @@ test('retries upload-session payment when the seller refreshes the x402 challeng
       paymentWalletClient,
       paymentRpcUrl: `${baseUrl}/rpc`,
       gatewayUrl: baseUrl,
+      onPaymentStatusUpdate: (status) => {
+        paymentStatuses.push(status.paymentStatus);
+      },
+      onFinalizeStatusUpdate: (status) => {
+        finalizeProgressPhases.push(status.progressPhase ?? status.status);
+      },
     });
 
     assert.equal(result.receipt.receiptId, 'receipt_retry');
     assert.equal(uploadSessionRequests, 3);
     assert.equal(paidUploadSessionRequests, 2);
-    assert.equal(finalizeJobStatusRequests, 1);
+    assert.equal(paymentStatusRequests, 2);
+    assert.deepEqual(paymentStatuses, ['pending', 'settled']);
+    assert.equal(finalizeJobStatusRequests, 2);
+    assert.deepEqual(finalizeProgressPhases, ['queued', 'pinning_manifest', 'completed']);
     assert.equal(uploaded.size, 2);
   } finally {
     await new Promise((resolve, reject) => {
@@ -712,6 +756,10 @@ function encodeBase64Json(value) {
 
 function decodeBase64Json(value) {
   return JSON.parse(Buffer.from(value, 'base64').toString('utf8'));
+}
+
+async function delay(ms) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildMultipartUploadTarget(baseUrl, uploadToken, asset, partSizeBytes = 4) {

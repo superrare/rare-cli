@@ -35,8 +35,12 @@ export { auctionAbi } from '../contracts/abis/auction.js';
 export { tokenAbi } from '../contracts/abis/token.js';
 export type {
   PreservationAsset,
+  PreservationFinalizeJobStatus,
+  PreservationFinalizeProgressPhase,
+  PreservationPaymentLifecycleStatus,
   PreservationPaymentOption,
   PreservationQuote,
+  PreservationQuotePaymentStatus,
   PreservationReceipt,
   TokenPreservationSource,
 } from './backup-service.js';

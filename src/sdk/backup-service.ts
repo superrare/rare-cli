@@ -8,6 +8,7 @@ export const DEFAULT_PRESERVATION_SERVICE_URL = DEFAULT_BASE_URL;
 export const RARE_RATE_PER_BYTE_ATOMIC = 69_690_000_000n;
 const FINALIZE_POLL_INTERVAL_MS = 1_000;
 const FINALIZE_POLL_TIMEOUT_MS = 300_000;
+const PAYMENT_STATUS_POLL_INTERVAL_MS = 1_000;
 
 export interface TokenPreservationSource {
   chain: SupportedChain;
@@ -108,16 +109,51 @@ export interface PreservationReceipt {
   createdAt: string;
 }
 
+export type PreservationQuoteStatus =
+  | 'quoted'
+  | 'paid'
+  | 'uploaded'
+  | 'finalized'
+  | 'expired'
+  | 'rejected'
+  | (string & {});
+
+export type PreservationPaymentLifecycleStatus =
+  | 'not_started'
+  | 'pending'
+  | 'settled'
+  | (string & {});
+
+export interface PreservationQuotePaymentStatus {
+  quoteId: string;
+  quoteStatus: PreservationQuoteStatus;
+  expiresAt: string;
+  paymentStatus: PreservationPaymentLifecycleStatus;
+  payment: PreservationPaymentSummary | null;
+}
+
 export type PreservationFinalizeJobState =
   | 'queued'
   | 'processing'
   | 'completed'
   | 'failed';
 
+export type PreservationFinalizeProgressPhase =
+  | 'queued'
+  | 'processing'
+  | 'resolving_settlement'
+  | 'pinning_assets'
+  | 'pinning_manifest'
+  | 'persisting_receipt'
+  | 'completed'
+  | 'failed'
+  | (string & {});
+
 export interface PreservationFinalizeJobStatus {
   jobId: string | null;
   quoteId: string;
   status: PreservationFinalizeJobState;
+  progressPhase: PreservationFinalizeProgressPhase | null;
   attempts: number;
   submittedAt: string;
   startedAt: string | null;
@@ -147,6 +183,8 @@ export interface CreatePreservationUploadSessionOptions {
   serviceUrl: string;
   quoteId: string;
   fetchImpl: typeof fetch;
+  statusFetchImpl?: typeof fetch;
+  onPaymentStatusUpdate?: (status: PreservationQuotePaymentStatus) => void;
 }
 
 export interface FinalizeTokenPreservationOptions {
@@ -192,13 +230,27 @@ export async function quoteTokenPreservation(opts: QuoteTokenPreservationOptions
 export async function createPreservationUploadSession(
   opts: CreatePreservationUploadSessionOptions,
 ): Promise<PreservationUploadSession> {
-  const response = await opts.fetchImpl(serviceUrl(`/v1/preservations/quotes/${encodeURIComponent(opts.quoteId)}/upload-session`, opts.serviceUrl), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({}),
-  });
+  const paymentStatusPoller =
+    opts.onPaymentStatusUpdate
+      ? startQuotePaymentStatusPolling({
+        serviceUrl: opts.serviceUrl,
+        quoteId: opts.quoteId,
+        fetchImpl: opts.statusFetchImpl ?? fetch,
+        onStatusUpdate: opts.onPaymentStatusUpdate,
+      })
+      : null;
 
-  return parseServiceJson<PreservationUploadSession>(response, 'Failed to create preservation upload session');
+  try {
+    const response = await opts.fetchImpl(serviceUrl(`/v1/preservations/quotes/${encodeURIComponent(opts.quoteId)}/upload-session`, opts.serviceUrl), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    return parseServiceJson<PreservationUploadSession>(response, 'Failed to create preservation upload session');
+  } finally {
+    paymentStatusPoller?.stop();
+  }
 }
 
 export async function uploadPreservationAssets(
@@ -394,6 +446,27 @@ function normalizePreservationReceipt(body: unknown): PreservationReceipt {
   };
 }
 
+function normalizePreservationQuotePaymentStatus(
+  body: unknown,
+): PreservationQuotePaymentStatus {
+  if (!body || typeof body !== 'object') {
+    throw new Error('Failed to fetch preservation payment status: invalid response body');
+  }
+
+  const record = body as Record<string, unknown>;
+  const payment =
+    record.payment && typeof record.payment === 'object'
+      ? normalizePreservationPaymentSummary(record.payment as Record<string, unknown>)
+      : null;
+
+  return {
+    ...(record as unknown as PreservationQuotePaymentStatus),
+    quoteStatus: normalizePreservationQuoteStatus(record.quoteStatus),
+    paymentStatus: normalizePreservationPaymentLifecycleStatus(record.paymentStatus),
+    payment,
+  };
+}
+
 function normalizeFinalizeJobStatus(body: unknown): PreservationFinalizeJobStatus {
   if (!body || typeof body !== 'object') {
     throw new Error('Failed to finalize preservation: invalid finalize job response');
@@ -401,6 +474,7 @@ function normalizeFinalizeJobStatus(body: unknown): PreservationFinalizeJobStatu
 
   const record = body as Record<string, unknown>;
   const status = normalizeFinalizeJobState(record.status);
+  const progressPhase = normalizeFinalizeProgressPhase(record.progressPhase);
   const receipt =
     record.receipt && typeof record.receipt === 'object'
       ? normalizePreservationReceipt(record.receipt)
@@ -409,6 +483,7 @@ function normalizeFinalizeJobStatus(body: unknown): PreservationFinalizeJobStatu
   return {
     ...(record as unknown as PreservationFinalizeJobStatus),
     status,
+    progressPhase,
     receipt,
   };
 }
@@ -423,6 +498,34 @@ function normalizeFinalizeJobState(value: unknown): PreservationFinalizeJobState
     default:
       throw new Error('Failed to finalize preservation: invalid finalize job status');
   }
+}
+
+function normalizeFinalizeProgressPhase(
+  value: unknown,
+): PreservationFinalizeProgressPhase | null {
+  if (value == null) {
+    return null;
+  }
+
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function normalizePreservationQuoteStatus(value: unknown): PreservationQuoteStatus {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error('Failed to fetch preservation payment status: invalid quote status');
+  }
+
+  return value as PreservationQuoteStatus;
+}
+
+function normalizePreservationPaymentLifecycleStatus(
+  value: unknown,
+): PreservationPaymentLifecycleStatus {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new Error('Failed to fetch preservation payment status: invalid payment status');
+  }
+
+  return value as PreservationPaymentLifecycleStatus;
 }
 
 function normalizePreservationPaymentSummary(
@@ -533,6 +636,89 @@ function buildFinalizeFailure(jobStatus: PreservationFinalizeJobStatus): Error {
 
 async function delay(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getQuotePaymentStatus(opts: {
+  serviceUrl: string;
+  quoteId: string;
+  fetchImpl: typeof fetch;
+}): Promise<PreservationQuotePaymentStatus> {
+  const response = await opts.fetchImpl(
+    serviceUrl(
+      `/v1/preservations/quotes/${encodeURIComponent(opts.quoteId)}/payment-status`,
+      opts.serviceUrl,
+    ),
+  );
+
+  return normalizePreservationQuotePaymentStatus(
+    await parseServiceJson<unknown>(
+      response,
+      'Failed to fetch preservation payment status',
+    ),
+  );
+}
+
+function startQuotePaymentStatusPolling(opts: {
+  serviceUrl: string;
+  quoteId: string;
+  fetchImpl: typeof fetch;
+  onStatusUpdate: (status: PreservationQuotePaymentStatus) => void;
+}): { stop: () => void } {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let previousPaymentStatus: string | null = null;
+
+  const scheduleNextPoll = (): void => {
+    if (stopped) {
+      return;
+    }
+
+    timer = setTimeout(() => {
+      void pollOnce();
+    }, PAYMENT_STATUS_POLL_INTERVAL_MS);
+  };
+
+  const pollOnce = async (): Promise<void> => {
+    if (stopped) {
+      return;
+    }
+
+    try {
+      const status = await getQuotePaymentStatus({
+        serviceUrl: opts.serviceUrl,
+        quoteId: opts.quoteId,
+        fetchImpl: opts.fetchImpl,
+      });
+
+      if (stopped) {
+        return;
+      }
+
+      if (status.paymentStatus !== previousPaymentStatus) {
+        previousPaymentStatus = status.paymentStatus;
+        opts.onStatusUpdate(status);
+      }
+
+      if (status.paymentStatus === 'settled') {
+        return;
+      }
+    } catch {
+      return;
+    }
+
+    scheduleNextPoll();
+  };
+
+  scheduleNextPoll();
+
+  return {
+    stop(): void {
+      stopped = true;
+      if (timer !== null) {
+        clearTimeout(timer);
+      }
+    },
+  };
 }
 
 function serviceUrl(pathname: string, rawBaseUrl: string): string {

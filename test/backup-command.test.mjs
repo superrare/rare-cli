@@ -101,9 +101,13 @@ test('backup token preserves successfully with --yes in non-interactive mode', a
     assert.equal(result.code, 0);
     assert.match(result.stdout, /Preservation quote:/);
     assert.match(result.stdout, /Assets:\s+4/);
+    assert.match(result.stdout, /Preservation payment facilitation in progress\./);
+    assert.match(result.stdout, /Preservation payment settled\./);
     assert.match(result.stdout, /Uploading quoted assets directly to preservation storage\.\.\./);
     assert.match(result.stdout, /Waiting for preservation finalization\.\.\./);
-    assert.match(result.stdout, /Preservation finalize job completed\./);
+    assert.match(result.stdout, /Preservation finalize job queued/);
+    assert.match(result.stdout, /Preservation finalize job pinning manifest/);
+    assert.match(result.stdout, /Preservation finalize job completed/);
     assert.match(result.stdout, /Preservation complete:/);
     assert.doesNotMatch(result.stdout, /Record CID:/);
     assert.doesNotMatch(result.stdout, /Record URI:/);
@@ -118,8 +122,10 @@ test('backup token preserves successfully with --yes in non-interactive mode', a
     assert.match(result.stdout, /Receipt ID:\s+receipt_test/);
     assert.equal(result.stderr, '');
     assert.equal(server.counters.quoteRequests, 1);
-    assert.equal(server.counters.uploadSessionRequests, 1);
+    assert.equal(server.counters.uploadSessionRequests, 2);
+    assert.equal(server.counters.paymentStatusRequests, 2);
     assert.equal(server.counters.finalizeRequests, 1);
+    assert.equal(server.counters.finalizeJobStatusRequests, 2);
     assert.ok(server.counters.uploadRequests > 4);
     assert.equal(server.counters.uploadCompleteRequests, 4);
   } finally {
@@ -181,10 +187,13 @@ async function startPreservationServer() {
   const counters = {
     quoteRequests: 0,
     uploadSessionRequests: 0,
+    paymentStatusRequests: 0,
     finalizeRequests: 0,
+    finalizeJobStatusRequests: 0,
     uploadRequests: 0,
     uploadCompleteRequests: 0,
   };
+  let paymentSettled = false;
   const metadataCid = 'bafytestmetadata';
   const imagePath = `${metadataCid}/image.png`;
   const mediaPath = `${metadataCid}/animation.mp4`;
@@ -304,6 +313,16 @@ async function startPreservationServer() {
 
     if (url.pathname === '/v1/preservations/quotes/quote_test/upload-session' && req.method === 'POST') {
       counters.uploadSessionRequests += 1;
+
+      const paymentSignature = req.headers['payment-signature'];
+      if (!paymentSignature || Array.isArray(paymentSignature)) {
+        respondWithPaymentRequired(res, 60);
+        return;
+      }
+
+      await delay(1_100);
+      paymentSettled = true;
+      await delay(1_100);
       res.setHeader('content-type', 'application/json');
       res.end(
         JSON.stringify({
@@ -313,6 +332,31 @@ async function startPreservationServer() {
           uploadTargets: quotedAssets.map((asset) =>
             buildMultipartUploadTarget(baseUrl, 'upload_token', asset)
           ),
+        }),
+      );
+      return;
+    }
+
+    if (url.pathname === '/v1/preservations/quotes/quote_test/payment-status' && req.method === 'GET') {
+      counters.paymentStatusRequests += 1;
+      res.setHeader('content-type', 'application/json');
+      res.end(
+        JSON.stringify({
+          quoteId: 'quote_test',
+          quoteStatus: paymentSettled ? 'paid' : 'quoted',
+          expiresAt: '2026-01-01T00:00:00.000Z',
+          paymentStatus: paymentSettled ? 'settled' : 'pending',
+          payment: paymentSettled
+            ? {
+              paymentIdentifier: 'pres_test',
+              network: 'eip155:11155111',
+              tokenAddress: '0x197FaeF3f59eC80113e773Bb6206a17d183F97CB',
+              tokenAmount: '123',
+              payerAddress: '0x2222222222222222222222222222222222222222',
+              transaction: '0xabc123',
+              settledAt: '2026-01-01T00:06:00.000Z',
+            }
+            : null,
         }),
       );
       return;
@@ -362,18 +406,41 @@ async function startPreservationServer() {
 
     if (url.pathname === '/v1/preservations/quotes/quote_test/finalize' && req.method === 'POST') {
       counters.finalizeRequests += 1;
+      res.statusCode = 202;
       res.setHeader('content-type', 'application/json');
       res.end(
         JSON.stringify({
           quoteId: 'quote_test',
-          jobId: null,
-          status: 'completed',
+          jobId: 'job_test',
+          status: 'queued',
+          progressPhase: 'queued',
+          attempts: 0,
+          submittedAt: '2026-01-01T00:07:00.000Z',
+          startedAt: null,
+          completedAt: null,
+          errorMessage: null,
+          receipt: null,
+        }),
+      );
+      return;
+    }
+
+    if (url.pathname === '/v1/preservations/finalize-jobs/job_test' && req.method === 'GET') {
+      counters.finalizeJobStatusRequests += 1;
+      const isCompleted = counters.finalizeJobStatusRequests > 1;
+      res.setHeader('content-type', 'application/json');
+      res.end(
+        JSON.stringify({
+          jobId: 'job_test',
+          quoteId: 'quote_test',
+          status: isCompleted ? 'completed' : 'processing',
+          progressPhase: isCompleted ? 'completed' : 'pinning_manifest',
           attempts: 1,
           submittedAt: '2026-01-01T00:07:00.000Z',
           startedAt: '2026-01-01T00:07:00.000Z',
-          completedAt: '2026-01-01T00:07:00.000Z',
+          completedAt: isCompleted ? '2026-01-01T00:07:02.000Z' : null,
           errorMessage: null,
-          receipt: {
+          receipt: isCompleted ? {
             receiptId: 'receipt_test',
             quoteId: 'quote_test',
             expiresAt: '2026-01-01T00:10:00.000Z',
@@ -449,7 +516,7 @@ async function startPreservationServer() {
               tokenUri: `ipfs://${metadataCid}/metadata.json`,
             },
             createdAt: '2026-01-01T00:07:00.000Z',
-          },
+          } : null,
         }),
       );
       return;
@@ -490,6 +557,54 @@ function escapeRegex(value) {
 
 async function readJson(req) {
   return JSON.parse((await readBuffer(req)).toString('utf8'));
+}
+
+function respondWithPaymentRequired(res, maxTimeoutSeconds) {
+  res.statusCode = 402;
+  res.setHeader(
+    'payment-required',
+    encodeBase64Json({
+      x402Version: 2,
+      error: 'Payment required',
+      resource: {
+        url: 'http://127.0.0.1/upload-session',
+        description: 'Upload session',
+        mimeType: 'application/json',
+      },
+      accepts: [
+        {
+          scheme: 'exact',
+          network: 'eip155:11155111',
+          amount: '123',
+          asset: '0x197FaeF3f59eC80113e773Bb6206a17d183F97CB',
+          payTo: '0x1111111111111111111111111111111111111111',
+          maxTimeoutSeconds,
+          extra: {
+            assetTransferMethod: 'permit2',
+            name: 'SuperRare',
+            version: '1',
+          },
+        },
+      ],
+      extensions: {
+        'payment-identifier': {
+          info: {
+            required: true,
+          },
+        },
+      },
+    }),
+  );
+  res.setHeader('content-type', 'application/json');
+  res.end(JSON.stringify({ error: 'payment_required' }));
+}
+
+function encodeBase64Json(value) {
+  return Buffer.from(JSON.stringify(value), 'utf8').toString('base64');
+}
+
+async function delay(ms) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function buildMultipartUploadTarget(baseUrl, uploadToken, asset, partSizeBytes = 4) {

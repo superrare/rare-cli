@@ -18,6 +18,7 @@ import {
   uploadPreservationAssets,
   type PreservationAsset,
   type PreservationFinalizeJobStatus,
+  type PreservationQuotePaymentStatus,
   type PreservationUploadProgress,
   type PreservationQuote,
   type PreservationReceipt,
@@ -289,16 +290,23 @@ async function preserveQuotedToken(opts: {
     serviceUrl: opts.serviceUrl,
     quoteId: opts.quote.quoteId,
     fetchImpl: paymentFetch,
+    statusFetchImpl: fetch,
+    onPaymentStatusUpdate: createPaymentStatusLogger(),
   });
 
   log('Uploading quoted assets directly to preservation storage...');
-  await uploadPreservationAssets(
-    opts.serviceUrl,
-    uploadSession,
-    opts.resolved.assets,
-    fetch,
-    createPreservationUploadLogger(),
-  );
+  const uploadLogger = createPreservationUploadLogger();
+  try {
+    await uploadPreservationAssets(
+      opts.serviceUrl,
+      uploadSession,
+      opts.resolved.assets,
+      fetch,
+      uploadLogger.onProgress,
+    );
+  } finally {
+    uploadLogger.cleanup();
+  }
 
   log('Waiting for preservation finalization...');
   const receipt = await finalizeTokenPreservation({
@@ -326,16 +334,32 @@ function printQuote(quote: PreservationQuote, paymentChain: SupportedChain): voi
   console.log(`  Assets:         ${quote.assets.length}`);
 }
 
-function createPreservationUploadLogger(): (progress: PreservationUploadProgress) => void {
-  return (progress) => {
+function createPreservationUploadLogger(): {
+  onProgress: (progress: PreservationUploadProgress) => void;
+  cleanup: () => void;
+} {
+  const progressLine = createSingleLineProgressRenderer();
+
+  const onProgress = (progress: PreservationUploadProgress) => {
     const assetLabel = `${progress.assetIndex + 1}/${progress.assetCount} (${progress.assetId})`;
+    const isMultipartAsset = (progress.partCount ?? 0) > 1;
 
     if (progress.phase === 'asset-started') {
+      if (isMultipartAsset && progressLine.enabled) {
+        progressLine.render(formatUploadProgressLine(assetLabel, progress));
+        return;
+      }
+
       log(`Uploading preservation asset ${assetLabel} (${progress.totalBytes} bytes)...`);
       return;
     }
 
     if (progress.phase === 'part-completed') {
+      if (isMultipartAsset && progressLine.enabled) {
+        progressLine.render(formatUploadProgressLine(assetLabel, progress));
+        return;
+      }
+
       if ((progress.partCount ?? 0) > 1 && progress.partNumber !== null) {
         log(
           `Uploaded preservation asset ${assetLabel} part ${progress.partNumber}/${progress.partCount} (${progress.uploadedBytes}/${progress.totalBytes} bytes).`,
@@ -344,52 +368,192 @@ function createPreservationUploadLogger(): (progress: PreservationUploadProgress
       return;
     }
 
+    if (isMultipartAsset) {
+      progressLine.clear();
+    }
+
     log(`Verified preservation upload for asset ${assetLabel}.`);
+  };
+
+  return {
+    onProgress,
+    cleanup: () => progressLine.clear(),
   };
 }
 
-function createFinalizeStatusLogger(): (status: PreservationFinalizeJobStatus) => void {
-  let previousStatus: PreservationFinalizeJobStatus['status'] | null = null;
+function createPaymentStatusLogger(): (status: PreservationQuotePaymentStatus) => void {
+  let previousPaymentStatus: string | null = null;
 
   return (status) => {
-    if (status.status === previousStatus) {
+    if (status.paymentStatus === previousPaymentStatus) {
       return;
     }
 
-    previousStatus = status.status;
-    if (status.status === 'queued') {
-      log(
-        status.jobId
-          ? `Preservation finalize job queued (${status.jobId}).`
-          : 'Preservation finalize job queued.',
-      );
-      return;
+    previousPaymentStatus = status.paymentStatus;
+    const message = formatPaymentStatusMessage(status);
+    if (message) {
+      log(message);
     }
-
-    if (status.status === 'processing') {
-      log(
-        status.jobId
-          ? `Preservation finalize job processing (${status.jobId}).`
-          : 'Preservation finalize job processing.',
-      );
-      return;
-    }
-
-    if (status.status === 'completed') {
-      log(
-        status.jobId
-          ? `Preservation finalize job completed (${status.jobId}).`
-          : 'Preservation finalize job completed.',
-      );
-      return;
-    }
-
-    log(
-      status.jobId
-        ? `Preservation finalize job failed (${status.jobId}).`
-        : 'Preservation finalize job failed.',
-    );
   };
+}
+
+function formatPaymentStatusMessage(
+  status: PreservationQuotePaymentStatus,
+): string | null {
+  switch (status.paymentStatus) {
+    case 'not_started':
+      return null;
+    case 'pending':
+      return 'Preservation payment facilitation in progress.';
+    case 'settled':
+      return 'Preservation payment settled.';
+    default:
+      return `Preservation payment ${status.paymentStatus.replace(/_/g, ' ')}.`;
+  }
+}
+
+function createFinalizeStatusLogger(): (status: PreservationFinalizeJobStatus) => void {
+  let previousPhase: string | null = null;
+
+  return (status) => {
+    const phase = status.progressPhase ?? status.status;
+    if (phase === previousPhase) {
+      return;
+    }
+
+    previousPhase = phase;
+    log(formatFinalizeStatusMessage(status, phase));
+  };
+}
+
+function formatFinalizeStatusMessage(
+  status: PreservationFinalizeJobStatus,
+  phase: string,
+): string {
+  const suffix = status.jobId ? ` (${status.jobId}).` : '.';
+
+  switch (phase) {
+    case 'queued':
+      return `Preservation finalize job queued${suffix}`;
+    case 'processing':
+      return `Preservation finalize job processing${suffix}`;
+    case 'resolving_settlement':
+      return `Preservation finalize job resolving settlement${suffix}`;
+    case 'pinning_assets':
+      return `Preservation finalize job pinning assets${suffix}`;
+    case 'pinning_manifest':
+      return `Preservation finalize job pinning manifest${suffix}`;
+    case 'persisting_receipt':
+      return `Preservation finalize job persisting receipt${suffix}`;
+    case 'completed':
+      return `Preservation finalize job completed${suffix}`;
+    case 'failed':
+      return `Preservation finalize job failed${suffix}`;
+    default:
+      return `Preservation finalize job ${phase.replace(/_/g, ' ')}${suffix}`;
+  }
+}
+
+function createSingleLineProgressRenderer(): {
+  enabled: boolean;
+  render: (line: string) => void;
+  clear: () => void;
+} {
+  const enabled = !isJsonMode() && Boolean(process.stdout.isTTY);
+  let lastRenderedLength = 0;
+
+  const clear = () => {
+    if (!enabled || lastRenderedLength === 0) {
+      return;
+    }
+
+    process.stdout.write(`\r${' '.repeat(lastRenderedLength)}\r`);
+    lastRenderedLength = 0;
+  };
+
+  const render = (line: string) => {
+    if (!enabled) {
+      return;
+    }
+
+    const truncatedLine = truncateForTerminal(line, process.stdout.columns ?? 80);
+    const paddedLine = truncatedLine.padEnd(lastRenderedLength, ' ');
+    process.stdout.write(`\r${paddedLine}`);
+    lastRenderedLength = truncatedLine.length;
+  };
+
+  return {
+    enabled,
+    render,
+    clear,
+  };
+}
+
+function formatUploadProgressLine(
+  assetLabel: string,
+  progress: PreservationUploadProgress,
+): string {
+  const totalBytes = progress.totalBytes;
+  const uploadedBytes = Math.min(progress.uploadedBytes, totalBytes);
+  const ratio = totalBytes > 0 ? uploadedBytes / totalBytes : 0;
+  const percentage = `${(ratio * 100).toFixed(1)}%`;
+  const barWidth = resolveProgressBarWidth(process.stdout.columns ?? 80);
+  const bar = renderProgressBar(ratio, barWidth);
+  const byteSummary = `${formatByteCount(uploadedBytes)}/${formatByteCount(totalBytes)}`;
+  const partSummary = `${progress.partNumber ?? 0}/${progress.partCount ?? 0} parts`;
+
+  return `Uploading preservation asset ${assetLabel} ${bar} ${percentage} ${byteSummary} (${partSummary})`;
+}
+
+function resolveProgressBarWidth(columns: number): number {
+  if (columns >= 140) return 28;
+  if (columns >= 110) return 20;
+  if (columns >= 90) return 16;
+  return 12;
+}
+
+function renderProgressBar(ratio: number, width: number): string {
+  const clampedRatio = Math.max(0, Math.min(1, ratio));
+  const filledWidth = Math.round(clampedRatio * width);
+  return `[${'#'.repeat(filledWidth)}${'-'.repeat(width - filledWidth)}]`;
+}
+
+function formatByteCount(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) {
+    return '0 B';
+  }
+
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  const units = ['KiB', 'MiB', 'GiB', 'TiB'];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  const digits =
+    value >= 100 ? 0
+      : value >= 10 ? 1
+        : 2;
+
+  return `${value.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+function truncateForTerminal(line: string, columns: number): string {
+  if (columns <= 0 || line.length <= columns) {
+    return line;
+  }
+
+  if (columns <= 3) {
+    return '.'.repeat(columns);
+  }
+
+  return `${line.slice(0, columns - 3)}...`;
 }
 
 function printReceipt(
