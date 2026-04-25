@@ -11,6 +11,7 @@ import { importCommand } from './commands/import.js';
 import { offerCommand } from './commands/offer.js';
 import { listingCommand } from './commands/listing.js';
 import { currenciesCommand } from './commands/currencies.js';
+import { swapCommand } from './commands/swap.js';
 import { setJsonMode } from './output.js';
 
 const program = new Command();
@@ -39,6 +40,7 @@ program.addCommand(importCommand());
 program.addCommand(offerCommand());
 program.addCommand(listingCommand());
 program.addCommand(currenciesCommand());
+program.addCommand(swapCommand());
 
 program.parseAsync(process.argv).catch((err) => {
   // Only print here if not already handled (printContractError calls process.exit)

@@ -3,7 +3,7 @@ import { basename } from 'node:path';
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { uploadMedia, pinMetadata, type NftAttribute } from '../sdk/api.js';
+import type { NftAttribute } from '../sdk/api.js';
 import { createRareClient } from '../sdk/client.js';
 import { output, log } from '../output.js';
 
@@ -47,6 +47,9 @@ export function mintCommand(): Command {
     .option('--royalty-receiver <address>', 'royalty receiver address (defaults to caller)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
+      const chain = getActiveChain(opts.chain);
+      const publicClient = getPublicClient(chain);
+      const mediaClient = createRareClient({ publicClient });
       let tokenUri: string;
 
       if (opts.tokenUri) {
@@ -67,14 +70,14 @@ export function mintCommand(): Command {
 
         const imageBuffer = await readFile(opts.image);
         log(`Uploading image: ${basename(opts.image)} (${imageBuffer.byteLength} bytes)`);
-        const imageMedia = await uploadMedia(new Uint8Array(imageBuffer), basename(opts.image));
+        const imageMedia = await mediaClient.media.upload(new Uint8Array(imageBuffer), basename(opts.image));
         log(`  Image uploaded: ${imageMedia.url}`);
 
         let videoMedia;
         if (opts.video) {
           const videoBuffer = await readFile(opts.video);
           log(`Uploading video: ${basename(opts.video)} (${videoBuffer.byteLength} bytes)`);
-          videoMedia = await uploadMedia(new Uint8Array(videoBuffer), basename(opts.video));
+          videoMedia = await mediaClient.media.upload(new Uint8Array(videoBuffer), basename(opts.video));
           log(`  Video uploaded: ${videoMedia.url}`);
         }
 
@@ -82,7 +85,7 @@ export function mintCommand(): Command {
         const attributes: NftAttribute[] | undefined =
           opts.attribute.length > 0 ? opts.attribute.map(parseAttribute) : undefined;
 
-        tokenUri = await pinMetadata({
+        tokenUri = await mediaClient.media.pinMetadata({
           name: opts.name,
           description: opts.description,
           image: imageMedia,
@@ -92,9 +95,7 @@ export function mintCommand(): Command {
         });
       }
 
-      const chain = getActiveChain(opts.chain);
       const { client, account } = getWalletClient(chain);
-      const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const contractAddress = opts.contract as `0x${string}`;
 

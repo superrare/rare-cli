@@ -1,0 +1,47 @@
+export const liquidRouterAbi = [
+  {
+    type: 'function',
+    name: 'buy',
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'recipient', type: 'address' },
+      { name: 'minTokensOut', type: 'uint256' },
+      { name: 'commands', type: 'bytes' },
+      { name: 'inputs', type: 'bytes[]' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [{ name: 'tokensReceived', type: 'uint256' }],
+    stateMutability: 'payable',
+  },
+  {
+    type: 'function',
+    name: 'sell',
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'tokenAmount', type: 'uint256' },
+      { name: 'recipient', type: 'address' },
+      { name: 'minEthOut', type: 'uint256' },
+      { name: 'commands', type: 'bytes' },
+      { name: 'inputs', type: 'bytes[]' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [{ name: 'ethReceived', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'swap',
+    inputs: [
+      { name: 'tokenIn', type: 'address' },
+      { name: 'amountIn', type: 'uint256' },
+      { name: 'tokenOut', type: 'address' },
+      { name: 'recipient', type: 'address' },
+      { name: 'minAmountOut', type: 'uint256' },
+      { name: 'commands', type: 'bytes' },
+      { name: 'inputs', type: 'bytes[]' },
+      { name: 'deadline', type: 'uint256' },
+    ],
+    outputs: [{ name: 'amountOut', type: 'uint256' }],
+    stateMutability: 'payable',
+  },
+] as const;
