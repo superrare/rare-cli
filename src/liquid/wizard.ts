@@ -23,7 +23,6 @@ export interface LiquidCurveWizardOptions {
   stdin?: ReadStream;
   stdout?: WriteStream;
   factoryConfig: LiquidFactoryConfig;
-  rarePriceUsd?: number;
   getRarePriceUsd: () => Promise<number>;
 }
 
@@ -74,33 +73,18 @@ async function promptForPreset(rl: ReturnType<typeof createInterface>): Promise<
   }
 }
 
-async function promptForRarePrice(
-  rl: ReturnType<typeof createInterface>,
+async function fetchRarePriceUsd(
   getRarePriceUsd: () => Promise<number>,
-  provided?: number,
 ): Promise<number> {
-  if (provided !== undefined) {
-    if (!Number.isFinite(provided) || provided <= 0) {
-      throw new Error('Provided RARE/USD price must be a positive number.');
-    }
-    return provided;
-  }
-
   try {
     const rarePriceUsd = await getRarePriceUsd();
+    if (!Number.isFinite(rarePriceUsd) || rarePriceUsd <= 0) {
+      throw new Error('Fetched RARE/USD price must be a positive number.');
+    }
     console.log(`\nUsing fetched RARE/USD price: ${rarePriceUsd}`);
     return rarePriceUsd;
   } catch (error) {
-    console.log(`\nCould not fetch RARE/USD price automatically: ${error instanceof Error ? error.message : String(error)}`);
-  }
-
-  while (true) {
-    const answer = (await rl.question('Enter RARE/USD price: ')).trim();
-    const value = Number(answer);
-    if (Number.isFinite(value) && value > 0) {
-      return value;
-    }
-    console.log('Price must be a positive number.');
+    throw new Error(`Could not fetch RARE/USD price automatically: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
@@ -121,7 +105,7 @@ export async function runLiquidCurveWizard(opts: LiquidCurveWizardOptions): Prom
 
   try {
     const preset = await promptForPreset(rl);
-    const rarePriceUsd = await promptForRarePrice(rl, opts.getRarePriceUsd, opts.rarePriceUsd);
+    const rarePriceUsd = await fetchRarePriceUsd(opts.getRarePriceUsd);
     const curves = generatePresetCurves(preset, rarePriceUsd, opts.factoryConfig);
     const preview = buildCurvePreview(curves, opts.factoryConfig, rarePriceUsd);
 

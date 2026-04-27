@@ -26,16 +26,27 @@ export function isCurvePresetKey(value: string): value is CurvePresetKey {
   return value === 'low-demand' || value === 'medium-demand' || value === 'high-demand';
 }
 
-export function parseRarePriceUsdOverride(provided: string | undefined): number | undefined {
-  if (provided === undefined) {
+export function validateRarePriceUsd(value: number, label = 'RARE/USD price'): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${label} must be a positive number.`);
+  }
+  return value;
+}
+
+export async function resolveRarePriceUsd(getRarePriceUsd: () => Promise<number>): Promise<number> {
+  try {
+    return validateRarePriceUsd(await getRarePriceUsd(), 'Fetched RARE/USD price');
+  } catch (error) {
+    throw new Error(`Could not fetch RARE/USD price automatically: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+export async function maybeResolveRarePriceUsd(getRarePriceUsd: () => Promise<number>): Promise<number | undefined> {
+  try {
+    return await resolveRarePriceUsd(getRarePriceUsd);
+  } catch {
     return undefined;
   }
-
-  const parsed = Number(provided);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error('--rare-price-usd must be a positive number.');
-  }
-  return parsed;
 }
 
 export function resolveCurveSourceMode(

@@ -16,38 +16,13 @@ import { output, log } from '../output.js';
 import {
   formatCurvePreview,
   isCurvePresetKey,
+  maybeResolveRarePriceUsd,
   parseAttribute,
-  parseRarePriceUsdOverride,
+  resolveRarePriceUsd,
   resolveCurveSourceMode,
 } from './deploy-core.js';
 
 export { formatCurvePreview, resolveCurveSourceMode } from './deploy-core.js';
-
-async function resolveRarePriceUsd(
-  rare: ReturnType<typeof createRareClient>,
-  provided?: string,
-): Promise<number> {
-  if (provided !== undefined) {
-    return parseRarePriceUsdOverride(provided)!;
-  }
-
-  return (await rare.token.getPrice('RARE')).priceUsd;
-}
-
-async function maybeResolveRarePriceUsd(
-  rare: ReturnType<typeof createRareClient>,
-  provided?: string,
-): Promise<number | undefined> {
-  if (provided !== undefined) {
-    return resolveRarePriceUsd(rare, provided);
-  }
-
-  try {
-    return (await rare.token.getPrice('RARE')).priceUsd;
-  } catch {
-    return undefined;
-  }
-}
 
 async function resolveTokenUri(
   rare: ReturnType<typeof createRareClient>,
@@ -113,7 +88,6 @@ async function resolveCurves(
   opts: {
     curvesFile?: string;
     curvePreset?: string;
-    rarePriceUsd?: string;
     writeCurvesFile?: string;
   },
   rare: ReturnType<typeof createRareClient>,
@@ -124,12 +98,13 @@ async function resolveCurves(
   rarePriceUsd?: number;
 }> {
   const factoryConfig = await rare.liquid.getFactoryConfig();
+  const getRarePriceUsd = async () => (await rare.token.getPrice('rare')).priceUsd;
   const mode = resolveCurveSourceMode(opts, Boolean(process.stdin.isTTY));
 
   if (mode === 'file') {
     const raw = await readFile(opts.curvesFile!, 'utf-8');
     const curves = parseCurveConfig(raw, factoryConfig.curvePoolSupplyTokens, factoryConfig.poolTickSpacing);
-    const rarePriceUsd = await maybeResolveRarePriceUsd(rare, opts.rarePriceUsd);
+    const rarePriceUsd = await maybeResolveRarePriceUsd(getRarePriceUsd);
     return {
       source: `file:${opts.curvesFile!}`,
       curves,
@@ -142,7 +117,7 @@ async function resolveCurves(
     if (!isCurvePresetKey(opts.curvePreset!)) {
       throw new Error(`Unsupported curve preset "${opts.curvePreset!}". Use low-demand, medium-demand, or high-demand.`);
     }
-    const rarePriceUsd = await resolveRarePriceUsd(rare, opts.rarePriceUsd);
+    const rarePriceUsd = await resolveRarePriceUsd(getRarePriceUsd);
     const curves = await rare.liquid.generatePresetCurves({
       preset: opts.curvePreset!,
       rarePriceUsd,
@@ -158,8 +133,7 @@ async function resolveCurves(
 
   const wizard = await runLiquidCurveWizard({
     factoryConfig,
-    rarePriceUsd: parseRarePriceUsdOverride(opts.rarePriceUsd),
-    getRarePriceUsd: async () => (await rare.token.getPrice('RARE')).priceUsd,
+    getRarePriceUsd,
   });
   await writeGeneratedCurves(opts.writeCurvesFile, wizard.curves);
   return {
@@ -227,7 +201,6 @@ function deployLiquidTokenCommand(): Command {
     .argument('<symbol>', 'symbol of the liquid token')
     .option('--curves-file <path>', 'path to curve JSON')
     .option('--curve-preset <preset>', 'curve preset to generate (low-demand, medium-demand, high-demand)')
-    .option('--rare-price-usd <number>', 'override RARE/USD price used for preset generation and preview')
     .option('--write-curves-file <path>', 'write generated curves to a JSON file')
     .option('--initial-rare-liquidity <amount>', 'initial RARE liquidity to seed with')
     .option('--preview', 'preview the resolved curve config without deploying')
@@ -245,7 +218,6 @@ function deployLiquidTokenCommand(): Command {
         opts: {
           curvesFile?: string;
           curvePreset?: string;
-          rarePriceUsd?: string;
           writeCurvesFile?: string;
           initialRareLiquidity?: string;
           preview?: boolean;
