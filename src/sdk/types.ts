@@ -193,7 +193,7 @@ export interface TokenInfo {
 
 export interface GeneratePresetCurvesParams {
   preset: CurvePresetKey;
-  rarePriceUsd: number;
+  rarePriceUsd?: number;
 }
 
 export interface ValidateLiquidCurvesParams {

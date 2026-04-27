@@ -3,6 +3,7 @@ import type { SupportedChain } from '../contracts/addresses.js';
 import { liquidFactoryAbi } from '../contracts/abis/liquid-factory.js';
 import { buildCurvePreview, generatePresetCurves, validateCurves } from '../liquid/curve-config.js';
 import { fetchLiquidFactoryConfig } from '../liquid/factory-config.js';
+import { getTokenPrice } from './api.js';
 import {
   ensureTokenAllowance,
   requireConfiguredAddress,
@@ -10,6 +11,14 @@ import {
   toTokenAmount,
 } from './helpers.js';
 import type { RareClient, RareClientConfig } from './types.js';
+
+async function resolveRarePriceUsd(provided?: number): Promise<number> {
+  const rarePriceUsd = provided ?? (await getTokenPrice('rare')).priceUsd;
+  if (!Number.isFinite(rarePriceUsd) || rarePriceUsd <= 0) {
+    throw new Error('RARE/USD price must be a positive number.');
+  }
+  return rarePriceUsd;
+}
 
 export function createLiquidNamespace(
   config: RareClientConfig,
@@ -25,11 +34,12 @@ export function createLiquidNamespace(
     },
 
     async generatePresetCurves(params) {
-      const factoryConfig = await fetchLiquidFactoryConfig(
-        publicClient,
-        requireConfiguredAddress(addresses.liquidFactory, 'Liquid Editions factory', chain),
-      );
-      return generatePresetCurves(params.preset, params.rarePriceUsd, factoryConfig);
+      const liquidFactory = requireConfiguredAddress(addresses.liquidFactory, 'Liquid Editions factory', chain);
+      const [factoryConfig, rarePriceUsd] = await Promise.all([
+        fetchLiquidFactoryConfig(publicClient, liquidFactory),
+        resolveRarePriceUsd(params.rarePriceUsd),
+      ]);
+      return generatePresetCurves(params.preset, rarePriceUsd, factoryConfig);
     },
 
     async validateCurves(params) {
