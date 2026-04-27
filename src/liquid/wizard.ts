@@ -1,14 +1,11 @@
 import { createInterface } from 'node:readline/promises';
 import type { ReadStream, WriteStream } from 'node:tty';
 import {
-  buildCurvePreview,
-  generatePresetCurves,
   getCurvePresetDefinition,
   type CurvePresetKey,
   type LiquidCurvePreview,
   type LiquidCurveSegment,
 } from './curve-config.js';
-import type { LiquidFactoryConfig } from './factory-config.js';
 
 const PRESETS: CurvePresetKey[] = ['low-demand', 'medium-demand', 'high-demand'];
 
@@ -22,8 +19,7 @@ export interface LiquidCurveWizardResult {
 export interface LiquidCurveWizardOptions {
   stdin?: ReadStream;
   stdout?: WriteStream;
-  factoryConfig: LiquidFactoryConfig;
-  getRarePriceUsd: () => Promise<number>;
+  generatePresetCurves: (preset: CurvePresetKey) => Promise<LiquidCurveWizardResult>;
 }
 
 function printPreview(preview: LiquidCurvePreview): void {
@@ -73,21 +69,6 @@ async function promptForPreset(rl: ReturnType<typeof createInterface>): Promise<
   }
 }
 
-async function fetchRarePriceUsd(
-  getRarePriceUsd: () => Promise<number>,
-): Promise<number> {
-  try {
-    const rarePriceUsd = await getRarePriceUsd();
-    if (!Number.isFinite(rarePriceUsd) || rarePriceUsd <= 0) {
-      throw new Error('Fetched RARE/USD price must be a positive number.');
-    }
-    console.log(`\nUsing fetched RARE/USD price: ${rarePriceUsd}`);
-    return rarePriceUsd;
-  } catch (error) {
-    throw new Error(`Could not fetch RARE/USD price automatically: ${error instanceof Error ? error.message : String(error)}`);
-  }
-}
-
 async function promptForConfirmation(rl: ReturnType<typeof createInterface>): Promise<boolean> {
   while (true) {
     const answer = (await rl.question('\nUse these curves? [y/n]: ')).trim().toLowerCase();
@@ -105,17 +86,16 @@ export async function runLiquidCurveWizard(opts: LiquidCurveWizardOptions): Prom
 
   try {
     const preset = await promptForPreset(rl);
-    const rarePriceUsd = await fetchRarePriceUsd(opts.getRarePriceUsd);
-    const curves = generatePresetCurves(preset, rarePriceUsd, opts.factoryConfig);
-    const preview = buildCurvePreview(curves, opts.factoryConfig, rarePriceUsd);
+    const generated = await opts.generatePresetCurves(preset);
+    console.log(`\nUsing fetched RARE/USD price: ${generated.rarePriceUsd}`);
 
-    printPreview(preview);
+    printPreview(generated.preview);
     const confirmed = await promptForConfirmation(rl);
     if (!confirmed) {
       throw new Error('Curve generation cancelled.');
     }
 
-    return { preset, rarePriceUsd, curves, preview };
+    return generated;
   } finally {
     rl.close();
   }

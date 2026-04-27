@@ -6,7 +6,6 @@ import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
 import { printError } from '../errors.js';
 import {
-  buildCurvePreview,
   parseCurveConfig,
   type LiquidCurvePreview,
   type LiquidCurveSegment,
@@ -16,9 +15,7 @@ import { output, log } from '../output.js';
 import {
   formatCurvePreview,
   isCurvePresetKey,
-  maybeResolveRarePriceUsd,
   parseAttribute,
-  resolveRarePriceUsd,
   resolveCurveSourceMode,
 } from './deploy-core.js';
 
@@ -97,19 +94,18 @@ async function resolveCurves(
   preview: LiquidCurvePreview;
   rarePriceUsd?: number;
 }> {
-  const factoryConfig = await rare.liquid.getFactoryConfig();
-  const getRarePriceUsd = async () => (await rare.token.getPrice('rare')).priceUsd;
   const mode = resolveCurveSourceMode(opts, Boolean(process.stdin.isTTY));
 
   if (mode === 'file') {
+    const factoryConfig = await rare.liquid.getFactoryConfig();
     const raw = await readFile(opts.curvesFile!, 'utf-8');
     const curves = parseCurveConfig(raw, factoryConfig.curvePoolSupplyTokens, factoryConfig.poolTickSpacing);
-    const rarePriceUsd = await maybeResolveRarePriceUsd(getRarePriceUsd);
+    const preview = await rare.liquid.validateCurves({ curves });
     return {
       source: `file:${opts.curvesFile!}`,
       curves,
-      preview: buildCurvePreview(curves, factoryConfig, rarePriceUsd),
-      rarePriceUsd,
+      preview,
+      rarePriceUsd: preview.rarePriceUsd,
     };
   }
 
@@ -117,23 +113,20 @@ async function resolveCurves(
     if (!isCurvePresetKey(opts.curvePreset!)) {
       throw new Error(`Unsupported curve preset "${opts.curvePreset!}". Use low-demand, medium-demand, or high-demand.`);
     }
-    const rarePriceUsd = await resolveRarePriceUsd(getRarePriceUsd);
-    const curves = await rare.liquid.generatePresetCurves({
+    const generated = await rare.liquid.generatePresetCurves({
       preset: opts.curvePreset!,
-      rarePriceUsd,
     });
-    await writeGeneratedCurves(opts.writeCurvesFile, curves);
+    await writeGeneratedCurves(opts.writeCurvesFile, generated.curves);
     return {
       source: `preset:${opts.curvePreset!}`,
-      curves,
-      preview: buildCurvePreview(curves, factoryConfig, rarePriceUsd),
-      rarePriceUsd,
+      curves: generated.curves,
+      preview: generated.preview,
+      rarePriceUsd: generated.rarePriceUsd,
     };
   }
 
   const wizard = await runLiquidCurveWizard({
-    factoryConfig,
-    getRarePriceUsd,
+    generatePresetCurves: async (preset) => rare.liquid.generatePresetCurves({ preset }),
   });
   await writeGeneratedCurves(opts.writeCurvesFile, wizard.curves);
   return {

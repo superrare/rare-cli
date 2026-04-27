@@ -10,9 +10,7 @@ import {
 } from '../src/commands/swap-core.js';
 import {
   formatCurvePreview,
-  maybeResolveRarePriceUsd,
   resolveCurveSourceMode,
-  resolveRarePriceUsd,
 } from '../src/commands/deploy-core.js';
 
 test('resolveCurveSourceMode rejects omitted curves outside a TTY', () => {
@@ -21,23 +19,6 @@ test('resolveCurveSourceMode rejects omitted curves outside a TTY', () => {
 
 test('resolveCurveSourceMode prefers files over presets', () => {
   assert.equal(resolveCurveSourceMode({ curvesFile: './curves.json', curvePreset: 'medium-demand' }, false), 'file');
-});
-
-test('resolveRarePriceUsd fetches the API price', async () => {
-  assert.equal(await resolveRarePriceUsd(async () => 0.25), 0.25);
-});
-
-test('resolveRarePriceUsd validates fetched API values', async () => {
-  await assert.rejects(() => resolveRarePriceUsd(async () => 0), /positive number/i);
-});
-
-test('maybeResolveRarePriceUsd treats API failures as optional', async () => {
-  assert.equal(
-    await maybeResolveRarePriceUsd(async () => {
-      throw new Error('API unavailable');
-    }),
-    undefined,
-  );
 });
 
 test('formatCurvePreview prints source and segment details', () => {

@@ -193,7 +193,13 @@ export interface TokenInfo {
 
 export interface GeneratePresetCurvesParams {
   preset: CurvePresetKey;
-  rarePriceUsd?: number;
+}
+
+export interface GeneratePresetCurvesResult {
+  preset: CurvePresetKey;
+  rarePriceUsd: number;
+  curves: LiquidCurveSegment[];
+  preview: LiquidCurvePreview;
 }
 
 export interface ValidateLiquidCurvesParams {
@@ -333,7 +339,7 @@ export interface RareClient {
   };
   liquid: {
     getFactoryConfig(): Promise<LiquidFactoryConfig>;
-    generatePresetCurves(params: GeneratePresetCurvesParams): Promise<LiquidCurveSegment[]>;
+    generatePresetCurves(params: GeneratePresetCurvesParams): Promise<GeneratePresetCurvesResult>;
     validateCurves(params: ValidateLiquidCurvesParams): Promise<LiquidCurvePreview>;
     deployMultiCurve(params: DeployLiquidMultiCurveParams): Promise<DeployLiquidMultiCurveResult>;
   };

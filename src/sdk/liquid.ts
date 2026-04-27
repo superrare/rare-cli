@@ -12,12 +12,20 @@ import {
 } from './helpers.js';
 import type { RareClient, RareClientConfig } from './types.js';
 
-async function resolveRarePriceUsd(provided?: number): Promise<number> {
-  const rarePriceUsd = provided ?? (await getTokenPrice('rare')).priceUsd;
+async function fetchRarePriceUsd(): Promise<number> {
+  const rarePriceUsd = (await getTokenPrice('rare')).priceUsd;
   if (!Number.isFinite(rarePriceUsd) || rarePriceUsd <= 0) {
-    throw new Error('RARE/USD price must be a positive number.');
+    throw new Error('Fetched RARE/USD price must be a positive number.');
   }
   return rarePriceUsd;
+}
+
+async function maybeFetchRarePriceUsd(): Promise<number | undefined> {
+  try {
+    return await fetchRarePriceUsd();
+  } catch {
+    return undefined;
+  }
 }
 
 export function createLiquidNamespace(
@@ -37,21 +45,28 @@ export function createLiquidNamespace(
       const liquidFactory = requireConfiguredAddress(addresses.liquidFactory, 'Liquid Editions factory', chain);
       const [factoryConfig, rarePriceUsd] = await Promise.all([
         fetchLiquidFactoryConfig(publicClient, liquidFactory),
-        resolveRarePriceUsd(params.rarePriceUsd),
+        fetchRarePriceUsd(),
       ]);
-      return generatePresetCurves(params.preset, rarePriceUsd, factoryConfig);
+      const curves = generatePresetCurves(params.preset, rarePriceUsd, factoryConfig);
+      return {
+        preset: params.preset,
+        rarePriceUsd,
+        curves,
+        preview: buildCurvePreview(curves, factoryConfig, rarePriceUsd),
+      };
     },
 
     async validateCurves(params) {
-      const factoryConfig = await fetchLiquidFactoryConfig(
-        publicClient,
-        requireConfiguredAddress(addresses.liquidFactory, 'Liquid Editions factory', chain),
-      );
+      const liquidFactory = requireConfiguredAddress(addresses.liquidFactory, 'Liquid Editions factory', chain);
+      const [factoryConfig, rarePriceUsd] = await Promise.all([
+        fetchLiquidFactoryConfig(publicClient, liquidFactory),
+        maybeFetchRarePriceUsd(),
+      ]);
       const validation = validateCurves(params.curves, factoryConfig);
       if (!validation.isValid || !validation.curves) {
         throw new Error(validation.errorMessage ?? 'Invalid curve configuration');
       }
-      return buildCurvePreview(validation.curves, factoryConfig);
+      return buildCurvePreview(validation.curves, factoryConfig, rarePriceUsd);
     },
 
     async deployMultiCurve(params) {

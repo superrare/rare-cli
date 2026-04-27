@@ -8,6 +8,7 @@ export type {
   TokenTradeQuote,
   TokenTradeResult,
   GeneratePresetCurvesParams,
+  GeneratePresetCurvesResult,
   ValidateLiquidCurvesParams,
   DeployLiquidMultiCurveParams,
   DeployLiquidMultiCurveResult,

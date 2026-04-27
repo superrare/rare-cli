@@ -1,5 +1,5 @@
 import { formatEther, formatUnits, isHex } from 'viem';
-import type { BuyRareQuote, TokenTradeQuote } from '../sdk/client.js';
+import type { BuyRareQuote, TokenTradeQuote } from '../sdk/types.js';
 
 export function parseInputsJson(raw: string, label: string): readonly `0x${string}`[] {
   let parsed: unknown;
