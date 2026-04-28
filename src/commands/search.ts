@@ -3,6 +3,7 @@ import { getActiveChain } from '../config.js';
 import { getWalletClient } from '../client.js';
 import { searchNfts, searchCollections } from '../sdk/api.js';
 import { chainIds, type SupportedChain } from '../contracts/addresses.js';
+import { printError } from '../errors.js';
 import { output, log, printNftRow, printCollectionRow, printPagination } from '../output.js';
 
 function getWalletAddress(chain: SupportedChain): string {
@@ -37,25 +38,29 @@ export function searchCommand(): Command {
 
       log(`Searching ${label} on ${chain}...`);
 
-      const result = await searchNfts({
-        query: opts.query,
-        perPage: parseInt(opts.perPage, 10),
-        page: parseInt(opts.page, 10),
-        ownerAddress,
-        chainId: chainIds[chain],
-      });
+      try {
+        const result = await searchNfts({
+          query: opts.query,
+          perPage: parseInt(opts.perPage, 10),
+          page: parseInt(opts.page, 10),
+          ownerAddress,
+          chainId: chainIds[chain],
+        });
 
-      output(result, () => {
-        console.log(`\n${label} (${result.pagination.totalCount} total):`);
-        if (result.data.length === 0) {
-          console.log('  No results found.');
-          return;
-        }
-        for (const nft of result.data) {
-          printNftRow(nft);
-        }
-        printPagination(result.pagination);
-      });
+        output(result, () => {
+          console.log(`\n${label} (${result.pagination.totalCount} total):`);
+          if (result.data.length === 0) {
+            console.log('  No results found.');
+            return;
+          }
+          for (const nft of result.data) {
+            printNftRow(nft);
+          }
+          printPagination(result.pagination);
+        });
+      } catch (error) {
+        printError(error);
+      }
     });
 
   // --- rare search auctions ---
@@ -73,27 +78,31 @@ export function searchCommand(): Command {
 
       log(`Searching auctions (${opts.state}) on ${chain}...`);
 
-      const result = await searchNfts({
-        query: opts.query,
-        perPage: parseInt(opts.perPage, 10),
-        page: parseInt(opts.page, 10),
-        ownerAddress: opts.owner,
-        hasAuction: true,
-        auctionState: opts.state,
-        chainId: chainIds[chain],
-      });
+      try {
+        const result = await searchNfts({
+          query: opts.query,
+          perPage: parseInt(opts.perPage, 10),
+          page: parseInt(opts.page, 10),
+          ownerAddress: opts.owner,
+          hasAuction: true,
+          auctionState: opts.state,
+          chainId: chainIds[chain],
+        });
 
-      output(result, () => {
-        console.log(`\nAuctions — ${opts.state} (${result.pagination.totalCount} total):`);
-        if (result.data.length === 0) {
-          console.log('  No results found.');
-          return;
-        }
-        for (const nft of result.data) {
-          printNftRow(nft);
-        }
-        printPagination(result.pagination);
-      });
+        output(result, () => {
+          console.log(`\nAuctions — ${opts.state} (${result.pagination.totalCount} total):`);
+          if (result.data.length === 0) {
+            console.log('  No results found.');
+            return;
+          }
+          for (const nft of result.data) {
+            printNftRow(nft);
+          }
+          printPagination(result.pagination);
+        });
+      } catch (error) {
+        printError(error);
+      }
     });
 
   // --- rare search collections ---
@@ -109,23 +118,27 @@ export function searchCommand(): Command {
 
       log(`Searching collections on ${chain}...`);
 
-      const result = await searchCollections({
-        query: opts.query,
-        perPage: parseInt(opts.perPage, 10),
-        page: parseInt(opts.page, 10),
-      });
+      try {
+        const result = await searchCollections({
+          query: opts.query,
+          perPage: parseInt(opts.perPage, 10),
+          page: parseInt(opts.page, 10),
+        });
 
-      output(result, () => {
-        console.log(`\nCollections (${result.pagination.totalCount} total):`);
-        if (result.data.length === 0) {
-          console.log('  No results found.');
-          return;
-        }
-        for (const col of result.data) {
-          printCollectionRow(col);
-        }
-        printPagination(result.pagination);
-      });
+        output(result, () => {
+          console.log(`\nCollections (${result.pagination.totalCount} total):`);
+          if (result.data.length === 0) {
+            console.log('  No results found.');
+            return;
+          }
+          for (const col of result.data) {
+            printCollectionRow(col);
+          }
+          printPagination(result.pagination);
+        });
+      } catch (error) {
+        printError(error);
+      }
     });
 
   return cmd;

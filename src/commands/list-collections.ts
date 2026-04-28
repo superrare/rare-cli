@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { searchCollections, type Collection } from '../sdk/api.js';
+import { printError } from '../errors.js';
 import { output, log, printCollectionRow, printCollection } from '../output.js';
 
 export function listCollectionsCommand(): Command {
@@ -14,33 +15,37 @@ export function listCollectionsCommand(): Command {
 
       log(`Fetching collections on ${chain}...`);
 
-      const allItems: Collection[] = [];
-      let page = 1;
-      let hasMore = true;
+      try {
+        const allItems: Collection[] = [];
+        let page = 1;
+        let hasMore = true;
 
-      while (hasMore) {
-        const result = await searchCollections({
-          query: opts.query,
-          perPage: 100,
-          page,
+        while (hasMore) {
+          const result = await searchCollections({
+            query: opts.query,
+            perPage: 100,
+            page,
+          });
+
+          allItems.push(...result.data);
+          hasMore = page < result.pagination.totalPages;
+          page++;
+        }
+
+        output(allItems, () => {
+          if (allItems.length === 0) {
+            console.log('No collections found.');
+            return;
+          }
+
+          console.log(`\nFound ${allItems.length} collection(s):`);
+          for (const col of allItems) {
+            printCollection(col);
+          }
         });
-
-        allItems.push(...result.data);
-        hasMore = page < result.pagination.totalPages;
-        page++;
+      } catch (error) {
+        printError(error);
       }
-
-      output(allItems, () => {
-        if (allItems.length === 0) {
-          console.log('No collections found.');
-          return;
-        }
-
-        console.log(`\nFound ${allItems.length} collection(s):`);
-        for (const col of allItems) {
-          printCollection(col);
-        }
-      });
     });
 
   return cmd;

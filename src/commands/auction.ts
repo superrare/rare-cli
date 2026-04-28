@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { formatEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { printContractError } from '../errors.js';
+import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import { resolveCurrency } from '../contracts/addresses.js';
 import { output, log } from '../output.js';
@@ -62,7 +62,7 @@ export function auctionCommand(): Command {
           },
         );
       } catch (error) {
-        printContractError(error);
+        printError(error);
       }
     });
 
@@ -105,7 +105,7 @@ export function auctionCommand(): Command {
           },
         );
       } catch (error) {
-        printContractError(error);
+        printError(error);
       }
     });
 
@@ -138,7 +138,7 @@ export function auctionCommand(): Command {
           },
         );
       } catch (error) {
-        printContractError(error);
+        printError(error);
       }
     });
 
@@ -171,7 +171,7 @@ export function auctionCommand(): Command {
           },
         );
       } catch (error) {
-        printContractError(error);
+        printError(error);
       }
     });
 

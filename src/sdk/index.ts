@@ -1,5 +1,5 @@
 export { createRareClient } from './client.js';
-export type { RareClient, RareClientConfig } from './client.js';
+export type { RareClient, RareClientConfig } from './types.js';
 export type {
   CollectionSearchParams,
   ImportErc721Params,
