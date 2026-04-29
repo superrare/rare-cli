@@ -10,6 +10,7 @@ import {
 } from '../src/commands/swap-core.js';
 import {
   formatCurvePreview,
+  formatLiquidEditionUrl,
   resolveCurveSourceMode,
 } from '../src/commands/deploy-core.js';
 
@@ -47,6 +48,13 @@ test('formatCurvePreview prints source and segment details', () => {
 
   assert.ok(lines.some((line) => line.includes('preset:medium-demand')));
   assert.ok(lines.some((line) => line.includes('ticks -60 -> 60')));
+});
+
+test('formatLiquidEditionUrl builds a SuperRare Liquid Editions link', () => {
+  assert.equal(
+    formatLiquidEditionUrl(11155111, '0x8AfB46A1c2b08dc9ffCEE3B57eBC7C3482F1AC28'),
+    'https://superrare.com/liquid-editions/11155111/0x8AfB46A1c2b08dc9ffCEE3B57eBC7C3482F1AC28',
+  );
 });
 
 test('parseInputsJson accepts a JSON array of hex strings', () => {

@@ -13,13 +13,14 @@ import {
 import { runLiquidCurveWizard } from '../liquid/wizard.js';
 import { output, log } from '../output.js';
 import {
+  formatLiquidEditionUrl,
   formatCurvePreview,
   isCurvePresetKey,
   parseAttribute,
   resolveCurveSourceMode,
 } from './deploy-core.js';
 
-export { formatCurvePreview, resolveCurveSourceMode } from './deploy-core.js';
+export { formatCurvePreview, formatLiquidEditionUrl, resolveCurveSourceMode } from './deploy-core.js';
 
 async function resolveTokenUri(
   rare: ReturnType<typeof createRareClient>,
@@ -264,12 +265,15 @@ function deployLiquidTokenCommand(): Command {
             initialRareLiquidity: opts.initialRareLiquidity,
             curves: curves.curves,
           });
+          const liquidEditionUrl = result.contract ? formatLiquidEditionUrl(rare.chainId, result.contract) : null;
 
           output(
             {
               txHash: result.txHash,
               blockNumber: result.receipt.blockNumber.toString(),
               contract: result.contract ?? null,
+              chainId: rare.chainId,
+              liquidEditionUrl,
               tokenUri,
               curves: curves.curves,
               source: curves.source,
@@ -279,6 +283,7 @@ function deployLiquidTokenCommand(): Command {
               console.log(`Transaction sent: ${result.txHash}`);
               if (result.contract) {
                 console.log(`\nLiquid token deployed at: ${result.contract}`);
+                console.log(`Liquid Editions URL: ${liquidEditionUrl}`);
               } else {
                 console.log(`\nTransaction confirmed. Block: ${result.receipt.blockNumber}`);
                 console.log('Could not parse deployed address from logs.');

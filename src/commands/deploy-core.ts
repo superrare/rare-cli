@@ -36,6 +36,10 @@ export function resolveCurveSourceMode(
   throw new Error('When --curves-file is omitted, provide --curve-preset or run the command in a TTY for the interactive curve wizard.');
 }
 
+export function formatLiquidEditionUrl(chainId: number, contractAddress: string): string {
+  return `https://superrare.com/liquid-editions/${chainId}/${contractAddress}`;
+}
+
 export function formatCurvePreview(preview: LiquidCurvePreview, source: string): string[] {
   const lines = [
     `Curve source: ${source}`,
