@@ -50,8 +50,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "generate:types": "openapi-typescript https://rare-api-8426-784573620320.us-east1.run.app/doc -o src/data-access/schema.d.ts",
     "test": "tsc -p tsconfig.test.json && node --test .test-dist/test/**/*.test.js",
+    "generate:types": "openapi-typescript https://api.superrare.com/doc -o src/data-access/schema.d.ts",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
