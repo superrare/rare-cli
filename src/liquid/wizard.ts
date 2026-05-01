@@ -1,5 +1,5 @@
 import { createInterface } from 'node:readline/promises';
-import type { ReadStream, WriteStream } from 'node:tty';
+import type { Readable, Writable } from 'node:stream';
 import {
   getCurvePresetDefinition,
   type CurvePresetKey,
@@ -17,8 +17,9 @@ export interface LiquidCurveWizardResult {
 }
 
 export interface LiquidCurveWizardOptions {
-  stdin?: ReadStream;
-  stdout?: WriteStream;
+  stdin?: Readable;
+  stdout?: Writable;
+  skipConfirmation?: boolean;
   generatePresetCurves: (preset: CurvePresetKey) => Promise<LiquidCurveWizardResult>;
 }
 
@@ -90,9 +91,11 @@ export async function runLiquidCurveWizard(opts: LiquidCurveWizardOptions): Prom
     console.log(`\nUsing fetched RARE/USD price: ${generated.rarePriceUsd}`);
 
     printPreview(generated.preview);
-    const confirmed = await promptForConfirmation(rl);
-    if (!confirmed) {
-      throw new Error('Curve generation cancelled.');
+    if (!opts.skipConfirmation) {
+      const confirmed = await promptForConfirmation(rl);
+      if (!confirmed) {
+        throw new Error('Curve generation cancelled.');
+      }
     }
 
     return generated;

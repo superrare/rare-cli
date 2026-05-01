@@ -49,6 +49,9 @@ export function deriveLiquidFactoryConfig(
   if (creatorLaunchRewardWei > maxTotalSupplyWei) {
     throw new Error('Liquid factory creatorLaunchReward exceeds maxTotalSupply');
   }
+  if (minRareLiquidityWei < 0n) {
+    throw new Error('Liquid factory minRareLiquidityWei cannot be negative');
+  }
 
   const curvePoolSupplyWei = maxTotalSupplyWei - creatorLaunchRewardWei;
   if (curvePoolSupplyWei <= 0n) {

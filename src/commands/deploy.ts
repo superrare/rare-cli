@@ -87,6 +87,7 @@ async function resolveCurves(
     curvesFile?: string;
     curvePreset?: string;
     writeCurvesFile?: string;
+    yes?: boolean;
   },
   rare: ReturnType<typeof createRareClient>,
 ): Promise<{
@@ -127,6 +128,7 @@ async function resolveCurves(
   }
 
   const wizard = await runLiquidCurveWizard({
+    skipConfirmation: opts.yes,
     generatePresetCurves: async (preset) => rare.liquid.generatePresetCurves({ preset }),
   });
   await writeGeneratedCurves(opts.writeCurvesFile, wizard.curves);
@@ -198,6 +200,7 @@ function deployLiquidTokenCommand(): Command {
     .option('--write-curves-file <path>', 'write generated curves to a JSON file')
     .option('--initial-rare-liquidity <amount>', 'initial RARE liquidity to seed with')
     .option('--preview', 'preview the resolved curve config without deploying')
+    .option('--yes', 'skip the interactive curve confirmation prompt')
     .option('--token-uri <uri>', 'token metadata URI (skip upload if provided)')
     .option('--description <description>', 'description for metadata when uploading')
     .option('--image <path>', 'path to the metadata image')
@@ -215,6 +218,7 @@ function deployLiquidTokenCommand(): Command {
           writeCurvesFile?: string;
           initialRareLiquidity?: string;
           preview?: boolean;
+          yes?: boolean;
           tokenUri?: string;
           description?: string;
           image?: string;

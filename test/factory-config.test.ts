@@ -52,6 +52,20 @@ test('deriveLiquidFactoryConfig rejects creator rewards above max supply', () =>
   );
 });
 
+test('deriveLiquidFactoryConfig rejects negative minimum rare liquidity', () => {
+  assert.throws(
+    () =>
+      deriveLiquidFactoryConfig(
+        '0xba5BDe662c17e2aDFF1075610382B9B691296350',
+        10n ** 18n,
+        0n,
+        -1n,
+        { lpTickLower: -60, lpTickUpper: 60, poolTickSpacing: 60 },
+      ),
+    /minRareLiquidityWei cannot be negative/i,
+  );
+});
+
 test('deriveLiquidFactoryConfig rejects ticks that do not align to spacing', () => {
   assert.throws(
     () =>
