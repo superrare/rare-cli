@@ -128,7 +128,7 @@ async function buildLocalTokenTradeQuote(
         : params.minEthOut
           ? toWei(params.minEthOut)
           : computeMinAmountOut(estimatedQuote.amountOut, defaultSlippageBps);
-    const routeQuote = await quoteRoute(publicClient, quoterAddress, route, amountIn, minAmountOut);
+    const routeQuote = { ...estimatedQuote, minAmountOut };
     const { commands, inputs } = encodeRoute(routeQuote, amountIn, route.tokenIn, route.tokenOut);
 
     return {
