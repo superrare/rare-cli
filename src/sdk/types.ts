@@ -174,6 +174,79 @@ export interface ListingStatus {
   isEth: boolean;
 }
 
+export interface BatchListingTokenEntry {
+  contract: Address;
+  tokenId: IntegerInput;
+}
+
+export interface BatchListingRootArtifact {
+  root: `0x${string}`;
+  currency: Address;
+  amount: string;
+  splitAddresses: Address[];
+  splitRatios: number[];
+  tokens: { contract: Address; tokenId: string }[];
+  allowList?: { root: `0x${string}`; addresses: Address[]; endTimestamp?: string };
+}
+
+export interface BatchListingProofArtifact {
+  root: `0x${string}`;
+  contract: Address;
+  tokenId: string;
+  proof: `0x${string}`[];
+  allowListProof?: `0x${string}`[];
+  allowListAddress?: Address;
+}
+
+export interface BatchListingCreateParams {
+  artifact: BatchListingRootArtifact;
+  autoApprove?: boolean;
+}
+
+export interface BatchListingCreateResult extends TransactionResult {
+  approvalTxHashes?: Hash[];
+}
+
+export interface BatchListingCancelParams {
+  root: `0x${string}`;
+}
+
+export interface BatchListingBuyParams {
+  proofArtifact: BatchListingProofArtifact;
+  creator: Address;
+  currency: Address;
+  amount: AmountInput;
+}
+
+export interface BatchListingSetAllowListParams {
+  root: `0x${string}`;
+  allowListRoot: `0x${string}`;
+  endTimestamp: IntegerInput;
+}
+
+export interface BatchListingStatusParams {
+  root: `0x${string}`;
+  creator: Address;
+  contract?: Address;
+  tokenId?: IntegerInput;
+  proof?: `0x${string}`[];
+}
+
+export interface BatchListingStatus {
+  root: `0x${string}`;
+  seller: Address;
+  currencyAddress: Address;
+  amount: bigint;
+  splitRecipients: Address[];
+  splitRatios: number[];
+  nonce: bigint;
+  isEth: boolean;
+  hasListing: boolean;
+  allowList?: { root: `0x${string}`; endTimestamp: bigint };
+  tokenInRoot?: boolean;
+  tokenNonce?: bigint;
+}
+
 export interface TokenContractInfo {
   contract: Address;
   chain: SupportedChain;
@@ -195,6 +268,7 @@ export interface RareClient {
   contracts: {
     factory: Address;
     auction: Address;
+    batchListing?: Address;
   };
   deploy: {
     erc721(params: DeployErc721Params): Promise<DeployErc721Result>;
@@ -220,6 +294,13 @@ export interface RareClient {
     cancel(params: ListingCancelParams): Promise<TransactionResult>;
     buy(params: ListingBuyParams): Promise<TransactionResult>;
     getStatus(params: ListingStatusParams): Promise<ListingStatus>;
+  };
+  batchListing: {
+    create(params: BatchListingCreateParams): Promise<BatchListingCreateResult>;
+    cancel(params: BatchListingCancelParams): Promise<TransactionResult>;
+    buy(params: BatchListingBuyParams): Promise<TransactionResult>;
+    setAllowList(params: BatchListingSetAllowListParams): Promise<TransactionResult>;
+    getStatus(params: BatchListingStatusParams): Promise<BatchListingStatus>;
   };
   search: {
     nfts(params?: NftSearchParams): Promise<SearchPageResponse<Nft>>;

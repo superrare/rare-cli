@@ -18,6 +18,7 @@ import { createMintNamespace } from './mint.js';
 import { createAuctionNamespace } from './auction.js';
 import { createOfferNamespace } from './offer.js';
 import { createListingNamespace } from './listing.js';
+import { createBatchListingNamespace } from './batch-listing.js';
 import { createTokenNamespace } from './token.js';
 
 export type { RareClientConfig, RareClient } from './types.js';
@@ -34,12 +35,23 @@ export function createRareClient(config: RareClientConfig): RareClient {
     contracts: {
       factory: addresses.factory,
       auction: addresses.auction,
+      batchListing: addresses.batchListing,
     },
     deploy: createDeployNamespace(publicClient, config, addresses),
     mint: createMintNamespace(publicClient, config),
     auction: createAuctionNamespace(publicClient, config, addresses),
     offer: createOfferNamespace(publicClient, config, addresses),
     listing: createListingNamespace(publicClient, config, addresses),
+    batchListing: createBatchListingNamespace(publicClient, config, {
+      get batchListing() {
+        if (!addresses.batchListing) {
+          throw new Error(
+            `Batch listing marketplace is not deployed on "${chain}". Available on: mainnet, sepolia.`,
+          );
+        }
+        return addresses.batchListing;
+      },
+    }),
     token: createTokenNamespace(publicClient, chain),
     search: {
       async nfts(params = {}) {

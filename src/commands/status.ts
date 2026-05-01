@@ -22,7 +22,7 @@ export function statusCommand(): Command {
       try {
         const contractInfo = await rare.token.getContractInfo({ contract: contractAddress });
 
-        let tokenInfo;
+        let tokenInfo: Awaited<ReturnType<typeof rare.token.getTokenInfo>> | null | undefined;
         if (opts.tokenId !== undefined) {
           try {
             tokenInfo = await rare.token.getTokenInfo({

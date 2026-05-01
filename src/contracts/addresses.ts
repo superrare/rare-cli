@@ -31,16 +31,22 @@ export const defaultRpcUrls: Partial<Record<SupportedChain, string>> = {
   'base-sepolia': 'https://sepolia.base.org',
 };
 
-type ContractSet = { factory: `0x${string}`; auction: `0x${string}` };
+type ContractSet = {
+  factory: `0x${string}`;
+  auction: `0x${string}`;
+  batchListing?: `0x${string}`;
+};
 
 export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
   sepolia: {
     factory: '0x3c7526a0975156299ceef369b8ff3c01cc670523',
     auction: '0xC8Edc7049b233641ad3723D6C60019D1c8771612',
+    batchListing: '0xF2bE72d4343beD375Cb6d0E799a3c003163860e0',
   },
   mainnet: {
     factory: '0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1',
     auction: '0x6D7c44773C52D396F43c2D511B81aa168E9a7a42',
+    batchListing: '0x6a190885A806D39A0A8C348bfA1ac762D72E608d',
   },
   base: {
     factory: '0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd',
@@ -102,6 +108,19 @@ export function getContractAddresses(chain: SupportedChain): ContractSet {
     );
   }
   return addresses;
+}
+
+export function getBatchListingAddress(chain: SupportedChain): `0x${string}` {
+  const addresses = getContractAddresses(chain);
+  if (!addresses.batchListing) {
+    const deployed = Object.entries(contractAddresses)
+      .filter(([, set]) => set?.batchListing)
+      .map(([name]) => name);
+    throw new Error(
+      `Batch listing marketplace is not deployed on "${chain}". Available on: ${deployed.join(', ')}`
+    );
+  }
+  return addresses.batchListing;
 }
 
 export function isSupportedChain(value: string): value is SupportedChain {
