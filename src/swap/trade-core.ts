@@ -7,7 +7,7 @@ export type TokenTradeDirection = 'buy' | 'sell';
 export type TokenTradeRouteSource = 'liquid-edition' | 'known-pool' | 'uniswap-api';
 export type TokenTradeExecution = 'liquid-router' | 'uniswap-api';
 
-export interface TokenTradeQuoteCore {
+export interface TokenTradeQuoteCoreBase {
   amountIn: bigint;
   estimatedAmountOut: bigint;
   minAmountOut: bigint;
@@ -16,12 +16,22 @@ export interface TokenTradeQuoteCore {
   inputDecimals: number;
   outputDecimals: number;
   slippageBps: number;
-  routeSource: TokenTradeRouteSource;
-  execution: TokenTradeExecution;
   routeDescription: string;
-  commands?: `0x${string}`;
-  inputs?: readonly `0x${string}`[];
 }
+
+export interface LiquidRouterTokenTradeQuoteCore extends TokenTradeQuoteCoreBase {
+  routeSource: Extract<TokenTradeRouteSource, 'liquid-edition' | 'known-pool'>;
+  execution: 'liquid-router';
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+}
+
+export interface UniswapApiTokenTradeQuoteCore extends TokenTradeQuoteCoreBase {
+  routeSource: 'uniswap-api';
+  execution: 'uniswap-api';
+}
+
+export type TokenTradeQuoteCore = LiquidRouterTokenTradeQuoteCore | UniswapApiTokenTradeQuoteCore;
 
 interface UniswapQuoteLike {
   output: {
@@ -94,7 +104,7 @@ export function buildLiquidRouterTradeQuote(params: {
   usedMinAmountOutOverride: boolean;
   commands: `0x${string}`;
   inputs: readonly `0x${string}`[];
-}): TokenTradeQuoteCore {
+}): LiquidRouterTokenTradeQuoteCore {
   return {
     amountIn: params.amountIn,
     estimatedAmountOut: params.routeQuote.amountOut,
@@ -169,7 +179,7 @@ export function buildUniswapTradeQuote(params: {
   inputDecimals: number;
   outputDecimals: number;
   routing: string;
-}): TokenTradeQuoteCore {
+}): UniswapApiTokenTradeQuoteCore {
   const { estimatedAmountOut, minAmountOut } = getQuotedRecipientAmount(params.quote, params.recipient);
 
   return {
@@ -188,7 +198,7 @@ export function buildUniswapTradeQuote(params: {
 }
 
 export function buildBuyRareQuoteFromTokenQuote(rareAddress: Address, quote: TokenTradeQuoteCore) {
-  if (quote.execution !== 'liquid-router' || !quote.commands || !quote.inputs) {
+  if (quote.execution !== 'liquid-router') {
     throw new Error('Failed to build the canonical RARE route.');
   }
 

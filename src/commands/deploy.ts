@@ -265,13 +265,13 @@ function deployLiquidTokenCommand(): Command {
             initialRareLiquidity: opts.initialRareLiquidity,
             curves: curves.curves,
           });
-          const liquidEditionUrl = result.contract ? formatLiquidEditionUrl(rare.chainId, result.contract) : null;
+          const liquidEditionUrl = formatLiquidEditionUrl(rare.chainId, result.contract);
 
           output(
             {
               txHash: result.txHash,
               blockNumber: result.receipt.blockNumber.toString(),
-              contract: result.contract ?? null,
+              contract: result.contract,
               chainId: rare.chainId,
               liquidEditionUrl,
               tokenUri,
@@ -281,13 +281,8 @@ function deployLiquidTokenCommand(): Command {
             },
             () => {
               console.log(`Transaction sent: ${result.txHash}`);
-              if (result.contract) {
-                console.log(`\nLiquid token deployed at: ${result.contract}`);
-                console.log(`Liquid Editions URL: ${liquidEditionUrl}`);
-              } else {
-                console.log(`\nTransaction confirmed. Block: ${result.receipt.blockNumber}`);
-                console.log('Could not parse deployed address from logs.');
-              }
+              console.log(`\nLiquid token deployed at: ${result.contract}`);
+              console.log(`Liquid Editions URL: ${liquidEditionUrl}`);
             },
           );
         } catch (error) {

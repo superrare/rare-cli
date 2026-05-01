@@ -215,7 +215,7 @@ export interface DeployLiquidMultiCurveParams {
 }
 
 export interface DeployLiquidMultiCurveResult extends TransactionResult {
-  contract: Address | undefined;
+  contract: Address;
   tokenUri: string;
   curves: LiquidCurveSegment[];
 }
@@ -280,7 +280,7 @@ export interface SellTokenParams {
 export type TokenTradeRouteSource = 'liquid-edition' | 'known-pool' | 'uniswap-api';
 export type TokenTradeExecution = 'liquid-router' | 'uniswap-api';
 
-export interface TokenTradeQuote {
+export interface TokenTradeQuoteBase {
   amountIn: bigint;
   estimatedAmountOut: bigint;
   minAmountOut: bigint;
@@ -289,12 +289,22 @@ export interface TokenTradeQuote {
   inputDecimals: number;
   outputDecimals: number;
   slippageBps: number;
-  routeSource: TokenTradeRouteSource;
-  execution: TokenTradeExecution;
   routeDescription: string;
-  commands?: `0x${string}`;
-  inputs?: readonly `0x${string}`[];
 }
+
+export interface LiquidRouterTokenTradeQuote extends TokenTradeQuoteBase {
+  routeSource: Extract<TokenTradeRouteSource, 'liquid-edition' | 'known-pool'>;
+  execution: 'liquid-router';
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+}
+
+export interface UniswapApiTokenTradeQuote extends TokenTradeQuoteBase {
+  routeSource: 'uniswap-api';
+  execution: 'uniswap-api';
+}
+
+export type TokenTradeQuote = LiquidRouterTokenTradeQuote | UniswapApiTokenTradeQuote;
 
 export interface TokenTradeResult extends TransactionResult {
   estimatedAmountOut: bigint;

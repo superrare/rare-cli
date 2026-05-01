@@ -1,4 +1,4 @@
-import { type Address, parseEventLogs, parseUnits } from 'viem';
+import { type Address, type Hash, type PublicClient, type TransactionReceipt, parseEventLogs, parseUnits } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
 import { liquidFactoryAbi } from '../contracts/abis/liquid-factory.js';
 import { buildCurvePreview, generatePresetCurves, validateCurves } from '../liquid/curve-config.js';
@@ -11,6 +11,13 @@ import {
   toTokenAmount,
 } from './helpers.js';
 import type { RareClient, RareClientConfig } from './types.js';
+
+const LIQUID_TOKEN_CREATED_LOG_RETRY_ATTEMPTS = 3;
+const LIQUID_TOKEN_CREATED_LOG_RETRY_DELAY_MS = 1_000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 async function fetchRarePriceUsd(): Promise<number> {
   const rarePriceUsd = (await getTokenPrice('rare')).priceUsd;
@@ -26,6 +33,55 @@ async function maybeFetchRarePriceUsd(): Promise<number | undefined> {
   } catch {
     return undefined;
   }
+}
+
+function getLiquidTokenAddressFromReceipt(receipt: TransactionReceipt): Address | undefined {
+  const logs = parseEventLogs({
+    abi: liquidFactoryAbi,
+    logs: receipt.logs,
+    eventName: 'LiquidTokenCreated',
+  });
+  return logs[0]?.args.token;
+}
+
+function missingLiquidTokenAddressError(txHash: Hash, receipt: TransactionReceipt, cause?: unknown): Error {
+  const statusPhrase = receipt.status === 'success'
+    ? 'succeeded'
+    : `was confirmed with status "${receipt.status}"`;
+  const message =
+    `Liquid token deploy transaction ${statusPhrase}, but the deployed contract address could not be read ` +
+    `from the LiquidTokenCreated event logs after ${LIQUID_TOKEN_CREATED_LOG_RETRY_ATTEMPTS + 1} attempts. ` +
+    `Transaction hash: ${txHash}. Block: ${receipt.blockNumber}. The connected RPC may be delayed or returning ` +
+    'incomplete receipt logs; retry with a synced RPC or inspect the transaction hash.';
+
+  return cause instanceof Error ? new Error(message, { cause }) : new Error(message);
+}
+
+async function waitForLiquidTokenAddress(
+  publicClient: PublicClient,
+  txHash: Hash,
+): Promise<{ receipt: TransactionReceipt; contract: Address }> {
+  let receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+  let contract = getLiquidTokenAddressFromReceipt(receipt);
+  if (contract) {
+    return { receipt, contract };
+  }
+
+  let lastRpcError: unknown;
+  for (let attempt = 0; attempt < LIQUID_TOKEN_CREATED_LOG_RETRY_ATTEMPTS; attempt += 1) {
+    await sleep(LIQUID_TOKEN_CREATED_LOG_RETRY_DELAY_MS);
+    try {
+      receipt = await publicClient.getTransactionReceipt({ hash: txHash });
+      contract = getLiquidTokenAddressFromReceipt(receipt);
+      if (contract) {
+        return { receipt, contract };
+      }
+    } catch (error) {
+      lastRpcError = error;
+    }
+  }
+
+  throw missingLiquidTokenAddressError(txHash, receipt, lastRpcError);
 }
 
 export function createLiquidNamespace(
@@ -113,17 +169,12 @@ export function createLiquidNamespace(
         chain: undefined,
       });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const logs = parseEventLogs({
-        abi: liquidFactoryAbi,
-        logs: receipt.logs,
-        eventName: 'LiquidTokenCreated',
-      });
+      const { receipt, contract } = await waitForLiquidTokenAddress(publicClient, txHash);
 
       return {
         txHash,
         receipt,
-        contract: logs[0]?.args.token,
+        contract,
         tokenUri: params.tokenUri,
         curves: validation.curves,
       };

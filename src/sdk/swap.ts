@@ -50,15 +50,17 @@ import type {
 } from './types.js';
 
 type TokenTradeDirection = 'buy' | 'sell';
+type LocalTokenTradeQuote = Extract<TokenTradeQuote, { execution: 'liquid-router' }>;
+type UniswapTokenTradeQuote = Extract<TokenTradeQuote, { execution: 'uniswap-api' }>;
 
 type LocalTokenTradeQuoteDetails = {
   kind: 'local';
-  quote: TokenTradeQuote;
+  quote: LocalTokenTradeQuote;
 };
 
 type UniswapTokenTradeQuoteDetails = {
   kind: 'uniswap';
-  quote: TokenTradeQuote;
+  quote: UniswapTokenTradeQuote;
   rawQuote: UniswapQuotePayload;
   tokenIn: Address;
   tokenOut: Address;
@@ -398,9 +400,6 @@ export function createSwapNamespace(
 
       if (quoteDetails.kind === 'local') {
         const router = requireConfiguredAddress(addresses.swapRouter, 'Liquid router', chain);
-        if (!quoteDetails.quote.commands || !quoteDetails.quote.inputs) {
-          throw new Error('Missing encoded route for liquid-router execution.');
-        }
 
         const txHash = await walletClient.writeContract({
           address: router,
@@ -478,9 +477,6 @@ export function createSwapNamespace(
 
       if (quoteDetails.kind === 'local') {
         const router = requireConfiguredAddress(addresses.swapRouter, 'Liquid router', chain);
-        if (!quoteDetails.quote.commands || !quoteDetails.quote.inputs) {
-          throw new Error('Missing encoded route for liquid-router execution.');
-        }
 
         const tokenAmount = await toTokenAmount(publicClient, params.token, params.tokenAmount, 'tokenAmount');
         await ensureTokenAllowance(publicClient, walletClient, account, accountAddress, params.token, router, tokenAmount);

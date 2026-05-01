@@ -282,8 +282,8 @@ function swapBuyTokenCommand(): Command {
             estimatedAmountOut: quote.estimatedAmountOut.toString(),
             minAmountOut: quote.minAmountOut.toString(),
             slippageBps: quote.slippageBps,
-            commands: quote.commands ?? null,
-            inputs: quote.inputs ?? null,
+            commands: quote.execution === 'liquid-router' ? quote.commands : null,
+            inputs: quote.execution === 'liquid-router' ? quote.inputs : null,
           },
           () => {
             for (const line of quoteLines) {
@@ -399,8 +399,8 @@ function swapSellTokenCommand(): Command {
             estimatedAmountOut: quote.estimatedAmountOut.toString(),
             minAmountOut: quote.minAmountOut.toString(),
             slippageBps: quote.slippageBps,
-            commands: quote.commands ?? null,
-            inputs: quote.inputs ?? null,
+            commands: quote.execution === 'liquid-router' ? quote.commands : null,
+            inputs: quote.execution === 'liquid-router' ? quote.inputs : null,
           },
           () => {
             for (const line of quoteLines) {
