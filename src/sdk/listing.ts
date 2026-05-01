@@ -114,17 +114,38 @@ export function createListingNamespace(
     async getStatus(params) {
       const target = params.target ?? ETH_ADDRESS;
 
-      const [seller, currencyAddress, amount] = await publicClient.readContract({
-        address: addresses.auction,
-        abi: auctionAbi,
-        functionName: 'tokenSalePrices',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), target],
-      });
+      const [seller, currencyAddress, amount, splitAddrs, splitRatiosResult] =
+        await publicClient.readContract({
+          address: addresses.auction,
+          abi: auctionAbi,
+          functionName: 'getSalePrice',
+          args: [params.contract, toInteger(params.tokenId, 'tokenId'), target],
+        });
 
       const hasListing = amount > 0n;
       const isEth = currencyAddress === ETH_ADDRESS;
 
-      return { seller, currencyAddress, amount, hasListing, isEth };
+      const wallet = config.account ?? config.walletClient?.account?.address ?? null;
+      let canBuy: boolean | null = null;
+      if (wallet) {
+        const w = wallet.toLowerCase();
+        const sellerLower = seller.toLowerCase();
+        const targetLower = target.toLowerCase();
+        const targetMatches = targetLower === ETH_ADDRESS.toLowerCase() || targetLower === w;
+        canBuy = hasListing && targetMatches && w !== sellerLower;
+      }
+
+      return {
+        seller,
+        currencyAddress,
+        amount,
+        hasListing,
+        isEth,
+        target,
+        splitAddresses: [...splitAddrs],
+        splitRatios: [...splitRatiosResult],
+        canBuy,
+      };
     },
   };
 }

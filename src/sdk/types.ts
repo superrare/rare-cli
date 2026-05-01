@@ -172,6 +172,10 @@ export interface ListingStatus {
   amount: bigint;
   hasListing: boolean;
   isEth: boolean;
+  target: Address;
+  splitAddresses: Address[];
+  splitRatios: number[];
+  canBuy: boolean | null;
 }
 
 export interface TokenContractInfo {

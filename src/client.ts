@@ -57,3 +57,19 @@ export function getWalletClient(chain: SupportedChain) {
     account,
   };
 }
+
+export function tryGetWalletClient(chain: SupportedChain) {
+  const chainConfig = getChainConfig(chain);
+  if (!chainConfig.privateKey) return null;
+  const rpcUrl = chainConfig.rpcUrl ?? defaultRpcUrls[chain];
+  if (!rpcUrl) return null;
+  const account = privateKeyToAccount(chainConfig.privateKey as `0x${string}`);
+  return {
+    client: createWalletClient({
+      chain: viemChains[chain],
+      transport: http(rpcUrl),
+      account,
+    }),
+    account,
+  };
+}
