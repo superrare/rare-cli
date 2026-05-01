@@ -158,19 +158,12 @@ rare offer create --contract 0x... --token-id 1 --amount 0.5
 # Create an offer with ERC20 currency
 rare offer create --contract 0x... --token-id 1 --amount 100 --currency usdc
 
-# Create a convertible offer (seller may convert it to an auction)
-rare offer create --contract 0x... --token-id 1 --amount 0.5 --convertible
-
 # Accept an offer on a token you own
 rare offer accept --contract 0x... --token-id 1 --amount 0.5
 
 # Accept with payout splits (must sum to 100; caller is NOT auto-included)
 rare offer accept --contract 0x... --token-id 1 --amount 0.5 \
   --split 0xCollab=30 --split 0xMyWallet=70
-
-# Convert a convertible offer into a reserve auction (offer becomes opening bid)
-rare offer convert-to-auction --contract 0x... --token-id 1 \
-  --amount 0.5 --duration 86400
 
 # Cancel your offer
 rare offer cancel --contract 0x... --token-id 1
@@ -179,13 +172,11 @@ rare offer cancel --contract 0x... --token-id 1
 rare offer status --contract 0x... --token-id 1
 ```
 
-`--amount` on `accept` and `convert-to-auction` is a slippage assertion: the on-chain offer must still match the value you pass, otherwise the tx reverts. Re-run `offer status` if you suspect drift.
+`--amount` on `accept` is a slippage assertion: the on-chain offer must still match the value you pass, otherwise the tx reverts. Re-run `offer status` if you suspect drift.
 
 `--split <ADDR=RATIO>` is repeatable. Ratios must sum to exactly 100. If you omit `--split`, the SDK defaults to `[caller, 100]` (100% to your wallet). If you pass any `--split`, you must specify the complete list — the caller is **not** auto-appended.
 
-`convert-to-auction` requires the offer to have been created with `--convertible`. The SDK pre-checks and fails fast if not.
-
-NFT approval (`setApprovalForAll`) is auto-handled by `offer accept` and `offer convert-to-auction` when needed, just like `auction create` and `listing create`.
+NFT approval (`setApprovalForAll`) is auto-handled by `offer accept` when needed, just like `auction create` and `listing create`.
 
 ### Listings
 

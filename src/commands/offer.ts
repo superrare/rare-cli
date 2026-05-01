@@ -50,7 +50,7 @@ function finalizeSplits(acc: SplitAccumulator | undefined):
 
 export function offerCommand(): Command {
   const cmd = new Command('offer');
-  cmd.description('Offer subcommands (create, cancel, accept, convert-to-auction, status)');
+  cmd.description('Offer subcommands (create, cancel, accept, status)');
 
   // offer create
   cmd
@@ -195,70 +195,6 @@ export function offerCommand(): Command {
       }
     });
 
-  // offer convert-to-auction
-  cmd
-    .command('convert-to-auction')
-    .description('Convert a convertible offer into a reserve auction (the offer becomes the opening bid)')
-    .requiredOption('--contract <address>', 'NFT contract address')
-    .requiredOption('--token-id <id>', 'token ID')
-    .requiredOption('--amount <amount>', 'offer amount in ETH (or token units) — slippage assertion against on-chain offer')
-    .requiredOption('--duration <seconds>', 'auction length in seconds')
-    .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
-    .option(
-      '--split <addr=ratio>',
-      'payout split recipient (repeatable). Format: 0xADDR=RATIO. Ratios must sum to 100. If omitted, 100% goes to the connected wallet.',
-      collectSplit,
-    )
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
-      let splits: { addresses: Address[]; ratios: number[] } | undefined;
-      try {
-        splits = finalizeSplits(opts.split as SplitAccumulator);
-      } catch (error) {
-        printError(error);
-        return;
-      }
-
-      const chain = getActiveChain(opts.chain);
-      const { client } = getWalletClient(chain);
-      const publicClient = getPublicClient(chain);
-      const rare = createRareClient({ publicClient, walletClient: client });
-      const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
-      const isEth = currency === ETH_ADDRESS;
-
-      log(`Converting offer to auction on ${chain}...`);
-      log(`  NFT contract: ${opts.contract}`);
-      log(`  Token ID: ${opts.tokenId}`);
-      log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
-      log(`  Duration: ${opts.duration}s`);
-      if (splits) {
-        log(`  Splits:`);
-        splits.addresses.forEach((a, i) => log(`    ${a} = ${splits!.ratios[i]}%`));
-      }
-
-      try {
-        const result = await rare.offer.convertToAuction({
-          contract: opts.contract as `0x${string}`,
-          tokenId: opts.tokenId,
-          amount: opts.amount,
-          duration: opts.duration,
-          currency,
-          splitAddresses: splits?.addresses,
-          splitRatios: splits?.ratios,
-        });
-
-        output(
-          { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
-          () => {
-            console.log(`\nTransaction sent: ${result.txHash}`);
-            console.log(`Offer converted to auction! Block: ${result.receipt.blockNumber}`);
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
-    });
-
   // offer status
   cmd
     .command('status')
@@ -306,15 +242,10 @@ export function offerCommand(): Command {
           }
           console.log(`  Marketplace fee:   ${result.marketplaceFee}%`);
           console.log(`  Convertible:       ${result.convertible ? 'yes' : 'no'}`);
-          if (
-            result.canAccept !== null ||
-            result.canCancel !== null ||
-            result.canConvertToAuction !== null
-          ) {
+          if (result.canAccept !== null || result.canCancel !== null) {
             console.log('  For your wallet:');
             console.log(`    Can accept:      ${result.canAccept ? 'yes' : 'no'}`);
             console.log(`    Can cancel:      ${result.canCancel ? 'yes' : 'no'}`);
-            console.log(`    Can convert:     ${result.canConvertToAuction ? 'yes' : 'no'}`);
           }
         }
       });

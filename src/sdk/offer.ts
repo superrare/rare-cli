@@ -120,56 +120,6 @@ export function createOfferNamespace(
       return { txHash, receipt };
     },
 
-    async convertToAuction(params) {
-      const { walletClient, account, accountAddress } = requireWallet(config);
-
-      const currency = params.currency ?? ETH_ADDRESS;
-      const tokenId = toInteger(params.tokenId, 'tokenId');
-      const amount = toWei(params.amount);
-      const duration = toInteger(params.duration, 'duration');
-      const splitAddresses = params.splitAddresses ?? [accountAddress];
-      const splitRatios = params.splitRatios ?? [100];
-
-      const [, currentAmount, , , convertible] = await publicClient.readContract({
-        address: addresses.auction,
-        abi: auctionAbi,
-        functionName: 'tokenCurrentOffers',
-        args: [params.contract, tokenId, currency],
-      });
-
-      if (currentAmount === 0n) {
-        throw new Error('No active offer for this token in the specified currency.');
-      }
-      if (!convertible) {
-        throw new Error(
-          'Offer is not convertible. Only offers created with --convertible can be converted to an auction.',
-        );
-      }
-      if (currentAmount !== amount) {
-        throw new Error(
-          `Offer amount mismatch. On-chain offer is ${currentAmount} (wei) but --amount expects ${amount} (wei). ` +
-            'Re-check with "rare offer status".',
-        );
-      }
-
-      await ensureNftApproved(
-        publicClient, walletClient, account, accountAddress,
-        params.contract, addresses.auction,
-      );
-
-      const txHash = await walletClient.writeContract({
-        address: addresses.auction,
-        abi: auctionAbi,
-        functionName: 'convertOfferToAuction',
-        args: [params.contract, tokenId, currency, amount, duration, splitAddresses, splitRatios],
-        account,
-        chain: undefined,
-      });
-
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return { txHash, receipt };
-    },
-
     async getStatus(params) {
       const currency = params.currency ?? ETH_ADDRESS;
       const tokenId = toInteger(params.tokenId, 'tokenId');
@@ -208,7 +158,6 @@ export function createOfferNamespace(
       const wallet = config.account ?? config.walletClient?.account?.address ?? null;
       let canAccept: boolean | null = null;
       let canCancel: boolean | null = null;
-      let canConvertToAuction: boolean | null = null;
       if (wallet) {
         const w = wallet.toLowerCase();
         const owner = tokenOwner?.toLowerCase() ?? null;
@@ -217,7 +166,6 @@ export function createOfferNamespace(
         canAccept = hasOffer && owner !== null && w === owner;
         canCancel =
           hasOffer && w === buyerLower && (cancellableAfter === null || now >= cancellableAfter);
-        canConvertToAuction = hasOffer && convertible && owner !== null && w === owner;
       }
 
       return {
@@ -232,7 +180,6 @@ export function createOfferNamespace(
         cancellableAfter,
         canAccept,
         canCancel,
-        canConvertToAuction,
       };
     },
   };
