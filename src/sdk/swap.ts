@@ -20,7 +20,7 @@ import {
   requireWallet,
   resolveDeadline,
   sendPreparedTransaction,
-  toInteger,
+  toSafeIntegerNumber,
   toTokenAmount,
   toWei,
   validateRouterPayload,
@@ -433,7 +433,7 @@ export function createSwapNamespace(
 
       const swapResponse = await requestUniswapSwap({
         quote: quoteDetails.rawQuote,
-        deadline: params.deadline === undefined ? undefined : Number(toInteger(params.deadline, 'deadline')),
+        deadline: params.deadline === undefined ? undefined : toSafeIntegerNumber(params.deadline, 'deadline'),
       });
       const sent = await sendPreparedTransaction(publicClient, walletClient, account, swapResponse.swap);
       return {
@@ -532,7 +532,7 @@ export function createSwapNamespace(
 
       const swapResponse = await requestUniswapSwap({
         quote: quoteDetails.rawQuote,
-        deadline: params.deadline === undefined ? undefined : Number(toInteger(params.deadline, 'deadline')),
+        deadline: params.deadline === undefined ? undefined : toSafeIntegerNumber(params.deadline, 'deadline'),
       });
       const sent = await sendPreparedTransaction(publicClient, walletClient, account, swapResponse.swap);
       return {

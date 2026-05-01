@@ -9,9 +9,9 @@ import {
 
 const baseFactoryConfig = {
   baseToken: '0xba5BDe662c17e2aDFF1075610382B9B691296350' as const,
-  curvePoolSupplyTokens: 900_000,
-  maxTotalSupplyTokens: 1_000_000,
-  creatorLaunchRewardTokens: 100_000,
+  curvePoolSupplyTokens: '900000',
+  maxTotalSupplyTokens: '1000000',
+  creatorLaunchRewardTokens: '100000',
   poolTickSpacing: 60,
 };
 

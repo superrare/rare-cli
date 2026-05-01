@@ -6,21 +6,20 @@ export interface LiquidFactoryConfig {
   creatorLaunchRewardWei: bigint;
   curvePoolSupplyWei: bigint;
   minRareLiquidityWei: bigint;
-  maxTotalSupplyTokens: number;
-  creatorLaunchRewardTokens: number;
-  curvePoolSupplyTokens: number;
-  minRareLiquidityTokens: number;
+  maxTotalSupplyTokens: string;
+  creatorLaunchRewardTokens: string;
+  curvePoolSupplyTokens: string;
+  minRareLiquidityTokens: string;
   lpTickLower: number;
   lpTickUpper: number;
   poolTickSpacing: number;
 }
 
-function parseTokenAmount(value: bigint, label: string): number {
-  const tokenAmount = Number(formatUnits(value, 18));
-  if (!Number.isFinite(tokenAmount) || tokenAmount < 0) {
+function formatTokenAmount(value: bigint, label: string): string {
+  if (value < 0n) {
     throw new Error(`Liquid factory ${label} is invalid`);
   }
-  return tokenAmount;
+  return formatUnits(value, 18);
 }
 
 function parseTick(value: number, label: string): number {
@@ -76,10 +75,10 @@ export function deriveLiquidFactoryConfig(
     creatorLaunchRewardWei,
     curvePoolSupplyWei,
     minRareLiquidityWei,
-    maxTotalSupplyTokens: parseTokenAmount(maxTotalSupplyWei, 'maxTotalSupply'),
-    creatorLaunchRewardTokens: parseTokenAmount(creatorLaunchRewardWei, 'creatorLaunchReward'),
-    curvePoolSupplyTokens: parseTokenAmount(curvePoolSupplyWei, 'curve pool supply'),
-    minRareLiquidityTokens: parseTokenAmount(minRareLiquidityWei, 'minRareLiquidityWei'),
+    maxTotalSupplyTokens: formatTokenAmount(maxTotalSupplyWei, 'maxTotalSupply'),
+    creatorLaunchRewardTokens: formatTokenAmount(creatorLaunchRewardWei, 'creatorLaunchReward'),
+    curvePoolSupplyTokens: formatTokenAmount(curvePoolSupplyWei, 'curve pool supply'),
+    minRareLiquidityTokens: formatTokenAmount(minRareLiquidityWei, 'minRareLiquidityWei'),
     lpTickLower,
     lpTickUpper,
     poolTickSpacing,

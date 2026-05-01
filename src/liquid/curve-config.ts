@@ -29,9 +29,9 @@ export interface LiquidCurveSegmentSummary {
 export interface LiquidCurvePreview {
   totalPositions: number;
   totalShare: number;
-  curvePoolSupplyTokens: number;
-  maxTotalSupplyTokens: number;
-  creatorLaunchRewardTokens: number;
+  curvePoolSupplyTokens: string;
+  maxTotalSupplyTokens: string;
+  creatorLaunchRewardTokens: string;
   baseToken: Address;
   rarePriceUsd?: number;
   segments: LiquidCurveSegmentSummary[];
@@ -68,6 +68,8 @@ type UsdTokenPriceCurveInput = {
   numPositions: number;
   sharesPercent: number;
 };
+
+type TokenSupplyAmount = string | number;
 
 const TICK_BASE = 1.0001;
 const TICK_LOG_BASE = Math.log(TICK_BASE);
@@ -138,6 +140,14 @@ function toValidShareNumber(value: unknown): number | null {
   const numeric = typeof value === 'string' ? Number(value) : toValidNumber(value);
   if (numeric === null || numeric <= 0 || numeric > 1) {
     return null;
+  }
+  return numeric;
+}
+
+function toApproxTokenAmount(value: TokenSupplyAmount, label: string): number {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    throw new Error(`Liquid factory ${label} is invalid`);
   }
   return numeric;
 }
@@ -409,7 +419,11 @@ function validateAndNormalizeSegments(
   return { isValid: true, curves: sortedSegments };
 }
 
-export function parseCurveConfig(value: string, totalCurveSupplyTokens: number, tickSpacing: number): LiquidCurveSegment[] {
+export function parseCurveConfig(
+  value: string,
+  totalCurveSupplyTokens: TokenSupplyAmount,
+  tickSpacing: number,
+): LiquidCurveSegment[] {
   let parsed: unknown;
   try {
     parsed = JSON.parse(value);
@@ -420,7 +434,8 @@ export function parseCurveConfig(value: string, totalCurveSupplyTokens: number, 
     throw new Error('Invalid curve JSON');
   }
 
-  const validation = validateAndNormalizeSegments(parsed, totalCurveSupplyTokens, tickSpacing);
+  const totalCurveSupplyApproxTokens = toApproxTokenAmount(totalCurveSupplyTokens, 'curve pool supply');
+  const validation = validateAndNormalizeSegments(parsed, totalCurveSupplyApproxTokens, tickSpacing);
   if (!validation.isValid || !validation.curves) {
     throw new Error(validation.errorMessage ?? 'Invalid curve configuration');
   }
@@ -431,13 +446,14 @@ export function validateCurves(
   curves: LiquidCurveSegment[],
   config: Pick<LiquidFactoryConfig, 'curvePoolSupplyTokens' | 'poolTickSpacing'>,
 ): LiquidCurvesValidationResult {
-  return validateAndNormalizeSegments(curves, config.curvePoolSupplyTokens, config.poolTickSpacing);
+  const totalCurveSupplyApproxTokens = toApproxTokenAmount(config.curvePoolSupplyTokens, 'curve pool supply');
+  return validateAndNormalizeSegments(curves, totalCurveSupplyApproxTokens, config.poolTickSpacing);
 }
 
 function tokenPriceCurveToSegments(
   segments: TokenPriceCurveInput[],
   tickSpacing: number,
-  totalCurveSupplyTokens: number,
+  totalCurveSupplyApproxTokens: number,
 ): LiquidCurveSegment[] {
   if (segments.length === 0) {
     throw new Error('Please add at least one curve segment');
@@ -481,14 +497,14 @@ function tokenPriceCurveToSegments(
     };
   });
 
-  return parseCurveConfig(JSON.stringify(customCurve), totalCurveSupplyTokens, tickSpacing);
+  return parseCurveConfig(JSON.stringify(customCurve), totalCurveSupplyApproxTokens, tickSpacing);
 }
 
 function usdTokenPriceCurveToSegments(
   segments: UsdTokenPriceCurveInput[],
   rarePriceUsd: number,
   tickSpacing: number,
-  totalCurveSupplyTokens: number,
+  totalCurveSupplyApproxTokens: number,
 ): LiquidCurveSegment[] {
   return tokenPriceCurveToSegments(
     segments.map((segment) => ({
@@ -498,7 +514,7 @@ function usdTokenPriceCurveToSegments(
       sharesPercent: segment.sharesPercent,
     })),
     tickSpacing,
-    totalCurveSupplyTokens,
+    totalCurveSupplyApproxTokens,
   );
 }
 
@@ -507,11 +523,12 @@ export function generatePresetCurves(
   rarePriceUsd: number,
   config: Pick<LiquidFactoryConfig, 'curvePoolSupplyTokens' | 'poolTickSpacing'>,
 ): LiquidCurveSegment[] {
+  const totalCurveSupplyApproxTokens = toApproxTokenAmount(config.curvePoolSupplyTokens, 'curve pool supply');
   return usdTokenPriceCurveToSegments(
     getUsdTokenPriceCurveInputsForPresetWithReserveTail(preset),
     rarePriceUsd,
     config.poolTickSpacing,
-    config.curvePoolSupplyTokens,
+    totalCurveSupplyApproxTokens,
   );
 }
 

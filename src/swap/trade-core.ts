@@ -52,6 +52,9 @@ function toTradeInteger(value: bigint | number | string, field: string): bigint 
     if (!Number.isFinite(value) || !Number.isInteger(value)) {
       throw new Error(`${field} must be an integer.`);
     }
+    if (!Number.isSafeInteger(value)) {
+      throw new Error(`${field} is too large to pass as a number. Pass it as a string or bigint to avoid precision loss.`);
+    }
     return BigInt(value);
   }
 

@@ -13,6 +13,8 @@ import type { UniswapTransactionRequest } from '../swap/uniswap-api.js';
 import type { RareClientConfig, IntegerInput, AmountInput, WalletAccount, TransactionResult } from './types.js';
 
 export const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
 
 export const approvalAbi = [
   {
@@ -135,6 +137,9 @@ export function toInteger(value: IntegerInput, field: string): bigint {
     if (!Number.isFinite(value) || !Number.isInteger(value)) {
       throw new Error(`${field} must be an integer.`);
     }
+    if (!Number.isSafeInteger(value)) {
+      throw new Error(`${field} is too large to pass as a number. Pass it as a string or bigint to avoid precision loss.`);
+    }
     return BigInt(value);
   }
 
@@ -145,12 +150,32 @@ export function toInteger(value: IntegerInput, field: string): bigint {
   }
 }
 
+export function toSafeIntegerNumber(value: IntegerInput, field: string): number {
+  const integer = toInteger(value, field);
+  if (integer < MIN_SAFE_INTEGER_BIGINT || integer > MAX_SAFE_INTEGER_BIGINT) {
+    throw new Error(`${field} must fit in a safe JavaScript integer.`);
+  }
+  return Number(integer);
+}
+
+function stringifyAmountInput(value: Exclude<AmountInput, bigint>, field: string): string {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw new Error(`${field} must be a valid finite decimal amount.`);
+    }
+    if (Number.isInteger(value) && !Number.isSafeInteger(value)) {
+      throw new Error(`${field} is too large to pass as a number. Pass it as a string or bigint to avoid precision loss.`);
+    }
+  }
+  return String(value);
+}
+
 export function toWei(value: AmountInput): bigint {
   if (typeof value === 'bigint') {
     return value;
   }
 
-  return parseEther(String(value));
+  return parseEther(stringifyAmountInput(value, 'amount'));
 }
 
 export function requireConfiguredAddress(address: Address | undefined, label: string, chain: SupportedChain): Address {
@@ -184,7 +209,7 @@ export async function toTokenAmount(
     return value;
   }
 
-  const rawValue = String(value);
+  const rawValue = stringifyAmountInput(value, field);
   if (!/^\d+(\.\d+)?$/.test(rawValue)) {
     throw new Error(`${field} must be a valid positive decimal amount.`);
   }

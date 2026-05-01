@@ -15,9 +15,27 @@ test('deriveLiquidFactoryConfig uses maxTotalSupply minus creatorLaunchReward fo
     },
   );
 
-  assert.equal(config.maxTotalSupplyTokens, 1_000_000);
-  assert.equal(config.creatorLaunchRewardTokens, 100_000);
-  assert.equal(config.curvePoolSupplyTokens, 900_000);
+  assert.equal(config.maxTotalSupplyTokens, '1000000');
+  assert.equal(config.creatorLaunchRewardTokens, '100000');
+  assert.equal(config.curvePoolSupplyTokens, '900000');
+});
+
+test('deriveLiquidFactoryConfig preserves fractional token precision', () => {
+  const config = deriveLiquidFactoryConfig(
+    '0xba5BDe662c17e2aDFF1075610382B9B691296350',
+    10n ** 18n + 1n,
+    1n,
+    0n,
+    {
+      lpTickLower: -887220,
+      lpTickUpper: 887220,
+      poolTickSpacing: 60,
+    },
+  );
+
+  assert.equal(config.maxTotalSupplyTokens, '1.000000000000000001');
+  assert.equal(config.creatorLaunchRewardTokens, '0.000000000000000001');
+  assert.equal(config.curvePoolSupplyTokens, '1');
 });
 
 test('deriveLiquidFactoryConfig rejects creator rewards above max supply', () => {

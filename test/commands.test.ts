@@ -26,9 +26,9 @@ test('formatCurvePreview prints source and segment details', () => {
     {
       totalPositions: 3,
       totalShare: 1,
-      curvePoolSupplyTokens: 900_000,
-      maxTotalSupplyTokens: 1_000_000,
-      creatorLaunchRewardTokens: 100_000,
+      curvePoolSupplyTokens: '900000',
+      maxTotalSupplyTokens: '1000000',
+      creatorLaunchRewardTokens: '100000',
       baseToken: '0xba5BDe662c17e2aDFF1075610382B9B691296350',
       rarePriceUsd: 1.5,
       segments: [

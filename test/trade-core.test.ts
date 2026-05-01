@@ -30,6 +30,7 @@ test('trade core computes slippage and minimum output', () => {
   assert.equal(resolveSlippageBps(undefined), 50);
   assert.equal(resolveSlippageBps('125'), 125);
   assert.throws(() => resolveSlippageBps('10000'), /between 0 and 9999/i);
+  assert.throws(() => resolveSlippageBps(Number.MAX_SAFE_INTEGER + 1), /string or bigint/i);
   assert.equal(computeMinAmountOut(10_000n, 50), 9_950n);
   assert.equal(computeSlippageBpsFromAmounts(10_000n, 9_500n), 500);
 });
