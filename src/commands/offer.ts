@@ -149,13 +149,6 @@ export function offerCommand(): Command {
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
-      const chain = getActiveChain(opts.chain);
-      const { client } = getWalletClient(chain);
-      const publicClient = getPublicClient(chain);
-      const rare = createRareClient({ publicClient, walletClient: client });
-      const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
-      const isEth = currency === ETH_ADDRESS;
-
       let splits: { addresses: Address[]; ratios: number[] } | undefined;
       try {
         splits = finalizeSplits(opts.split as SplitAccumulator);
@@ -163,6 +156,13 @@ export function offerCommand(): Command {
         printError(error);
         return;
       }
+
+      const chain = getActiveChain(opts.chain);
+      const { client } = getWalletClient(chain);
+      const publicClient = getPublicClient(chain);
+      const rare = createRareClient({ publicClient, walletClient: client });
+      const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
+      const isEth = currency === ETH_ADDRESS;
 
       log(`Accepting offer on ${chain}...`);
       log(`  NFT contract: ${opts.contract}`);
@@ -211,13 +211,6 @@ export function offerCommand(): Command {
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
-      const chain = getActiveChain(opts.chain);
-      const { client } = getWalletClient(chain);
-      const publicClient = getPublicClient(chain);
-      const rare = createRareClient({ publicClient, walletClient: client });
-      const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
-      const isEth = currency === ETH_ADDRESS;
-
       let splits: { addresses: Address[]; ratios: number[] } | undefined;
       try {
         splits = finalizeSplits(opts.split as SplitAccumulator);
@@ -225,6 +218,13 @@ export function offerCommand(): Command {
         printError(error);
         return;
       }
+
+      const chain = getActiveChain(opts.chain);
+      const { client } = getWalletClient(chain);
+      const publicClient = getPublicClient(chain);
+      const rare = createRareClient({ publicClient, walletClient: client });
+      const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
+      const isEth = currency === ETH_ADDRESS;
 
       log(`Converting offer to auction on ${chain}...`);
       log(`  NFT contract: ${opts.contract}`);
