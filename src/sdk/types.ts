@@ -121,6 +121,16 @@ export interface OfferAcceptParams {
   splitRatios?: number[];
 }
 
+export interface OfferConvertToAuctionParams {
+  contract: Address;
+  tokenId: IntegerInput;
+  currency?: Address;
+  amount: AmountInput;
+  duration: IntegerInput;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+}
+
 export interface OfferStatusParams {
   contract: Address;
   tokenId: IntegerInput;
@@ -134,6 +144,12 @@ export interface OfferStatus {
   marketplaceFee: number;
   convertible: boolean;
   hasOffer: boolean;
+  currency: Address;
+  tokenOwner: Address | null;
+  cancellableAfter: bigint | null;
+  canAccept: boolean | null;
+  canCancel: boolean | null;
+  canConvertToAuction: boolean | null;
 }
 
 export interface ListingCreateParams {
@@ -213,6 +229,7 @@ export interface RareClient {
     create(params: OfferCreateParams): Promise<TransactionResult>;
     cancel(params: OfferCancelParams): Promise<TransactionResult>;
     accept(params: OfferAcceptParams): Promise<TransactionResult>;
+    convertToAuction(params: OfferConvertToAuctionParams): Promise<TransactionResult>;
     getStatus(params: OfferStatusParams): Promise<OfferStatus>;
   };
   listing: {
