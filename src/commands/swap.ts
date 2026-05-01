@@ -5,6 +5,7 @@ import { formatEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
+import { printError } from '../errors.js';
 import { output, log, isJsonMode } from '../output.js';
 import {
   ensureHex,
@@ -42,6 +43,16 @@ async function confirmProceed(): Promise<boolean> {
   }
 }
 
+function withErrorHandling<Args extends unknown[]>(action: (...args: Args) => Promise<void>): (...args: Args) => Promise<void> {
+  return async (...args: Args) => {
+    try {
+      await action(...args);
+    } catch (error) {
+      printError(error);
+    }
+  };
+}
+
 function swapBuyCommand(): Command {
   const cmd = new Command('buy');
   cmd.description('Execute a raw ETH -> token router buy');
@@ -55,7 +66,7 @@ function swapBuyCommand(): Command {
     .option('--recipient <address>', 'recipient address')
     .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .action(async (opts: {
+    .action(withErrorHandling(async (opts: {
       token: string;
       eth: string;
       minOut: string;
@@ -95,7 +106,7 @@ function swapBuyCommand(): Command {
           console.log(`Confirmed in block ${result.receipt.blockNumber}`);
         },
       );
-    });
+    }));
 
   return cmd;
 }
@@ -113,7 +124,7 @@ function swapSellCommand(): Command {
     .option('--recipient <address>', 'recipient address')
     .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .action(async (opts: {
+    .action(withErrorHandling(async (opts: {
       token: string;
       amount: string;
       minOut: string;
@@ -153,7 +164,7 @@ function swapSellCommand(): Command {
           console.log(`Confirmed in block ${result.receipt.blockNumber}`);
         },
       );
-    });
+    }));
 
   return cmd;
 }
@@ -172,7 +183,7 @@ function swapSwapCommand(): Command {
     .option('--recipient <address>', 'recipient address')
     .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .action(async (opts: {
+    .action(withErrorHandling(async (opts: {
       tokenIn: string;
       amountIn: string;
       tokenOut: string;
@@ -215,7 +226,7 @@ function swapSwapCommand(): Command {
           console.log(`Confirmed in block ${result.receipt.blockNumber}`);
         },
       );
-    });
+    }));
 
   return cmd;
 }
@@ -234,7 +245,7 @@ function swapBuyTokenCommand(): Command {
     .option('--recipient <address>', 'recipient address')
     .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use')
-    .action(async (opts: {
+    .action(withErrorHandling(async (opts: {
       token: string;
       eth: string;
       slippageBps?: string;
@@ -332,7 +343,7 @@ function swapBuyTokenCommand(): Command {
           console.log(`Min token out: ${formatQuotedAmount(result.minAmountOut, quote.outputDecimals)}`);
         },
       );
-    });
+    }));
 
   return cmd;
 }
@@ -351,7 +362,7 @@ function swapSellTokenCommand(): Command {
     .option('--recipient <address>', 'recipient address')
     .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use')
-    .action(async (opts: {
+    .action(withErrorHandling(async (opts: {
       token: string;
       amount: string;
       slippageBps?: string;
@@ -451,7 +462,7 @@ function swapSellTokenCommand(): Command {
           console.log(`Min ETH out: ${formatEther(result.minAmountOut)}`);
         },
       );
-    });
+    }));
 
   return cmd;
 }
@@ -469,7 +480,7 @@ function swapBuyRareCommand(): Command {
     .option('--recipient <address>', 'recipient address')
     .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .action(async (opts: {
+    .action(withErrorHandling(async (opts: {
       eth: string;
       slippageBps?: string;
       minRareOut?: string;
@@ -559,7 +570,7 @@ function swapBuyRareCommand(): Command {
           console.log(`Min RARE out: ${formatEther(result.minRareOut)}`);
         },
       );
-    });
+    }));
 
   return cmd;
 }
