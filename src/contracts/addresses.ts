@@ -31,16 +31,22 @@ export const defaultRpcUrls: Partial<Record<SupportedChain, string>> = {
   'base-sepolia': 'https://sepolia.base.org',
 };
 
-type ContractSet = { factory: `0x${string}`; auction: `0x${string}` };
+type ContractSet = {
+  factory: `0x${string}`;
+  auction: `0x${string}`;
+  lazyBatchMintFactory?: `0x${string}`;
+};
 
 export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
   sepolia: {
     factory: '0x3c7526a0975156299ceef369b8ff3c01cc670523',
     auction: '0xC8Edc7049b233641ad3723D6C60019D1c8771612',
+    lazyBatchMintFactory: '0xE5efBA88D556aDA98124654fE505465b8d494858',
   },
   mainnet: {
     factory: '0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1',
     auction: '0x6D7c44773C52D396F43c2D511B81aa168E9a7a42',
+    lazyBatchMintFactory: '0x40F9E4b420D5A8fF5aED32B5F72A37013c0739B6',
   },
   base: {
     factory: '0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd',

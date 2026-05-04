@@ -38,6 +38,16 @@ export interface DeployErc721Result extends TransactionResult {
   contract: Address;
 }
 
+export interface DeployLazyBatchMintParams {
+  name: string;
+  symbol: string;
+  maxTokens?: IntegerInput;
+}
+
+export interface DeployLazyBatchMintResult extends TransactionResult {
+  contract: Address;
+}
+
 export interface MintToParams {
   contract: Address;
   tokenUri: string;
@@ -198,6 +208,7 @@ export interface RareClient {
   };
   deploy: {
     erc721(params: DeployErc721Params): Promise<DeployErc721Result>;
+    lazyBatchMint(params: DeployLazyBatchMintParams): Promise<DeployLazyBatchMintResult>;
   };
   mint: {
     mintTo(params: MintToParams): Promise<MintToResult>;

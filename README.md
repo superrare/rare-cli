@@ -79,6 +79,25 @@ rare deploy erc721 "My Collection" "MC"
 rare deploy erc721 "My Collection" "MC" --max-tokens 1000
 ```
 
+### Create a Lazy Batch Mint Collection
+
+For lazy minting flows, use the lazy batch mint factory instead. Tokens in a lazy collection aren't pre-minted — they're prepared and claimed/redeemed by buyers later.
+
+```bash
+# Uncapped lazy collection (typical — leaves room for incremental lazy mints)
+rare collection create lazy-batch-mint "My Lazy Collection" "MLC"
+
+# Capped lazy collection (immutable supply ceiling)
+rare collection create lazy-batch-mint "My Lazy Collection" "MLC" --max-tokens 100
+```
+
+**Lazy vs standard batch mint**:
+
+- `rare deploy erc721` deploys a SovereignBatchMint contract — tokens are minted directly via `rare mint` in the same tx as their creation. Use this for traditional editions where the artist mints up front.
+- `rare collection create lazy-batch-mint` deploys a LazySovereignBatchMint contract — designed to feed the lazy mint preparation/redemption pipeline. Use this when buyers (not the artist) trigger the on-chain mint at purchase time.
+
+The lazy factory is currently deployed on **mainnet** and **sepolia** only.
+
 ### Import an Existing Collection
 
 Import an existing ERC-721 contract into the RARE Protocol registry:
