@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 export const requiredLiveEnv = [
-  'E2E_RPC_URL',
+  'TEST_RPC_URL',
   'E2E_SELLER_PRIVATE_KEY',
   'E2E_BUYER_PRIVATE_KEY',
 ];

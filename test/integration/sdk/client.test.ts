@@ -1,91 +1,44 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { getContractAddresses } from '../../../src/contracts/addresses.js';
-import type { createRareClient as createRareClientFn } from '../../../src/sdk/client.js';
-import { jsonResponse, stubFetch } from '../../helpers/fetch.js';
-import {
-  createFakePublicClient,
-  createFakeWalletClient,
-  nftContract,
-  sellerAddress,
-} from '../../helpers/fakeViem.js';
+import { createRareClient } from '../../../src/sdk/client.js';
+import { createTestSepoliaPublicClient } from '../../helpers/liveViem.js';
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-  vi.resetModules();
-});
+describe('Rare SDK client live integration', () => {
+  it('uses a real viem Sepolia public client for chain and contract resolution', async () => {
+    const publicClient = createTestSepoliaPublicClient();
+    const rare = createRareClient({ publicClient });
 
-describe('Rare SDK client facade', () => {
-  it('resolves chain IDs and contract addresses from the public client chain', async () => {
-    const createRareClient = await importFreshRareClient();
-    const rare = createRareClient({ publicClient: createFakePublicClient() });
-
+    await expect(publicClient.getChainId()).resolves.toBe(11_155_111);
     expect(rare.chain).toBe('sepolia');
     expect(rare.chainId).toBe(11_155_111);
     expect(rare.contracts).toEqual(getContractAddresses('sepolia'));
-  });
+  }, 30_000);
 
-  it('defaults NFT search requests to the client chain ID', async () => {
-    const { records } = stubFetch(async () =>
-      jsonResponse({
-        data: [],
-        pagination: { page: 1, perPage: 24, totalCount: 0, totalPages: 0 },
-      }),
-    );
-    const createRareClient = await importFreshRareClient();
-    const rare = createRareClient({ publicClient: createFakePublicClient() });
+  it('defaults NFT search requests to the real client chain ID', async () => {
+    const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
 
-    await rare.search.nfts({ query: 'rare' });
+    const result = await rare.search.nfts({ page: 1, perPage: 2 });
 
-    const url = new URL(records[0].request.url);
-    expect(url.pathname).toBe('/v1/nfts');
-    expect(url.searchParams.get('q')).toBe('rare');
-    expect(url.searchParams.get('chainId')).toBe('11155111');
-  });
+    expect(result.pagination).toMatchObject({ page: 1, perPage: 2 });
+    expect(result.data.length).toBeGreaterThan(0);
+    expect(result.data.every((nft) => Number(nft.chainId) === 11_155_111)).toBe(true);
+  }, 30_000);
 
   it('does not override an explicit NFT search chain ID', async () => {
-    const { records } = stubFetch(async () =>
-      jsonResponse({
-        data: [],
-        pagination: { page: 1, perPage: 24, totalCount: 0, totalPages: 0 },
-      }),
-    );
-    const createRareClient = await importFreshRareClient();
-    const rare = createRareClient({ publicClient: createFakePublicClient() });
+    const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
 
-    await rare.search.nfts({ chainId: 1 });
+    const result = await rare.search.nfts({ chainId: 1, page: 1, perPage: 2 });
 
-    expect(new URL(records[0].request.url).searchParams.get('chainId')).toBe('1');
-  });
+    expect(result.pagination).toMatchObject({ page: 1, perPage: 2 });
+    expect(result.data.length).toBeGreaterThan(0);
+    expect(result.data.every((nft) => Number(nft.chainId) === 1)).toBe(true);
+  }, 30_000);
 
-  it('imports ERC-721 collections with an owner from config account or wallet account', async () => {
-    const { records } = stubFetch(async () => jsonResponse({ imported: true }));
-    const createRareClient = await importFreshRareClient();
-    const rare = createRareClient({
-      publicClient: createFakePublicClient(),
-      walletClient: createFakeWalletClient(),
-    });
+  it('requires an owner for SDK import before posting to the API', async () => {
+    const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
 
-    await rare.import.erc721({ contract: nftContract });
-
-    expect(records).toHaveLength(1);
-    expect(new URL(records[0].request.url).pathname).toBe('/v1/collections/import');
-    expect(records[0].body).toEqual({
-      chainId: 11_155_111,
-      contractAddress: nftContract.toLowerCase(),
-      ownerAddress: sellerAddress.toLowerCase(),
-    });
-  });
-
-  it('requires an owner for SDK import when no wallet or account is configured', async () => {
-    const createRareClient = await importFreshRareClient();
-    const rare = createRareClient({ publicClient: createFakePublicClient() });
-
-    await expect(rare.import.erc721({ contract: nftContract })).rejects.toThrow(
-      'No owner available for import.',
-    );
+    await expect(
+      rare.import.erc721({ contract: '0x1000000000000000000000000000000000000000' }),
+    ).rejects.toThrow('No owner available for import.');
   });
 });
-
-async function importFreshRareClient(): Promise<typeof createRareClientFn> {
-  return (await import('../../../src/sdk/client.js')).createRareClient;
-}

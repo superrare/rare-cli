@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { PublicClient, WalletClient } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import { mainnet } from 'viem/chains';
 import {
   requireWallet,
@@ -10,13 +12,14 @@ import {
   toPositiveWei,
   toWei,
 } from '../../../src/sdk/helpers.js';
-import {
-  buyerAddress,
-  createFakePublicClient,
-  createFakeWalletClient,
-  sellerAccount,
-  sellerAddress,
-} from '../../helpers/fakeViem.js';
+
+const sellerAccount = privateKeyToAccount(
+  '0x0000000000000000000000000000000000000000000000000000000000000001',
+);
+const sellerAddress = sellerAccount.address;
+const buyerAddress = privateKeyToAccount(
+  '0x0000000000000000000000000000000000000000000000000000000000000002',
+).address;
 
 describe('SDK helper normalization', () => {
   it('normalizes integer inputs to bigint', () => {
@@ -67,24 +70,22 @@ describe('SDK helper normalization', () => {
 
 describe('wallet resolution', () => {
   it('requires a wallet client for write operations', () => {
-    expect(() => requireWallet({ publicClient: createFakePublicClient() })).toThrow(
+    expect(() => requireWallet({ publicClient: publicClient() })).toThrow(
       'walletClient is required for write operations.',
     );
   });
 
   it('uses the wallet account when no override account is configured', () => {
-    const walletClient = createFakeWalletClient({ account: sellerAccount });
-    const result = requireWallet({ publicClient: createFakePublicClient(), walletClient });
+    const result = requireWallet({ publicClient: publicClient(), walletClient: walletClient(sellerAccount) });
 
     expect(result.account).toBe(sellerAccount);
     expect(result.accountAddress).toBe(sellerAddress);
   });
 
   it('keeps the wallet account object when it matches the configured account', () => {
-    const walletClient = createFakeWalletClient({ account: sellerAccount });
     const result = requireWallet({
-      publicClient: createFakePublicClient(),
-      walletClient,
+      publicClient: publicClient(),
+      walletClient: walletClient(sellerAccount),
       account: sellerAddress,
     });
 
@@ -93,10 +94,9 @@ describe('wallet resolution', () => {
   });
 
   it('uses a configured account address when it differs from the wallet account object', () => {
-    const walletClient = createFakeWalletClient({ account: sellerAccount });
     const result = requireWallet({
-      publicClient: createFakePublicClient(),
-      walletClient,
+      publicClient: publicClient(),
+      walletClient: walletClient(sellerAccount),
       account: buyerAddress,
     });
 
@@ -107,18 +107,26 @@ describe('wallet resolution', () => {
 
 describe('chain resolution', () => {
   it('maps public client chain IDs to supported chain names', () => {
-    expect(resolveChainFromPublicClient(createFakePublicClient({ chain: mainnet }))).toBe('mainnet');
+    expect(resolveChainFromPublicClient(publicClient(mainnet))).toBe('mainnet');
   });
 
   it('requires an explicit chain on the public client', () => {
-    expect(() => resolveChainFromPublicClient(createFakePublicClient({ chain: undefined }))).toThrow(
+    expect(() => resolveChainFromPublicClient(publicClient(undefined))).toThrow(
       'Unable to resolve chain from publicClient.chain.id.',
     );
   });
 
   it('rejects unsupported chain IDs', () => {
     expect(() =>
-      resolveChainFromPublicClient(createFakePublicClient({ chain: { ...mainnet, id: 999_999 } })),
+      resolveChainFromPublicClient(publicClient({ ...mainnet, id: 999_999 })),
     ).toThrow('Unsupported chain id: 999999.');
   });
 });
+
+function publicClient(chain?: PublicClient['chain']): PublicClient {
+  return (chain ? { chain } : {}) as PublicClient;
+}
+
+function walletClient(account: WalletClient['account']): WalletClient {
+  return { account } as WalletClient;
+}

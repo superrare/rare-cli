@@ -5,12 +5,16 @@ import {
 import { auctionAbi } from '../contracts/abis/auction.js';
 import type { RareClientConfig, RareClient } from './types.js';
 import {
-  ETH_ADDRESS,
   preparePayment,
   requireWallet,
-  toNonNegativeInteger,
-  toPositiveWei,
 } from './helpers.js';
+import {
+  planOfferAccept,
+  planOfferCancel,
+  planOfferCreate,
+  planOfferStatus,
+  shapeOfferStatus,
+} from './marketplace-core.js';
 
 export function createOfferNamespace(
   publicClient: PublicClient,
@@ -20,22 +24,18 @@ export function createOfferNamespace(
   return {
     async create(params) {
       const { walletClient, account, accountAddress } = requireWallet(config);
-
-      const currency = params.currency ?? ETH_ADDRESS;
-      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
-      const amount = toPositiveWei(params.amount, 'amount');
-      const convertible = params.convertible ?? false;
+      const plan = planOfferCreate(params);
 
       const value = await preparePayment({
         publicClient, walletClient, account, accountAddress,
-        auctionAddress: addresses.auction, currency, amount,
+        auctionAddress: addresses.auction, currency: plan.currency, amount: plan.amount,
       });
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'offer',
-        args: [params.contract, tokenId, currency, amount, convertible],
+        args: [params.contract, plan.tokenId, plan.currency, plan.amount, plan.convertible],
         account,
         chain: undefined,
         value,
@@ -47,15 +47,13 @@ export function createOfferNamespace(
 
     async cancel(params) {
       const { walletClient, account } = requireWallet(config);
-
-      const currency = params.currency ?? ETH_ADDRESS;
-      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
+      const plan = planOfferCancel(params);
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'cancelOffer',
-        args: [params.contract, tokenId, currency],
+        args: [params.contract, plan.tokenId, plan.currency],
         account,
         chain: undefined,
       });
@@ -66,18 +64,20 @@ export function createOfferNamespace(
 
     async accept(params) {
       const { walletClient, account, accountAddress } = requireWallet(config);
-
-      const currency = params.currency ?? ETH_ADDRESS;
-      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
-      const amount = toPositiveWei(params.amount, 'amount');
-      const splitAddresses = params.splitAddresses ?? [accountAddress];
-      const splitRatios = params.splitRatios ?? [100];
+      const plan = planOfferAccept(params, accountAddress);
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'acceptOffer',
-        args: [params.contract, tokenId, currency, amount, splitAddresses, splitRatios],
+        args: [
+          params.contract,
+          plan.tokenId,
+          plan.currency,
+          plan.amount,
+          plan.splitAddresses,
+          plan.splitRatios,
+        ],
         account,
         chain: undefined,
       });
@@ -87,19 +87,16 @@ export function createOfferNamespace(
     },
 
     async getStatus(params) {
-      const currency = params.currency ?? ETH_ADDRESS;
-      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
+      const plan = planOfferStatus(params);
 
-      const [buyer, amount, timestamp, marketplaceFee, convertible] = await publicClient.readContract({
+      const result = await publicClient.readContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'tokenCurrentOffers',
-        args: [params.contract, tokenId, currency],
+        args: [params.contract, plan.tokenId, plan.currency],
       });
 
-      const hasOffer = amount > 0n;
-
-      return { buyer, amount, timestamp, marketplaceFee, convertible, hasOffer };
+      return shapeOfferStatus(result);
     },
   };
 }

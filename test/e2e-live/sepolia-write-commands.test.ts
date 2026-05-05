@@ -8,7 +8,7 @@ import { loadDotEnv } from './env.mjs';
 loadDotEnv();
 
 const requiredEnv = [
-  'E2E_RPC_URL',
+  'TEST_RPC_URL',
   'E2E_SELLER_PRIVATE_KEY',
   'E2E_BUYER_PRIVATE_KEY',
 ] as const;
@@ -357,7 +357,7 @@ async function configureLiveHome(home: string, privateKey: string): Promise<void
     '--private-key',
     privateKey,
     '--rpc-url',
-    process.env.E2E_RPC_URL!,
+    process.env.TEST_RPC_URL!,
   ], { home });
 
   expect(result.code).toBe(0);
