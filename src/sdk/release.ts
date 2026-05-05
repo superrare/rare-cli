@@ -357,8 +357,8 @@ export function createReleaseNamespace(
       const price = await toCurrencyUnits(publicClient, currencyAddress, params.price);
       const startTime = normalizeReleaseStartTime(params.startTime);
       const maxMints = toInteger(params.maxMints, 'maxMints');
-      if (maxMints < 0n) {
-        throw new Error('maxMints must be greater than or equal to 0.');
+      if (maxMints < 1n || maxMints > 100n) {
+        throw new Error('maxMints must be an integer between 1 and 100.');
       }
       const { splitRecipients, splitRatios } = resolveReleaseSplits({
         splitAddresses: params.splitAddresses,

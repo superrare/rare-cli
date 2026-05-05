@@ -33,7 +33,7 @@ export function releaseCommand(): Command {
     .description('Configure a RareMinter direct sale release')
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--price <amount>', 'price per mint in ETH or token units')
-    .requiredOption('--max-mints <number>', 'max tokens per mint transaction (0 disables the per-tx max)')
+    .requiredOption('--max-mints <number>', 'max tokens per mint transaction (1-100)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--start <time>', 'sale start time as unix seconds or an ISO date (defaults to now)')
     .option(

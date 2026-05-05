@@ -154,6 +154,7 @@ rare release status --contract 0x... --wallet 0x...
 ```
 
 Release configuration uses `RareMinter.prepareMintDirectSale`. It does not mint, generate allowlist proofs, or modify allowlist, mint-limit, transaction-limit, staking, or protocol-admin settings.
+`--max-mints` must be between 1 and 100 because direct sale mint transactions cannot mint more than 100 tokens.
 
 ### Auctions
 
