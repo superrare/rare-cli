@@ -65,11 +65,12 @@ type LiveState = {
   offerCancelReady: Promise<void>;
   offerAcceptToken: MintResult;
   buyerMintToken: MintResult;
-  erc20OfferAcceptToken?: MintResult;
+  rareOfferAcceptToken: MintResult;
 };
 
 let live: LiveState;
-const itWithErc20 = process.env.E2E_ERC20_CURRENCY ? it : it.skip;
+const E2E_RARE_CURRENCY = 'rare';
+const E2E_RARE_AMOUNT = '0.000001';
 
 describeLive('live Sepolia CLI write commands', () => {
   beforeAll(async () => {
@@ -150,11 +151,9 @@ describeLive('live Sepolia CLI write commands', () => {
         buyerMintToken: await step('mint token directly to buyer', () =>
           mintToken(sellerHome, collection.contract, { to: buyerAddress }),
         ),
-        erc20OfferAcceptToken: process.env.E2E_ERC20_CURRENCY
-          ? await step('mint ERC20 offer accept token', () =>
-              mintToken(sellerHome, collection.contract),
-            )
-          : undefined,
+        rareOfferAcceptToken: await step('mint RARE offer accept token', () =>
+          mintToken(sellerHome, collection.contract),
+        ),
       };
     } catch (error) {
       await cleanupTempHome(sellerHome);
@@ -181,9 +180,8 @@ describeLive('live Sepolia CLI write commands', () => {
       live.offerCancelToken,
       live.offerAcceptToken,
       live.buyerMintToken,
-      live.erc20OfferAcceptToken,
+      live.rareOfferAcceptToken,
     ]) {
-      if (!token) continue;
       expectTx(token);
       expect(token.contract).toBe(live.collection.contract);
       expect(token.tokenUri).toBe(E2E_TOKEN_URI);
@@ -198,17 +196,17 @@ describeLive('live Sepolia CLI write commands', () => {
   it('creates and cancels a listing', async () => {
     const listingCancelCreate = await step('create listing for cancellation', () =>
       jsonCommand<TxResult>(live.sellerHome, [
-          'listing',
-          'create',
-          '--contract',
-          live.collection.contract,
-          '--token-id',
-          live.listingCancelToken.tokenId,
-          '--price',
-          '0.000001',
-          '--chain',
-          'sepolia',
-        ]),
+        'listing',
+        'create',
+        '--contract',
+        live.collection.contract,
+        '--token-id',
+        live.listingCancelToken.tokenId,
+        '--price',
+        '0.000001',
+        '--chain',
+        'sepolia',
+      ]),
     );
     expectTx(listingCancelCreate);
     expect(listingCancelCreate.approvalTxHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
@@ -457,20 +455,15 @@ describeLive('live Sepolia CLI write commands', () => {
     await expectOfferStatus(live.sellerHome, live.collection.contract, live.offerAcceptToken.tokenId, false);
   });
 
-  itWithErc20('creates and accepts an ERC20 offer through the live allowance path', async () => {
-    const token = live.erc20OfferAcceptToken;
-    if (!token) throw new Error('E2E_ERC20_CURRENCY is set but no ERC20 offer token was minted.');
-
-    const currencyInput = process.env.E2E_ERC20_CURRENCY!;
-    const currency = resolveCurrency(currencyInput, 'sepolia');
-    const amount = process.env.E2E_ERC20_AMOUNT ?? '0.000001';
-    const amountWei = parseEther(amount);
+  it('creates and accepts a RARE offer through the live allowance path', async () => {
+    const currency = resolveCurrency(E2E_RARE_CURRENCY, 'sepolia');
+    const amountWei = parseEther(E2E_RARE_AMOUNT);
     const auctionAddress = getContractAddresses('sepolia').auction;
     const balance = await readErc20Balance(currency, live.buyerAddress);
 
     if (balance < amountWei) {
       throw new Error(
-        `E2E buyer has insufficient ${currencyInput} balance for live ERC20 offer test. ` +
+        `E2E buyer has insufficient Sepolia RARE balance for live ERC20 offer test. ` +
           `Required at least ${amountWei}, found ${balance}.`,
       );
     }
@@ -487,18 +480,18 @@ describeLive('live Sepolia CLI write commands', () => {
         '--contract',
         live.collection.contract,
         '--token-id',
-        token.tokenId,
+        live.rareOfferAcceptToken.tokenId,
         '--amount',
-        amount,
+        E2E_RARE_AMOUNT,
         '--currency',
-        currencyInput,
+        E2E_RARE_CURRENCY,
         '--chain',
         'sepolia',
       ], 240_000),
     ));
 
     expect(await readErc20Allowance(currency, live.buyerAddress, auctionAddress)).toBeGreaterThanOrEqual(amountWei);
-    await expectOfferStatus(live.sellerHome, live.collection.contract, token.tokenId, true, currencyInput);
+    await expectOfferStatus(live.sellerHome, live.collection.contract, live.rareOfferAcceptToken.tokenId, true, E2E_RARE_CURRENCY);
 
     expectTx(await step('accept ERC20 offer', () =>
       jsonCommand<TxResult>(live.sellerHome, [
@@ -507,16 +500,16 @@ describeLive('live Sepolia CLI write commands', () => {
         '--contract',
         live.collection.contract,
         '--token-id',
-        token.tokenId,
+        live.rareOfferAcceptToken.tokenId,
         '--amount',
-        amount,
+        E2E_RARE_AMOUNT,
         '--currency',
-        currencyInput,
+        E2E_RARE_CURRENCY,
         '--chain',
         'sepolia',
       ]),
     ));
-    await expectOfferStatus(live.sellerHome, live.collection.contract, token.tokenId, false, currencyInput);
+    await expectOfferStatus(live.sellerHome, live.collection.contract, live.rareOfferAcceptToken.tokenId, false, E2E_RARE_CURRENCY);
   });
 });
 
