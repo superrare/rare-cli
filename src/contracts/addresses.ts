@@ -31,16 +31,22 @@ export const defaultRpcUrls: Partial<Record<SupportedChain, string>> = {
   'base-sepolia': 'https://sepolia.base.org',
 };
 
-type ContractSet = { factory: `0x${string}`; auction: `0x${string}` };
+type ContractSet = {
+  factory: `0x${string}`;
+  auction: `0x${string}`;
+  rareMinter?: `0x${string}`;
+};
 
 export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
   sepolia: {
     factory: '0x3c7526a0975156299ceef369b8ff3c01cc670523',
     auction: '0xC8Edc7049b233641ad3723D6C60019D1c8771612',
+    rareMinter: '0xd28Dc0B89104d7BBd902F338a0193fF063617ccE',
   },
   mainnet: {
     factory: '0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1',
     auction: '0x6D7c44773C52D396F43c2D511B81aa168E9a7a42',
+    rareMinter: '0x5fa112EFeD8297bec0010b312208d223E0cE891E',
   },
   base: {
     factory: '0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd',
@@ -102,6 +108,16 @@ export function getContractAddresses(chain: SupportedChain): ContractSet {
     );
   }
   return addresses;
+}
+
+export function getRareMinterAddress(chain: SupportedChain): `0x${string}` {
+  const rareMinter = getContractAddresses(chain).rareMinter;
+  if (!rareMinter) {
+    throw new Error(
+      `RareMinter is not configured on "${chain}". Supported RareMinter chains: mainnet, sepolia.`
+    );
+  }
+  return rareMinter;
 }
 
 export function isSupportedChain(value: string): value is SupportedChain {

@@ -126,6 +126,35 @@ rare mint \
   --royalty-receiver 0x...
 ```
 
+### Direct Sale Releases
+
+After creating and preparing a lazy collection, configure its RareMinter direct sale:
+
+```bash
+rare release configure \
+  --contract 0x... \
+  --price 0.1 \
+  --max-mints 5
+
+# Optional payout splits. If omitted, 100% goes to the configured wallet.
+rare release configure \
+  --contract 0x... \
+  --price 100 \
+  --currency rare \
+  --start 2026-06-01T16:00:00Z \
+  --max-mints 5 \
+  --split 0x...artist=80 \
+  --split 0x...collaborator=20
+
+# Check release status (read-only)
+rare release status --contract 0x...
+
+# Include wallet-specific mint and transaction usage
+rare release status --contract 0x... --wallet 0x...
+```
+
+Release configuration uses `RareMinter.prepareMintDirectSale`. It does not mint, generate allowlist proofs, or modify allowlist, mint-limit, transaction-limit, staking, or protocol-admin settings.
+
 ### Auctions
 
 ```bash
@@ -189,7 +218,7 @@ rare listing status --contract 0x... --token-id 1
 
 ### Currencies
 
-All marketplace commands (`auction`, `offer`, `listing`) accept `--currency` to specify a payment token. Named currencies (`eth`, `usdc`, `rare`) are resolved per-chain automatically. You can also pass any ERC20 address directly.
+All marketplace commands (`auction`, `offer`, `listing`, `release`) accept `--currency` to specify a payment token. Named currencies (`eth`, `usdc`, `rare`) are resolved per-chain automatically. You can also pass any ERC20 address directly.
 
 ERC20 allowances are auto-approved when needed for bids, offers, and purchases.
 
@@ -341,17 +370,17 @@ rare configure --show
 - **Use sepolia for testing.** Default to sepolia and only switch to mainnet when you're ready.
 - **Set a reliable RPC endpoint.** Public endpoints throttle and drop requests. Services like Alchemy or Infura provide free tiers.
 - **Don't share your private key.** Keep `~/.rare/config.json` secure and never commit it to version control.
-- **Check status before transacting.** Use `rare status` and `rare auction status` to inspect on-chain state before sending transactions.
+- **Check status before transacting.** Use `rare status`, `rare auction status`, and `rare release status` to inspect on-chain state before sending transactions.
 - **Back up your wallet.** If you lose your private key, you lose access to your assets. Store a copy somewhere safe.
 
 ## Contract Addresses
 
-| Network | Factory | Auction |
-|---|---|---|
-| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` |
-| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` |
-| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` |
-| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` |
+| Network | Factory | Auction | RareMinter |
+|---|---|---|---|
+| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` | `0xd28Dc0B89104d7BBd902F338a0193fF063617ccE` |
+| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` | `0x5fa112EFeD8297bec0010b312208d223E0cE891E` |
+| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` | Not configured |
+| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` | Not configured |
 
 ## Underlying Solidity Contracts
 
@@ -360,6 +389,7 @@ If you want to inspect the on-chain contracts used by this CLI:
 - Token contract used when minting NFTs: [`SovereignBatchMint.sol`](https://github.com/superrare/core/blob/main/src/v2/token/ERC721/sovereign/SovereignBatchMint.sol)
 - Factory used for collection deployments: [`SovereignBatchMintFactory.sol`](https://github.com/superrare/core/blob/main/src/v2/token/ERC721/sovereign/SovereignBatchMintFactory.sol)
 - Auction/market contract used for auction operations: [`SuperRareBazaar.sol`](https://github.com/superrare/core/blob/main/src/bazaar/SuperRareBazaar.sol)
+- Direct sale release contract: [`RareMinter.sol`](https://github.com/superrare/core/blob/main/src/collection/RareMinter.sol)
 
 ## Development (Optional)
 

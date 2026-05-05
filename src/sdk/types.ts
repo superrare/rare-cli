@@ -15,6 +15,7 @@ import type {
 
 export type IntegerInput = bigint | number | string;
 export type AmountInput = bigint | number | string;
+export type TimestampInput = IntegerInput | Date;
 export type WalletAccount = NonNullable<WalletClient['account']>;
 
 export interface RareClientConfig {
@@ -174,6 +175,66 @@ export interface ListingStatus {
   isEth: boolean;
 }
 
+export interface ReleaseConfigureParams {
+  contract: Address;
+  currency?: Address;
+  price: AmountInput;
+  startTime?: TimestampInput;
+  maxMints: IntegerInput;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+}
+
+export interface ReleaseConfigureResult extends TransactionResult {
+  rareMinter: Address;
+  contract: Address;
+  currencyAddress: Address;
+  price: bigint;
+  startTime: bigint;
+  maxMints: bigint;
+  splitRecipients: Address[];
+  splitRatios: number[];
+}
+
+export interface ReleaseStatusParams {
+  contract: Address;
+  wallet?: Address;
+}
+
+export interface ReleaseStatus {
+  rareMinter: Address;
+  contract: Address;
+  configured: boolean;
+  seller: Address;
+  currencyAddress: Address;
+  currencyDecimals: number | null;
+  price: bigint;
+  startTime: bigint;
+  maxMints: bigint;
+  splitRecipients: Address[];
+  splitRatios: number[];
+  allowlistRoot: `0x${string}`;
+  allowlistEndTimestamp: bigint;
+  allowlistActive: boolean;
+  requiresAllowlist: boolean;
+  mintLimit: bigint;
+  txLimit: bigint;
+  wallet: Address | null;
+  walletMints: bigint | null;
+  walletTxs: bigint | null;
+  stakingMinimumAmount: bigint;
+  stakingMinimumEndTimestamp: bigint;
+  stakingMinimumActive: boolean;
+  totalSupply: bigint | null;
+  maxSupply: bigint | null;
+  remainingSupply: bigint | null;
+  soldOut: boolean | null;
+  started: boolean;
+  currentlyMintable: boolean;
+  isEth: boolean;
+  now: bigint;
+}
+
 export interface TokenContractInfo {
   contract: Address;
   chain: SupportedChain;
@@ -195,6 +256,7 @@ export interface RareClient {
   contracts: {
     factory: Address;
     auction: Address;
+    rareMinter?: Address;
   };
   deploy: {
     erc721(params: DeployErc721Params): Promise<DeployErc721Result>;
@@ -220,6 +282,10 @@ export interface RareClient {
     cancel(params: ListingCancelParams): Promise<TransactionResult>;
     buy(params: ListingBuyParams): Promise<TransactionResult>;
     getStatus(params: ListingStatusParams): Promise<ListingStatus>;
+  };
+  release: {
+    configure(params: ReleaseConfigureParams): Promise<ReleaseConfigureResult>;
+    getStatus(params: ReleaseStatusParams): Promise<ReleaseStatus>;
   };
   search: {
     nfts(params?: NftSearchParams): Promise<SearchPageResponse<Nft>>;

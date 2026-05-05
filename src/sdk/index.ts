@@ -1,5 +1,12 @@
 export { createRareClient } from './client.js';
-export type { RareClient, RareClientConfig } from './types.js';
+export type {
+  RareClient,
+  RareClientConfig,
+  ReleaseConfigureParams,
+  ReleaseConfigureResult,
+  ReleaseStatus,
+  ReleaseStatusParams,
+} from './types.js';
 export type {
   CollectionSearchParams,
   ImportErc721Params,
@@ -20,9 +27,11 @@ export {
   chainIds,
   viemChains,
   getContractAddresses,
+  getRareMinterAddress,
   isSupportedChain,
 } from '../contracts/addresses.js';
 export type { SupportedChain } from '../contracts/addresses.js';
 export { factoryAbi } from '../contracts/abis/factory.js';
 export { auctionAbi } from '../contracts/abis/auction.js';
 export { tokenAbi } from '../contracts/abis/token.js';
+export { rareMinterAbi } from '../contracts/abis/rare-minter.js';
