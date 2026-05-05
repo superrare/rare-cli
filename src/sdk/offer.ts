@@ -55,7 +55,6 @@ export function createOfferNamespace(
 
       const currency = params.currency ?? ETH_ADDRESS;
       const amount = toWei(params.amount);
-      const convertible = params.convertible ?? false;
 
       const value = await preparePayment({
         publicClient, walletClient, account, accountAddress,
@@ -66,7 +65,7 @@ export function createOfferNamespace(
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'offer',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount, convertible],
+        args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount, false],
         account,
         chain: undefined,
         value,
@@ -124,34 +123,36 @@ export function createOfferNamespace(
       const currency = params.currency ?? ETH_ADDRESS;
       const tokenId = toInteger(params.tokenId, 'tokenId');
 
-      const [offerSettled, ownerSettled, delaySettled] = await Promise.allSettled([
-        publicClient.readContract({
-          address: addresses.auction,
-          abi: auctionAbi,
-          functionName: 'tokenCurrentOffers',
-          args: [params.contract, tokenId, currency],
-        }),
-        publicClient.readContract({
-          address: params.contract,
-          abi: tokenAbi,
-          functionName: 'ownerOf',
-          args: [tokenId],
-        }),
-        publicClient.readContract({
-          address: addresses.auction,
-          abi: auctionAbi,
-          functionName: 'offerCancelationDelay',
-        }),
-      ]);
+      const [offerResult, ownerResult, delayResult] = await publicClient.multicall({
+        contracts: [
+          {
+            address: addresses.auction,
+            abi: auctionAbi,
+            functionName: 'tokenCurrentOffers',
+            args: [params.contract, tokenId, currency],
+          },
+          {
+            address: params.contract,
+            abi: tokenAbi,
+            functionName: 'ownerOf',
+            args: [tokenId],
+          },
+          {
+            address: addresses.auction,
+            abi: auctionAbi,
+            functionName: 'offerCancelationDelay',
+          },
+        ],
+      });
 
-      if (offerSettled.status !== 'fulfilled') {
-        throw offerSettled.reason;
+      if (offerResult.status !== 'success') {
+        throw offerResult.error;
       }
-      const [buyer, amount, timestamp, marketplaceFee, convertible] = offerSettled.value;
+      const [buyer, amount, timestamp, marketplaceFee] = offerResult.result;
       const hasOffer = amount > 0n;
 
-      const tokenOwner = ownerSettled.status === 'fulfilled' ? ownerSettled.value : null;
-      const cancellationDelay = delaySettled.status === 'fulfilled' ? delaySettled.value : null;
+      const tokenOwner = ownerResult.status === 'success' ? ownerResult.result : null;
+      const cancellationDelay = delayResult.status === 'success' ? delayResult.result : null;
       const cancellableAfter =
         hasOffer && cancellationDelay !== null ? timestamp + cancellationDelay : null;
 
@@ -173,7 +174,6 @@ export function createOfferNamespace(
         amount,
         timestamp,
         marketplaceFee,
-        convertible,
         hasOffer,
         currency,
         tokenOwner,

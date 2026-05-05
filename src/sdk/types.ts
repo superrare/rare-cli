@@ -103,7 +103,6 @@ export interface OfferCreateParams {
   tokenId: IntegerInput;
   currency?: Address;
   amount: AmountInput;
-  convertible?: boolean;
 }
 
 export interface OfferCancelParams {
@@ -132,7 +131,6 @@ export interface OfferStatus {
   amount: bigint;
   timestamp: bigint;
   marketplaceFee: number;
-  convertible: boolean;
   hasOffer: boolean;
   currency: Address;
   tokenOwner: Address | null;

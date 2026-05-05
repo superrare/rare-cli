@@ -60,7 +60,6 @@ export function offerCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID')
     .requiredOption('--amount <amount>', 'offer amount in ETH (or token units)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
-    .option('--convertible', 'mark offer as convertible (allows seller to convert it to an auction)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts) => {
       const chain = getActiveChain(opts.chain);
@@ -75,7 +74,6 @@ export function offerCommand(): Command {
       log(`  NFT contract: ${opts.contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
-      log(`  Convertible: ${opts.convertible ? 'yes' : 'no'}`);
 
       try {
         const result = await rare.offer.create({
@@ -83,7 +81,6 @@ export function offerCommand(): Command {
           tokenId: opts.tokenId,
           amount: opts.amount,
           currency,
-          convertible: opts.convertible ?? false,
         });
 
         output(
@@ -140,7 +137,7 @@ export function offerCommand(): Command {
     .description('Accept an offer on a token you own')
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
-    .requiredOption('--amount <amount>', 'offer amount to accept in ETH (or token units) — slippage assertion against on-chain offer')
+    .requiredOption('--amount <amount>', 'offer amount to accept in ETH (or token units)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option(
       '--split <addr=ratio>',
@@ -241,7 +238,6 @@ export function offerCommand(): Command {
             );
           }
           console.log(`  Marketplace fee:   ${result.marketplaceFee}%`);
-          console.log(`  Convertible:       ${result.convertible ? 'yes' : 'no'}`);
           if (result.canAccept !== null || result.canCancel !== null) {
             console.log('  For your wallet:');
             console.log(`    Can accept:      ${result.canAccept ? 'yes' : 'no'}`);
