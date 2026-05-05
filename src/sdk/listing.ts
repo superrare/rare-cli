@@ -6,14 +6,18 @@ import {
 import { auctionAbi } from '../contracts/abis/auction.js';
 import type { RareClientConfig, RareClient } from './types.js';
 import {
-  ETH_ADDRESS,
   approvalAbi,
   preparePayment,
   requireWallet,
-  toInteger,
-  toWei,
   waitForApproval,
 } from './helpers.js';
+import {
+  planListingBuy,
+  planListingCancel,
+  planListingCreate,
+  planListingStatus,
+  shapeListingStatus,
+} from './marketplace-core.js';
 
 export function createListingNamespace(
   publicClient: PublicClient,
@@ -23,18 +27,12 @@ export function createListingNamespace(
   return {
     async create(params) {
       const { walletClient, account, accountAddress } = requireWallet(config);
-
-      const currency = params.currency ?? ETH_ADDRESS;
-      const price = toWei(params.price);
-      const target = params.target ?? ETH_ADDRESS;
-      const splitAddresses = params.splitAddresses ?? [accountAddress];
-      const splitRatios = params.splitRatios ?? [100];
-      const nftAddress = params.contract;
+      const plan = planListingCreate(params, accountAddress);
 
       let approvalTxHash: Hash | undefined;
       if (params.autoApprove !== false) {
         const isApproved = await publicClient.readContract({
-          address: nftAddress,
+          address: plan.nftAddress,
           abi: approvalAbi,
           functionName: 'isApprovedForAll',
           args: [accountAddress, addresses.auction],
@@ -42,7 +40,7 @@ export function createListingNamespace(
 
         if (!isApproved) {
           approvalTxHash = await walletClient.writeContract({
-            address: nftAddress,
+            address: plan.nftAddress,
             abi: approvalAbi,
             functionName: 'setApprovalForAll',
             args: [addresses.auction, true],
@@ -51,7 +49,7 @@ export function createListingNamespace(
           });
 
           await publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
-          await waitForApproval(publicClient, nftAddress, accountAddress, addresses.auction);
+          await waitForApproval(publicClient, plan.nftAddress, accountAddress, addresses.auction);
         }
       }
 
@@ -59,7 +57,15 @@ export function createListingNamespace(
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'setSalePrice',
-        args: [nftAddress, toInteger(params.tokenId, 'tokenId'), currency, price, target, splitAddresses, splitRatios],
+        args: [
+          plan.nftAddress,
+          plan.tokenId,
+          plan.currency,
+          plan.price,
+          plan.target,
+          plan.splitAddresses,
+          plan.splitRatios,
+        ],
         account,
         chain: undefined,
       });
@@ -70,14 +76,13 @@ export function createListingNamespace(
 
     async cancel(params) {
       const { walletClient, account } = requireWallet(config);
-
-      const target = params.target ?? ETH_ADDRESS;
+      const plan = planListingCancel(params);
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'removeSalePrice',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), target],
+        args: [params.contract, plan.tokenId, plan.target],
         account,
         chain: undefined,
       });
@@ -88,20 +93,18 @@ export function createListingNamespace(
 
     async buy(params) {
       const { walletClient, account, accountAddress } = requireWallet(config);
-
-      const currency = params.currency ?? ETH_ADDRESS;
-      const amount = toWei(params.amount);
+      const plan = planListingBuy(params);
 
       const value = await preparePayment({
         publicClient, walletClient, account, accountAddress,
-        auctionAddress: addresses.auction, currency, amount,
+        auctionAddress: addresses.auction, currency: plan.currency, amount: plan.amount,
       });
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'buy',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount],
+        args: [params.contract, plan.tokenId, plan.currency, plan.amount],
         account,
         chain: undefined,
         value,
@@ -112,19 +115,16 @@ export function createListingNamespace(
     },
 
     async getStatus(params) {
-      const target = params.target ?? ETH_ADDRESS;
+      const plan = planListingStatus(params);
 
-      const [seller, currencyAddress, amount] = await publicClient.readContract({
+      const result = await publicClient.readContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'tokenSalePrices',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), target],
+        args: [params.contract, plan.tokenId, plan.target],
       });
 
-      const hasListing = amount > 0n;
-      const isEth = currencyAddress === ETH_ADDRESS;
-
-      return { seller, currencyAddress, amount, hasListing, isEth };
+      return shapeListingStatus(result);
     },
   };
 }
