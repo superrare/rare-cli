@@ -42,6 +42,8 @@ Avoid unit tests for pass-through code, logging, formatting-only wrappers, HTTP/
 
 Integration tests should carry most of the coverage and should focus on SDK behavior across module boundaries.
 
+Avoid mocks in integration tests. Integration tests should exercise the real SDK shell against real or controlled external dependencies, such as the live Rare API, real viem clients, real RPC endpoints, forks, or dedicated testnet services. If a behavior only needs fake clients, fake fetches, or mocked contract calls, it is probably pure functional core logic and belongs in a unit test instead.
+
 Cover:
 
 - Public SDK methods and exported client behavior.
