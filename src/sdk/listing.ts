@@ -10,8 +10,9 @@ import {
   approvalAbi,
   preparePayment,
   requireWallet,
-  toInteger,
-  toWei,
+  toNonNegativeInteger,
+  toNonNegativeWei,
+  toPositiveWei,
   waitForApproval,
 } from './helpers.js';
 
@@ -25,7 +26,8 @@ export function createListingNamespace(
       const { walletClient, account, accountAddress } = requireWallet(config);
 
       const currency = params.currency ?? ETH_ADDRESS;
-      const price = toWei(params.price);
+      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
+      const price = toNonNegativeWei(params.price, 'price');
       const target = params.target ?? ETH_ADDRESS;
       const splitAddresses = params.splitAddresses ?? [accountAddress];
       const splitRatios = params.splitRatios ?? [100];
@@ -59,7 +61,7 @@ export function createListingNamespace(
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'setSalePrice',
-        args: [nftAddress, toInteger(params.tokenId, 'tokenId'), currency, price, target, splitAddresses, splitRatios],
+        args: [nftAddress, tokenId, currency, price, target, splitAddresses, splitRatios],
         account,
         chain: undefined,
       });
@@ -72,12 +74,13 @@ export function createListingNamespace(
       const { walletClient, account } = requireWallet(config);
 
       const target = params.target ?? ETH_ADDRESS;
+      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'removeSalePrice',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), target],
+        args: [params.contract, tokenId, target],
         account,
         chain: undefined,
       });
@@ -90,7 +93,8 @@ export function createListingNamespace(
       const { walletClient, account, accountAddress } = requireWallet(config);
 
       const currency = params.currency ?? ETH_ADDRESS;
-      const amount = toWei(params.amount);
+      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
+      const amount = toPositiveWei(params.amount, 'amount');
 
       const value = await preparePayment({
         publicClient, walletClient, account, accountAddress,
@@ -101,7 +105,7 @@ export function createListingNamespace(
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'buy',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount],
+        args: [params.contract, tokenId, currency, amount],
         account,
         chain: undefined,
         value,
@@ -113,12 +117,13 @@ export function createListingNamespace(
 
     async getStatus(params) {
       const target = params.target ?? ETH_ADDRESS;
+      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
 
       const [seller, currencyAddress, amount] = await publicClient.readContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'tokenSalePrices',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), target],
+        args: [params.contract, tokenId, target],
       });
 
       const hasListing = amount > 0n;

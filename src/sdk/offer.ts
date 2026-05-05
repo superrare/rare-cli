@@ -8,8 +8,8 @@ import {
   ETH_ADDRESS,
   preparePayment,
   requireWallet,
-  toInteger,
-  toWei,
+  toNonNegativeInteger,
+  toPositiveWei,
 } from './helpers.js';
 
 export function createOfferNamespace(
@@ -22,7 +22,8 @@ export function createOfferNamespace(
       const { walletClient, account, accountAddress } = requireWallet(config);
 
       const currency = params.currency ?? ETH_ADDRESS;
-      const amount = toWei(params.amount);
+      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
+      const amount = toPositiveWei(params.amount, 'amount');
       const convertible = params.convertible ?? false;
 
       const value = await preparePayment({
@@ -34,7 +35,7 @@ export function createOfferNamespace(
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'offer',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount, convertible],
+        args: [params.contract, tokenId, currency, amount, convertible],
         account,
         chain: undefined,
         value,
@@ -48,12 +49,13 @@ export function createOfferNamespace(
       const { walletClient, account } = requireWallet(config);
 
       const currency = params.currency ?? ETH_ADDRESS;
+      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'cancelOffer',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency],
+        args: [params.contract, tokenId, currency],
         account,
         chain: undefined,
       });
@@ -66,7 +68,8 @@ export function createOfferNamespace(
       const { walletClient, account, accountAddress } = requireWallet(config);
 
       const currency = params.currency ?? ETH_ADDRESS;
-      const amount = toWei(params.amount);
+      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
+      const amount = toPositiveWei(params.amount, 'amount');
       const splitAddresses = params.splitAddresses ?? [accountAddress];
       const splitRatios = params.splitRatios ?? [100];
 
@@ -74,7 +77,7 @@ export function createOfferNamespace(
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'acceptOffer',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount, splitAddresses, splitRatios],
+        args: [params.contract, tokenId, currency, amount, splitAddresses, splitRatios],
         account,
         chain: undefined,
       });
@@ -85,12 +88,13 @@ export function createOfferNamespace(
 
     async getStatus(params) {
       const currency = params.currency ?? ETH_ADDRESS;
+      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
 
       const [buyer, amount, timestamp, marketplaceFee, convertible] = await publicClient.readContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'tokenCurrentOffers',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency],
+        args: [params.contract, tokenId, currency],
       });
 
       const hasOffer = amount > 0n;

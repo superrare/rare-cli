@@ -10,8 +10,9 @@ import {
   approvalAbi,
   preparePayment,
   requireWallet,
-  toInteger,
-  toWei,
+  toNonNegativeInteger,
+  toPositiveInteger,
+  toPositiveWei,
   waitForApproval,
 } from './helpers.js';
 
@@ -26,9 +27,9 @@ export function createAuctionNamespace(
 
       const nftAddress = params.contract;
       const currency = params.currency ?? ETH_ADDRESS;
-      const tokenId = toInteger(params.tokenId, 'tokenId');
-      const startingPrice = toWei(params.startingPrice);
-      const duration = toInteger(params.duration, 'duration');
+      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
+      const startingPrice = toPositiveWei(params.startingPrice, 'startingPrice');
+      const duration = toPositiveInteger(params.duration, 'duration');
       const splitAddresses = params.splitAddresses ?? [accountAddress];
       const splitRatios = params.splitRatios ?? [100];
 
@@ -94,7 +95,8 @@ export function createAuctionNamespace(
       const { walletClient, account, accountAddress } = requireWallet(config);
 
       const currency = params.currency ?? ETH_ADDRESS;
-      const amount = toWei(params.amount);
+      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
+      const amount = toPositiveWei(params.amount, 'amount');
 
       const value = await preparePayment({
         publicClient, walletClient, account, accountAddress,
@@ -105,7 +107,7 @@ export function createAuctionNamespace(
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'bid',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount],
+        args: [params.contract, tokenId, currency, amount],
         account,
         chain: undefined,
         value,
@@ -117,12 +119,13 @@ export function createAuctionNamespace(
 
     async settle(params) {
       const { walletClient, account } = requireWallet(config);
+      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'settleAuction',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId')],
+        args: [params.contract, tokenId],
         account,
         chain: undefined,
       });
@@ -133,12 +136,13 @@ export function createAuctionNamespace(
 
     async cancel(params) {
       const { walletClient, account } = requireWallet(config);
+      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'cancelAuction',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId')],
+        args: [params.contract, tokenId],
         account,
         chain: undefined,
       });
@@ -148,11 +152,12 @@ export function createAuctionNamespace(
     },
 
     async getStatus(params) {
+      const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
       const result = await publicClient.readContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'getAuctionDetails',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId')],
+        args: [params.contract, tokenId],
       });
 
       const [
