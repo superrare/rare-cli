@@ -19,6 +19,25 @@ import { ETH_ADDRESS, requireWallet, toInteger } from './helpers.js';
 
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
+const releaseCollectionAbi = [
+  {
+    inputs: [
+      { name: '_receiver', type: 'address' },
+    ],
+    name: 'mintTo',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'owner',
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
 type RawDirectSaleConfig = {
   seller: Address;
   currencyAddress: Address;
@@ -185,6 +204,48 @@ async function toCurrencyUnits(
   return parsed;
 }
 
+async function assertConfigurableReleaseContract(opts: {
+  publicClient: PublicClient;
+  contract: Address;
+  accountAddress: Address;
+  rareMinter: Address;
+}): Promise<void> {
+  const { publicClient, contract, accountAddress, rareMinter } = opts;
+
+  let owner: Address;
+  try {
+    owner = await publicClient.readContract({
+      address: contract,
+      abi: releaseCollectionAbi,
+      functionName: 'owner',
+    });
+  } catch (error) {
+    throw new Error(`Unable to read owner() from collection ${contract}: ${(error as Error).message}`);
+  }
+
+  if (owner.toLowerCase() !== accountAddress.toLowerCase()) {
+    throw new Error(
+      `Connected wallet ${accountAddress} is not the owner of collection ${contract}. ` +
+        `Contract owner is ${owner}.`,
+    );
+  }
+
+  try {
+    await publicClient.simulateContract({
+      address: contract,
+      abi: releaseCollectionAbi,
+      functionName: 'mintTo',
+      args: [accountAddress],
+      account: rareMinter,
+    });
+  } catch (error) {
+    throw new Error(
+      `Collection ${contract} must expose mintTo(address) callable by RareMinter ${rareMinter}. ` +
+        `Simulation failed: ${(error as Error).message}`,
+    );
+  }
+}
+
 function deriveReleaseStatus(opts: {
   rareMinter: Address;
   contract: Address;
@@ -285,6 +346,13 @@ export function createReleaseNamespace(
     async configure(params) {
       const rareMinter = requireRareMinter(addresses.rareMinter);
       const { walletClient, account, accountAddress } = requireWallet(config);
+      await assertConfigurableReleaseContract({
+        publicClient,
+        contract: params.contract,
+        accountAddress,
+        rareMinter,
+      });
+
       const currencyAddress = params.currency ?? ETH_ADDRESS;
       const price = await toCurrencyUnits(publicClient, currencyAddress, params.price);
       const startTime = normalizeReleaseStartTime(params.startTime);
