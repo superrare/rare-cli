@@ -170,6 +170,22 @@ function stringifyAmountInput(value: Exclude<AmountInput, bigint>, field: string
   return String(value);
 }
 
+export function toNonNegativeInteger(value: IntegerInput, field: string): bigint {
+  const normalized = toInteger(value, field);
+  if (normalized < 0n) {
+    throw new Error(`${field} must be greater than or equal to 0.`);
+  }
+  return normalized;
+}
+
+export function toPositiveInteger(value: IntegerInput, field: string): bigint {
+  const normalized = toInteger(value, field);
+  if (normalized <= 0n) {
+    throw new Error(`${field} must be greater than 0.`);
+  }
+  return normalized;
+}
+
 export function toWei(value: AmountInput): bigint {
   if (typeof value === 'bigint') {
     return value;
@@ -304,6 +320,22 @@ export async function sendPreparedTransaction(
   return { txHash, receipt };
 }
 
+export function toNonNegativeWei(value: AmountInput, field: string): bigint {
+  const normalized = toWei(value);
+  if (normalized < 0n) {
+    throw new Error(`${field} must be greater than or equal to 0.`);
+  }
+  return normalized;
+}
+
+export function toPositiveWei(value: AmountInput, field: string): bigint {
+  const normalized = toWei(value);
+  if (normalized <= 0n) {
+    throw new Error(`${field} must be greater than 0.`);
+  }
+  return normalized;
+}
+
 /**
  * Handles ETH fee calculation or ERC20 allowance approval before a payment transaction.
  * Returns the `value` to attach to the transaction (non-zero only for ETH payments).
@@ -336,27 +368,20 @@ export async function preparePayment(opts: {
   }
 
   // ERC20: ensure sufficient allowance
+  let allowance: bigint | undefined;
   try {
-    const allowance = await publicClient.readContract({
+    allowance = await publicClient.readContract({
       address: currency,
       abi: erc20Abi,
       functionName: 'allowance',
       args: [accountAddress, auctionAddress],
     });
-    if (allowance < amount) {
-      const approveTx = await walletClient.writeContract({
-        address: currency,
-        abi: erc20Abi,
-        functionName: 'approve',
-        args: [auctionAddress, maxUint256],
-        account,
-        chain: undefined,
-      });
-      await publicClient.waitForTransactionReceipt({ hash: approveTx });
-    }
   } catch (err) {
     // Allowance check failed (e.g. non-standard ERC20) — approve unconditionally
     console.warn('ERC20 allowance check failed, approving unconditionally:', (err as Error).message);
+  }
+
+  if (allowance === undefined || allowance < amount) {
     const approveTx = await walletClient.writeContract({
       address: currency,
       abi: erc20Abi,

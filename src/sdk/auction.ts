@@ -4,16 +4,19 @@ import {
   type PublicClient,
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
-import type { RareClientConfig, RareClient, AuctionStatus } from './types.js';
+import type { RareClientConfig, RareClient } from './types.js';
 import {
-  ETH_ADDRESS,
   approvalAbi,
   preparePayment,
   requireWallet,
-  toInteger,
-  toWei,
   waitForApproval,
 } from './helpers.js';
+import {
+  planAuctionBid,
+  planAuctionCreate,
+  planAuctionTokenAction,
+  shapeAuctionStatus,
+} from './marketplace-core.js';
 
 export function createAuctionNamespace(
   publicClient: PublicClient,
@@ -23,19 +26,12 @@ export function createAuctionNamespace(
   return {
     async create(params) {
       const { walletClient, account, accountAddress } = requireWallet(config);
-
-      const nftAddress = params.contract;
-      const currency = params.currency ?? ETH_ADDRESS;
-      const tokenId = toInteger(params.tokenId, 'tokenId');
-      const startingPrice = toWei(params.startingPrice);
-      const duration = toInteger(params.duration, 'duration');
-      const splitAddresses = params.splitAddresses ?? [accountAddress];
-      const splitRatios = params.splitRatios ?? [100];
+      const plan = planAuctionCreate(params, accountAddress);
 
       let approvalTxHash: Hash | undefined;
       if (params.autoApprove !== false) {
         const isApproved = await publicClient.readContract({
-          address: nftAddress,
+          address: plan.nftAddress,
           abi: approvalAbi,
           functionName: 'isApprovedForAll',
           args: [accountAddress, addresses.auction],
@@ -43,7 +39,7 @@ export function createAuctionNamespace(
 
         if (!isApproved) {
           approvalTxHash = await walletClient.writeContract({
-            address: nftAddress,
+            address: plan.nftAddress,
             abi: approvalAbi,
             functionName: 'setApprovalForAll',
             args: [addresses.auction, true],
@@ -52,7 +48,7 @@ export function createAuctionNamespace(
           });
 
           await publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
-          await waitForApproval(publicClient, nftAddress, accountAddress, addresses.auction);
+          await waitForApproval(publicClient, plan.nftAddress, accountAddress, addresses.auction);
         }
       }
 
@@ -68,14 +64,14 @@ export function createAuctionNamespace(
         functionName: 'configureAuction',
         args: [
           auctionType,
-          nftAddress,
-          tokenId,
-          startingPrice,
-          currency,
-          duration,
+          plan.nftAddress,
+          plan.tokenId,
+          plan.startingPrice,
+          plan.currency,
+          plan.duration,
           0n,
-          splitAddresses,
-          splitRatios,
+          plan.splitAddresses,
+          plan.splitRatios,
         ],
         account,
         chain: undefined,
@@ -92,20 +88,18 @@ export function createAuctionNamespace(
 
     async bid(params) {
       const { walletClient, account, accountAddress } = requireWallet(config);
-
-      const currency = params.currency ?? ETH_ADDRESS;
-      const amount = toWei(params.amount);
+      const plan = planAuctionBid(params);
 
       const value = await preparePayment({
         publicClient, walletClient, account, accountAddress,
-        auctionAddress: addresses.auction, currency, amount,
+        auctionAddress: addresses.auction, currency: plan.currency, amount: plan.amount,
       });
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'bid',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount],
+        args: [params.contract, plan.tokenId, plan.currency, plan.amount],
         account,
         chain: undefined,
         value,
@@ -117,12 +111,13 @@ export function createAuctionNamespace(
 
     async settle(params) {
       const { walletClient, account } = requireWallet(config);
+      const plan = planAuctionTokenAction(params);
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'settleAuction',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId')],
+        args: [params.contract, plan.tokenId],
         account,
         chain: undefined,
       });
@@ -133,12 +128,13 @@ export function createAuctionNamespace(
 
     async cancel(params) {
       const { walletClient, account } = requireWallet(config);
+      const plan = planAuctionTokenAction(params);
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'cancelAuction',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId')],
+        args: [params.contract, plan.tokenId],
         account,
         chain: undefined,
       });
@@ -148,48 +144,15 @@ export function createAuctionNamespace(
     },
 
     async getStatus(params) {
+      const plan = planAuctionTokenAction(params);
       const result = await publicClient.readContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'getAuctionDetails',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId')],
+        args: [params.contract, plan.tokenId],
       });
 
-      const [
-        seller,
-        creationBlock,
-        startingTime,
-        lengthOfAuction,
-        currency,
-        minimumBid,
-        auctionType,
-        splitAddresses,
-        splitRatios,
-      ] = result;
-
-      const started = startingTime > 0n;
-      const endTime = started ? startingTime + lengthOfAuction : null;
-      const now = BigInt(Math.floor(Date.now() / 1000));
-      let status: AuctionStatus['status'] = 'PENDING';
-      if (started) {
-        status = endTime !== null && now >= endTime ? 'ENDED' : 'RUNNING';
-      }
-
-      return {
-        seller,
-        creationBlock,
-        startingTime,
-        lengthOfAuction,
-        currency,
-        minimumBid,
-        auctionType,
-        splitAddresses: [...splitAddresses],
-        splitRatios: [...splitRatios],
-        isEth: currency === ETH_ADDRESS,
-        started,
-        endTime,
-        status,
-      };
+      return shapeAuctionStatus(result, BigInt(Math.floor(Date.now() / 1000)));
     },
   };
 }
