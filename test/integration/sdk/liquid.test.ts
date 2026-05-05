@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   encodeAbiParameters,
   encodeEventTopics,
@@ -106,18 +106,96 @@ describe('Liquid Editions SDK integration with controlled clients', () => {
 
     expect(writeCalls).toEqual([]);
   });
+
+  it('skips approval when initial liquidity is omitted', async () => {
+    const { publicClient, walletClient, readCalls, writeCalls, waitCalls } = createControlledClients({
+      allowance: 0n,
+    });
+    const rare = createRareClient({ publicClient, walletClient });
+
+    const result = await rare.liquid.deployMultiCurve({
+      name: 'Liquid Test',
+      symbol: 'LIQ',
+      tokenUri,
+      curves: validCurves,
+    });
+
+    expect(result.contract).toBe(getAddress(deployedToken));
+    expect(readCalls.some((call) => call.functionName === 'allowance')).toBe(false);
+    expect(writeCalls).toHaveLength(1);
+    expect(writeCalls[0]).toMatchObject({
+      address: liquidFactory,
+      functionName: 'createLiquidTokenMultiCurve',
+    });
+    expect(writeCalls[0]?.args?.[4]).toBe(0n);
+    expect(waitCalls).toEqual([deployTxHash]);
+  });
+
+  it('skips approval when existing allowance covers initial liquidity', async () => {
+    const { publicClient, walletClient, writeCalls, waitCalls } = createControlledClients({
+      allowance: maxUint256,
+    });
+    const rare = createRareClient({ publicClient, walletClient });
+
+    await rare.liquid.deployMultiCurve({
+      name: 'Liquid Test',
+      symbol: 'LIQ',
+      tokenUri,
+      initialRareLiquidity: '1.5',
+      curves: validCurves,
+    });
+
+    expect(writeCalls).toHaveLength(1);
+    expect(writeCalls[0]).toMatchObject({
+      address: liquidFactory,
+      functionName: 'createLiquidTokenMultiCurve',
+    });
+    expect(waitCalls).toEqual([deployTxHash]);
+  });
+
+  it('reports a mined deploy transaction when the LiquidTokenCreated event never appears', async () => {
+    vi.useFakeTimers();
+    try {
+      const clients = createControlledClients({
+        allowance: maxUint256,
+        omitDeployLog: true,
+      });
+      const rare = createRareClient({ publicClient: clients.publicClient, walletClient: clients.walletClient });
+
+      const deploy = rare.liquid.deployMultiCurve({
+        name: 'Liquid Test',
+        symbol: 'LIQ',
+        tokenUri,
+        curves: validCurves,
+      });
+      const deployError = deploy.catch((error: unknown) => error);
+
+      await vi.advanceTimersByTimeAsync(3_000);
+      const error = await deployError;
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toContain(
+        'Liquid token deploy transaction succeeded, but the deployed contract address could not be read',
+      );
+      expect((error as Error).message).toContain(`Transaction hash: ${deployTxHash}. Block: 123.`);
+      expect(clients.receiptCalls).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
-function createControlledClients(opts: { allowance: bigint }): {
+function createControlledClients(opts: { allowance: bigint; omitDeployLog?: boolean }): {
   publicClient: PublicClient;
   walletClient: WalletClient;
   readCalls: ReadCall[];
   writeCalls: WriteCall[];
   waitCalls: Hash[];
+  receiptCalls: number;
 } {
   const readCalls: ReadCall[] = [];
   const writeCalls: WriteCall[] = [];
   const waitCalls: Hash[] = [];
+  let receiptCalls = 0;
 
   const publicClient = {
     chain: sepolia,
@@ -149,13 +227,21 @@ function createControlledClients(opts: { allowance: bigint }): {
     waitForTransactionReceipt: async ({ hash }: { hash: Hash }) => {
       waitCalls.push(hash);
       return hash === deployTxHash
-        ? liquidTokenCreatedReceipt({
-            factory: liquidFactory,
-            token: deployedToken,
-            creator: account.address,
-            tokenUri,
-            txHash: hash,
-          })
+        ? opts.omitDeployLog
+          ? missingLogReceipt(hash)
+          : liquidTokenCreatedReceipt({
+              factory: liquidFactory,
+              token: deployedToken,
+              creator: account.address,
+              tokenUri,
+              txHash: hash,
+            })
+        : ({ status: 'success', blockNumber: 456n, logs: [], transactionHash: hash } as unknown as TransactionReceipt);
+    },
+    getTransactionReceipt: async ({ hash }: { hash: Hash }) => {
+      receiptCalls += 1;
+      return hash === deployTxHash
+        ? missingLogReceipt(hash)
         : ({ status: 'success', blockNumber: 456n, logs: [], transactionHash: hash } as unknown as TransactionReceipt);
     },
   } as unknown as PublicClient;
@@ -174,7 +260,20 @@ function createControlledClients(opts: { allowance: bigint }): {
     },
   } as unknown as WalletClient;
 
-  return { publicClient, walletClient, readCalls, writeCalls, waitCalls };
+  return {
+    publicClient,
+    walletClient,
+    readCalls,
+    writeCalls,
+    waitCalls,
+    get receiptCalls() {
+      return receiptCalls;
+    },
+  };
+}
+
+function missingLogReceipt(hash: Hash): TransactionReceipt {
+  return { status: 'success', blockNumber: 123n, logs: [], transactionHash: hash } as unknown as TransactionReceipt;
 }
 
 function liquidTokenCreatedReceipt(params: {
