@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { ETH_ADDRESS } from '../src/contracts/addresses.js';
 import { inferBaseCurrencyAddress } from '../src/swap/pool-core.js';

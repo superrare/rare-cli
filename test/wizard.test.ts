@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { PassThrough, Writable } from 'node:stream';
 import { runLiquidCurveWizard, type LiquidCurveWizardResult } from '../src/liquid/wizard.js';

@@ -42,23 +42,46 @@ export interface CanonicalV4Pool {
   poolId?: `0x${string}`;
 }
 
-type ContractSet = {
+export type ContractAddresses = {
   factory: Address;
   auction: Address;
   liquidFactory?: Address;
   swapRouter?: Address;
   v4Quoter?: Address;
+};
+
+export type CanonicalV4Pools = {
   rareEthPool?: CanonicalV4Pool;
   usdcEthPool?: CanonicalV4Pool;
 };
 
-export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
+export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses>> = {
   sepolia: {
     factory: '0x3c7526a0975156299ceef369b8ff3c01cc670523',
     auction: '0xC8Edc7049b233641ad3723D6C60019D1c8771612',
     liquidFactory: '0xfD18C0D99e5b6F89F3538806241C2C0d6FD728Ac',
     swapRouter: '0x429c3Ee66E7f6CDA12C5BadE4104aF3277aA2305',
     v4Quoter: '0x61B3f2011A92d183C7dbaDBdA940a7555Ccf9227',
+  },
+  mainnet: {
+    factory: '0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1',
+    auction: '0x6D7c44773C52D396F43c2D511B81aa168E9a7a42',
+    liquidFactory: '0xd3D8Ca76E8c5547694106378B6e471B4AC8EFC63',
+    swapRouter: '0xEBd58EdA8408d9EA409f2c2bE8898BD9738f3583',
+    v4Quoter: '0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203',
+  },
+  base: {
+    factory: '0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd',
+    auction: '0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2',
+  },
+  'base-sepolia': {
+    factory: '0x2b181ae0f1aea6fed75591b04991b1a3f9868d51',
+    auction: '0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2',
+  },
+};
+
+export const canonicalV4Pools: Partial<Record<SupportedChain, CanonicalV4Pools>> = {
+  sepolia: {
     rareEthPool: {
       currency0: ZERO_ADDRESS,
       currency1: '0x197FaeF3f59eC80113e773Bb6206a17d183F97CB',
@@ -77,11 +100,6 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
     },
   },
   mainnet: {
-    factory: '0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1',
-    auction: '0x6D7c44773C52D396F43c2D511B81aa168E9a7a42',
-    liquidFactory: '0xd3D8Ca76E8c5547694106378B6e471B4AC8EFC63',
-    swapRouter: '0xEBd58EdA8408d9EA409f2c2bE8898BD9738f3583',
-    v4Quoter: '0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203',
     rareEthPool: {
       currency0: ZERO_ADDRESS,
       currency1: '0xba5BDe662c17e2aDFF1075610382B9B691296350',
@@ -98,14 +116,6 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
       hooks: ZERO_ADDRESS,
       poolId: '0xdce6394339af00981949f5f3baf27e3610c76326a700af57e4b3e3ae4977f78d',
     },
-  },
-  base: {
-    factory: '0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd',
-    auction: '0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2',
-  },
-  'base-sepolia': {
-    factory: '0x2b181ae0f1aea6fed75591b04991b1a3f9868d51',
-    auction: '0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2',
   },
 };
 
@@ -151,7 +161,7 @@ export function resolveCurrency(input: string, chain: SupportedChain): `0x${stri
   throw new Error(`Unknown currency "${input}". Supported: ${currencyNames.join(', ')} or a 0x address.`);
 }
 
-export function getContractAddresses(chain: SupportedChain): ContractSet {
+export function getContractAddresses(chain: SupportedChain): ContractAddresses {
   const addresses = contractAddresses[chain];
   if (!addresses) {
     throw new Error(
@@ -159,6 +169,16 @@ export function getContractAddresses(chain: SupportedChain): ContractSet {
     );
   }
   return addresses;
+}
+
+export function getCanonicalV4Pools(chain: SupportedChain): CanonicalV4Pools {
+  const pools = canonicalV4Pools[chain];
+  if (!pools) {
+    throw new Error(
+      `Canonical V4 pools are not configured for "${chain}". Supported chains: ${Object.keys(canonicalV4Pools).join(', ')}`
+    );
+  }
+  return pools;
 }
 
 export function isSupportedChain(value: string): value is SupportedChain {
@@ -190,7 +210,7 @@ export function getV4QuoterAddress(chain: SupportedChain): Address {
 }
 
 export function getCanonicalRareEthPool(chain: SupportedChain): CanonicalV4Pool {
-  const pool = getContractAddresses(chain).rareEthPool;
+  const pool = getCanonicalV4Pools(chain).rareEthPool;
   if (!pool) {
     throw new Error(`Canonical RARE/ETH pool is not configured for "${chain}". Supported chains: mainnet, sepolia`);
   }
@@ -198,7 +218,7 @@ export function getCanonicalRareEthPool(chain: SupportedChain): CanonicalV4Pool 
 }
 
 export function getCanonicalUsdcEthPool(chain: SupportedChain): CanonicalV4Pool {
-  const pool = getContractAddresses(chain).usdcEthPool;
+  const pool = getCanonicalV4Pools(chain).usdcEthPool;
   if (!pool) {
     throw new Error(`Canonical USDC/ETH pool is not configured for "${chain}". Supported chains: mainnet, sepolia`);
   }

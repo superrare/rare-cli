@@ -31,13 +31,15 @@ export type {
 } from './api.js';
 
 export {
+  canonicalV4Pools,
   contractAddresses,
   chainIds,
   viemChains,
+  getCanonicalV4Pools,
   getContractAddresses,
   isSupportedChain,
 } from '../contracts/addresses.js';
-export type { SupportedChain } from '../contracts/addresses.js';
+export type { CanonicalV4Pool, CanonicalV4Pools, ContractAddresses, SupportedChain } from '../contracts/addresses.js';
 export { factoryAbi } from '../contracts/abis/factory.js';
 export { auctionAbi } from '../contracts/abis/auction.js';
 export { liquidFactoryAbi } from '../contracts/abis/liquid-factory.js';

@@ -1,4 +1,4 @@
-import test from 'node:test';
+import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { decodeAbiParameters, parseAbiParameters } from 'viem';
 import { ETH_ADDRESS } from '../src/contracts/addresses.js';

@@ -12,6 +12,10 @@ export function getTestRpcUrl(): string {
   return rpcUrl;
 }
 
+export function hasTestRpcUrl(): boolean {
+  return Boolean(process.env.TEST_RPC_URL);
+}
+
 export function createTestSepoliaPublicClient() {
   return createPublicClient({
     chain: sepolia,

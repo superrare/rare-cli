@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { isAddress, type Address } from 'viem';
 import { createRareClient } from '../../../src/sdk/client.js';
 import type { RareClient } from '../../../src/sdk/types.js';
-import { createTestSepoliaPublicClient } from '../../helpers/liveViem.js';
+import { createTestSepoliaPublicClient, hasTestRpcUrl } from '../../helpers/liveViem.js';
 
 type ReadableNftFixture = {
   contract: Address;
@@ -12,12 +12,14 @@ type ReadableNftFixture = {
 let rare: RareClient;
 let fixture: ReadableNftFixture;
 
-beforeAll(async () => {
-  rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
-  fixture = await findReadableSepoliaNft(rare);
-}, 30_000);
+const describeLive = hasTestRpcUrl() ? describe : describe.skip;
 
-describe('SDK contract read integration', () => {
+describeLive('SDK contract read integration', () => {
+  beforeAll(async () => {
+    rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
+    fixture = await findReadableSepoliaNft(rare);
+  }, 30_000);
+
   it('reads token contract and token info through real RPC', async () => {
     const contractInfo = await rare.token.getContractInfo({ contract: fixture.contract });
     expect(contractInfo.contract).toBe(fixture.contract);
