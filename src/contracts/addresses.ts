@@ -1,5 +1,5 @@
 import { sepolia, mainnet, base, baseSepolia } from 'viem/chains';
-import type { Chain } from 'viem';
+import { isAddress, type Address, type Chain } from 'viem';
 
 export const supportedChains = [
   'mainnet',
@@ -31,7 +31,7 @@ export const defaultRpcUrls: Partial<Record<SupportedChain, string>> = {
   'base-sepolia': 'https://sepolia.base.org',
 };
 
-type ContractSet = { factory: `0x${string}`; auction: `0x${string}` };
+type ContractSet = { factory: Address; auction: Address };
 
 export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
   sepolia: {
@@ -52,11 +52,13 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
   },
 };
 
-export type CurrencyName = 'eth' | 'usdc' | 'rare';
+export const currencyNames = ['eth', 'rare', 'usdc'] as const;
 
-const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as `0x${string}`;
+export type CurrencyName = (typeof currencyNames)[number];
 
-const currencyAddresses: Record<CurrencyName, Partial<Record<SupportedChain, `0x${string}`>>> = {
+const ETH_ADDRESS: Address = '0x0000000000000000000000000000000000000000';
+
+const currencyAddresses: Record<CurrencyName, Partial<Record<SupportedChain, Address>>> = {
   eth: {
     mainnet: ETH_ADDRESS,
     sepolia: ETH_ADDRESS,
@@ -77,19 +79,21 @@ const currencyAddresses: Record<CurrencyName, Partial<Record<SupportedChain, `0x
   },
 };
 
-export const currencyNames = Object.keys(currencyAddresses) as CurrencyName[];
+function isCurrencyName(value: string): value is CurrencyName {
+  return currencyNames.some((currencyName) => currencyName === value);
+}
 
-export function resolveCurrency(input: string, chain: SupportedChain): `0x${string}` {
+export function resolveCurrency(input: string, chain: SupportedChain): Address {
   const lower = input.toLowerCase();
-  if (lower in currencyAddresses) {
-    const addr = currencyAddresses[lower as CurrencyName][chain];
+  if (isCurrencyName(lower)) {
+    const addr = currencyAddresses[lower][chain];
     if (!addr) {
       throw new Error(`Currency "${lower}" is not available on "${chain}".`);
     }
     return addr;
   }
-  if (input.startsWith('0x')) {
-    return input as `0x${string}`;
+  if (isAddress(input)) {
+    return input;
   }
   throw new Error(`Unknown currency "${input}". Supported: ${currencyNames.join(', ')} or a 0x address.`);
 }
@@ -105,5 +109,5 @@ export function getContractAddresses(chain: SupportedChain): ContractSet {
 }
 
 export function isSupportedChain(value: string): value is SupportedChain {
-  return (supportedChains as readonly string[]).includes(value);
+  return supportedChains.some((chain) => chain === value);
 }

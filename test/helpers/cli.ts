@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { text } from 'node:stream/consumers';
 import { fileURLToPath } from 'node:url';
 
 const cliPath = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
@@ -23,51 +24,51 @@ export async function withTempHome<T>(fn: (home: string) => Promise<T>): Promise
   }
 }
 
-export function runCli(args: string[], opts: {
+export async function runCli(args: string[], opts: {
   home?: string;
   env?: NodeJS.ProcessEnv;
   timeoutMs?: number;
 } = {}): Promise<CliResult> {
   const command = `rare ${redactArgs(args).join(' ')}`;
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [cliPath, ...args], {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        HOME: opts.home ?? process.env.HOME,
-        USERPROFILE: opts.home ?? process.env.USERPROFILE,
-        ...opts.env,
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+  const child = spawn(process.execPath, [cliPath, ...args], {
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      HOME: opts.home ?? process.env.HOME,
+      USERPROFILE: opts.home ?? process.env.USERPROFILE,
+      ...opts.env,
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const stdout = text(child.stdout);
+  const stderr = text(child.stderr);
+  const code = await waitForClose(child, opts.timeoutMs ?? 30_000, command);
+  return { command, code, stdout: await stdout, stderr: await stderr };
+}
 
+function waitForClose(
+  child: ReturnType<typeof spawn>,
+  timeoutMs: number,
+  command: string,
+): Promise<number | null> {
+  return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       child.kill('SIGTERM');
-      reject(new Error(`CLI timed out after ${opts.timeoutMs ?? 30_000}ms: ${command}`));
-    }, opts.timeoutMs ?? 30_000);
-
-    let stdout = '';
-    let stderr = '';
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
-    });
+      reject(new Error(`CLI timed out after ${timeoutMs}ms: ${command}`));
+    }, timeoutMs);
     child.on('error', (error) => {
       clearTimeout(timer);
       reject(error);
     });
     child.on('close', (code) => {
       clearTimeout(timer);
-      resolve({ command, code, stdout, stderr });
+      resolve(code);
     });
   });
 }
 
-export function parseJsonStdout<T = Record<string, unknown>>(result: CliResult): T {
+export function parseJsonStdout<T = Record<string, unknown>>(result: CliResult): T;
+export function parseJsonStdout(result: CliResult): unknown {
   if (result.code !== 0) {
     throw new Error(formatCliFailure(result, `expected exit code 0, received ${result.code}`));
   }
@@ -76,9 +77,11 @@ export function parseJsonStdout<T = Record<string, unknown>>(result: CliResult):
   }
 
   try {
-    return JSON.parse(result.stdout) as T;
+    const parsed: unknown = JSON.parse(result.stdout);
+    return parsed;
   } catch (error) {
-    throw new Error(formatCliFailure(result, `failed to parse stdout as JSON: ${(error as Error).message}`));
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(formatCliFailure(result, `failed to parse stdout as JSON: ${message}`));
   }
 }
 

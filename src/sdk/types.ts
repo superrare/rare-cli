@@ -10,6 +10,8 @@ import type {
   Nft,
   Collection,
   NftEvent,
+  NftEventOptions,
+  CollectionEventOptions,
   UserProfile,
 } from './api.js';
 
@@ -227,11 +229,11 @@ export interface RareClient {
   };
   nft: {
     get(universalTokenId: string): Promise<Nft>;
-    events(universalTokenId: string, opts?: { page?: number; perPage?: number; eventType?: string | string[]; sortBy?: 'newest' | 'oldest' }): Promise<SearchPageResponse<NftEvent>>;
+    events(universalTokenId: string, opts?: NftEventOptions): Promise<SearchPageResponse<NftEvent>>;
   };
   collection: {
     get(id: string): Promise<Collection>;
-    events(id: string, opts?: { page?: number; perPage?: number; eventType?: string | string[]; sortBy?: 'newest' | 'oldest' }): Promise<SearchPageResponse<NftEvent>>;
+    events(id: string, opts?: CollectionEventOptions): Promise<SearchPageResponse<NftEvent>>;
   };
   user: {
     get(address: string): Promise<UserProfile>;

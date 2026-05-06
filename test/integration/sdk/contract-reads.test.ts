@@ -9,16 +9,18 @@ type ReadableNftFixture = {
   tokenId: string;
 };
 
-let rare: RareClient;
-let fixture: ReadableNftFixture;
+const setup = Promise.resolve().then(async (): Promise<{ rare: RareClient; fixture: ReadableNftFixture }> => {
+  const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
+  return { rare, fixture: await findReadableSepoliaNft(rare) };
+});
 
 beforeAll(async () => {
-  rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
-  fixture = await findReadableSepoliaNft(rare);
+  await setup;
 }, 30_000);
 
 describe('SDK contract read integration', () => {
   it('reads token contract and token info through real RPC', async () => {
+    const { rare, fixture } = await setup;
     const contractInfo = await rare.token.getContractInfo({ contract: fixture.contract });
     expect(contractInfo.contract).toBe(fixture.contract);
     expect(contractInfo.chain).toBe('sepolia');
@@ -37,6 +39,7 @@ describe('SDK contract read integration', () => {
   }, 30_000);
 
   it('reads marketplace listing, offer, and auction status through real RPC', async () => {
+    const { rare, fixture } = await setup;
     const [listing, offer, auction] = await Promise.all([
       rare.listing.getStatus({ contract: fixture.contract, tokenId: fixture.tokenId }),
       rare.offer.getStatus({ contract: fixture.contract, tokenId: fixture.tokenId }),

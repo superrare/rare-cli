@@ -9,12 +9,14 @@ import {
   http,
   parseEther,
   type Address,
+  type PublicClient,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { getContractAddresses, resolveCurrency } from '../../src/contracts/addresses.js';
+import { parseHexString } from '../../src/sdk/validation.js';
 import { parseJsonStdout, runCli } from '../helpers/cli.js';
-import { loadDotEnv } from './env.mjs';
+import { loadDotEnv } from '../helpers/env.js';
 
 loadDotEnv();
 
@@ -68,7 +70,27 @@ type LiveState = {
   rareOfferAcceptToken: MintResult;
 };
 
-let live: LiveState;
+class LiveStateRef {
+  #value: LiveState | undefined;
+
+  get value(): LiveState {
+    if (!this.#value) {
+      throw new Error('Live E2E state has not been initialized.');
+    }
+
+    return this.#value;
+  }
+
+  get optionalValue(): LiveState | undefined {
+    return this.#value;
+  }
+
+  set(value: LiveState): void {
+    this.#value = value;
+  }
+}
+
+const live = new LiveStateRef();
 const E2E_RARE_CURRENCY = 'rare';
 const E2E_RARE_AMOUNT = '0.000001';
 
@@ -81,8 +103,8 @@ describeLive('live Sepolia CLI write commands', () => {
     const buyerAddress = privateKeyToAccount(livePrivateKey('E2E_BUYER_PRIVATE_KEY')).address;
 
     try {
-      await step('configure seller wallet', () => configureLiveHome(sellerHome, process.env.E2E_SELLER_PRIVATE_KEY!));
-      await step('configure buyer wallet', () => configureLiveHome(buyerHome, process.env.E2E_BUYER_PRIVATE_KEY!));
+      await step('configure seller wallet', () => configureLiveHome(sellerHome, livePrivateKey('E2E_SELLER_PRIVATE_KEY')));
+      await step('configure buyer wallet', () => configureLiveHome(buyerHome, livePrivateKey('E2E_BUYER_PRIVATE_KEY')));
 
       const collection = await step('deploy ERC-721 collection', () =>
         jsonCommand<DeployResult>(sellerHome, [
@@ -118,7 +140,7 @@ describeLive('live Sepolia CLI write commands', () => {
       );
       expectTx(offerCancelCreate);
 
-      live = {
+      live.set({
         sellerHome,
         buyerHome,
         sellerAddress,
@@ -154,7 +176,7 @@ describeLive('live Sepolia CLI write commands', () => {
         rareOfferAcceptToken: await step('mint RARE offer accept token', () =>
           mintToken(sellerHome, collection.contract),
         ),
-      };
+      });
     } catch (error) {
       await cleanupTempHome(sellerHome);
       await cleanupTempHome(buyerHome);
@@ -163,45 +185,45 @@ describeLive('live Sepolia CLI write commands', () => {
   });
 
   afterAll(async () => {
-    await cleanupTempHome(live?.sellerHome);
-    await cleanupTempHome(live?.buyerHome);
+    await cleanupTempHome(live.optionalValue?.sellerHome);
+    await cleanupTempHome(live.optionalValue?.buyerHome);
   });
 
   it('deploys collection and mints token fixtures', () => {
-    expectTx(live.collection);
-    expect(live.collection.contract).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expectTx(live.value.collection);
+    expect(live.value.collection.contract).toMatch(/^0x[0-9a-fA-F]{40}$/);
     for (const token of [
-      live.listingCancelToken,
-      live.listingBuyToken,
-      live.zeroPriceListingToken,
-      live.auctionCancelToken,
-      live.auctionSettleToken,
-      live.buyerAuctionCancelToken,
-      live.offerCancelToken,
-      live.offerAcceptToken,
-      live.buyerMintToken,
-      live.rareOfferAcceptToken,
+      live.value.listingCancelToken,
+      live.value.listingBuyToken,
+      live.value.zeroPriceListingToken,
+      live.value.auctionCancelToken,
+      live.value.auctionSettleToken,
+      live.value.buyerAuctionCancelToken,
+      live.value.offerCancelToken,
+      live.value.offerAcceptToken,
+      live.value.buyerMintToken,
+      live.value.rareOfferAcceptToken,
     ]) {
       expectTx(token);
-      expect(token.contract).toBe(live.collection.contract);
+      expect(token.contract).toBe(live.value.collection.contract);
       expect(token.tokenUri).toBe(E2E_TOKEN_URI);
       expect(token.tokenId).toMatch(/^\d+$/);
     }
   });
 
   it('mints directly to another recipient', async () => {
-    await expectTokenOwner(live.sellerHome, live.collection.contract, live.buyerMintToken.tokenId, live.buyerAddress);
+    await expectTokenOwner(live.value.sellerHome, live.value.collection.contract, live.value.buyerMintToken.tokenId, live.value.buyerAddress);
   });
 
   it('creates and cancels a listing', async () => {
     const listingCancelCreate = await step('create listing for cancellation', () =>
-      jsonCommand<TxResult>(live.sellerHome, [
+      jsonCommand<TxResult>(live.value.sellerHome, [
         'listing',
         'create',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.listingCancelToken.tokenId,
+        live.value.listingCancelToken.tokenId,
         '--price',
         '0.000001',
         '--chain',
@@ -210,32 +232,32 @@ describeLive('live Sepolia CLI write commands', () => {
     );
     expectTx(listingCancelCreate);
     expect(listingCancelCreate.approvalTxHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
-    await expectListingStatus(live.sellerHome, live.collection.contract, live.listingCancelToken.tokenId, true);
+    await expectListingStatus(live.value.sellerHome, live.value.collection.contract, live.value.listingCancelToken.tokenId, true);
 
     expectTx(await step('cancel listing', () =>
-      jsonCommand<TxResult>(live.sellerHome, [
+      jsonCommand<TxResult>(live.value.sellerHome, [
         'listing',
         'cancel',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.listingCancelToken.tokenId,
+        live.value.listingCancelToken.tokenId,
         '--chain',
         'sepolia',
       ]),
     ));
-    await expectListingStatus(live.sellerHome, live.collection.contract, live.listingCancelToken.tokenId, false);
+    await expectListingStatus(live.value.sellerHome, live.value.collection.contract, live.value.listingCancelToken.tokenId, false);
   });
 
   it('creates a zero-price listing as an inactive listing without repeating approval', async () => {
     const zeroPriceListingCreate = await step('create zero-price listing', () =>
-      jsonCommand<TxResult>(live.sellerHome, [
+      jsonCommand<TxResult>(live.value.sellerHome, [
         'listing',
         'create',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.zeroPriceListingToken.tokenId,
+        live.value.zeroPriceListingToken.tokenId,
         '--price',
         '0',
         '--chain',
@@ -245,18 +267,18 @@ describeLive('live Sepolia CLI write commands', () => {
 
     expectTx(zeroPriceListingCreate);
     expect(zeroPriceListingCreate.approvalTxHash).toBeNull();
-    await expectListingStatus(live.sellerHome, live.collection.contract, live.zeroPriceListingToken.tokenId, false);
+    await expectListingStatus(live.value.sellerHome, live.value.collection.contract, live.value.zeroPriceListingToken.tokenId, false);
   });
 
   it('creates and buys a listing', async () => {
     const listingBuyCreate = await step('create listing for purchase', () =>
-      jsonCommand<TxResult>(live.sellerHome, [
+      jsonCommand<TxResult>(live.value.sellerHome, [
         'listing',
         'create',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.listingBuyToken.tokenId,
+        live.value.listingBuyToken.tokenId,
         '--price',
         '0.000001',
         '--chain',
@@ -267,31 +289,31 @@ describeLive('live Sepolia CLI write commands', () => {
     expect(listingBuyCreate.approvalTxHash).toBeNull();
 
     expectTx(await step('buy listing', () =>
-      jsonCommand<TxResult>(live.buyerHome, [
+      jsonCommand<TxResult>(live.value.buyerHome, [
         'listing',
         'buy',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.listingBuyToken.tokenId,
+        live.value.listingBuyToken.tokenId,
         '--amount',
         '0.000001',
         '--chain',
         'sepolia',
       ]),
     ));
-    await expectListingStatus(live.sellerHome, live.collection.contract, live.listingBuyToken.tokenId, false);
+    await expectListingStatus(live.value.sellerHome, live.value.collection.contract, live.value.listingBuyToken.tokenId, false);
   });
 
   it('creates and cancels an auction', async () => {
     const auctionCancelCreate = await step('create auction for cancellation', () =>
-      jsonCommand<TxResult>(live.sellerHome, [
+      jsonCommand<TxResult>(live.value.sellerHome, [
         'auction',
         'create',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.auctionCancelToken.tokenId,
+        live.value.auctionCancelToken.tokenId,
         '--starting-price',
         '0.000001',
         '--duration',
@@ -303,15 +325,15 @@ describeLive('live Sepolia CLI write commands', () => {
     expectTx(auctionCancelCreate);
     expect(auctionCancelCreate.approvalTxHash).toBeNull();
 
-    await expectAuctionStatus(live.sellerHome, live.collection.contract, live.auctionCancelToken.tokenId, 'PENDING');
+    await expectAuctionStatus(live.value.sellerHome, live.value.collection.contract, live.value.auctionCancelToken.tokenId, 'PENDING');
     expectTx(await step('cancel auction', () =>
-      jsonCommand<TxResult>(live.sellerHome, [
+      jsonCommand<TxResult>(live.value.sellerHome, [
         'auction',
         'cancel',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.auctionCancelToken.tokenId,
+        live.value.auctionCancelToken.tokenId,
         '--chain',
         'sepolia',
       ]),
@@ -320,13 +342,13 @@ describeLive('live Sepolia CLI write commands', () => {
 
   it('auto-approves a buyer-owned token before creating and cancelling an auction', async () => {
     const buyerAuctionCreate = await step('create buyer-owned auction for cancellation', () =>
-      jsonCommand<TxResult>(live.buyerHome, [
+      jsonCommand<TxResult>(live.value.buyerHome, [
         'auction',
         'create',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.buyerAuctionCancelToken.tokenId,
+        live.value.buyerAuctionCancelToken.tokenId,
         '--starting-price',
         '0.000001',
         '--duration',
@@ -338,16 +360,16 @@ describeLive('live Sepolia CLI write commands', () => {
 
     expectTx(buyerAuctionCreate);
     expect(buyerAuctionCreate.approvalTxHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
-    await expectAuctionStatus(live.buyerHome, live.collection.contract, live.buyerAuctionCancelToken.tokenId, 'PENDING');
+    await expectAuctionStatus(live.value.buyerHome, live.value.collection.contract, live.value.buyerAuctionCancelToken.tokenId, 'PENDING');
 
     expectTx(await step('cancel buyer-owned auction', () =>
-      jsonCommand<TxResult>(live.buyerHome, [
+      jsonCommand<TxResult>(live.value.buyerHome, [
         'auction',
         'cancel',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.buyerAuctionCancelToken.tokenId,
+        live.value.buyerAuctionCancelToken.tokenId,
         '--chain',
         'sepolia',
       ]),
@@ -356,13 +378,13 @@ describeLive('live Sepolia CLI write commands', () => {
 
   it('creates, bids, and settles an auction', async () => {
     const auctionSettleCreate = await step('create auction for settlement', () =>
-      jsonCommand<TxResult>(live.sellerHome, [
+      jsonCommand<TxResult>(live.value.sellerHome, [
         'auction',
         'create',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.auctionSettleToken.tokenId,
+        live.value.auctionSettleToken.tokenId,
         '--starting-price',
         '0.000001',
         '--duration',
@@ -375,13 +397,13 @@ describeLive('live Sepolia CLI write commands', () => {
     expect(auctionSettleCreate.approvalTxHash).toBeNull();
 
     expectTx(await step('bid on auction', () =>
-      jsonCommand<TxResult>(live.buyerHome, [
+      jsonCommand<TxResult>(live.value.buyerHome, [
         'auction',
         'bid',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.auctionSettleToken.tokenId,
+        live.value.auctionSettleToken.tokenId,
         '--amount',
         '0.000001',
         '--chain',
@@ -389,15 +411,15 @@ describeLive('live Sepolia CLI write commands', () => {
       ]),
     ));
     await step('wait for auction to end', waitForAuctionToEnd);
-    await expectAuctionStatus(live.sellerHome, live.collection.contract, live.auctionSettleToken.tokenId, 'ENDED');
+    await expectAuctionStatus(live.value.sellerHome, live.value.collection.contract, live.value.auctionSettleToken.tokenId, 'ENDED');
     expectTx(await step('settle auction', () =>
-      jsonCommand<TxResult>(live.sellerHome, [
+      jsonCommand<TxResult>(live.value.sellerHome, [
         'auction',
         'settle',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.auctionSettleToken.tokenId,
+        live.value.auctionSettleToken.tokenId,
         '--chain',
         'sepolia',
       ]),
@@ -405,33 +427,33 @@ describeLive('live Sepolia CLI write commands', () => {
   });
 
   it('creates and cancels an offer', async () => {
-    expectTx(live.offerCancelCreate);
-    await expectOfferStatus(live.sellerHome, live.collection.contract, live.offerCancelToken.tokenId, true);
-    await live.offerCancelReady;
+    expectTx(live.value.offerCancelCreate);
+    await expectOfferStatus(live.value.sellerHome, live.value.collection.contract, live.value.offerCancelToken.tokenId, true);
+    await live.value.offerCancelReady;
     expectTx(await step('cancel offer', () =>
-      jsonCommand<TxResult>(live.buyerHome, [
+      jsonCommand<TxResult>(live.value.buyerHome, [
         'offer',
         'cancel',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.offerCancelToken.tokenId,
+        live.value.offerCancelToken.tokenId,
         '--chain',
         'sepolia',
       ]),
     ));
-    await expectOfferStatus(live.sellerHome, live.collection.contract, live.offerCancelToken.tokenId, false);
+    await expectOfferStatus(live.value.sellerHome, live.value.collection.contract, live.value.offerCancelToken.tokenId, false);
   });
 
   it('creates and accepts an offer', async () => {
     expectTx(await step('create offer for acceptance', () =>
-      jsonCommand<TxResult>(live.buyerHome, [
+      jsonCommand<TxResult>(live.value.buyerHome, [
         'offer',
         'create',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.offerAcceptToken.tokenId,
+        live.value.offerAcceptToken.tokenId,
         '--amount',
         '0.000001',
         '--chain',
@@ -439,27 +461,27 @@ describeLive('live Sepolia CLI write commands', () => {
       ]),
     ));
     expectTx(await step('accept offer', () =>
-      jsonCommand<TxResult>(live.sellerHome, [
+      jsonCommand<TxResult>(live.value.sellerHome, [
         'offer',
         'accept',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.offerAcceptToken.tokenId,
+        live.value.offerAcceptToken.tokenId,
         '--amount',
         '0.000001',
         '--chain',
         'sepolia',
       ]),
     ));
-    await expectOfferStatus(live.sellerHome, live.collection.contract, live.offerAcceptToken.tokenId, false);
+    await expectOfferStatus(live.value.sellerHome, live.value.collection.contract, live.value.offerAcceptToken.tokenId, false);
   });
 
   it('creates and accepts a RARE offer through the live allowance path', async () => {
     const currency = resolveCurrency(E2E_RARE_CURRENCY, 'sepolia');
     const amountWei = parseEther(E2E_RARE_AMOUNT);
     const auctionAddress = getContractAddresses('sepolia').auction;
-    const balance = await readErc20Balance(currency, live.buyerAddress);
+    const balance = await readErc20Balance(currency, live.value.buyerAddress);
 
     if (balance < amountWei) {
       throw new Error(
@@ -471,16 +493,16 @@ describeLive('live Sepolia CLI write commands', () => {
     await step('reset buyer ERC20 allowance', () =>
       approveErc20(currency, livePrivateKey('E2E_BUYER_PRIVATE_KEY'), auctionAddress, 0n),
     );
-    expect(await readErc20Allowance(currency, live.buyerAddress, auctionAddress)).toBe(0n);
+    expect(await readErc20Allowance(currency, live.value.buyerAddress, auctionAddress)).toBe(0n);
 
     expectTx(await step('create ERC20 offer for acceptance', () =>
-      jsonCommand<TxResult>(live.buyerHome, [
+      jsonCommand<TxResult>(live.value.buyerHome, [
         'offer',
         'create',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.rareOfferAcceptToken.tokenId,
+        live.value.rareOfferAcceptToken.tokenId,
         '--amount',
         E2E_RARE_AMOUNT,
         '--currency',
@@ -490,17 +512,17 @@ describeLive('live Sepolia CLI write commands', () => {
       ], 240_000),
     ));
 
-    expect(await readErc20Allowance(currency, live.buyerAddress, auctionAddress)).toBeGreaterThanOrEqual(amountWei);
-    await expectOfferStatus(live.sellerHome, live.collection.contract, live.rareOfferAcceptToken.tokenId, true, E2E_RARE_CURRENCY);
+    expect(await readErc20Allowance(currency, live.value.buyerAddress, auctionAddress)).toBeGreaterThanOrEqual(amountWei);
+    await expectOfferStatus(live.value.sellerHome, live.value.collection.contract, live.value.rareOfferAcceptToken.tokenId, true, E2E_RARE_CURRENCY);
 
     expectTx(await step('accept ERC20 offer', () =>
-      jsonCommand<TxResult>(live.sellerHome, [
+      jsonCommand<TxResult>(live.value.sellerHome, [
         'offer',
         'accept',
         '--contract',
-        live.collection.contract,
+        live.value.collection.contract,
         '--token-id',
-        live.rareOfferAcceptToken.tokenId,
+        live.value.rareOfferAcceptToken.tokenId,
         '--amount',
         E2E_RARE_AMOUNT,
         '--currency',
@@ -509,7 +531,7 @@ describeLive('live Sepolia CLI write commands', () => {
         'sepolia',
       ]),
     ));
-    await expectOfferStatus(live.sellerHome, live.collection.contract, live.rareOfferAcceptToken.tokenId, false, E2E_RARE_CURRENCY);
+    await expectOfferStatus(live.value.sellerHome, live.value.collection.contract, live.value.rareOfferAcceptToken.tokenId, false, E2E_RARE_CURRENCY);
   });
 });
 
@@ -523,7 +545,7 @@ async function configureLiveHome(home: string, privateKey: string): Promise<void
     '--private-key',
     privateKey,
     '--rpc-url',
-    process.env.TEST_RPC_URL!,
+    testRpcUrl(),
   ], { home });
 
   expect(result.code).toBe(0);
@@ -531,7 +553,7 @@ async function configureLiveHome(home: string, privateKey: string): Promise<void
 }
 
 async function mintToken(home: string, contract: string, opts: { to?: string } = {}): Promise<MintResult> {
-  const args = [
+  const baseArgs = [
     'mint',
     '--contract',
     contract,
@@ -540,9 +562,7 @@ async function mintToken(home: string, contract: string, opts: { to?: string } =
     '--chain',
     'sepolia',
   ];
-  if (opts.to) {
-    args.push('--to', opts.to);
-  }
+  const args = opts.to ? [...baseArgs, '--to', opts.to] : baseArgs;
 
   const result = await jsonCommand<MintResult>(home, args);
 
@@ -579,7 +599,7 @@ async function expectOfferStatus(
   hasOffer: boolean,
   currency?: string,
 ): Promise<void> {
-  const args = [
+  const baseArgs = [
     'offer',
     'status',
     '--contract',
@@ -589,9 +609,7 @@ async function expectOfferStatus(
     '--chain',
     'sepolia',
   ];
-  if (currency) {
-    args.push('--currency', currency);
-  }
+  const args = currency ? [...baseArgs, '--currency', currency] : baseArgs;
 
   const status = await jsonCommand<{ hasOffer: boolean }>(home, args);
   expect(status.hasOffer).toBe(hasOffer);
@@ -638,9 +656,13 @@ async function expectTokenOwner(home: string, contract: string, tokenId: string,
     'sepolia',
   ]);
 
-  expect(status.token).not.toBeNull();
-  expect(status.token!.owner.toLowerCase()).toBe(owner.toLowerCase());
-  expect(status.token!.tokenUri).toBe(E2E_TOKEN_URI);
+  const token = status.token;
+  expect(token).not.toBeNull();
+  if (!token) {
+    throw new Error('Expected token status response to include token details.');
+  }
+  expect(token.owner.toLowerCase()).toBe(owner.toLowerCase());
+  expect(token.tokenUri).toBe(E2E_TOKEN_URI);
 }
 
 async function readErc20Balance(currency: Address, owner: Address): Promise<bigint> {
@@ -671,7 +693,7 @@ async function approveErc20(
   const walletClient = createWalletClient({
     account: privateKeyToAccount(privateKey),
     chain: sepolia,
-    transport: http(process.env.TEST_RPC_URL!),
+    transport: http(process.env.TEST_RPC_URL),
   });
   const txHash = await walletClient.writeContract({
     address: currency,
@@ -682,19 +704,27 @@ async function approveErc20(
   await publicClient.waitForTransactionReceipt({ hash: txHash });
 }
 
-function createLivePublicClient() {
+function createLivePublicClient(): PublicClient {
   return createPublicClient({
     chain: sepolia,
-    transport: http(process.env.TEST_RPC_URL!),
+    transport: http(testRpcUrl()),
   });
 }
 
 function livePrivateKey(name: 'E2E_SELLER_PRIVATE_KEY' | 'E2E_BUYER_PRIVATE_KEY'): `0x${string}` {
   const value = process.env[name];
-  if (!value || !value.startsWith('0x')) {
+  if (!value) {
     throw new Error(`${name} must be set to a 0x-prefixed private key.`);
   }
-  return value as `0x${string}`;
+  return parseHexString(value, name);
+}
+
+function testRpcUrl(): string {
+  const value = process.env.TEST_RPC_URL;
+  if (!value) {
+    throw new Error('TEST_RPC_URL must be set.');
+  }
+  return value;
 }
 
 function liveAuctionDurationSeconds(): number {

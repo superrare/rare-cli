@@ -221,10 +221,11 @@ export function shapeAuctionStatus(
 ): AuctionStatus {
   const started = startingTime > 0n;
   const endTime = started ? startingTime + lengthOfAuction : null;
-  let status: AuctionStatus['status'] = 'PENDING';
-  if (started) {
-    status = endTime !== null && nowSeconds >= endTime ? 'ENDED' : 'RUNNING';
-  }
+  const status: AuctionStatus['status'] = !started
+    ? 'PENDING'
+    : endTime !== null && nowSeconds >= endTime
+      ? 'ENDED'
+      : 'RUNNING';
 
   return {
     seller,

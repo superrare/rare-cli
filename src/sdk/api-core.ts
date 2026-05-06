@@ -8,7 +8,7 @@ export type NftMediaEntry = {
 };
 
 export type NftAttribute = {
-  trait_type?: string;
+  trait_type: string;
   value: string | number;
   display_type?: 'number' | 'boost_number' | 'boost_percentage' | 'date';
   max_value?: number;
@@ -134,19 +134,17 @@ export function buildGeneratedMediaEntry(
 export function buildPinMetadataBody(opts: PinMetadataParams): {
   name: string;
   description: string;
-  nftMedia: Record<string, NftMediaEntry>;
+  nftMedia: { image: NftMediaEntry; video?: NftMediaEntry };
   tags: string[];
   attributes?: NftAttribute[];
 } {
-  const nftMedia: Record<string, NftMediaEntry> = { image: opts.image };
-  if (opts.video) {
-    nftMedia.video = opts.video;
-  }
-
   return {
     name: opts.name,
     description: opts.description,
-    nftMedia,
+    nftMedia: {
+      image: opts.image,
+      ...(opts.video ? { video: opts.video } : {}),
+    },
     tags: opts.tags ?? [],
     ...(opts.attributes?.length ? { attributes: opts.attributes } : {}),
   };
@@ -168,7 +166,23 @@ export function buildImportErc721Body(opts: ImportErc721RequestParams): {
   };
 }
 
-export function buildNftSearchQuery(params: NftSearchParams = {}) {
+export function buildNftSearchQuery(params: NftSearchParams = {}): {
+  q?: string;
+  page: number;
+  perPage: number;
+  sortBy: NonNullable<NftSearchParams['sortBy']>;
+  ownerAddress?: string;
+  creatorAddress?: string;
+  contractAddress?: string;
+  collectionId?: string;
+  chainId?: number;
+  hasAuction?: boolean;
+  auctionState?: NftSearchParams['auctionState'];
+  hasListing?: boolean;
+  hasOffer?: boolean;
+  tags?: string[];
+  mediaType?: NftSearchParams['mediaType'];
+} {
   return {
     q: params.query,
     page: params.page ?? 1,
@@ -188,7 +202,12 @@ export function buildNftSearchQuery(params: NftSearchParams = {}) {
   };
 }
 
-export function buildCollectionSearchQuery(params: CollectionSearchParams = {}) {
+export function buildCollectionSearchQuery(params: CollectionSearchParams = {}): {
+  q?: string;
+  page: number;
+  perPage: number;
+  sortBy: NonNullable<CollectionSearchParams['sortBy']>;
+} {
   return {
     q: params.query,
     page: params.page ?? 1,

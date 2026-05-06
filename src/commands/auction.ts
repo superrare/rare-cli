@@ -5,9 +5,33 @@ import { getPublicClient, getWalletClient } from '../client.js';
 import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import { resolveCurrency } from '../contracts/addresses.js';
+import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+
+type AuctionCreateOptions = {
+  contract: string;
+  tokenId: string;
+  startingPrice: string;
+  duration: string;
+  currency?: string;
+  chain?: string;
+};
+
+type AuctionBidOptions = {
+  contract: string;
+  tokenId: string;
+  amount: string;
+  currency?: string;
+  chain?: string;
+};
+
+type AuctionTokenOptions = {
+  contract: string;
+  tokenId: string;
+  chain?: string;
+};
 
 export function auctionCommand(): Command {
   const cmd = new Command('auction');
@@ -23,16 +47,17 @@ export function auctionCommand(): Command {
     .requiredOption('--duration <seconds>', 'auction duration in seconds')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: AuctionCreateOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
+      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Creating auction on ${chain}...`);
       log(`  Auction contract: ${rare.contracts.auction}`);
-      log(`  NFT contract: ${opts.contract}`);
+      log(`  NFT contract: ${contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Starting price: ${opts.startingPrice} ETH`);
       log(`  Duration: ${opts.duration} seconds`);
@@ -40,7 +65,7 @@ export function auctionCommand(): Command {
 
       try {
         const result = await rare.auction.create({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
           startingPrice: opts.startingPrice,
           duration: opts.duration,
@@ -75,23 +100,24 @@ export function auctionCommand(): Command {
     .requiredOption('--amount <amount>', 'bid amount in ETH (or token units)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: AuctionBidOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
+      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Placing bid on ${chain}...`);
       log(`  Auction contract: ${rare.contracts.auction}`);
-      log(`  NFT contract: ${opts.contract}`);
+      log(`  NFT contract: ${contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
 
       try {
         const result = await rare.auction.bid({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
           amount: opts.amount,
           currency,
@@ -116,17 +142,18 @@ export function auctionCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: AuctionTokenOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
+      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Settling auction on ${chain}...`);
 
       try {
         const result = await rare.auction.settle({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
         });
 
@@ -149,17 +176,18 @@ export function auctionCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: AuctionTokenOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
+      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Cancelling auction on ${chain}...`);
 
       try {
         const result = await rare.auction.cancel({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
         });
 
@@ -182,13 +210,14 @@ export function auctionCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: AuctionTokenOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient });
+      const contract = parseAddress(opts.contract, '--contract');
 
       const result = await rare.auction.getStatus({
-        contract: opts.contract as `0x${string}`,
+        contract,
         tokenId: opts.tokenId,
       });
 
@@ -203,7 +232,9 @@ export function auctionCommand(): Command {
         console.log(`  Status:         ${result.status}`);
         if (result.started) {
           console.log(`  Started at:     ${new Date(Number(result.startingTime) * 1000).toISOString()}`);
-          console.log(`  Ends at:        ${endDate!.toISOString()}`);
+          if (endDate) {
+            console.log(`  Ends at:        ${endDate.toISOString()}`);
+          }
         }
         console.log(`  Creation block: ${result.creationBlock}`);
         console.log(`  Auction type:   ${result.auctionType}`);

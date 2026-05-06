@@ -10,14 +10,7 @@ const errorMiddleware: Middleware = {
 
     const url = new URL(request.url);
     const path = url.pathname;
-    let errorMessage: string | undefined;
-
-    try {
-      const body = await response.clone().json();
-      errorMessage = body?.error;
-    } catch {
-      // body wasn't JSON — fall through
-    }
+    const errorMessage = await readErrorMessage(response);
 
     throw new RareApiError(
       errorMessage ?? response.statusText ?? 'Request failed',
@@ -27,7 +20,7 @@ const errorMiddleware: Middleware = {
   },
 };
 
-export function createApiClient(baseUrl?: string) {
+export function createApiClient(baseUrl?: string): ReturnType<typeof createClient<paths>> {
   const client = createClient<paths>({
     baseUrl: baseUrl ?? DEFAULT_BASE_URL,
   });
@@ -38,3 +31,21 @@ export function createApiClient(baseUrl?: string) {
 }
 
 export type ApiClient = ReturnType<typeof createApiClient>;
+
+async function readErrorMessage(response: Response): Promise<string | undefined> {
+  try {
+    const body: unknown = await response.clone().json();
+    return isErrorBody(body) ? body.error : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isErrorBody(value: unknown): value is { error: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'error' in value &&
+    typeof value.error === 'string'
+  );
+}

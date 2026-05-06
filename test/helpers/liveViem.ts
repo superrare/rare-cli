@@ -1,6 +1,6 @@
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, type PublicClient } from 'viem';
 import { sepolia } from 'viem/chains';
-import { loadDotEnv } from '../e2e-live/env.mjs';
+import { loadDotEnv } from './env.js';
 
 loadDotEnv();
 
@@ -12,7 +12,7 @@ export function getTestRpcUrl(): string {
   return rpcUrl;
 }
 
-export function createTestSepoliaPublicClient() {
+export function createTestSepoliaPublicClient(): PublicClient {
   return createPublicClient({
     chain: sepolia,
     transport: http(getTestRpcUrl(), {
