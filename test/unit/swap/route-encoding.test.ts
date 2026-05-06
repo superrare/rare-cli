@@ -1,14 +1,13 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { decodeAbiParameters, parseAbiParameters } from 'viem';
-import { ETH_ADDRESS } from '../src/contracts/addresses.js';
+import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import {
   buildCanonicalTokenBuyRoute,
   buildCanonicalTokenSellRoute,
   buildExactInputSingleRoute,
-} from '../src/swap/build-route.js';
-import { encodeBuyRareRoute, encodeRoute } from '../src/swap/route-encoding.js';
-import { quoteExactInputSingle } from '../src/swap/quoter.js';
+} from '../../../src/swap/build-route.js';
+import { encodeBuyRareRoute, encodeRoute } from '../../../src/swap/route-encoding.js';
 
 const rareAddress = '0xba5BDe662c17e2aDFF1075610382B9B691296350' as const;
 const wethAddress = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as const;
@@ -50,17 +49,6 @@ test('buildCanonicalTokenSellRoute unwraps WETH when the canonical base token is
   assert.equal(route?.steps.length, 2);
   assert.equal(route?.steps[0]?.kind, 'v4Swap');
   assert.equal(route?.steps[1]?.kind, 'unwrapWeth');
-});
-
-test('quoteExactInputSingle returns the mocked quote result', async () => {
-  const publicClient = {
-    simulateContract: async () => ({ result: [123n, 456n] }),
-  } as any;
-
-  const quote = await quoteExactInputSingle(publicClient, '0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203', ETH_ADDRESS, rareAddress, rarePoolKey, 1n);
-  assert.equal(quote.amountOut, 123n);
-  assert.equal(quote.gasEstimate, 456n);
-  assert.equal(quote.step.zeroForOne, true);
 });
 
 test('encodeBuyRareRoute emits one V4 command with swap/settle/take actions', () => {

@@ -1,6 +1,6 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { deriveLiquidFactoryConfig } from '../src/liquid/factory-config-core.js';
+import { deriveLiquidFactoryConfig } from '../../../src/liquid/factory-config-core.js';
 
 test('deriveLiquidFactoryConfig uses maxTotalSupply minus creatorLaunchReward for curve supply', () => {
   const config = deriveLiquidFactoryConfig(

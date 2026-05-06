@@ -5,7 +5,7 @@ import {
   generatePresetCurves,
   validateCurves,
   type LiquidCurveSegment,
-} from '../src/liquid/curve-config.js';
+} from '../../../src/liquid/curve-config.js';
 
 const baseFactoryConfig = {
   baseToken: '0xba5BDe662c17e2aDFF1075610382B9B691296350' as const,

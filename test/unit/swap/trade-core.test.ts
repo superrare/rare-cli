@@ -1,7 +1,7 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { ETH_ADDRESS } from '../src/contracts/addresses.js';
-import { inferBaseCurrencyAddress } from '../src/swap/pool-core.js';
+import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
+import { inferBaseCurrencyAddress } from '../../../src/swap/pool-core.js';
 import {
   assertRecipientSupportedForUniswapFallback,
   buildBuyRareQuoteFromTokenQuote,
@@ -12,7 +12,7 @@ import {
   computeSlippageBpsFromAmounts,
   getQuotedRecipientAmount,
   resolveSlippageBps,
-} from '../src/swap/trade-core.js';
+} from '../../../src/swap/trade-core.js';
 
 const rareAddress = '0xba5BDe662c17e2aDFF1075610382B9B691296350' as const;
 const tokenAddress = '0xf100000000000000000000000000000000000001' as const;

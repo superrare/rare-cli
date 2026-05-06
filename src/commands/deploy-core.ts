@@ -8,6 +8,10 @@ const DISPLAY_TYPES: readonly NonNullable<NftAttribute['display_type']>[] = [
   'date',
 ];
 
+function isDisplayType(value: string): value is NonNullable<NftAttribute['display_type']> {
+  return DISPLAY_TYPES.some((displayType) => displayType === value);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -43,7 +47,7 @@ function parseDisplayType(value: unknown, raw: string): NftAttribute['display_ty
   if (value === undefined) {
     return undefined;
   }
-  if (typeof value !== 'string' || !DISPLAY_TYPES.some((displayType) => displayType === value)) {
+  if (typeof value !== 'string' || !isDisplayType(value)) {
     throw new Error(`Attribute JSON "display_type" is invalid: ${raw}`);
   }
   return value;
