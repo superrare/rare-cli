@@ -7,10 +7,8 @@ import {
   parseEther,
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
-import { chainIds, supportedChains, type SupportedChain } from '../contracts/addresses.js';
+import { chainIds, ETH_ADDRESS, supportedChains, type SupportedChain } from '../contracts/addresses.js';
 import type { RareClientConfig, IntegerInput, AmountInput, WalletAccount } from './types.js';
-
-export const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
 export const approvalAbi = [
   {

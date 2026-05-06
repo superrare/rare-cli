@@ -4,11 +4,9 @@ import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
-import { resolveCurrency } from '../contracts/addresses.js';
+import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
 import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
-
-const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
 type OfferCreateOptions = {
   contract: string;

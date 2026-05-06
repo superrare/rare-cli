@@ -1,5 +1,5 @@
 import { sepolia, mainnet, base, baseSepolia } from 'viem/chains';
-import { isAddress, type Address, type Chain } from 'viem';
+import { isAddress, zeroAddress, type Address, type Chain } from 'viem';
 
 export const supportedChains = [
   'mainnet',
@@ -56,7 +56,8 @@ export const currencyNames = ['eth', 'rare', 'usdc'] as const;
 
 export type CurrencyName = (typeof currencyNames)[number];
 
-const ETH_ADDRESS: Address = '0x0000000000000000000000000000000000000000';
+export const ETH_ADDRESS: Address = zeroAddress;
+export const PUBLIC_LISTING_TARGET: Address = zeroAddress;
 
 const currencyAddresses: Record<CurrencyName, Partial<Record<SupportedChain, Address>>> = {
   eth: {

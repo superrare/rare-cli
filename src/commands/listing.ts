@@ -4,11 +4,9 @@ import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
-import { resolveCurrency } from '../contracts/addresses.js';
+import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '../contracts/addresses.js';
 import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
-
-const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
 type ListingCreateOptions = {
   contract: string;
@@ -56,14 +54,14 @@ export function listingCommand(): Command {
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
       const contract = parseAddress(opts.contract, '--contract');
-      const target = opts.target ? parseAddress(opts.target, '--target') : ETH_ADDRESS;
+      const target = opts.target ? parseAddress(opts.target, '--target') : PUBLIC_LISTING_TARGET;
 
       log(`Creating listing on ${chain}...`);
       log(`  Marketplace contract: ${rare.contracts.auction}`);
       log(`  NFT contract: ${contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Price: ${opts.price} ${isEth ? 'ETH' : currency}`);
-      log(`  Target: ${target === ETH_ADDRESS ? 'public' : target}`);
+      log(`  Target: ${target === PUBLIC_LISTING_TARGET ? 'public' : target}`);
 
       try {
         const result = await rare.listing.create({
@@ -107,7 +105,7 @@ export function listingCommand(): Command {
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const contract = parseAddress(opts.contract, '--contract');
-      const target = opts.target ? parseAddress(opts.target, '--target') : ETH_ADDRESS;
+      const target = opts.target ? parseAddress(opts.target, '--target') : PUBLIC_LISTING_TARGET;
 
       log(`Cancelling listing on ${chain}...`);
 
@@ -187,7 +185,7 @@ export function listingCommand(): Command {
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient });
       const contract = parseAddress(opts.contract, '--contract');
-      const target = opts.target ? parseAddress(opts.target, '--target') : ETH_ADDRESS;
+      const target = opts.target ? parseAddress(opts.target, '--target') : PUBLIC_LISTING_TARGET;
 
       const result = await rare.listing.getStatus({
         contract,

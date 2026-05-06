@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { isAddress, type Address } from 'viem';
+import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import { createRareClient } from '../../../src/sdk/client.js';
 import type { RareClient } from '../../../src/sdk/types.js';
 import { createTestSepoliaPublicClient } from '../../helpers/liveViem.js';
@@ -49,7 +50,7 @@ describe('SDK contract read integration', () => {
     expect(isAddress(listing.seller)).toBe(true);
     expect(isAddress(listing.currencyAddress)).toBe(true);
     expect(listing.hasListing).toBe(listing.amount > 0n);
-    expect(listing.isEth).toBe(listing.currencyAddress === '0x0000000000000000000000000000000000000000');
+    expect(listing.isEth).toBe(listing.currencyAddress === ETH_ADDRESS);
 
     expect(isAddress(offer.buyer)).toBe(true);
     expect(offer.hasOffer).toBe(offer.amount > 0n);

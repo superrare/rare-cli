@@ -32,6 +32,13 @@ export default defineConfig([
       ...js.configs.recommended.rules,
       'functional/no-let': ['error', { allowInForLoopInit: true }],
       'no-param-reassign': ['error', { props: true }],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Literal[value="0x0000000000000000000000000000000000000000"]',
+          message: 'Use viem zeroAddress directly, or a semantic constant such as ETH_ADDRESS or PUBLIC_LISTING_TARGET.',
+        },
+      ],
       'no-var': 'error',
       'prefer-const': 'error',
     },
@@ -115,6 +122,10 @@ export default defineConfig([
         {
           selector: 'TSTypeAssertion',
           message: 'Type assertions are disallowed except `as const` and `as unknown`.',
+        },
+        {
+          selector: 'Literal[value="0x0000000000000000000000000000000000000000"]',
+          message: 'Use viem zeroAddress directly, or a semantic constant such as ETH_ADDRESS or PUBLIC_LISTING_TARGET.',
         },
       ],
       'no-unused-vars': 'off',
