@@ -13,7 +13,9 @@ import {
   formatQuotedAmount,
   formatTokenTradeQuoteLines,
   isAffirmativeResponse,
+  parseAddress,
   parseInputsJson,
+  parseOptionalAddress,
   shouldPromptForConfirmation,
 } from './swap-core.js';
 
@@ -22,7 +24,9 @@ export {
   formatBuyRareQuoteLines,
   formatTokenTradeQuoteLines,
   isAffirmativeResponse,
+  parseAddress,
   parseInputsJson,
+  parseOptionalAddress,
   shouldPromptForConfirmation,
 } from './swap-core.js';
 
@@ -82,20 +86,22 @@ function swapBuyCommand(): Command {
       const rare = createRareClient({ publicClient, walletClient: client });
       const inputs = await readInputsFile(opts.inputsFile);
       const commands = ensureHex(opts.commands, 'commands');
+      const token = parseAddress(opts.token, 'token');
+      const recipient = parseOptionalAddress(opts.recipient, 'recipient');
 
       log(`Buying token via router on ${chain}...`);
       log(`  Router: ${rare.contracts.swapRouter}`);
-      log(`  Token: ${opts.token}`);
+      log(`  Token: ${token}`);
       log(`  ETH in: ${opts.eth}`);
       log(`  Min out: ${opts.minOut}`);
 
       const result = await rare.swap.buy({
-        token: opts.token as `0x${string}`,
+        token,
         ethAmount: opts.eth,
         minTokensOut: opts.minOut,
         commands,
         inputs,
-        recipient: opts.recipient as `0x${string}` | undefined,
+        recipient,
         deadline: opts.deadlineSeconds,
       });
 
@@ -140,20 +146,22 @@ function swapSellCommand(): Command {
       const rare = createRareClient({ publicClient, walletClient: client });
       const inputs = await readInputsFile(opts.inputsFile);
       const commands = ensureHex(opts.commands, 'commands');
+      const token = parseAddress(opts.token, 'token');
+      const recipient = parseOptionalAddress(opts.recipient, 'recipient');
 
       log(`Selling token via router on ${chain}...`);
       log(`  Router: ${rare.contracts.swapRouter}`);
-      log(`  Token: ${opts.token}`);
+      log(`  Token: ${token}`);
       log(`  Amount: ${opts.amount}`);
       log(`  Min ETH out: ${opts.minOut}`);
 
       const result = await rare.swap.sell({
-        token: opts.token as `0x${string}`,
+        token,
         tokenAmount: opts.amount,
         minEthOut: opts.minOut,
         commands,
         inputs,
-        recipient: opts.recipient as `0x${string}` | undefined,
+        recipient,
         deadline: opts.deadlineSeconds,
       });
 
@@ -200,22 +208,25 @@ function swapSwapCommand(): Command {
       const rare = createRareClient({ publicClient, walletClient: client });
       const inputs = await readInputsFile(opts.inputsFile);
       const commands = ensureHex(opts.commands, 'commands');
+      const tokenIn = parseAddress(opts.tokenIn, 'token-in');
+      const tokenOut = parseAddress(opts.tokenOut, 'token-out');
+      const recipient = parseOptionalAddress(opts.recipient, 'recipient');
 
       log(`Swapping via router on ${chain}...`);
       log(`  Router: ${rare.contracts.swapRouter}`);
-      log(`  Token in: ${opts.tokenIn}`);
+      log(`  Token in: ${tokenIn}`);
       log(`  Amount in: ${opts.amountIn}`);
-      log(`  Token out: ${opts.tokenOut}`);
+      log(`  Token out: ${tokenOut}`);
       log(`  Min out: ${opts.minOut}`);
 
       const result = await rare.swap.swap({
-        tokenIn: opts.tokenIn as `0x${string}`,
+        tokenIn,
         amountIn: opts.amountIn,
-        tokenOut: opts.tokenOut as `0x${string}`,
+        tokenOut,
         minAmountOut: opts.minOut,
         commands,
         inputs,
-        recipient: opts.recipient as `0x${string}` | undefined,
+        recipient,
         deadline: opts.deadlineSeconds,
       });
 
@@ -260,19 +271,20 @@ function swapBuyTokenCommand(): Command {
       const publicClient = getPublicClient(chain);
       const wallet = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: wallet.client });
-      const recipient = opts.recipient ?? wallet.account.address;
+      const token = parseAddress(opts.token, 'token');
+      const recipient = opts.recipient ? parseAddress(opts.recipient, 'recipient') : wallet.account.address;
       const quote = await rare.swap.quoteBuyToken({
-        token: opts.token as `0x${string}`,
+        token,
         ethAmount: opts.eth,
         minTokensOut: opts.minOut,
         slippageBps: opts.slippageBps,
-        recipient: recipient as `0x${string}`,
+        recipient,
       });
       const promptNeeded = shouldPromptForConfirmation(opts, Boolean(process.stdin.isTTY), isJsonMode());
       const quoteLines = formatTokenTradeQuoteLines({
         chain,
         direction: 'buy',
-        token: opts.token,
+        token,
         amountLabel: 'ETH in',
         amountIn: opts.eth,
         quote,
@@ -284,7 +296,7 @@ function swapBuyTokenCommand(): Command {
         output(
           {
             chain,
-            token: opts.token,
+            token,
             recipient,
             execution: quote.execution,
             routeSource: quote.routeSource,
@@ -319,10 +331,10 @@ function swapBuyTokenCommand(): Command {
       log(`Submitting token buy on ${chain}...`);
 
       const result = await rare.swap.buyToken({
-        token: opts.token as `0x${string}`,
+        token,
         ethAmount: opts.eth,
         minTokensOut: quote.minAmountOut,
-        recipient: recipient as `0x${string}`,
+        recipient,
         deadline: opts.deadlineSeconds,
       });
 
@@ -377,19 +389,20 @@ function swapSellTokenCommand(): Command {
       const publicClient = getPublicClient(chain);
       const wallet = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: wallet.client });
-      const recipient = opts.recipient ?? wallet.account.address;
+      const token = parseAddress(opts.token, 'token');
+      const recipient = opts.recipient ? parseAddress(opts.recipient, 'recipient') : wallet.account.address;
       const quote = await rare.swap.quoteSellToken({
-        token: opts.token as `0x${string}`,
+        token,
         tokenAmount: opts.amount,
         minEthOut: opts.minOut,
         slippageBps: opts.slippageBps,
-        recipient: recipient as `0x${string}`,
+        recipient,
       });
       const promptNeeded = shouldPromptForConfirmation(opts, Boolean(process.stdin.isTTY), isJsonMode());
       const quoteLines = formatTokenTradeQuoteLines({
         chain,
         direction: 'sell',
-        token: opts.token,
+        token,
         amountLabel: 'Token in',
         amountIn: opts.amount,
         quote,
@@ -401,7 +414,7 @@ function swapSellTokenCommand(): Command {
         output(
           {
             chain,
-            token: opts.token,
+            token,
             recipient,
             execution: quote.execution,
             routeSource: quote.routeSource,
@@ -436,10 +449,10 @@ function swapSellTokenCommand(): Command {
       log(`Submitting token sell on ${chain}...`);
 
       const result = await rare.swap.sellToken({
-        token: opts.token as `0x${string}`,
+        token,
         tokenAmount: opts.amount,
         minEthOut: quote.minAmountOut,
-        recipient: recipient as `0x${string}`,
+        recipient,
         deadline: opts.deadlineSeconds,
       });
 
@@ -500,7 +513,7 @@ function swapBuyRareCommand(): Command {
       });
       const promptNeeded = shouldPromptForConfirmation(opts, Boolean(process.stdin.isTTY), isJsonMode());
       const wallet = promptNeeded || !opts.quoteOnly ? getWalletClient(chain) : undefined;
-      const recipient = opts.recipient ?? wallet?.account.address;
+      const recipient = opts.recipient ? parseAddress(opts.recipient, 'recipient') : wallet?.account.address;
       const quoteLines = formatBuyRareQuoteLines({
         chain,
         router: quoteClient.contracts.swapRouter,
@@ -551,7 +564,7 @@ function swapBuyRareCommand(): Command {
       const result = await rare.swap.buyRare({
         ethAmount: opts.eth,
         minRareOut: quote.minRareOut,
-        recipient: recipient as `0x${string}` | undefined,
+        recipient,
         deadline: opts.deadlineSeconds,
       });
 

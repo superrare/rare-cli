@@ -9,6 +9,10 @@ import {
 
 const PRESETS: CurvePresetKey[] = ['low-demand', 'medium-demand', 'high-demand'];
 
+function isCurvePresetKey(value: string): value is CurvePresetKey {
+  return PRESETS.some((preset) => preset === value);
+}
+
 export interface LiquidCurveWizardResult {
   preset: CurvePresetKey;
   rarePriceUsd: number;
@@ -59,11 +63,14 @@ async function promptForPreset(rl: ReturnType<typeof createInterface>): Promise<
     const answer = (await rl.question('Preset number: ')).trim();
     const numeric = Number(answer);
     if (Number.isInteger(numeric) && numeric >= 1 && numeric <= PRESETS.length) {
-      return PRESETS[numeric - 1]!;
+      const preset = PRESETS[numeric - 1];
+      if (preset) {
+        return preset;
+      }
     }
 
-    if (PRESETS.includes(answer as CurvePresetKey)) {
-      return answer as CurvePresetKey;
+    if (isCurvePresetKey(answer)) {
+      return answer;
     }
 
     console.log('Invalid preset selection.');

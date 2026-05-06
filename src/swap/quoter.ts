@@ -3,6 +3,17 @@ import { uniswapV4QuoterAbi } from '../contracts/abis/uniswap-v4-quoter.js';
 import type { PoolKey, ResolvedRoute, ResolvedRouteStep, ResolvedV4RouteStep, RouteQuote } from './route-types.js';
 import { buildExactInputSingleRoute } from './build-route.js';
 
+function parseQuoteExactInputSingleResult(value: unknown): { amountOut: bigint; gasEstimate: bigint } {
+  if (!Array.isArray(value) || value.length !== 2) {
+    throw new Error('Unexpected V4 quoter result.');
+  }
+  const [amountOut, gasEstimate] = value;
+  if (typeof amountOut !== 'bigint' || typeof gasEstimate !== 'bigint') {
+    throw new Error('Unexpected V4 quoter result.');
+  }
+  return { amountOut, gasEstimate };
+}
+
 export async function quoteExactInputSingle(
   publicClient: PublicClient,
   quoterAddress: Address,
@@ -36,7 +47,7 @@ export async function quoteExactInputSingle(
     ],
   });
 
-  const [amountOut, gasEstimate] = simulation.result as readonly [bigint, bigint];
+  const { amountOut, gasEstimate } = parseQuoteExactInputSingleResult(simulation.result);
   return { amountOut, gasEstimate, step };
 }
 

@@ -1,4 +1,4 @@
-import { formatEther, formatUnits, isHex } from 'viem';
+import { formatEther, formatUnits, getAddress, isHex, type Address } from 'viem';
 import type { BuyRareQuote, TokenTradeQuote } from '../sdk/types.js';
 
 export function parseInputsJson(raw: string, label: string): readonly `0x${string}`[] {
@@ -9,18 +9,37 @@ export function parseInputsJson(raw: string, label: string): readonly `0x${strin
     throw new Error(`Invalid JSON in inputs file: ${label}`);
   }
 
-  if (!Array.isArray(parsed) || parsed.some((value) => typeof value !== 'string' || !isHex(value))) {
+  if (!Array.isArray(parsed)) {
     throw new Error(`Inputs file must be a JSON array of hex strings: ${label}`);
   }
 
-  return parsed as readonly `0x${string}`[];
+  const inputs: `0x${string}`[] = [];
+  for (const value of parsed) {
+    if (typeof value !== 'string' || !isHex(value)) {
+      throw new Error(`Inputs file must be a JSON array of hex strings: ${label}`);
+    }
+    inputs.push(value);
+  }
+  return inputs;
 }
 
 export function ensureHex(value: string, label: string): `0x${string}` {
   if (!isHex(value)) {
     throw new Error(`${label} must be a hex string.`);
   }
-  return value as `0x${string}`;
+  return value;
+}
+
+export function parseAddress(value: string, label: string): Address {
+  try {
+    return getAddress(value);
+  } catch {
+    throw new Error(`${label} must be a valid EVM address.`);
+  }
+}
+
+export function parseOptionalAddress(value: string | undefined, label: string): Address | undefined {
+  return value === undefined ? undefined : parseAddress(value, label);
 }
 
 export function isAffirmativeResponse(value: string): boolean {

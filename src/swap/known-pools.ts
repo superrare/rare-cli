@@ -1,4 +1,4 @@
-import type { Address } from 'viem';
+import { getAddress, type Address } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
 import {
   getCanonicalRareEthPool,
@@ -10,10 +10,10 @@ import { normalizeAddress } from './pool-core.js';
 import type { PoolKey } from './route-types.js';
 
 const wrappedEthAddresses: Partial<Record<SupportedChain, Address>> = {
-  mainnet: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
-  sepolia: '0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14',
-  base: '0x4200000000000000000000000000000000000006',
-  'base-sepolia': '0x4200000000000000000000000000000000000006',
+  mainnet: getAddress('0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'),
+  sepolia: getAddress('0xfFf9976782d46CC05630D1f6eBAb18b2324d6B14'),
+  base: getAddress('0x4200000000000000000000000000000000000006'),
+  'base-sepolia': getAddress('0x4200000000000000000000000000000000000006'),
 };
 
 function poolToKey(pool: ReturnType<typeof getCanonicalRareEthPool>): PoolKey {

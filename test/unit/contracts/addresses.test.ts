@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getAddress } from 'viem';
 import {
   chainIds,
   getCanonicalRareEthPool,
@@ -18,11 +19,11 @@ describe('chain and currency helpers', () => {
 
   it('resolves deployed contract addresses for configured chains', () => {
     expect(getContractAddresses('sepolia')).toEqual({
-      factory: '0x3c7526a0975156299ceef369b8ff3c01cc670523',
-      auction: '0xC8Edc7049b233641ad3723D6C60019D1c8771612',
-      liquidFactory: '0xfD18C0D99e5b6F89F3538806241C2C0d6FD728Ac',
-      swapRouter: '0x429c3Ee66E7f6CDA12C5BadE4104aF3277aA2305',
-      v4Quoter: '0x61B3f2011A92d183C7dbaDBdA940a7555Ccf9227',
+      factory: getAddress('0x3c7526a0975156299ceef369b8ff3c01cc670523'),
+      auction: getAddress('0xC8Edc7049b233641ad3723D6C60019D1c8771612'),
+      liquidFactory: getAddress('0xfD18C0D99e5b6F89F3538806241C2C0d6FD728Ac'),
+      swapRouter: getAddress('0x429c3Ee66E7f6CDA12C5BadE4104aF3277aA2305'),
+      v4Quoter: getAddress('0x61B3f2011A92d183C7dbaDBdA940a7555Ccf9227'),
     });
   });
 

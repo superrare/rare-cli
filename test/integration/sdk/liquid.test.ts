@@ -3,6 +3,7 @@ import {
   encodeAbiParameters,
   encodeEventTopics,
   getAddress,
+  isHex,
   maxUint256,
   parseUnits,
   type Address,
@@ -28,11 +29,11 @@ type WriteCall = {
   args?: readonly unknown[];
 };
 
-const baseToken = '0xba5BDe662c17e2aDFF1075610382B9B691296350' as const;
-const liquidFactory = '0xfD18C0D99e5b6F89F3538806241C2C0d6FD728Ac' as const;
-const deployedToken = '0xf100000000000000000000000000000000000001' as const;
-const deployTxHash = `0x${'1'.repeat(64)}` as const;
-const approvalTxHash = `0x${'2'.repeat(64)}` as const;
+const baseToken = getAddress('0xba5BDe662c17e2aDFF1075610382B9B691296350');
+const liquidFactory = getAddress('0xfD18C0D99e5b6F89F3538806241C2C0d6FD728Ac');
+const deployedToken = getAddress('0xf100000000000000000000000000000000000001');
+const deployTxHash = testHash('1');
+const approvalTxHash = testHash('2');
 const tokenUri = 'ipfs://liquid-edition-metadata';
 const account = privateKeyToAccount(
   '0x0000000000000000000000000000000000000000000000000000000000000001',
@@ -173,10 +174,13 @@ describe('Liquid Editions SDK integration with controlled clients', () => {
       await vi.advanceTimersByTimeAsync(3_000);
       const error = await deployError;
       expect(error).toBeInstanceOf(Error);
-      expect((error as Error).message).toContain(
+      if (!(error instanceof Error)) {
+        throw new Error('Expected deploy to reject with an Error.');
+      }
+      expect(error.message).toContain(
         'Liquid token deploy transaction succeeded, but the deployed contract address could not be read',
       );
-      expect((error as Error).message).toContain(`Transaction hash: ${deployTxHash}. Block: 123.`);
+      expect(error.message).toContain(`Transaction hash: ${deployTxHash}. Block: 123.`);
       expect(clients.receiptCalls).toBe(3);
     } finally {
       vi.useRealTimers();
@@ -270,6 +274,14 @@ function createControlledClients(opts: { allowance: bigint; omitDeployLog?: bool
       return receiptCalls;
     },
   };
+}
+
+function testHash(fill: string): Hash {
+  const hash = `0x${fill.repeat(64)}`;
+  if (!isHex(hash)) {
+    throw new Error(`Invalid test hash fill: ${fill}`);
+  }
+  return hash;
 }
 
 function missingLogReceipt(hash: Hash): TransactionReceipt {

@@ -82,6 +82,10 @@ function printCurvePreview(preview: LiquidCurvePreview, source: string): void {
   }
 }
 
+function collectRepeatedString(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
 async function resolveCurves(
   opts: {
     curvesFile?: string;
@@ -99,12 +103,15 @@ async function resolveCurves(
   const mode = resolveCurveSourceMode(opts, Boolean(process.stdin.isTTY));
 
   if (mode === 'file') {
+    if (!opts.curvesFile) {
+      throw new Error('--curves-file is required for file curve source.');
+    }
     const factoryConfig = await rare.liquid.getFactoryConfig();
-    const raw = await readFile(opts.curvesFile!, 'utf-8');
+    const raw = await readFile(opts.curvesFile, 'utf-8');
     const curves = parseCurveConfig(raw, factoryConfig.curvePoolSupplyTokens, factoryConfig.poolTickSpacing);
     const preview = await rare.liquid.validateCurves({ curves });
     return {
-      source: `file:${opts.curvesFile!}`,
+      source: `file:${opts.curvesFile}`,
       curves,
       preview,
       rarePriceUsd: preview.rarePriceUsd,
@@ -112,15 +119,15 @@ async function resolveCurves(
   }
 
   if (mode === 'preset') {
-    if (!isCurvePresetKey(opts.curvePreset!)) {
-      throw new Error(`Unsupported curve preset "${opts.curvePreset!}". Use low-demand, medium-demand, or high-demand.`);
+    if (!opts.curvePreset || !isCurvePresetKey(opts.curvePreset)) {
+      throw new Error(`Unsupported curve preset "${opts.curvePreset}". Use low-demand, medium-demand, or high-demand.`);
     }
     const generated = await rare.liquid.generatePresetCurves({
-      preset: opts.curvePreset!,
+      preset: opts.curvePreset,
     });
     await writeGeneratedCurves(opts.writeCurvesFile, generated.curves);
     return {
-      source: `preset:${opts.curvePreset!}`,
+      source: `preset:${opts.curvePreset}`,
       curves: generated.curves,
       preview: generated.preview,
       rarePriceUsd: generated.rarePriceUsd,
@@ -205,8 +212,8 @@ function deployLiquidTokenCommand(): Command {
     .option('--description <description>', 'description for metadata when uploading')
     .option('--image <path>', 'path to the metadata image')
     .option('--video <path>', 'path to the metadata video')
-    .option('--tag <tag>', 'tag (repeatable)', (val: string, acc: string[]) => [...acc, val], [] as string[])
-    .option('--attribute <attr>', 'attribute as "trait=value" or JSON (repeatable)', (val: string, acc: string[]) => [...acc, val], [] as string[])
+    .option('--tag <tag>', 'tag (repeatable)', collectRepeatedString, [])
+    .option('--attribute <attr>', 'attribute as "trait=value" or JSON (repeatable)', collectRepeatedString, [])
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .action(
       async (

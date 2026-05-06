@@ -1,36 +1,40 @@
 import {
   encodeAbiParameters,
   encodePacked,
+  getAddress,
   parseAbiParameters,
   type Address,
 } from 'viem';
 import type { ResolvedRouteStep, ResolvedV4RouteStep, RouteQuote } from './route-types.js';
 
-const ROUTER_COMMANDS = {
+const ROUTER_COMMANDS: Record<'WRAP_ETH' | 'UNWRAP_WETH' | 'V4_SWAP', number> = {
   WRAP_ETH: 0x0b,
   UNWRAP_WETH: 0x0c,
   V4_SWAP: 0x10,
-} as const;
+};
 
-const V4_ACTIONS = {
+const V4_ACTIONS: Record<
+  'SWAP_EXACT_IN_SINGLE' | 'SWAP_EXACT_IN' | 'SETTLE' | 'SETTLE_ALL' | 'TAKE' | 'TAKE_ALL',
+  number
+> = {
   SWAP_EXACT_IN_SINGLE: 0x06,
   SWAP_EXACT_IN: 0x07,
   SETTLE: 0x0b,
   SETTLE_ALL: 0x0c,
   TAKE: 0x0e,
   TAKE_ALL: 0x0f,
-} as const;
+};
 
-const ROUTER_RECIPIENTS = {
-  msgSender: '0x0000000000000000000000000000000000000001',
-  addressThis: '0x0000000000000000000000000000000000000002',
-} as const satisfies Record<string, Address>;
+const ROUTER_RECIPIENTS: Record<'msgSender' | 'addressThis', Address> = {
+  msgSender: getAddress('0x0000000000000000000000000000000000000001'),
+  addressThis: getAddress('0x0000000000000000000000000000000000000002'),
+};
 
-const ROUTER_AMOUNT_CONSTANTS = {
+const ROUTER_AMOUNT_CONSTANTS: Record<'openDelta' | 'contractBalance', bigint> = {
   openDelta: 0n,
   contractBalance:
     0x8000000000000000000000000000000000000000000000000000000000000000n,
-} as const;
+};
 
 type V4PathKey = readonly [Address, number, number, Address, `0x${string}`];
 type V4ExactInSinglePoolKeyTuple = readonly [Address, Address, number, number, Address];

@@ -9,6 +9,7 @@ import {
   formatUnits,
   http,
   isAddress,
+  isHex,
   parseUnits,
   type Address,
 } from 'viem';
@@ -99,7 +100,7 @@ describeLive('live Sepolia Liquid Editions and swap CLI write commands', () => {
         ], null, 2),
         'utf8',
       );
-      await step('configure liquid/swap wallet', () => configureLiveHome(home, process.env.E2E_SELLER_PRIVATE_KEY!));
+      await step('configure liquid/swap wallet', () => configureLiveHome(home, livePrivateKey('E2E_SELLER_PRIVATE_KEY')));
 
       live = {
         home,
@@ -232,7 +233,7 @@ describeLive('live Sepolia Liquid Editions and swap CLI write commands', () => {
         '--min-out',
         formatUnits(BigInt(buyQuote.minAmountOut), 18),
         '--commands',
-        buyQuote.commands!,
+        requireRouterCommands(buyQuote, 'buy quote'),
         '--inputs-file',
         buyInputsFile,
         '--chain',
@@ -256,7 +257,7 @@ describeLive('live Sepolia Liquid Editions and swap CLI write commands', () => {
         '--min-out',
         formatUnits(BigInt(swapQuote.minAmountOut), 18),
         '--commands',
-        swapQuote.commands!,
+        requireRouterCommands(swapQuote, 'swap quote'),
         '--inputs-file',
         swapInputsFile,
         '--chain',
@@ -293,7 +294,7 @@ describeLive('live Sepolia Liquid Editions and swap CLI write commands', () => {
         '--min-out',
         formatEther(BigInt(sellQuote.minAmountOut)),
         '--commands',
-        sellQuote.commands!,
+        requireRouterCommands(sellQuote, 'sell quote'),
         '--inputs-file',
         sellInputsFile,
         '--chain',
@@ -331,6 +332,13 @@ function expectLocalQuote(quote: TokenTradeQuoteJson): void {
   expect(quote.inputs).toEqual(expect.arrayContaining([expect.stringMatching(/^0x/)]));
 }
 
+function requireRouterCommands(quote: TokenTradeQuoteJson, label: string): `0x${string}` {
+  if (!quote.commands) {
+    throw new Error(`Expected ${label} to include router commands.`);
+  }
+  return quote.commands;
+}
+
 async function writeInputsFile(name: string, inputs: `0x${string}`[] | null): Promise<string> {
   if (!inputs) {
     throw new Error('Expected quote to include router inputs.');
@@ -351,7 +359,7 @@ async function configureLiveHome(home: string, privateKey: string): Promise<void
     '--private-key',
     privateKey,
     '--rpc-url',
-    process.env.TEST_RPC_URL!,
+    liveRpcUrl(),
   ], { home });
 
   expect(result.code).toBe(0);
@@ -383,16 +391,24 @@ function expectTx(result: TxResult): void {
 function createLivePublicClient() {
   return createPublicClient({
     chain: sepolia,
-    transport: http(process.env.TEST_RPC_URL!),
+    transport: http(liveRpcUrl()),
   });
 }
 
 function livePrivateKey(name: 'E2E_SELLER_PRIVATE_KEY' | 'E2E_BUYER_PRIVATE_KEY'): `0x${string}` {
   const value = process.env[name];
-  if (!value || !value.startsWith('0x')) {
+  if (!value || !isHex(value)) {
     throw new Error(`${name} must be set to a 0x-prefixed private key.`);
   }
-  return value as `0x${string}`;
+  return value;
+}
+
+function liveRpcUrl(): string {
+  const value = process.env.TEST_RPC_URL;
+  if (!value) {
+    throw new Error('TEST_RPC_URL must be set.');
+  }
+  return value;
 }
 
 function liveSwapEthAmount(): string {

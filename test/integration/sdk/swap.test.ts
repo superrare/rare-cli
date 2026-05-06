@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  getAddress,
+  isHex,
   maxUint256,
   parseEther,
   parseUnits,
@@ -39,18 +41,18 @@ type SendCall = {
   value?: bigint;
 };
 
-const liquidToken = '0xf100000000000000000000000000000000000001' as const;
-const fallbackToken = '0xf200000000000000000000000000000000000002' as const;
-const hooks = '0x1111111111111111111111111111111111111111' as const;
-const router = '0x429c3Ee66E7f6CDA12C5BadE4104aF3277aA2305' as const;
+const liquidToken = getAddress('0xf100000000000000000000000000000000000001');
+const fallbackToken = getAddress('0xf200000000000000000000000000000000000002');
+const hooks = getAddress('0x1111111111111111111111111111111111111111');
+const router = getAddress('0x429c3Ee66E7f6CDA12C5BadE4104aF3277aA2305');
 const rare = resolveCurrency('rare', 'sepolia');
 const account = privateKeyToAccount(
   '0x0000000000000000000000000000000000000000000000000000000000000001',
 );
-const recipient = '0x9999999999999999999999999999999999999999' as const;
-const approvalTxHash = `0x${'a'.repeat(64)}` as const;
-const writeTxHash = `0x${'b'.repeat(64)}` as const;
-const preparedTxHash = `0x${'c'.repeat(64)}` as const;
+const recipient = getAddress('0x9999999999999999999999999999999999999999');
+const approvalTxHash = testHash('a');
+const writeTxHash = testHash('b');
+const preparedTxHash = testHash('c');
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -333,7 +335,8 @@ function createSwapClients(opts: {
     readContract: async (call: ReadCall) => {
       readCalls.push(call);
       if (call.functionName === 'poolKey' && call.address === liquidToken) {
-        return [rare, liquidToken, 0, 60, hooks] as const;
+        const poolKey: readonly [Address, Address, number, number, Address] = [rare, liquidToken, 0, 60, hooks];
+        return poolKey;
       }
       if (call.functionName === 'poolKey') {
         throw new Error('not a liquid token');
@@ -450,8 +453,32 @@ function preparedTransaction(params: {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function testHash(fill: string): Hash {
+  const hash = `0x${fill.repeat(64)}`;
+  if (!isHex(hash)) {
+    throw new Error(`Invalid test hash fill: ${fill}`);
+  }
+  return hash;
+}
+
 function fetchBody(fetchMock: ReturnType<typeof vi.fn>, callIndex: number): Record<string, unknown> {
-  const requestInit = fetchMock.mock.calls[callIndex]?.[1] as RequestInit | undefined;
-  expect(requestInit?.body).toEqual(expect.any(String));
-  return JSON.parse(requestInit?.body as string) as Record<string, unknown>;
+  const requestInit = fetchMock.mock.calls[callIndex]?.[1];
+  if (!isRecord(requestInit)) {
+    throw new Error(`Expected fetch call ${callIndex} to include a request init object.`);
+  }
+
+  expect(requestInit.body).toEqual(expect.any(String));
+  if (typeof requestInit.body !== 'string') {
+    throw new Error(`Expected fetch call ${callIndex} body to be a string.`);
+  }
+
+  const parsed: unknown = JSON.parse(requestInit.body);
+  if (!isRecord(parsed)) {
+    throw new Error(`Expected fetch call ${callIndex} body to be a JSON object.`);
+  }
+  return parsed;
 }

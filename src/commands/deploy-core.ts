@@ -1,13 +1,77 @@
 import type { NftAttribute } from '../sdk/api.js';
 import type { CurvePresetKey, LiquidCurvePreview } from '../liquid/curve-config.js';
 
+const DISPLAY_TYPES: readonly NonNullable<NftAttribute['display_type']>[] = [
+  'number',
+  'boost_number',
+  'boost_percentage',
+  'date',
+];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function parseAttributeValue(value: unknown, raw: string): string | number {
+  if (typeof value === 'string' || typeof value === 'number') {
+    return value;
+  }
+  throw new Error(`Attribute JSON "value" must be a string or number: ${raw}`);
+}
+
+function parseOptionalString(value: unknown, field: string, raw: string): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string') {
+    throw new Error(`Attribute JSON "${field}" must be a string: ${raw}`);
+  }
+  return value;
+}
+
+function parseOptionalNumber(value: unknown, field: string, raw: string): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`Attribute JSON "${field}" must be a finite number: ${raw}`);
+  }
+  return value;
+}
+
+function parseDisplayType(value: unknown, raw: string): NftAttribute['display_type'] {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'string' || !DISPLAY_TYPES.some((displayType) => displayType === value)) {
+    throw new Error(`Attribute JSON "display_type" is invalid: ${raw}`);
+  }
+  return value;
+}
+
+function parseAttributeJson(raw: string): NftAttribute {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`Invalid attribute JSON: ${raw}`);
+  }
+
+  if (!isRecord(parsed) || parsed.value === undefined) {
+    throw new Error(`Attribute JSON must include "value": ${raw}`);
+  }
+
+  return {
+    value: parseAttributeValue(parsed.value, raw),
+    trait_type: parseOptionalString(parsed.trait_type, 'trait_type', raw),
+    display_type: parseDisplayType(parsed.display_type, raw),
+    max_value: parseOptionalNumber(parsed.max_value, 'max_value', raw),
+  };
+}
+
 export function parseAttribute(raw: string): NftAttribute {
   if (raw.startsWith('{')) {
-    const parsed = JSON.parse(raw);
-    if (parsed.value === undefined) {
-      throw new Error(`Attribute JSON must include "value": ${raw}`);
-    }
-    return parsed as NftAttribute;
+    return parseAttributeJson(raw);
   }
 
   const eqIndex = raw.indexOf('=');

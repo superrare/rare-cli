@@ -6,13 +6,14 @@ import {
   maxUint256,
   parseEther,
   parseUnits,
+  zeroAddress,
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
-import { chainIds, type SupportedChain } from '../contracts/addresses.js';
+import { chainIds, supportedChains, type SupportedChain } from '../contracts/addresses.js';
 import type { UniswapTransactionRequest } from '../swap/uniswap-api.js';
 import type { RareClientConfig, IntegerInput, AmountInput, WalletAccount, TransactionResult } from './types.js';
 
-export const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+export const ETH_ADDRESS = zeroAddress;
 const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
 
@@ -83,9 +84,9 @@ export function resolveChainFromPublicClient(publicClient: PublicClient): Suppor
     throw new Error('Unable to resolve chain from publicClient.chain.id. Create your public client with an explicit chain.');
   }
 
-  for (const [chain, id] of Object.entries(chainIds)) {
-    if (id === chainId) {
-      return chain as SupportedChain;
+  for (const chain of supportedChains) {
+    if (chainIds[chain] === chainId) {
+      return chain;
     }
   }
 
@@ -378,7 +379,7 @@ export async function preparePayment(opts: {
     });
   } catch (err) {
     // Allowance check failed (e.g. non-standard ERC20) — approve unconditionally
-    console.warn('ERC20 allowance check failed, approving unconditionally:', (err as Error).message);
+    console.warn('ERC20 allowance check failed, approving unconditionally:', err instanceof Error ? err.message : String(err));
   }
 
   if (allowance === undefined || allowance < amount) {
