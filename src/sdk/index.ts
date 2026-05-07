@@ -21,6 +21,7 @@ export {
   viemChains,
   getContractAddresses,
   getBatchListingAddress,
+  getErc721ApprovalManagerAddress,
   isSupportedChain,
 } from '../contracts/addresses.js';
 export type { SupportedChain } from '../contracts/addresses.js';

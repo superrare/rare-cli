@@ -4,6 +4,7 @@ import { createBatchListingNamespace } from '../src/sdk/batch-listing.js';
 import { getBatchListingAddress } from '../src/contracts/addresses.js';
 
 const batchListingAddress = '0xF2bE72d4343beD375Cb6d0E799a3c003163860e0' as Address;
+const approvalManagerAddress = '0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E' as Address;
 const accountAddress = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as Address;
 const hex32 = (byte: string) => (`0x${byte.repeat(64)}` as `0x${string}`);
 
@@ -35,7 +36,7 @@ describe('batch listing namespace', () => {
           },
         } as never,
       },
-      { batchListing: batchListingAddress },
+      { batchListing: batchListingAddress, erc721ApprovalManager: approvalManagerAddress },
     );
 
     const result = await namespace.create({
@@ -67,7 +68,7 @@ describe('batch listing namespace', () => {
           account: { address: accountAddress },
         } as never,
       },
-      { batchListing: batchListingAddress },
+      { batchListing: batchListingAddress, erc721ApprovalManager: approvalManagerAddress },
     );
 
     await expect(
@@ -106,7 +107,7 @@ describe('batch listing namespace', () => {
           },
         } as never,
       },
-      { batchListing: batchListingAddress },
+      { batchListing: batchListingAddress, erc721ApprovalManager: approvalManagerAddress },
     );
 
     await namespace.buy({
@@ -150,7 +151,7 @@ describe('batch listing namespace', () => {
         },
       } as never,
       { publicClient: {} as never },
-      { batchListing: batchListingAddress },
+      { batchListing: batchListingAddress, erc721ApprovalManager: approvalManagerAddress },
     );
 
     const result = await namespace.getStatus({
@@ -159,6 +160,54 @@ describe('batch listing namespace', () => {
     });
 
     expect(result.hasListing).toBe(false);
+  });
+
+  it('approves the ERC721 approval manager rather than the marketplace', async () => {
+    const writeCalls: Array<{ functionName: string; args: unknown[] }> = [];
+    let approvalChecks = 0;
+    const namespace = createBatchListingNamespace(
+      {
+        async readContract(params: { functionName: string; args?: unknown[] }) {
+          if (params.functionName === 'ownerOf') return accountAddress;
+          if (params.functionName === 'isApprovedForAll') {
+            expect(params.args?.[1]).toBe(approvalManagerAddress);
+            approvalChecks += 1;
+            return approvalChecks > 1;
+          }
+          throw new Error(`Unexpected readContract: ${params.functionName}`);
+        },
+        async waitForTransactionReceipt() {
+          return receipt();
+        },
+      } as never,
+      {
+        publicClient: {} as never,
+        walletClient: {
+          account: { address: accountAddress },
+          async writeContract(params: { functionName: string; args: unknown[] }) {
+            writeCalls.push(params);
+            return params.functionName === 'setApprovalForAll' ? hex32('6') : hex32('7');
+          },
+        } as never,
+      },
+      { batchListing: batchListingAddress, erc721ApprovalManager: approvalManagerAddress },
+    );
+
+    const result = await namespace.create({
+      artifact: {
+        root: hex32('2'),
+        currency: '0x0000000000000000000000000000000000000000',
+        amount: '1',
+        splitAddresses: [],
+        splitRatios: [],
+        tokens: [{ contract: accountAddress, tokenId: '1' }],
+      },
+    });
+
+    expect(writeCalls[0]?.functionName).toBe('setApprovalForAll');
+    expect(writeCalls[0]?.args).toEqual([approvalManagerAddress, true]);
+    expect(writeCalls[1]?.functionName).toBe('registerSalePriceMerkleRoot');
+    expect(result.approvalTxHashes).toEqual([hex32('6')]);
   });
 });
 

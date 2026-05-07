@@ -269,6 +269,7 @@ export interface RareClient {
     factory: Address;
     auction: Address;
     batchListing?: Address;
+    erc721ApprovalManager?: Address;
   };
   deploy: {
     erc721(params: DeployErc721Params): Promise<DeployErc721Result>;

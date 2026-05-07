@@ -17,7 +17,7 @@ const ZERO_BYTES32 = '0x00000000000000000000000000000000000000000000000000000000
 export function createBatchListingNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
-  addresses: { batchListing: Address },
+  addresses: { batchListing: Address; erc721ApprovalManager: Address },
 ): RareClient['batchListing'] {
   return {
     async create(params) {
@@ -64,19 +64,19 @@ export function createBatchListingNamespace(
             address: nftAddress,
             abi: approvalAbi,
             functionName: 'isApprovedForAll',
-            args: [accountAddress, addresses.batchListing],
+            args: [accountAddress, addresses.erc721ApprovalManager],
           });
           if (!isApproved) {
             const approvalTxHash = await walletClient.writeContract({
               address: nftAddress,
               abi: approvalAbi,
               functionName: 'setApprovalForAll',
-              args: [addresses.batchListing, true],
+              args: [addresses.erc721ApprovalManager, true],
               account,
               chain: undefined,
             });
             await publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
-            await waitForApproval(publicClient, nftAddress, accountAddress, addresses.batchListing);
+            await waitForApproval(publicClient, nftAddress, accountAddress, addresses.erc721ApprovalManager);
             approvalTxHashes.push(approvalTxHash);
           }
         }

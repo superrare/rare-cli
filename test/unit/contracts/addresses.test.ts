@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   chainIds,
   getContractAddresses,
+  getErc721ApprovalManagerAddress,
   isSupportedChain,
   resolveCurrency,
 } from '../../../src/contracts/addresses.js';
@@ -19,7 +20,14 @@ describe('chain and currency helpers', () => {
       factory: '0x3c7526a0975156299ceef369b8ff3c01cc670523',
       auction: '0xC8Edc7049b233641ad3723D6C60019D1c8771612',
       batchListing: '0xF2bE72d4343beD375Cb6d0E799a3c003163860e0',
+      erc721ApprovalManager: '0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E',
     });
+  });
+
+  it('resolves the ERC721 approval manager for supported chains', () => {
+    expect(getErc721ApprovalManagerAddress('sepolia')).toBe(
+      '0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E',
+    );
   });
 
   it('resolves named currencies and custom ERC20 addresses', () => {

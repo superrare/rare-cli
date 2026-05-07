@@ -36,6 +36,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
       factory: addresses.factory,
       auction: addresses.auction,
       batchListing: addresses.batchListing,
+      erc721ApprovalManager: addresses.erc721ApprovalManager,
     },
     deploy: createDeployNamespace(publicClient, config, addresses),
     mint: createMintNamespace(publicClient, config),
@@ -50,6 +51,14 @@ export function createRareClient(config: RareClientConfig): RareClient {
           );
         }
         return addresses.batchListing;
+      },
+      get erc721ApprovalManager() {
+        if (!addresses.erc721ApprovalManager) {
+          throw new Error(
+            `ERC721 approval manager is not deployed on "${chain}". Available on: mainnet, sepolia.`,
+          );
+        }
+        return addresses.erc721ApprovalManager;
       },
     }),
     token: createTokenNamespace(publicClient, chain),

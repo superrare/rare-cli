@@ -35,6 +35,7 @@ type ContractSet = {
   factory: `0x${string}`;
   auction: `0x${string}`;
   batchListing?: `0x${string}`;
+  erc721ApprovalManager?: `0x${string}`;
 };
 
 export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
@@ -42,11 +43,13 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
     factory: '0x3c7526a0975156299ceef369b8ff3c01cc670523',
     auction: '0xC8Edc7049b233641ad3723D6C60019D1c8771612',
     batchListing: '0xF2bE72d4343beD375Cb6d0E799a3c003163860e0',
+    erc721ApprovalManager: '0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E',
   },
   mainnet: {
     factory: '0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1',
     auction: '0x6D7c44773C52D396F43c2D511B81aa168E9a7a42',
     batchListing: '0x6a190885A806D39A0A8C348bfA1ac762D72E608d',
+    erc721ApprovalManager: '0x4bb0Deea6d1A30C601338aAB776d394C2AE5c0F8',
   },
   base: {
     factory: '0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd',
@@ -121,6 +124,19 @@ export function getBatchListingAddress(chain: SupportedChain): `0x${string}` {
     );
   }
   return addresses.batchListing;
+}
+
+export function getErc721ApprovalManagerAddress(chain: SupportedChain): `0x${string}` {
+  const addresses = getContractAddresses(chain);
+  if (!addresses.erc721ApprovalManager) {
+    const deployed = Object.entries(contractAddresses)
+      .filter(([, set]) => set?.erc721ApprovalManager)
+      .map(([name]) => name);
+    throw new Error(
+      `ERC721 approval manager is not deployed on "${chain}". Available on: ${deployed.join(', ')}`
+    );
+  }
+  return addresses.erc721ApprovalManager;
 }
 
 export function isSupportedChain(value: string): value is SupportedChain {
