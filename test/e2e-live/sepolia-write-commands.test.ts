@@ -1,9 +1,5 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { afterAll, beforeAll, expect, it } from 'vitest';
 import {
-  createPublicClient,
   createWalletClient,
   erc20Abi,
   http,
@@ -13,24 +9,22 @@ import {
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { getContractAddresses, resolveCurrency } from '../../src/contracts/addresses.js';
-import { parseJsonStdout, runCli } from '../helpers/cli.js';
-import { loadDotEnv } from './env.mjs';
+import {
+  cleanupTempHome,
+  configureLiveHome,
+  createLivePublicClient,
+  createTempHome,
+  describeLive,
+  expectTx,
+  jsonCommand,
+  livePrivateKey,
+  retryNonceConflict,
+  step,
+  withLiveTransactionLock,
+  type TxResult,
+} from './live-helpers.js';
 
-loadDotEnv();
-
-const requiredEnv = [
-  'TEST_RPC_URL',
-  'E2E_SELLER_PRIVATE_KEY',
-  'E2E_BUYER_PRIVATE_KEY',
-] as const;
-
-const missingEnv = requiredEnv.filter((name) => !process.env[name]);
-const describeLive = missingEnv.length === 0 ? describe.sequential : describe.skip;
 const E2E_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/metadata.json';
-
-// Runtime dispatches owner() and mintTo(address). Creation code injects the seller as owner.
-const releaseFixtureRuntimePrefix = '60003560e01c80638da5cb5b14601f578063755edd1714603d5760006000fd5b73';
-const releaseFixtureRuntimeSuffix = '60005260206000f35b600160005260206000f3';
 
 type DeployResult = {
   txHash: string;
@@ -46,29 +40,11 @@ type MintResult = {
   tokenUri: string;
 };
 
-type TxResult = {
-  txHash: string;
-  blockNumber: string;
-  approvalTxHash?: string | null;
-};
-
-type ReleaseConfigureResult = TxResult & {
-  rareMinter: Address;
-  contract: Address;
-  currencyAddress: Address;
-  price: string;
-  startTime: string;
-  maxMints: string;
-  splitRecipients: Address[];
-  splitRatios: number[];
-};
-
 type LiveState = {
   sellerHome: string;
   buyerHome: string;
   sellerAddress: Address;
   buyerAddress: Address;
-  releaseContract: Address;
   collection: DeployResult;
   listingCancelToken: MintResult;
   listingBuyToken: MintResult;
@@ -99,9 +75,6 @@ describeLive('live Sepolia CLI write commands', () => {
     try {
       await step('configure seller wallet', () => configureLiveHome(sellerHome, process.env.E2E_SELLER_PRIVATE_KEY!));
       await step('configure buyer wallet', () => configureLiveHome(buyerHome, process.env.E2E_BUYER_PRIVATE_KEY!));
-      const releaseContract = await step('deploy RareMinter release fixture contract', () =>
-        deployReleaseFixtureContract(livePrivateKey('E2E_SELLER_PRIVATE_KEY'), sellerAddress),
-      );
 
       const collection = await step('deploy ERC-721 collection', () =>
         jsonCommand<DeployResult>(sellerHome, [
@@ -142,7 +115,6 @@ describeLive('live Sepolia CLI write commands', () => {
         buyerHome,
         sellerAddress,
         buyerAddress,
-        releaseContract,
         collection,
         listingCancelToken: await step('mint listing cancel token', () =>
           mintToken(sellerHome, collection.contract),
@@ -532,106 +504,7 @@ describeLive('live Sepolia CLI write commands', () => {
     await expectOfferStatus(live.sellerHome, live.collection.contract, live.rareOfferAcceptToken.tokenId, false, E2E_RARE_CURRENCY);
   });
 
-  it('configures a direct sale release for a freshly deployed RareMinter collection fixture', async () => {
-    const contract = live.releaseContract;
-    const rareMinter = getContractAddresses('sepolia').rareMinter!;
-    const price = '0.000001';
-
-    const result = await step('configure direct sale release', () =>
-      jsonCommand<ReleaseConfigureResult>(live.sellerHome, [
-        'release',
-        'configure',
-        '--contract',
-        contract,
-        '--price',
-        price,
-        '--max-mints',
-        '2',
-        '--split',
-        `${live.sellerAddress}=100`,
-        '--chain',
-        'sepolia',
-      ], 240_000),
-    );
-
-    expectTx(result);
-    expect(result.rareMinter).toBe(rareMinter);
-    expect(result.contract.toLowerCase()).toBe(contract.toLowerCase());
-    expect(result.currencyAddress).toBe('0x0000000000000000000000000000000000000000');
-    expect(result.price).toBe(parseEther(price).toString());
-    expect(result.maxMints).toBe('2');
-    expect(result.splitRecipients.map((address) => address.toLowerCase())).toEqual([
-      live.sellerAddress.toLowerCase(),
-    ]);
-    expect(result.splitRatios).toEqual([100]);
-
-    const status = await jsonCommand<{
-      configured: boolean;
-      contract: Address;
-      rareMinter: Address;
-      seller: Address;
-      price: string;
-      maxMints: string;
-    }>(live.sellerHome, [
-      'release',
-      'status',
-      '--contract',
-      contract,
-      '--chain',
-      'sepolia',
-    ]);
-
-    expect(status.configured).toBe(true);
-    expect(status.contract.toLowerCase()).toBe(contract.toLowerCase());
-    expect(status.rareMinter).toBe(rareMinter);
-    expect(status.seller.toLowerCase()).toBe(live.sellerAddress.toLowerCase());
-    expect(status.price).toBe(parseEther(price).toString());
-    expect(status.maxMints).toBe('2');
-  });
 });
-
-async function configureLiveHome(home: string, privateKey: string): Promise<void> {
-  const result = await runCli([
-    'configure',
-    '--default-chain',
-    'sepolia',
-    '--chain',
-    'sepolia',
-    '--private-key',
-    privateKey,
-    '--rpc-url',
-    process.env.TEST_RPC_URL!,
-  ], { home });
-
-  expect(result.code).toBe(0);
-  expect(result.stderr).toBe('');
-}
-
-async function deployReleaseFixtureContract(privateKey: `0x${string}`, owner: Address): Promise<Address> {
-  const account = privateKeyToAccount(privateKey);
-  const publicClient = createLivePublicClient();
-  const walletClient = createWalletClient({
-    account,
-    chain: sepolia,
-    transport: http(process.env.TEST_RPC_URL!),
-  });
-
-  const txHash = await walletClient.sendTransaction({
-    account,
-    chain: sepolia,
-    data: releaseFixtureBytecode(owner),
-  });
-  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-  if (!receipt.contractAddress) {
-    throw new Error('Release fixture deployment did not return a contract address.');
-  }
-  return receipt.contractAddress;
-}
-
-function releaseFixtureBytecode(owner: Address): `0x${string}` {
-  const ownerBytes = owner.slice(2).toLowerCase();
-  return `0x6048600c60003960486000f3${releaseFixtureRuntimePrefix}${ownerBytes}${releaseFixtureRuntimeSuffix}`;
-}
 
 async function mintToken(home: string, contract: string, opts: { to?: string } = {}): Promise<MintResult> {
   const args = [
@@ -719,15 +592,6 @@ async function expectAuctionStatus(
   expect(status.status).toBe(expectedStatus);
 }
 
-async function jsonCommand<T>(home: string, args: string[], timeoutMs = 180_000): Promise<T> {
-  return parseJsonStdout<T>(await runCli(['--json', ...args], { home, timeoutMs }));
-}
-
-function expectTx(result: TxResult): void {
-  expect(result.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
-  expect(result.blockNumber).toMatch(/^\d+$/);
-}
-
 async function expectTokenOwner(home: string, contract: string, tokenId: string, owner: Address): Promise<void> {
   const status = await jsonCommand<{
     token: { owner: Address; tokenUri: string; tokenId: string } | null;
@@ -770,34 +634,24 @@ async function approveErc20(
   spender: Address,
   amount: bigint,
 ): Promise<void> {
+  const account = privateKeyToAccount(privateKey);
   const publicClient = createLivePublicClient();
   const walletClient = createWalletClient({
-    account: privateKeyToAccount(privateKey),
+    account,
     chain: sepolia,
     transport: http(process.env.TEST_RPC_URL!),
   });
-  const txHash = await walletClient.writeContract({
-    address: currency,
-    abi: erc20Abi,
-    functionName: 'approve',
-    args: [spender, amount],
-  });
+  const txHash = await retryNonceConflict('reset buyer ERC20 allowance', () =>
+    withLiveTransactionLock(account.address, 'reset buyer ERC20 allowance', () =>
+      walletClient.writeContract({
+        address: currency,
+        abi: erc20Abi,
+        functionName: 'approve',
+        args: [spender, amount],
+      }),
+    ),
+  );
   await publicClient.waitForTransactionReceipt({ hash: txHash });
-}
-
-function createLivePublicClient() {
-  return createPublicClient({
-    chain: sepolia,
-    transport: http(process.env.TEST_RPC_URL!),
-  });
-}
-
-function livePrivateKey(name: 'E2E_SELLER_PRIVATE_KEY' | 'E2E_BUYER_PRIVATE_KEY'): `0x${string}` {
-  const value = process.env[name];
-  if (!value || !value.startsWith('0x')) {
-    throw new Error(`${name} must be set to a 0x-prefixed private key.`);
-  }
-  return value as `0x${string}`;
 }
 
 function liveAuctionDurationSeconds(): number {
@@ -821,18 +675,4 @@ async function waitForOfferCancelDelay(): Promise<void> {
 function startOfferCancelDelay(): Promise<void> {
   console.error(`[live e2e] wait for offer cancellation delay (${liveOfferCancelDelaySeconds()}s)`);
   return waitForOfferCancelDelay();
-}
-
-async function createTempHome(): Promise<string> {
-  return mkdtemp(join(tmpdir(), 'rare-cli-live-e2e-home-'));
-}
-
-async function cleanupTempHome(home: string | undefined): Promise<void> {
-  if (!home) return;
-  await rm(home, { recursive: true, force: true });
-}
-
-async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
-  console.error(`[live e2e] ${label}`);
-  return fn();
 }
