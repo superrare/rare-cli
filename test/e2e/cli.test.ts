@@ -88,4 +88,19 @@ describe('built CLI deterministic behavior', () => {
       expect(result.stderr).toContain('Error: --default-chain must be one of: mainnet, sepolia, base, base-sepolia');
     });
   });
+
+  it('wires release commands and validates user-visible inputs before RPC setup', async () => {
+    await withTempHome(async (home) => {
+      const help = await runCli(['release', '--help'], { home });
+      expect(help.code).toBe(0);
+      expect(help.stdout).toContain('Direct sale release subcommands');
+      expect(help.stdout).toContain('configure');
+      expect(help.stdout).toContain('status');
+
+      const result = await runCli(['release', 'status', '--contract', 'not-an-address'], { home });
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('Error: Invalid contract address: "not-an-address".');
+    });
+  });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   chainIds,
   getContractAddresses,
+  getRareMinterAddress,
   isSupportedChain,
   resolveCurrency,
 } from '../../../src/contracts/addresses.js';
@@ -18,7 +19,9 @@ describe('chain and currency helpers', () => {
     expect(getContractAddresses('sepolia')).toEqual({
       factory: '0x3c7526a0975156299ceef369b8ff3c01cc670523',
       auction: '0xC8Edc7049b233641ad3723D6C60019D1c8771612',
+      rareMinter: '0xd28Dc0B89104d7BBd902F338a0193fF063617ccE',
     });
+    expect(getRareMinterAddress('sepolia')).toBe('0xd28Dc0B89104d7BBd902F338a0193fF063617ccE');
   });
 
   it('resolves named currencies and custom ERC20 addresses', () => {

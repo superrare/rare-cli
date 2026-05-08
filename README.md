@@ -404,6 +404,21 @@ npm install
 npm run build
 ```
 
+Run the local test suites:
+
+```bash
+# Unit and SDK integration tests
+npm run test:fast
+
+# Full deterministic suite, including built CLI E2E
+npm test
+
+# Opt-in live Sepolia write E2E
+npm run test:e2e:live
+```
+
+Live Sepolia E2E requires `TEST_RPC_URL`, `E2E_SELLER_PRIVATE_KEY`, and `E2E_BUYER_PRIVATE_KEY`. The release write test deploys its own minimal Sepolia fixture contract with `owner()` and `mintTo(address)`, then configures that contract through `RareMinter`.
+
 For development with auto-rebuild:
 
 ```bash
