@@ -6,7 +6,11 @@ import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import { resolveCurrency } from '../contracts/addresses.js';
 import { output, log } from '../output.js';
-import { collectSplit, finalizeSplits, type SplitAccumulator } from './splits.js';
+import {
+  collectReleaseSplit,
+  finalizeReleaseSplitAccumulator,
+  type ReleaseSplitAccumulator,
+} from '../sdk/release-core.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 
@@ -39,13 +43,13 @@ export function releaseCommand(): Command {
     .option(
       '--split <addr=ratio>',
       'payout split recipient (repeatable). Format: 0xADDR=RATIO. Ratios must sum to 100. If omitted, 100% goes to the connected wallet.',
-      collectSplit,
+      collectReleaseSplit,
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .action(async (opts) => {
       let splits: { addresses: Address[]; ratios: number[] } | undefined;
       try {
-        splits = finalizeSplits(opts.split as SplitAccumulator | undefined);
+        splits = finalizeReleaseSplitAccumulator(opts.split as ReleaseSplitAccumulator | undefined);
       } catch (error) {
         printError(error);
         return;
