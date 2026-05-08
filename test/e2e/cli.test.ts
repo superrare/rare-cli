@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isAddress } from 'viem';
@@ -93,24 +93,61 @@ describe('built CLI deterministic behavior', () => {
     await withTempHome(async (home) => {
       const help = await runCli(['release', '--help'], { home });
       expect(help.code).toBe(0);
-      expect(help.stdout).toContain('Direct sale release subcommands');
+      expect(help.stdout).toContain('RareMinter release subcommands');
       expect(help.stdout).toContain('configure');
+      expect(help.stdout).toContain('allowlist');
+      expect(help.stdout).toContain('mint-limit');
+      expect(help.stdout).toContain('tx-limit');
+      expect(help.stdout).toContain('staking-minimum');
       expect(help.stdout).toContain('status');
-
-      const configureHelp = await runCli(['release', 'configure', '--help'], { home });
-      expect(configureHelp.code).toBe(0);
-      expect(configureHelp.stdout).toContain('--chain-id <id>');
-
-      const statusHelp = await runCli(['release', 'status', '--help'], { home });
-      expect(statusHelp.code).toBe(0);
-      expect(statusHelp.stdout).toContain('--account <address>');
-      expect(statusHelp.stdout).toContain('--chain-id <id>');
-      expect(statusHelp.stdout).not.toContain('--wallet');
 
       const result = await runCli(['release', 'status', '--contract', 'not-an-address'], { home });
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('Error: Invalid contract address: "not-an-address".');
+    });
+  });
+
+  it('builds and consumes release allowlist artifacts without RPC setup', async () => {
+    await withTempHome(async (home) => {
+      const input = join(home, 'allowlist.csv');
+      const artifactPath = join(home, 'allowlist-artifact.json');
+      const wallet = '0x0000000000000000000000000000000000000001';
+
+      await writeFile(input, `wallet\n${wallet}\n0x0000000000000000000000000000000000000002\n`, 'utf8');
+
+      const build = await runCli([
+        'release',
+        'allowlist',
+        'build',
+        '--input',
+        input,
+        '--output',
+        artifactPath,
+      ], { home });
+      expect(build.code).toBe(0);
+      expect(build.stdout).toContain('Allowlist artifact written');
+      expect(build.stdout).toContain('Wallets: 2');
+
+      const artifact = JSON.parse(await readFile(artifactPath, 'utf8'));
+      expect(artifact.root).toMatch(/^0x[0-9a-f]{64}$/);
+      expect(artifact.wallets).toHaveLength(2);
+
+      const proof = parseJsonStdout<{ root: string; address: string; proof: string[] }>(
+        await runCli([
+          '--json',
+          'release',
+          'allowlist',
+          'proof',
+          '--artifact',
+          artifactPath,
+          '--wallet',
+          wallet,
+        ], { home }),
+      );
+      expect(proof.root).toBe(artifact.root);
+      expect(proof.address).toBe(wallet);
+      expect(proof.proof).toEqual(expect.any(Array));
     });
   });
 });

@@ -1,18 +1,60 @@
 import {
+  getAddress,
   isAddress,
+  isHex,
+  keccak256,
   parseEther,
   parseUnits,
   type Address,
+  type Hex,
 } from 'viem';
 import type {
   AmountInput,
+  IntegerInput,
   ReleaseConfigureParams,
   ReleaseStatus,
   TimestampInput,
 } from './types.js';
-import { ETH_ADDRESS, toInteger } from './helpers.js';
+import { ETH_ADDRESS, toInteger, toNonNegativeInteger } from './helpers.js';
 
 export const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
+export const RELEASE_ALLOWLIST_ARTIFACT_KIND = 'rare-release-allowlist-v1' as const;
+const RELEASE_ALLOWLIST_LEAF_ENCODING = 'keccak256(address)' as const;
+const RELEASE_ALLOWLIST_TREE = 'sorted-addresses-sort-pairs' as const;
+
+export type ReleaseAllowlistInputFormat = 'csv' | 'json';
+
+export type ReleaseAllowlistWalletProof = {
+  address: Address;
+  leaf: Hex;
+  proof: Hex[];
+};
+
+export type ReleaseAllowlistArtifact = {
+  kind: typeof RELEASE_ALLOWLIST_ARTIFACT_KIND;
+  version: 1;
+  leafEncoding: typeof RELEASE_ALLOWLIST_LEAF_ENCODING;
+  tree: typeof RELEASE_ALLOWLIST_TREE;
+  root: Hex;
+  wallets: ReleaseAllowlistWalletProof[];
+};
+
+export type ReleaseAllowlistConfigPlan = {
+  contract: Address;
+  root: Hex;
+  endTimestamp: bigint;
+};
+
+export type ReleaseLimitConfigPlan = {
+  contract: Address;
+  limit: bigint;
+};
+
+export type ReleaseSellerStakingMinimumPlan = {
+  contract: Address;
+  amount: bigint;
+  endTimestamp: bigint;
+};
 
 export type RawDirectSaleConfig = {
   seller: Address;
@@ -70,39 +112,50 @@ export function assertReleaseContractOwner(opts: {
   }
 }
 
+export function normalizeReleaseTimestamp(
+  value: TimestampInput | undefined,
+  field: string,
+  opts: { defaultValue?: bigint } = {},
+): bigint {
+  let timestamp: bigint;
+
+  if (value === undefined) {
+    if (opts.defaultValue === undefined) {
+      throw new Error(`${field} is required.`);
+    }
+    timestamp = opts.defaultValue;
+  } else if (value instanceof Date) {
+    const milliseconds = value.getTime();
+    if (!Number.isFinite(milliseconds)) {
+      throw new Error(`${field} must be a valid date.`);
+    }
+    timestamp = BigInt(Math.floor(milliseconds / 1000));
+  } else if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^-?\d+$/.test(trimmed)) {
+      timestamp = BigInt(trimmed);
+    } else {
+      const milliseconds = Date.parse(trimmed);
+      if (Number.isNaN(milliseconds)) {
+        throw new Error(`${field} must be a unix timestamp or ISO date string.`);
+      }
+      timestamp = BigInt(Math.floor(milliseconds / 1000));
+    }
+  } else {
+    timestamp = toInteger(value, field);
+  }
+
+  if (timestamp < 0n) {
+    throw new Error(`${field} must be greater than or equal to 0.`);
+  }
+  return timestamp;
+}
+
 export function normalizeReleaseStartTime(
   value: TimestampInput | undefined,
   nowSeconds: bigint,
 ): bigint {
-  let startTime: bigint;
-
-  if (value === undefined) {
-    startTime = nowSeconds;
-  } else if (value instanceof Date) {
-    const milliseconds = value.getTime();
-    if (!Number.isFinite(milliseconds)) {
-      throw new Error('startTime must be a valid date.');
-    }
-    startTime = BigInt(Math.floor(milliseconds / 1000));
-  } else if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (/^-?\d+$/.test(trimmed)) {
-      startTime = BigInt(trimmed);
-    } else {
-      const milliseconds = Date.parse(trimmed);
-      if (Number.isNaN(milliseconds)) {
-        throw new Error('startTime must be a unix timestamp or ISO date string.');
-      }
-      startTime = BigInt(Math.floor(milliseconds / 1000));
-    }
-  } else {
-    startTime = toInteger(value, 'startTime');
-  }
-
-  if (startTime < 0n) {
-    throw new Error('startTime must be greater than or equal to 0.');
-  }
-  return startTime;
+  return normalizeReleaseTimestamp(value, 'startTime', { defaultValue: nowSeconds });
 }
 
 export function normalizeReleasePrice(opts: {
@@ -221,6 +274,71 @@ export function planReleaseConfigure(
   };
 }
 
+export function planReleaseAllowlistConfig(params: {
+  contract: Address;
+  root?: Hex;
+  artifact?: ReleaseAllowlistArtifact;
+  endTimestamp: TimestampInput;
+}): ReleaseAllowlistConfigPlan {
+  const root = params.root ?? params.artifact?.root;
+  if (!root) {
+    throw new Error('allowlist root is required. Pass a root or allowlist artifact.');
+  }
+
+  return {
+    contract: params.contract,
+    root: normalizeBytes32(root, 'allowlist root'),
+    endTimestamp: normalizeReleaseTimestamp(params.endTimestamp, 'endTimestamp'),
+  };
+}
+
+export function planReleaseClearAllowlistConfig(params: {
+  contract: Address;
+}): ReleaseAllowlistConfigPlan {
+  return {
+    contract: params.contract,
+    root: ZERO_BYTES32,
+    endTimestamp: 0n,
+  };
+}
+
+export function planReleaseLimitConfig(params: {
+  contract: Address;
+  limit: IntegerInput;
+}): ReleaseLimitConfigPlan {
+  return {
+    contract: params.contract,
+    limit: toNonNegativeInteger(params.limit, 'limit'),
+  };
+}
+
+export function planReleaseSellerStakingMinimum(params: {
+  contract: Address;
+  amount: AmountInput;
+  endTimestamp?: TimestampInput;
+}): ReleaseSellerStakingMinimumPlan {
+  const amount = normalizeReleaseStakingAmount(params.amount);
+  const endTimestamp = params.endTimestamp === undefined && amount === 0n
+    ? 0n
+    : normalizeReleaseTimestamp(params.endTimestamp, 'endTimestamp');
+
+  return {
+    contract: params.contract,
+    amount,
+    endTimestamp,
+  };
+}
+
+export function normalizeReleaseStakingAmount(amount: AmountInput): bigint {
+  const normalized = typeof amount === 'bigint'
+    ? amount
+    : parseEther(String(amount));
+  if (normalized < 0n) {
+    throw new Error('amount must be greater than or equal to 0.');
+  }
+  return normalized;
+}
+
 export function collectReleaseSplit(
   value: string,
   previous: ReleaseSplitAccumulator | undefined,
@@ -269,6 +387,169 @@ export function finalizeReleaseSplitAccumulator(
   };
 }
 
+export function buildReleaseAllowlistArtifactFromInput(
+  input: string,
+  format: ReleaseAllowlistInputFormat,
+): ReleaseAllowlistArtifact {
+  const wallets = format === 'csv'
+    ? parseReleaseAllowlistCsv(input)
+    : parseReleaseAllowlistJson(input);
+  return buildReleaseAllowlistArtifact(wallets);
+}
+
+export function parseReleaseAllowlistArtifactJson(input: string): ReleaseAllowlistArtifact {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(input);
+  } catch (error) {
+    throw new Error(`Malformed allowlist artifact JSON: ${(error as Error).message}`);
+  }
+  return parseReleaseAllowlistArtifact(parsed);
+}
+
+export function parseReleaseAllowlistArtifact(input: unknown): ReleaseAllowlistArtifact {
+  if (!isRecord(input)) {
+    throw new Error('Allowlist artifact must be a JSON object.');
+  }
+  if (input.kind !== RELEASE_ALLOWLIST_ARTIFACT_KIND || input.version !== 1) {
+    throw new Error(`Unsupported allowlist artifact. Expected kind "${RELEASE_ALLOWLIST_ARTIFACT_KIND}" version 1.`);
+  }
+  const root = normalizeBytes32(input.root, 'allowlist artifact root');
+  if (!Array.isArray(input.wallets)) {
+    throw new Error('Allowlist artifact must include a wallets array.');
+  }
+
+  const wallets = normalizeAllowlistRows(
+    input.wallets.map((entry, index) => {
+      if (!isRecord(entry)) {
+        throw new Error(`Invalid allowlist artifact wallet at index ${index}: expected an object.`);
+      }
+      return {
+        value: entry.address,
+        label: `artifact wallet ${index + 1}`,
+      };
+    }),
+  );
+  const artifact = buildReleaseAllowlistArtifact(wallets);
+  if (!hexEquals(artifact.root, root)) {
+    throw new Error(
+      `Allowlist artifact root ${root} does not match the artifact wallets. Rebuild the artifact from the source allowlist.`,
+    );
+  }
+
+  return artifact;
+}
+
+export function parseReleaseAllowlistCsv(input: string): Address[] {
+  const rows = parseCsvRows(input).filter((row) =>
+    row.fields.some((field) => field.trim().length > 0),
+  );
+  if (rows.length === 0) {
+    throw new Error('CSV allowlist is empty.');
+  }
+
+  const headerColumn = findAllowlistAddressColumn(rows[0]!.fields);
+  let addressColumn = 0;
+  let dataRows = rows;
+
+  if (headerColumn !== -1) {
+    addressColumn = headerColumn;
+    dataRows = rows.slice(1);
+  } else if (!isAddress(rows[0]!.fields[0]?.trim() ?? '')) {
+    throw new Error('CSV allowlist must put wallet addresses in the first column or include an address/wallet header.');
+  }
+
+  if (dataRows.length === 0) {
+    throw new Error('CSV allowlist does not contain any wallet rows.');
+  }
+
+  return normalizeAllowlistRows(dataRows.map((row) => ({
+    value: row.fields[addressColumn],
+    label: `CSV row ${row.number}`,
+  })));
+}
+
+export function parseReleaseAllowlistJson(input: string): Address[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(input);
+  } catch (error) {
+    throw new Error(`Malformed JSON allowlist: ${(error as Error).message}`);
+  }
+
+  if (isRecord(parsed) && parsed.kind === RELEASE_ALLOWLIST_ARTIFACT_KIND) {
+    return parseReleaseAllowlistArtifact(parsed).wallets.map((wallet) => wallet.address);
+  }
+
+  const entries = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.wallets)
+      ? parsed.wallets
+      : isRecord(parsed) && Array.isArray(parsed.addresses)
+        ? parsed.addresses
+        : null;
+
+  if (!entries) {
+    throw new Error(
+      'JSON allowlist must be an array of wallet addresses, an array of objects with address/wallet, or an object with wallets/addresses.',
+    );
+  }
+
+  return normalizeAllowlistRows(entries.map((entry, index) => ({
+    value: getAddressFromJsonAllowlistEntry(entry, `JSON entry ${index + 1}`),
+    label: `JSON entry ${index + 1}`,
+  })));
+}
+
+export function buildReleaseAllowlistArtifact(wallets: readonly Address[]): ReleaseAllowlistArtifact {
+  const addresses = normalizeAllowlistRows(wallets.map((wallet, index) => ({
+    value: wallet,
+    label: `wallet ${index + 1}`,
+  })));
+  if (addresses.length === 0) {
+    throw new Error('Allowlist must contain at least one wallet address.');
+  }
+
+  const sortedAddresses = [...addresses].sort(compareAddress);
+  const leaves = sortedAddresses.map(hashAllowlistAddress);
+  const layers = buildMerkleLayers(leaves);
+  const root = layers[layers.length - 1]![0]!;
+
+  return {
+    kind: RELEASE_ALLOWLIST_ARTIFACT_KIND,
+    version: 1,
+    leafEncoding: RELEASE_ALLOWLIST_LEAF_ENCODING,
+    tree: RELEASE_ALLOWLIST_TREE,
+    root,
+    wallets: sortedAddresses.map((address, index) => ({
+      address,
+      leaf: leaves[index]!,
+      proof: getMerkleProof(layers, index),
+    })),
+  };
+}
+
+export function getReleaseAllowlistProof(opts: {
+  artifact: ReleaseAllowlistArtifact;
+  wallet: Address;
+}): ReleaseAllowlistWalletProof | null {
+  const wallet = getAddress(opts.wallet);
+  return opts.artifact.wallets.find((entry) => addressesEqual(entry.address, wallet)) ?? null;
+}
+
+export function verifyReleaseAllowlistProof(opts: {
+  root: Hex;
+  wallet: Address;
+  proof: readonly Hex[];
+}): boolean {
+  const root = normalizeBytes32(opts.root, 'allowlist root');
+  let hash = hashAllowlistAddress(getAddress(opts.wallet));
+  for (const sibling of opts.proof) {
+    hash = hashMerklePair(hash, normalizeBytes32(sibling, 'allowlist proof item'));
+  }
+  return hexEquals(hash, root);
+}
+
 export function shapeReleaseStatus(opts: {
   rareMinter: Address;
   contract: Address;
@@ -276,9 +557,9 @@ export function shapeReleaseStatus(opts: {
   allowlist: RawAllowlistConfig;
   mintLimit: bigint;
   txLimit: bigint;
-  account: Address | null;
-  accountMints: bigint | null;
-  accountTxs: bigint | null;
+  wallet: Address | null;
+  walletMints: bigint | null;
+  walletTxs: bigint | null;
   stakingMinimum: RawStakingMinimum;
   totalSupply: bigint | null;
   maxSupply: bigint | null;
@@ -299,23 +580,23 @@ export function shapeReleaseStatus(opts: {
       ? opts.maxSupply > 0n && opts.totalSupply >= opts.maxSupply
       : null;
 
-  const accountMintLimitReached =
-    opts.account !== null &&
-    opts.accountMints !== null &&
+  const walletMintLimitReached =
+    opts.wallet !== null &&
+    opts.walletMints !== null &&
     opts.mintLimit > 0n &&
-    opts.accountMints >= opts.mintLimit;
-  const accountTxLimitReached =
-    opts.account !== null &&
-    opts.accountTxs !== null &&
+    opts.walletMints >= opts.mintLimit;
+  const walletTxLimitReached =
+    opts.wallet !== null &&
+    opts.walletTxs !== null &&
     opts.txLimit > 0n &&
-    opts.accountTxs >= opts.txLimit;
+    opts.walletTxs >= opts.txLimit;
 
   const currentlyMintable =
     configured &&
     started &&
     soldOut !== true &&
-    !accountMintLimitReached &&
-    !accountTxLimitReached;
+    !walletMintLimitReached &&
+    !walletTxLimitReached;
 
   return {
     rareMinter: opts.rareMinter,
@@ -335,9 +616,9 @@ export function shapeReleaseStatus(opts: {
     requiresAllowlist: allowlistActive,
     mintLimit: opts.mintLimit,
     txLimit: opts.txLimit,
-    account: opts.account,
-    accountMints: opts.accountMints,
-    accountTxs: opts.accountTxs,
+    wallet: opts.wallet,
+    walletMints: opts.walletMints,
+    walletTxs: opts.walletTxs,
     stakingMinimumAmount: opts.stakingMinimum.amount,
     stakingMinimumEndTimestamp: opts.stakingMinimum.endTimestamp,
     stakingMinimumActive,
@@ -360,4 +641,178 @@ function requireCurrencyDecimals(decimals: number | null): number {
     throw new Error('currencyDecimals must be a non-negative integer.');
   }
   return decimals;
+}
+
+function normalizeBytes32(value: unknown, field: string): Hex {
+  if (typeof value !== 'string' || !isHex(value) || value.length !== 66) {
+    throw new Error(`${field} must be a 32-byte hex string.`);
+  }
+  return value.toLowerCase() as Hex;
+}
+
+function parseCsvRows(input: string): Array<{ fields: string[]; number: number }> {
+  const rows: Array<{ fields: string[]; number: number }> = [];
+  let row: string[] = [];
+  let field = '';
+  let inQuotes = false;
+  let rowNumber = 1;
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i]!;
+
+    if (inQuotes) {
+      if (char === '"') {
+        if (input[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += char;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      if (field.length > 0) {
+        throw new Error(`Malformed CSV allowlist at row ${rowNumber}: unexpected quote.`);
+      }
+      inQuotes = true;
+      continue;
+    }
+    if (char === ',') {
+      row.push(field);
+      field = '';
+      continue;
+    }
+    if (char === '\n' || char === '\r') {
+      row.push(field);
+      rows.push({ fields: row, number: rowNumber });
+      row = [];
+      field = '';
+      if (char === '\r' && input[i + 1] === '\n') {
+        i++;
+      }
+      rowNumber++;
+      continue;
+    }
+
+    field += char;
+  }
+
+  if (inQuotes) {
+    throw new Error(`Malformed CSV allowlist at row ${rowNumber}: unterminated quoted field.`);
+  }
+
+  row.push(field);
+  rows.push({ fields: row, number: rowNumber });
+  return rows;
+}
+
+function findAllowlistAddressColumn(fields: string[]): number {
+  return fields.findIndex((field) => {
+    const normalized = field.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    return normalized === 'address' ||
+      normalized === 'wallet' ||
+      normalized === 'walletaddress';
+  });
+}
+
+function normalizeAllowlistRows(rows: Array<{ value: unknown; label: string }>): Address[] {
+  const seen = new Map<string, string>();
+  return rows.map((row) => {
+    if (typeof row.value !== 'string') {
+      throw new Error(`Invalid allowlist address at ${row.label}: expected a string.`);
+    }
+
+    const raw = row.value.trim();
+    if (!isAddress(raw)) {
+      throw new Error(`Invalid allowlist address at ${row.label}: "${raw}".`);
+    }
+    const address = getAddress(raw);
+    const lower = address.toLowerCase();
+    const firstLabel = seen.get(lower);
+    if (firstLabel) {
+      throw new Error(`Duplicate allowlist address at ${row.label}: "${address}" duplicates ${firstLabel}.`);
+    }
+    seen.set(lower, row.label);
+    return address;
+  });
+}
+
+function getAddressFromJsonAllowlistEntry(entry: unknown, label: string): unknown {
+  if (typeof entry === 'string') {
+    return entry;
+  }
+  if (!isRecord(entry)) {
+    throw new Error(`Invalid allowlist ${label}: expected a string or object.`);
+  }
+  if ('address' in entry) return entry.address;
+  if ('wallet' in entry) return entry.wallet;
+  if ('walletAddress' in entry) return entry.walletAddress;
+  if ('wallet_address' in entry) return entry.wallet_address;
+  throw new Error(`Invalid allowlist ${label}: object must include address, wallet, walletAddress, or wallet_address.`);
+}
+
+function buildMerkleLayers(leaves: Hex[]): Hex[][] {
+  const layers: Hex[][] = [leaves];
+  let current = leaves;
+  while (current.length > 1) {
+    const next: Hex[] = [];
+    for (let i = 0; i < current.length; i += 2) {
+      const left = current[i]!;
+      const right = current[i + 1];
+      next.push(right ? hashMerklePair(left, right) : left);
+    }
+    layers.push(next);
+    current = next;
+  }
+  return layers;
+}
+
+function getMerkleProof(layers: Hex[][], leafIndex: number): Hex[] {
+  const proof: Hex[] = [];
+  let index = leafIndex;
+
+  for (let layerIndex = 0; layerIndex < layers.length - 1; layerIndex++) {
+    const layer = layers[layerIndex]!;
+    const siblingIndex = index % 2 === 0 ? index + 1 : index - 1;
+    const sibling = layer[siblingIndex];
+    if (sibling) {
+      proof.push(sibling);
+    }
+    index = Math.floor(index / 2);
+  }
+
+  return proof;
+}
+
+function hashAllowlistAddress(address: Address): Hex {
+  return keccak256(address);
+}
+
+function hashMerklePair(a: Hex, b: Hex): Hex {
+  const [left, right] = compareHex(a, b) <= 0 ? [a, b] : [b, a];
+  return keccak256(`0x${left.slice(2)}${right.slice(2)}` as Hex);
+}
+
+function compareAddress(a: Address, b: Address): number {
+  return a.toLowerCase().localeCompare(b.toLowerCase());
+}
+
+function compareHex(a: Hex, b: Hex): number {
+  return a.toLowerCase().localeCompare(b.toLowerCase());
+}
+
+function addressesEqual(a: Address, b: Address): boolean {
+  return a.toLowerCase() === b.toLowerCase();
+}
+
+function hexEquals(a: Hex, b: Hex): boolean {
+  return a.toLowerCase() === b.toLowerCase();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

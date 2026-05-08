@@ -2,11 +2,38 @@ export { createRareClient } from './client.js';
 export type {
   RareClient,
   RareClientConfig,
+  ReleaseAllowlistArtifact,
+  ReleaseAllowlistConfig,
+  ReleaseAllowlistWalletProof,
   ReleaseConfigureParams,
   ReleaseConfigureResult,
+  ReleaseLimitConfig,
+  ReleaseSellerStakingMinimum,
+  ReleaseSetAllowlistConfigParams,
+  ReleaseSetAllowlistConfigResult,
+  ReleaseSetLimitParams,
+  ReleaseSetLimitResult,
+  ReleaseSetSellerStakingMinimumParams,
+  ReleaseSetSellerStakingMinimumResult,
   ReleaseStatus,
   ReleaseStatusParams,
 } from './types.js';
+export {
+  buildReleaseAllowlistArtifact,
+  buildReleaseAllowlistArtifactFromInput,
+  collectReleaseSplit,
+  finalizeReleaseSplitAccumulator,
+  getReleaseAllowlistProof,
+  parseReleaseAllowlistArtifact,
+  parseReleaseAllowlistArtifactJson,
+  parseReleaseAllowlistCsv,
+  parseReleaseAllowlistJson,
+  verifyReleaseAllowlistProof,
+} from './release-core.js';
+export type {
+  ReleaseAllowlistInputFormat,
+  ReleaseSplitAccumulator,
+} from './release-core.js';
 export type {
   CollectionSearchParams,
   ImportErc721Params,

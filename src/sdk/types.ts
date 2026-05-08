@@ -196,9 +196,79 @@ export interface ReleaseConfigureResult extends TransactionResult {
   splitRatios: number[];
 }
 
+export interface ReleaseAllowlistWalletProof {
+  address: Address;
+  leaf: Hash;
+  proof: Hash[];
+}
+
+export interface ReleaseAllowlistArtifact {
+  kind: 'rare-release-allowlist-v1';
+  version: 1;
+  leafEncoding: 'keccak256(address)';
+  tree: 'sorted-addresses-sort-pairs';
+  root: Hash;
+  wallets: ReleaseAllowlistWalletProof[];
+}
+
+export interface ReleaseAllowlistConfig {
+  rareMinter: Address;
+  contract: Address;
+  root: Hash;
+  endTimestamp: bigint;
+  active: boolean;
+  now: bigint;
+}
+
+export interface ReleaseLimitConfig {
+  rareMinter: Address;
+  contract: Address;
+  limit: bigint;
+  enabled: boolean;
+}
+
+export interface ReleaseSellerStakingMinimum {
+  rareMinter: Address;
+  contract: Address;
+  amount: bigint;
+  endTimestamp: bigint;
+  active: boolean;
+  now: bigint;
+}
+
+export interface ReleaseSetAllowlistConfigParams {
+  contract: Address;
+  root?: Hash;
+  artifact?: ReleaseAllowlistArtifact;
+  endTimestamp: TimestampInput;
+}
+
+export interface ReleaseSetAllowlistConfigResult extends TransactionResult {
+  config: ReleaseAllowlistConfig;
+}
+
+export interface ReleaseSetLimitParams {
+  contract: Address;
+  limit: IntegerInput;
+}
+
+export interface ReleaseSetLimitResult extends TransactionResult {
+  config: ReleaseLimitConfig;
+}
+
+export interface ReleaseSetSellerStakingMinimumParams {
+  contract: Address;
+  amount: AmountInput;
+  endTimestamp?: TimestampInput;
+}
+
+export interface ReleaseSetSellerStakingMinimumResult extends TransactionResult {
+  config: ReleaseSellerStakingMinimum;
+}
+
 export interface ReleaseStatusParams {
   contract: Address;
-  account?: Address;
+  wallet?: Address;
 }
 
 export interface ReleaseStatus {
@@ -219,9 +289,9 @@ export interface ReleaseStatus {
   requiresAllowlist: boolean;
   mintLimit: bigint;
   txLimit: bigint;
-  account: Address | null;
-  accountMints: bigint | null;
-  accountTxs: bigint | null;
+  wallet: Address | null;
+  walletMints: bigint | null;
+  walletTxs: bigint | null;
   stakingMinimumAmount: bigint;
   stakingMinimumEndTimestamp: bigint;
   stakingMinimumActive: boolean;
@@ -284,7 +354,19 @@ export interface RareClient {
     getStatus(params: ListingStatusParams): Promise<ListingStatus>;
   };
   release: {
+    buildAllowlistArtifact(params: { input: string; format: 'csv' | 'json' }): ReleaseAllowlistArtifact;
+    parseAllowlistArtifact(params: { input: string }): ReleaseAllowlistArtifact;
+    getAllowlistProof(params: { artifact: ReleaseAllowlistArtifact; wallet: Address }): ReleaseAllowlistWalletProof | null;
     configure(params: ReleaseConfigureParams): Promise<ReleaseConfigureResult>;
+    getAllowlistConfig(params: { contract: Address }): Promise<ReleaseAllowlistConfig>;
+    setAllowlistConfig(params: ReleaseSetAllowlistConfigParams): Promise<ReleaseSetAllowlistConfigResult>;
+    clearAllowlistConfig(params: { contract: Address }): Promise<ReleaseSetAllowlistConfigResult>;
+    getMintLimit(params: { contract: Address }): Promise<ReleaseLimitConfig>;
+    setMintLimit(params: ReleaseSetLimitParams): Promise<ReleaseSetLimitResult>;
+    getTxLimit(params: { contract: Address }): Promise<ReleaseLimitConfig>;
+    setTxLimit(params: ReleaseSetLimitParams): Promise<ReleaseSetLimitResult>;
+    getSellerStakingMinimum(params: { contract: Address }): Promise<ReleaseSellerStakingMinimum>;
+    setSellerStakingMinimum(params: ReleaseSetSellerStakingMinimumParams): Promise<ReleaseSetSellerStakingMinimumResult>;
     getStatus(params: ReleaseStatusParams): Promise<ReleaseStatus>;
   };
   search: {

@@ -3,13 +3,22 @@ import { parseEther, parseUnits } from 'viem';
 import {
   ZERO_BYTES32,
   assertReleaseContractOwner,
+  buildReleaseAllowlistArtifact,
+  buildReleaseAllowlistArtifactFromInput,
   collectReleaseSplit,
   finalizeReleaseSplitAccumulator,
+  getReleaseAllowlistProof,
   normalizeReleasePrice,
   normalizeReleaseStartTime,
+  parseReleaseAllowlistArtifact,
+  parseReleaseAllowlistCsv,
+  planReleaseAllowlistConfig,
   planReleaseConfigure,
+  planReleaseLimitConfig,
+  planReleaseSellerStakingMinimum,
   resolveReleaseSplits,
   shapeReleaseStatus,
+  verifyReleaseAllowlistProof,
 } from '../../../src/sdk/release-core.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
@@ -130,6 +139,140 @@ describe('release configure planning', () => {
   });
 });
 
+describe('release allowlist artifacts', () => {
+  const walletA = '0x0000000000000000000000000000000000000003' as const;
+  const walletB = '0x0000000000000000000000000000000000000004' as const;
+  const walletC = '0x0000000000000000000000000000000000000005' as const;
+
+  it('builds reusable Merkle proof artifacts from CSV wallets', () => {
+    const artifact = buildReleaseAllowlistArtifactFromInput(
+      [
+        'wallet,notes',
+        `${walletC},third`,
+        `${walletA},first`,
+        `${walletB},second`,
+      ].join('\n'),
+      'csv',
+    );
+
+    expect(artifact).toMatchObject({
+      kind: 'rare-release-allowlist-v1',
+      version: 1,
+      leafEncoding: 'keccak256(address)',
+      tree: 'sorted-addresses-sort-pairs',
+      wallets: [
+        expect.objectContaining({ address: walletA }),
+        expect.objectContaining({ address: walletB }),
+        expect.objectContaining({ address: walletC }),
+      ],
+    });
+    expect(artifact.root).toMatch(/^0x[0-9a-f]{64}$/);
+
+    for (const wallet of artifact.wallets) {
+      expect(verifyReleaseAllowlistProof({
+        root: artifact.root,
+        wallet: wallet.address,
+        proof: wallet.proof,
+      })).toBe(true);
+    }
+  });
+
+  it('builds artifacts from JSON wallet arrays and returns wallet proofs', () => {
+    const artifact = buildReleaseAllowlistArtifactFromInput(
+      JSON.stringify({
+        wallets: [
+          { wallet: walletB },
+          { address: walletA },
+        ],
+      }),
+      'json',
+    );
+    const proof = getReleaseAllowlistProof({ artifact, wallet: walletB });
+
+    expect(artifact.wallets).toHaveLength(2);
+    expect(proof?.address).toBe(walletB);
+    expect(proof?.proof).toHaveLength(1);
+    expect(parseReleaseAllowlistArtifact(JSON.parse(JSON.stringify(artifact)))).toEqual(artifact);
+  });
+
+  it('rejects invalid, duplicate, and malformed allowlist inputs with clear errors', () => {
+    expect(() => parseReleaseAllowlistCsv('wallet\nnot-an-address')).toThrow(
+      'Invalid allowlist address at CSV row 2: "not-an-address".',
+    );
+    expect(() => parseReleaseAllowlistCsv(`wallet\n${walletA}\n${walletA}`)).toThrow(
+      `Duplicate allowlist address at CSV row 3: "${walletA}" duplicates CSV row 2.`,
+    );
+    expect(() => parseReleaseAllowlistCsv('"unterminated')).toThrow(
+      'Malformed CSV allowlist at row 1: unterminated quoted field.',
+    );
+    expect(() => buildReleaseAllowlistArtifact([])).toThrow(
+      'Allowlist must contain at least one wallet address.',
+    );
+  });
+});
+
+describe('release allowlist and limit planning', () => {
+  it('plans allowlist config from an artifact root and parses ISO end timestamps', () => {
+    const artifact = buildReleaseAllowlistArtifact([accountAddress, recipientAddress]);
+
+    expect(
+      planReleaseAllowlistConfig({
+        contract: collection,
+        artifact,
+        endTimestamp: '2026-01-01T00:00:00.000Z',
+      }),
+    ).toEqual({
+      contract: collection,
+      root: artifact.root,
+      endTimestamp: 1_767_225_600n,
+    });
+  });
+
+  it('plans non-negative mint and transaction limits', () => {
+    expect(planReleaseLimitConfig({ contract: collection, limit: '0' })).toEqual({
+      contract: collection,
+      limit: 0n,
+    });
+    expect(planReleaseLimitConfig({ contract: collection, limit: 3 })).toEqual({
+      contract: collection,
+      limit: 3n,
+    });
+    expect(() => planReleaseLimitConfig({ contract: collection, limit: '-1' })).toThrow(
+      'limit must be greater than or equal to 0.',
+    );
+  });
+
+  it('plans seller staking minimum amounts in RARE units and allows zero to clear', () => {
+    expect(
+      planReleaseSellerStakingMinimum({
+        contract: collection,
+        amount: '12.5',
+        endTimestamp: 123n,
+      }),
+    ).toEqual({
+      contract: collection,
+      amount: parseEther('12.5'),
+      endTimestamp: 123n,
+    });
+    expect(
+      planReleaseSellerStakingMinimum({
+        contract: collection,
+        amount: '0',
+      }),
+    ).toEqual({
+      contract: collection,
+      amount: 0n,
+      endTimestamp: 0n,
+    });
+    expect(() =>
+      planReleaseSellerStakingMinimum({
+        contract: collection,
+        amount: '1',
+      }),
+    ).toThrow('endTimestamp is required.');
+  });
+});
+
 describe('release status shaping', () => {
   it('classifies a configured started release as currently mintable', () => {
     expect(
@@ -148,9 +291,9 @@ describe('release status shaping', () => {
         allowlist: { root: ZERO_BYTES32, endTimestamp: 0n },
         mintLimit: 0n,
         txLimit: 0n,
-        account: null,
-        accountMints: null,
-        accountTxs: null,
+        wallet: null,
+        walletMints: null,
+        walletTxs: null,
         stakingMinimum: { amount: 0n, endTimestamp: 0n },
         totalSupply: 5n,
         maxSupply: 10n,
@@ -185,9 +328,9 @@ describe('release status shaping', () => {
       allowlist: { root: `0x${'11'.repeat(32)}`, endTimestamp: 1_500n },
       mintLimit: 2n,
       txLimit: 0n,
-      account: recipientAddress,
-      accountMints: 2n,
-      accountTxs: 0n,
+      wallet: recipientAddress,
+      walletMints: 2n,
+      walletTxs: 0n,
       stakingMinimum: { amount: 10n, endTimestamp: 1_500n },
       totalSupply: 10n,
       maxSupply: 10n,
@@ -219,9 +362,9 @@ describe('release status shaping', () => {
       allowlist: { root: ZERO_BYTES32, endTimestamp: 0n },
       mintLimit: 0n,
       txLimit: 0n,
-      account: null,
-      accountMints: null,
-      accountTxs: null,
+      wallet: null,
+      walletMints: null,
+      walletTxs: null,
       stakingMinimum: { amount: 0n, endTimestamp: 0n },
       totalSupply: null,
       maxSupply: null,
