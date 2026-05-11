@@ -98,6 +98,97 @@ export interface CollectionPrepareLazyMintResult extends TransactionResult {
   minter?: Address;
 }
 
+export interface CollectionTokenCreatorParams {
+  contract: Address;
+  tokenId: IntegerInput;
+}
+
+export interface CollectionTokenCreatorResult {
+  contract: Address;
+  tokenId: bigint;
+  creator: Address;
+}
+
+export interface CollectionRoyaltyInfoParams {
+  contract: Address;
+  tokenId: IntegerInput;
+  salePrice?: IntegerInput;
+}
+
+export interface CollectionRoyaltyInfoResult {
+  contract: Address;
+  tokenId: bigint;
+  salePrice: bigint;
+  receiver: Address;
+  royaltyAmount: bigint;
+  defaultReceiver?: Address;
+  defaultPercentage?: bigint;
+}
+
+export interface CollectionSetDefaultRoyaltyReceiverParams {
+  contract: Address;
+  receiver: Address;
+}
+
+export interface CollectionSetDefaultRoyaltyReceiverResult extends TransactionResult {
+  contract: Address;
+  receiver: Address;
+}
+
+export interface CollectionSetTokenRoyaltyReceiverParams {
+  contract: Address;
+  tokenId: IntegerInput;
+  receiver: Address;
+}
+
+export interface CollectionSetTokenRoyaltyReceiverResult extends TransactionResult {
+  contract: Address;
+  tokenId: bigint;
+  receiver: Address;
+}
+
+export interface CollectionMintConfigParams {
+  contract: Address;
+}
+
+export interface CollectionMintConfigResult {
+  contract: Address;
+  tokenCount: bigint;
+  baseUri: string;
+  lockedMetadata: boolean;
+}
+
+export interface CollectionUpdateBaseUriParams {
+  contract: Address;
+  baseUri: string;
+}
+
+export interface CollectionUpdateBaseUriResult extends TransactionResult {
+  contract: Address;
+  baseUri: string;
+}
+
+export interface CollectionUpdateTokenUriParams {
+  contract: Address;
+  tokenId: IntegerInput;
+  tokenUri: string;
+}
+
+export interface CollectionUpdateTokenUriResult extends TransactionResult {
+  contract: Address;
+  tokenId: bigint;
+  tokenUri: string;
+}
+
+export interface CollectionLockBaseUriParams {
+  contract: Address;
+}
+
+export interface CollectionLockBaseUriResult extends TransactionResult {
+  contract: Address;
+  baseUri: string;
+}
+
 export interface MintToParams {
   contract: Address;
   tokenUri: string;
@@ -298,6 +389,14 @@ export interface RareClient {
     createLazySovereign(params: CreateLazySovereignCollectionParams): Promise<CreateLazySovereignCollectionResult>;
     mintBatch(params: CollectionMintBatchParams): Promise<CollectionMintBatchResult>;
     prepareLazyMint(params: CollectionPrepareLazyMintParams): Promise<CollectionPrepareLazyMintResult>;
+    getTokenCreator(params: CollectionTokenCreatorParams): Promise<CollectionTokenCreatorResult>;
+    getRoyaltyInfo(params: CollectionRoyaltyInfoParams): Promise<CollectionRoyaltyInfoResult>;
+    setDefaultRoyaltyReceiver(params: CollectionSetDefaultRoyaltyReceiverParams): Promise<CollectionSetDefaultRoyaltyReceiverResult>;
+    setTokenRoyaltyReceiver(params: CollectionSetTokenRoyaltyReceiverParams): Promise<CollectionSetTokenRoyaltyReceiverResult>;
+    getMintConfig(params: CollectionMintConfigParams): Promise<CollectionMintConfigResult>;
+    updateBaseUri(params: CollectionUpdateBaseUriParams): Promise<CollectionUpdateBaseUriResult>;
+    updateTokenUri(params: CollectionUpdateTokenUriParams): Promise<CollectionUpdateTokenUriResult>;
+    lockBaseUri(params: CollectionLockBaseUriParams): Promise<CollectionLockBaseUriResult>;
   };
   user: {
     get(address: string): Promise<UserProfile>;

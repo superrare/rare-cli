@@ -4,10 +4,18 @@ import {
   buildCollectionPrepareLazyMintWrite,
   buildCreateLazySovereignCollectionWrite,
   buildCreateSovereignCollectionWrite,
+  defaultRoyaltyInfoSalePrice,
   normalizeLazySovereignCollectionContractType,
   normalizeSovereignCollectionContractType,
+  planCollectionBaseUri,
+  planCollectionContract,
   planCollectionMintBatch,
   planCollectionPrepareLazyMint,
+  planCollectionReceiver,
+  planCollectionRoyaltyInfo,
+  planCollectionToken,
+  planCollectionTokenReceiver,
+  planCollectionTokenUri,
   planCreateLazySovereignCollection,
   planCreateSovereignCollection,
 } from '../../../src/sdk/collection-core.js';
@@ -244,6 +252,82 @@ describe('Sovereign collection core', () => {
     expect(buildCollectionPrepareLazyMintWrite(minterPlan)).toEqual({
       functionName: 'prepareMintWithMinter',
       args: ['ipfs://lazy', 3n, MINTER_ADDRESS],
+    });
+  });
+
+  it('plans collection token reads with non-negative token IDs', () => {
+    expect(planCollectionToken({
+      contract: COLLECTION_ADDRESS,
+      tokenId: '0',
+    })).toEqual({
+      contract: COLLECTION_ADDRESS,
+      tokenId: 0n,
+    });
+
+    expect(() => planCollectionToken({
+      contract: COLLECTION_ADDRESS,
+      tokenId: '-1',
+    })).toThrow('tokenId must be greater than or equal to 0.');
+  });
+
+  it('plans royalty info with a default raw sale price quote', () => {
+    expect(planCollectionRoyaltyInfo({
+      contract: COLLECTION_ADDRESS,
+      tokenId: 1,
+    })).toEqual({
+      contract: COLLECTION_ADDRESS,
+      tokenId: 1n,
+      salePrice: defaultRoyaltyInfoSalePrice,
+    });
+
+    expect(planCollectionRoyaltyInfo({
+      contract: COLLECTION_ADDRESS,
+      tokenId: 1,
+      salePrice: '500',
+    }).salePrice).toBe(500n);
+  });
+
+  it('plans collection owner write inputs', () => {
+    expect(planCollectionReceiver({
+      contract: COLLECTION_ADDRESS,
+      receiver: MINTER_ADDRESS,
+    })).toEqual({
+      contract: COLLECTION_ADDRESS,
+      receiver: MINTER_ADDRESS,
+    });
+
+    expect(planCollectionTokenReceiver({
+      contract: COLLECTION_ADDRESS,
+      tokenId: '2',
+      receiver: MINTER_ADDRESS,
+    })).toEqual({
+      contract: COLLECTION_ADDRESS,
+      tokenId: 2n,
+      receiver: MINTER_ADDRESS,
+    });
+  });
+
+  it('plans Lazy Sovereign metadata operations', () => {
+    expect(planCollectionBaseUri({
+      contract: COLLECTION_ADDRESS,
+      baseUri: 'ipfs://next',
+    })).toEqual({
+      contract: COLLECTION_ADDRESS,
+      baseUri: 'ipfs://next',
+    });
+
+    expect(planCollectionTokenUri({
+      contract: COLLECTION_ADDRESS,
+      tokenId: '3',
+      tokenUri: 'ipfs://token',
+    })).toEqual({
+      contract: COLLECTION_ADDRESS,
+      tokenId: 3n,
+      tokenUri: 'ipfs://token',
+    });
+
+    expect(planCollectionContract({ contract: COLLECTION_ADDRESS })).toEqual({
+      contract: COLLECTION_ADDRESS,
     });
   });
 });

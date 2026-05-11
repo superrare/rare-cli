@@ -1,6 +1,6 @@
 import type { Address, Hex } from 'viem';
 import type { IntegerInput } from './types.js';
-import { toPositiveInteger } from './helpers.js';
+import { toNonNegativeInteger, toPositiveInteger } from './helpers.js';
 
 export const sovereignCollectionContractTypes = [
   'standard',
@@ -21,6 +21,8 @@ export type LazySovereignCollectionContractTypeReadName =
   | 'LAZY_SOVEREIGN_NFT'
   | 'LAZY_ROYALTY_GUARD'
   | 'LAZY_ROYALTY_GUARD_DEADMAN';
+
+export const defaultRoyaltyInfoSalePrice = 10000n;
 
 export interface PlanCreateSovereignCollectionParams {
   name: string;
@@ -97,6 +99,68 @@ export type CollectionPrepareLazyMintWrite = {
   functionName: 'prepareMint' | 'prepareMintWithMinter';
   args: [string, bigint] | [string, bigint, Address];
 };
+
+export interface PlanCollectionTokenParams {
+  contract: Address;
+  tokenId: IntegerInput;
+}
+
+export interface CollectionTokenPlan {
+  contract: Address;
+  tokenId: bigint;
+}
+
+export interface PlanCollectionRoyaltyInfoParams extends PlanCollectionTokenParams {
+  salePrice?: IntegerInput;
+}
+
+export interface CollectionRoyaltyInfoPlan extends CollectionTokenPlan {
+  salePrice: bigint;
+}
+
+export interface PlanCollectionReceiverParams {
+  contract: Address;
+  receiver: Address;
+}
+
+export interface CollectionReceiverPlan {
+  contract: Address;
+  receiver: Address;
+}
+
+export interface PlanCollectionTokenReceiverParams extends PlanCollectionTokenParams {
+  receiver: Address;
+}
+
+export interface CollectionTokenReceiverPlan extends CollectionTokenPlan {
+  receiver: Address;
+}
+
+export interface PlanCollectionBaseUriParams {
+  contract: Address;
+  baseUri: string;
+}
+
+export interface CollectionBaseUriPlan {
+  contract: Address;
+  baseUri: string;
+}
+
+export interface PlanCollectionTokenUriParams extends PlanCollectionTokenParams {
+  tokenUri: string;
+}
+
+export interface CollectionTokenUriPlan extends CollectionTokenPlan {
+  tokenUri: string;
+}
+
+export interface PlanCollectionContractParams {
+  contract: Address;
+}
+
+export interface CollectionContractPlan {
+  contract: Address;
+}
 
 export function normalizeSovereignCollectionContractType(
   input: string | undefined,
@@ -283,6 +347,70 @@ export function buildCollectionPrepareLazyMintWrite(
   return {
     functionName: 'prepareMintWithMinter',
     args: [plan.baseUri, plan.tokenCount, plan.minter],
+  };
+}
+
+export function planCollectionToken(
+  params: PlanCollectionTokenParams,
+): CollectionTokenPlan {
+  return {
+    contract: params.contract,
+    tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
+  };
+}
+
+export function planCollectionRoyaltyInfo(
+  params: PlanCollectionRoyaltyInfoParams,
+): CollectionRoyaltyInfoPlan {
+  return {
+    ...planCollectionToken(params),
+    salePrice: params.salePrice === undefined
+      ? defaultRoyaltyInfoSalePrice
+      : toNonNegativeInteger(params.salePrice, 'salePrice'),
+  };
+}
+
+export function planCollectionReceiver(
+  params: PlanCollectionReceiverParams,
+): CollectionReceiverPlan {
+  return {
+    contract: params.contract,
+    receiver: params.receiver,
+  };
+}
+
+export function planCollectionTokenReceiver(
+  params: PlanCollectionTokenReceiverParams,
+): CollectionTokenReceiverPlan {
+  return {
+    ...planCollectionToken(params),
+    receiver: params.receiver,
+  };
+}
+
+export function planCollectionBaseUri(
+  params: PlanCollectionBaseUriParams,
+): CollectionBaseUriPlan {
+  return {
+    contract: params.contract,
+    baseUri: params.baseUri,
+  };
+}
+
+export function planCollectionTokenUri(
+  params: PlanCollectionTokenUriParams,
+): CollectionTokenUriPlan {
+  return {
+    ...planCollectionToken(params),
+    tokenUri: params.tokenUri,
+  };
+}
+
+export function planCollectionContract(
+  params: PlanCollectionContractParams,
+): CollectionContractPlan {
+  return {
+    contract: params.contract,
   };
 }
 

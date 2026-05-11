@@ -1,0 +1,116 @@
+export const collectionOwnerAbi = [
+  {
+    inputs: [{ internalType: 'uint256', name: '_tokenId', type: 'uint256' }],
+    name: 'tokenCreator',
+    outputs: [{ internalType: 'address payable', name: '', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'uint256', name: '_tokenId', type: 'uint256' },
+      { internalType: 'uint256', name: '_salePrice', type: 'uint256' },
+    ],
+    name: 'royaltyInfo',
+    outputs: [
+      { internalType: 'address', name: 'receiver', type: 'address' },
+      { internalType: 'uint256', name: 'royaltyAmount', type: 'uint256' },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'getDefaultRoyaltyReceiver',
+    outputs: [{ internalType: 'address', name: '', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'getDefaultRoyaltyPercentage',
+    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'address', name: '_receiver', type: 'address' }],
+    name: 'setDefaultRoyaltyReceiver',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'address', name: '_receiver', type: 'address' },
+      { internalType: 'uint256', name: '_tokenId', type: 'uint256' },
+    ],
+    name: 'setRoyaltyReceiverForToken',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'getMintConfig',
+    outputs: [
+      {
+        components: [
+          { internalType: 'uint256', name: 'numberOfTokens', type: 'uint256' },
+          { internalType: 'string', name: 'baseURI', type: 'string' },
+          { internalType: 'bool', name: 'lockedMetadata', type: 'bool' },
+        ],
+        internalType: 'struct LazySovereignNFT.MintConfig',
+        name: 'mintConfig',
+        type: 'tuple',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'string', name: '_baseURI', type: 'string' }],
+    name: 'updateBaseURI',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'uint256', name: '_tokenId', type: 'uint256' },
+      { internalType: 'string', name: '_metadataUri', type: 'string' },
+    ],
+    name: 'updateTokenURI',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'lockBaseURI',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    anonymous: false,
+    inputs: [{ indexed: false, internalType: 'string', name: 'baseURI', type: 'string' }],
+    name: 'MetadataUpdated',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: 'uint256', name: 'tokenId', type: 'uint256' },
+      { indexed: false, internalType: 'string', name: 'metadataUri', type: 'string' },
+    ],
+    name: 'TokenURIUpdated',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [{ indexed: false, internalType: 'string', name: 'baseURI', type: 'string' }],
+    name: 'MetadataLocked',
+    type: 'event',
+  },
+] as const;

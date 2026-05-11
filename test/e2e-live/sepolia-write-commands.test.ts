@@ -29,6 +29,8 @@ const describeLive = missingEnv.length === 0 ? describe.sequential : describe.sk
 const E2E_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/metadata.json';
 const E2E_BATCH_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/batch';
 const E2E_LAZY_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy';
+const E2E_LAZY_UPDATED_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy-updated';
+const E2E_LAZY_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy-token-1.json';
 
 type DeployResult = {
   txHash: string;
@@ -63,6 +65,41 @@ type CollectionPrepareLazyMintResult = {
   baseUri: string;
   tokenCount: string;
   minter?: string;
+};
+
+type CollectionTokenCreatorResult = {
+  chain: string;
+  contract: string;
+  tokenId: string;
+  creator: string;
+};
+
+type CollectionRoyaltyInfoResult = {
+  chain: string;
+  contract: string;
+  tokenId: string;
+  salePrice: string;
+  receiver: string;
+  royaltyAmount: string;
+  defaultReceiver?: string;
+  defaultPercentage?: string;
+};
+
+type CollectionMetadataStatusResult = {
+  chain: string;
+  contract: string;
+  baseUri: string;
+  tokenCount: string;
+  lockedMetadata: boolean;
+};
+
+type CollectionMetadataWriteResult = {
+  txHash: string;
+  blockNumber: string;
+  contract: string;
+  baseUri?: string;
+  tokenId?: string;
+  tokenUri?: string;
 };
 
 type MintResult = {
@@ -263,6 +300,66 @@ describeLive('live Sepolia CLI write commands', () => {
     expect(minted.fromTokenId).toBe('1');
     expect(minted.toTokenId).toBe('2');
     expect(minted.owner.toLowerCase()).toBe(live.sellerAddress.toLowerCase());
+
+    const creator = await step('read Sovereign token creator', () =>
+      jsonCommand<CollectionTokenCreatorResult>(live.sellerHome, [
+        'collection',
+        'creator',
+        '--contract',
+        created.contract,
+        '--token-id',
+        '1',
+        '--chain',
+        'sepolia',
+      ]),
+    );
+    expect(creator.contract.toLowerCase()).toBe(created.contract.toLowerCase());
+    expect(creator.tokenId).toBe('1');
+    expect(creator.creator.toLowerCase()).toBe(live.sellerAddress.toLowerCase());
+
+    const initialRoyalty = await readCollectionRoyalty(live.sellerHome, created.contract, '1');
+    expect(initialRoyalty.receiver.toLowerCase()).toBe(live.sellerAddress.toLowerCase());
+    expect(initialRoyalty.defaultReceiver?.toLowerCase()).toBe(live.sellerAddress.toLowerCase());
+    expect(initialRoyalty.defaultPercentage).toBe('10');
+    expect(initialRoyalty.royaltyAmount).toBe('1000');
+
+    expectTx(await step('set default royalty receiver', () =>
+      jsonCommand<TxResult>(live.sellerHome, [
+        'collection',
+        'royalty',
+        'set-default-receiver',
+        '--contract',
+        created.contract,
+        '--receiver',
+        live.buyerAddress,
+        '--chain',
+        'sepolia',
+      ]),
+    ));
+
+    const defaultReceiverRoyalty = await readCollectionRoyalty(live.sellerHome, created.contract, '1');
+    expect(defaultReceiverRoyalty.receiver.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
+    expect(defaultReceiverRoyalty.defaultReceiver?.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
+
+    expectTx(await step('set token royalty receiver', () =>
+      jsonCommand<TxResult>(live.sellerHome, [
+        'collection',
+        'royalty',
+        'set-token-receiver',
+        '--contract',
+        created.contract,
+        '--token-id',
+        '1',
+        '--receiver',
+        live.sellerAddress,
+        '--chain',
+        'sepolia',
+      ]),
+    ));
+
+    const tokenReceiverRoyalty = await readCollectionRoyalty(live.sellerHome, created.contract, '1');
+    expect(tokenReceiverRoyalty.receiver.toLowerCase()).toBe(live.sellerAddress.toLowerCase());
+    expect(tokenReceiverRoyalty.defaultReceiver?.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
   });
 
   it('creates a Lazy Sovereign release collection through the lazy factory', async () => {
@@ -309,6 +406,64 @@ describeLive('live Sepolia CLI write commands', () => {
     expect(prepared.baseUri).toBe(E2E_LAZY_BASE_URI);
     expect(prepared.tokenCount).toBe('2');
     expect(prepared.minter?.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
+
+    const initialMetadata = await readCollectionMetadata(live.sellerHome, created.contract);
+    expect(initialMetadata.baseUri).toBe(E2E_LAZY_BASE_URI);
+    expect(initialMetadata.tokenCount).toBe('2');
+    expect(initialMetadata.lockedMetadata).toBe(false);
+
+    const updatedBase = await step('update lazy base URI', () =>
+      jsonCommand<CollectionMetadataWriteResult>(live.sellerHome, [
+        'collection',
+        'metadata',
+        'update-base-uri',
+        '--contract',
+        created.contract,
+        '--base-uri',
+        E2E_LAZY_UPDATED_BASE_URI,
+        '--chain',
+        'sepolia',
+      ]),
+    );
+    expectTx(updatedBase);
+    expect(updatedBase.baseUri).toBe(E2E_LAZY_UPDATED_BASE_URI);
+
+    const updatedToken = await step('update lazy token URI', () =>
+      jsonCommand<CollectionMetadataWriteResult>(live.sellerHome, [
+        'collection',
+        'metadata',
+        'update-token-uri',
+        '--contract',
+        created.contract,
+        '--token-id',
+        '1',
+        '--token-uri',
+        E2E_LAZY_TOKEN_URI,
+        '--chain',
+        'sepolia',
+      ]),
+    );
+    expectTx(updatedToken);
+    expect(updatedToken.tokenId).toBe('1');
+    expect(updatedToken.tokenUri).toBe(E2E_LAZY_TOKEN_URI);
+
+    const locked = await step('lock lazy base URI', () =>
+      jsonCommand<CollectionMetadataWriteResult>(live.sellerHome, [
+        'collection',
+        'metadata',
+        'lock-base-uri',
+        '--contract',
+        created.contract,
+        '--chain',
+        'sepolia',
+      ]),
+    );
+    expectTx(locked);
+    expect(locked.baseUri).toBe(E2E_LAZY_UPDATED_BASE_URI);
+
+    const lockedMetadata = await readCollectionMetadata(live.sellerHome, created.contract);
+    expect(lockedMetadata.baseUri).toBe(E2E_LAZY_UPDATED_BASE_URI);
+    expect(lockedMetadata.lockedMetadata).toBe(true);
   });
 
   it('mints directly to another recipient', async () => {
@@ -736,6 +891,39 @@ async function expectAuctionStatus(
     'sepolia',
   ]);
   expect(status.status).toBe(expectedStatus);
+}
+
+async function readCollectionRoyalty(
+  home: string,
+  contract: string,
+  tokenId: string,
+): Promise<CollectionRoyaltyInfoResult> {
+  return jsonCommand<CollectionRoyaltyInfoResult>(home, [
+    'collection',
+    'royalty',
+    'status',
+    '--contract',
+    contract,
+    '--token-id',
+    tokenId,
+    '--chain',
+    'sepolia',
+  ]);
+}
+
+async function readCollectionMetadata(
+  home: string,
+  contract: string,
+): Promise<CollectionMetadataStatusResult> {
+  return jsonCommand<CollectionMetadataStatusResult>(home, [
+    'collection',
+    'metadata',
+    'status',
+    '--contract',
+    contract,
+    '--chain',
+    'sepolia',
+  ]);
 }
 
 async function jsonCommand<T>(home: string, args: string[], timeoutMs = 180_000): Promise<T> {

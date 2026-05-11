@@ -3,7 +3,8 @@ import { getAddress, isAddress, type Address } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
-import { requireContractAddress } from '../contracts/addresses.js';
+import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
+import type { RareClient } from '../sdk/types.js';
 import {
   lazySovereignCollectionContractTypes,
   normalizeLazySovereignCollectionContractType,
@@ -38,6 +39,44 @@ type CollectionPrepareLazyMintOptions = {
   tokenCount: string;
   minter?: string;
   chain?: string;
+};
+
+type CollectionTokenOptions = {
+  contract: string;
+  tokenId: string;
+  chain?: string;
+};
+
+type CollectionRoyaltyStatusOptions = CollectionTokenOptions & {
+  salePrice?: string;
+};
+
+type CollectionRoyaltyReceiverOptions = {
+  contract: string;
+  receiver: string;
+  chain?: string;
+};
+
+type CollectionTokenRoyaltyReceiverOptions = CollectionRoyaltyReceiverOptions & {
+  tokenId: string;
+};
+
+type CollectionContractOptions = {
+  contract: string;
+  chain?: string;
+};
+
+type CollectionUpdateBaseUriOptions = CollectionContractOptions & {
+  baseUri: string;
+};
+
+type CollectionUpdateTokenUriOptions = CollectionTokenOptions & {
+  tokenUri: string;
+};
+
+type CollectionCommandClient = {
+  chain: SupportedChain;
+  rare: RareClient;
 };
 
 function createSovereignCollectionCommand(): Command {
@@ -273,6 +312,362 @@ function createPrepareLazyMintCommand(): Command {
   return cmd;
 }
 
+function createTokenCreatorCommand(): Command {
+  const cmd = new Command('creator');
+  cmd.description('Read the creator address for a collection token');
+
+  cmd
+    .requiredOption('--contract <address>', 'collection contract address')
+    .requiredOption('--token-id <id>', 'token ID to inspect')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: CollectionTokenOptions) => {
+      try {
+        const contract = parseAddressOption(opts.contract, '--contract');
+        const { chain, rare } = createReadCollectionClient(opts.chain);
+        const result = await rare.collection.getTokenCreator({
+          contract,
+          tokenId: opts.tokenId,
+        });
+
+        output(
+          {
+            chain,
+            contract: result.contract,
+            tokenId: result.tokenId,
+            creator: result.creator,
+          },
+          () => {
+            console.log(`Token creator: ${result.creator}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createRoyaltyStatusCommand(): Command {
+  const cmd = new Command('status');
+  cmd.description('Read ERC-2981 royalty receiver and amount for a collection token');
+
+  cmd
+    .requiredOption('--contract <address>', 'collection contract address')
+    .requiredOption('--token-id <id>', 'token ID to inspect')
+    .option('--sale-price <raw>', 'raw sale price units used for the royalty quote')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: CollectionRoyaltyStatusOptions) => {
+      try {
+        const contract = parseAddressOption(opts.contract, '--contract');
+        const { chain, rare } = createReadCollectionClient(opts.chain);
+        const result = await rare.collection.getRoyaltyInfo({
+          contract,
+          tokenId: opts.tokenId,
+          salePrice: opts.salePrice,
+        });
+
+        output(
+          {
+            chain,
+            contract: result.contract,
+            tokenId: result.tokenId,
+            salePrice: result.salePrice,
+            receiver: result.receiver,
+            royaltyAmount: result.royaltyAmount,
+            defaultReceiver: result.defaultReceiver,
+            defaultPercentage: result.defaultPercentage,
+          },
+          () => {
+            console.log(`Royalty receiver: ${result.receiver}`);
+            console.log(`Royalty amount: ${result.royaltyAmount.toString()}`);
+            if (result.defaultReceiver !== undefined) {
+              console.log(`Default receiver: ${result.defaultReceiver}`);
+            }
+            if (result.defaultPercentage !== undefined) {
+              console.log(`Default percentage: ${result.defaultPercentage.toString()}%`);
+            }
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createSetDefaultRoyaltyReceiverCommand(): Command {
+  const cmd = new Command('set-default-receiver');
+  cmd.description('Set the default royalty receiver for a Sovereign-style collection');
+
+  cmd
+    .requiredOption('--contract <address>', 'collection contract address')
+    .requiredOption('--receiver <address>', 'new default royalty receiver')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: CollectionRoyaltyReceiverOptions) => {
+      try {
+        const contract = parseAddressOption(opts.contract, '--contract');
+        const receiver = parseAddressOption(opts.receiver, '--receiver');
+        const { chain, rare } = createWriteCollectionClient(opts.chain);
+
+        log(`Setting default royalty receiver on ${chain}...`);
+        log(`  Contract: ${contract}`);
+        log(`  Receiver: ${receiver}`);
+        log('Waiting for confirmation...');
+
+        const result = await rare.collection.setDefaultRoyaltyReceiver({ contract, receiver });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            contract: result.contract,
+            receiver: result.receiver,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Default royalty receiver set to: ${result.receiver}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createSetTokenRoyaltyReceiverCommand(): Command {
+  const cmd = new Command('set-token-receiver');
+  cmd.description('Set a token-specific royalty receiver for a Sovereign-style collection');
+
+  cmd
+    .requiredOption('--contract <address>', 'collection contract address')
+    .requiredOption('--token-id <id>', 'token ID to update')
+    .requiredOption('--receiver <address>', 'new token royalty receiver')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: CollectionTokenRoyaltyReceiverOptions) => {
+      try {
+        const contract = parseAddressOption(opts.contract, '--contract');
+        const receiver = parseAddressOption(opts.receiver, '--receiver');
+        const { chain, rare } = createWriteCollectionClient(opts.chain);
+
+        log(`Setting token royalty receiver on ${chain}...`);
+        log(`  Contract: ${contract}`);
+        log(`  Token ID: ${opts.tokenId}`);
+        log(`  Receiver: ${receiver}`);
+        log('Waiting for confirmation...');
+
+        const result = await rare.collection.setTokenRoyaltyReceiver({
+          contract,
+          tokenId: opts.tokenId,
+          receiver,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            contract: result.contract,
+            tokenId: result.tokenId,
+            receiver: result.receiver,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Token ${result.tokenId.toString()} royalty receiver set to: ${result.receiver}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createRoyaltyCommand(): Command {
+  const cmd = new Command('royalty');
+  cmd.description('Inspect and update collection royalty receiver settings');
+  cmd.addCommand(createRoyaltyStatusCommand());
+  cmd.addCommand(createSetDefaultRoyaltyReceiverCommand());
+  cmd.addCommand(createSetTokenRoyaltyReceiverCommand());
+  return cmd;
+}
+
+function createMetadataStatusCommand(): Command {
+  const cmd = new Command('status');
+  cmd.description('Read Lazy Sovereign mint metadata configuration');
+
+  cmd
+    .requiredOption('--contract <address>', 'collection contract address')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: CollectionContractOptions) => {
+      try {
+        const contract = parseAddressOption(opts.contract, '--contract');
+        const { chain, rare } = createReadCollectionClient(opts.chain);
+        const result = await rare.collection.getMintConfig({ contract });
+
+        output(
+          {
+            chain,
+            contract: result.contract,
+            baseUri: result.baseUri,
+            tokenCount: result.tokenCount,
+            lockedMetadata: result.lockedMetadata,
+          },
+          () => {
+            console.log(`Base URI: ${result.baseUri}`);
+            console.log(`Token count: ${result.tokenCount.toString()}`);
+            console.log(`Locked metadata: ${result.lockedMetadata ? 'yes' : 'no'}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createUpdateBaseUriCommand(): Command {
+  const cmd = new Command('update-base-uri');
+  cmd.description('Update the Lazy Sovereign base metadata URI');
+
+  cmd
+    .requiredOption('--contract <address>', 'collection contract address')
+    .requiredOption('--base-uri <uri>', 'new base URI')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: CollectionUpdateBaseUriOptions) => {
+      try {
+        const contract = parseAddressOption(opts.contract, '--contract');
+        const { chain, rare } = createWriteCollectionClient(opts.chain);
+
+        log(`Updating collection base URI on ${chain}...`);
+        log(`  Contract: ${contract}`);
+        log(`  Base URI: ${opts.baseUri}`);
+        log('Waiting for confirmation...');
+
+        const result = await rare.collection.updateBaseUri({
+          contract,
+          baseUri: opts.baseUri,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            contract: result.contract,
+            baseUri: result.baseUri,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Base URI updated to: ${result.baseUri}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createUpdateTokenUriCommand(): Command {
+  const cmd = new Command('update-token-uri');
+  cmd.description('Update metadata URI for one Lazy Sovereign token');
+
+  cmd
+    .requiredOption('--contract <address>', 'collection contract address')
+    .requiredOption('--token-id <id>', 'token ID to update')
+    .requiredOption('--token-uri <uri>', 'new token metadata URI')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: CollectionUpdateTokenUriOptions) => {
+      try {
+        const contract = parseAddressOption(opts.contract, '--contract');
+        const { chain, rare } = createWriteCollectionClient(opts.chain);
+
+        log(`Updating token metadata URI on ${chain}...`);
+        log(`  Contract: ${contract}`);
+        log(`  Token ID: ${opts.tokenId}`);
+        log(`  Token URI: ${opts.tokenUri}`);
+        log('Waiting for confirmation...');
+
+        const result = await rare.collection.updateTokenUri({
+          contract,
+          tokenId: opts.tokenId,
+          tokenUri: opts.tokenUri,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            contract: result.contract,
+            tokenId: result.tokenId,
+            tokenUri: result.tokenUri,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Token ${result.tokenId.toString()} URI updated to: ${result.tokenUri}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createLockBaseUriCommand(): Command {
+  const cmd = new Command('lock-base-uri');
+  cmd.description('Lock Lazy Sovereign base metadata URI updates');
+
+  cmd
+    .requiredOption('--contract <address>', 'collection contract address')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: CollectionContractOptions) => {
+      try {
+        const contract = parseAddressOption(opts.contract, '--contract');
+        const { chain, rare } = createWriteCollectionClient(opts.chain);
+
+        log(`Locking collection base URI on ${chain}...`);
+        log(`  Contract: ${contract}`);
+        log('Waiting for confirmation...');
+
+        const result = await rare.collection.lockBaseUri({ contract });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            contract: result.contract,
+            baseUri: result.baseUri,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Base URI locked: ${result.baseUri}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createMetadataCommand(): Command {
+  const cmd = new Command('metadata');
+  cmd.description('Inspect and update Lazy Sovereign metadata settings');
+  cmd.addCommand(createMetadataStatusCommand());
+  cmd.addCommand(createUpdateBaseUriCommand());
+  cmd.addCommand(createUpdateTokenUriCommand());
+  cmd.addCommand(createLockBaseUriCommand());
+  return cmd;
+}
+
 function createCollectionCreateCommand(): Command {
   const cmd = new Command('create');
   cmd.description('Create NFT collections through RARE factories');
@@ -287,7 +682,29 @@ export function collectionCommand(): Command {
   cmd.addCommand(createCollectionCreateCommand());
   cmd.addCommand(createMintBatchCommand());
   cmd.addCommand(createPrepareLazyMintCommand());
+  cmd.addCommand(createTokenCreatorCommand());
+  cmd.addCommand(createRoyaltyCommand());
+  cmd.addCommand(createMetadataCommand());
   return cmd;
+}
+
+function createReadCollectionClient(chainInput: string | undefined): CollectionCommandClient {
+  const chain = getActiveChain(chainInput);
+  const publicClient = getPublicClient(chain);
+  return {
+    chain,
+    rare: createRareClient({ publicClient }),
+  };
+}
+
+function createWriteCollectionClient(chainInput: string | undefined): CollectionCommandClient {
+  const chain = getActiveChain(chainInput);
+  const { client } = getWalletClient(chain);
+  const publicClient = getPublicClient(chain);
+  return {
+    chain,
+    rare: createRareClient({ publicClient, walletClient: client }),
+  };
 }
 
 function parseAddressOption(value: string, optionName: string): Address {
