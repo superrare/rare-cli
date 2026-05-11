@@ -187,6 +187,13 @@ describe('built CLI deterministic behavior', () => {
       expect(limits.stdout).toContain('Usage: rare release limits set-mint [options]');
       expect(limits.stdout).toContain('--limit <number>');
       expect(limits.stderr).toBe('');
+
+      const mint = await runCli(['release', 'mint', '--help'], { home });
+      expect(mint.code).toBe(0);
+      expect(mint.stdout).toContain('Usage: rare release mint [options]');
+      expect(mint.stdout).toContain('--quantity <number>');
+      expect(mint.stdout).toContain('--proof <path>');
+      expect(mint.stderr).toBe('');
     });
   });
 
@@ -286,6 +293,28 @@ describe('built CLI deterministic behavior', () => {
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('allowlist address at index 0 must be a valid 0x address.');
+    });
+  });
+
+  it('rejects malformed release mint options before wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const proof = join(home, 'bad-proof.json');
+      await writeFile(proof, JSON.stringify({ proof: ['0x1234'] }), 'utf8');
+
+      const result = await runCli([
+        'release',
+        'mint',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--proof',
+        proof,
+        '--chain',
+        'sepolia',
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('proof[0] must be a bytes32 hex string.');
     });
   });
 

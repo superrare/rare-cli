@@ -8,14 +8,19 @@ import {
   normalizeBytes32,
   parseReleaseAllowlistAddresses,
   parseReleaseAllowlistArtifact,
+  planReleaseDirectSaleMint,
   planReleaseAllowlistConfig,
   planReleaseMintLimit,
   planReleaseSellerStakingMinimum,
   planReleaseTxLimit,
+  preflightReleaseDirectSaleMint,
+  shapeReleaseCollectionSupply,
+  shapeReleaseDirectSaleConfig,
   verifyReleaseAllowlistProof,
 } from '../../../src/sdk/release-core.js';
 
 const COLLECTION_ADDRESS = '0x1111111111111111111111111111111111111111';
+const ETH_ADDRESS = '0x0000000000000000000000000000000000000000';
 const WALLET_A = '0x1111111111111111111111111111111111111111';
 const WALLET_B = '0x2222222222222222222222222222222222222222';
 const WALLET_C = '0x3333333333333333333333333333333333333333';
@@ -187,5 +192,128 @@ describe('RareMinter release core', () => {
       sellerStakingMinimum: 6n,
       sellerStakingMinimumEndTimestamp: 1778500000n,
     })).toThrow('RareMinter seller staking minimum write was mined but the verified read did not match.');
+  });
+
+  it('plans direct sale mints with uint8 quantity and optional proof inputs', () => {
+    expect(planReleaseDirectSaleMint({
+      contract: COLLECTION_ADDRESS,
+      quantity: '2',
+      price: '0.5',
+      proof: [EXPECTED_ROOT],
+    })).toEqual({
+      contract: COLLECTION_ADDRESS,
+      quantity: 2,
+      currency: undefined,
+      price: 500000000000000000n,
+      proof: [EXPECTED_ROOT],
+      recipient: undefined,
+      autoApprove: true,
+    });
+
+    expect(() => planReleaseDirectSaleMint({
+      contract: COLLECTION_ADDRESS,
+      quantity: 256,
+    })).toThrow('quantity must be less than or equal to 255.');
+  });
+
+  it('preflights direct sale mint limits, supply, and allowlist proofs', () => {
+    const proof = getReleaseAllowlistProof(buildReleaseAllowlistArtifact({
+      content: JSON.stringify([WALLET_B, WALLET_A, WALLET_C]),
+      format: 'json',
+    }), WALLET_A);
+    const plan = planReleaseDirectSaleMint({
+      contract: COLLECTION_ADDRESS,
+      quantity: 1,
+      proof: proof.proof,
+    });
+
+    expect(preflightReleaseDirectSaleMint({
+      status: {
+        directSale: shapeReleaseDirectSaleConfig({
+          seller: WALLET_B,
+          currencyAddress: ETH_ADDRESS,
+          price: 10n,
+          startTime: 90n,
+          maxMints: 2n,
+          splitRecipients: [WALLET_B],
+          splitRatios: [100],
+        }),
+        allowlistRoot: EXPECTED_ROOT,
+        allowlistEndTimestamp: 200n,
+        mintLimit: 2n,
+        txLimit: 1n,
+        accountMints: 1n,
+        accountTxs: 0n,
+        supply: shapeReleaseCollectionSupply({
+          totalSupply: 1n,
+          preparedTokenCount: 2n,
+        }),
+      },
+      plan,
+      buyer: WALLET_A,
+      nowSeconds: 100n,
+    })).toMatchObject({
+      contract: COLLECTION_ADDRESS,
+      buyer: WALLET_A,
+      recipient: WALLET_A,
+      quantity: 1,
+      currency: ETH_ADDRESS,
+      price: 10n,
+      totalPrice: 10n,
+      allowlistRequired: true,
+    });
+  });
+
+  it('rejects direct sale mints that fail preflight checks', () => {
+    const status = {
+      directSale: shapeReleaseDirectSaleConfig({
+        seller: WALLET_B,
+        currencyAddress: ETH_ADDRESS,
+        price: 10n,
+        startTime: 90n,
+        maxMints: 1n,
+        splitRecipients: [WALLET_B],
+        splitRatios: [100],
+      }),
+      allowlistRoot: EXPECTED_ROOT,
+      allowlistEndTimestamp: 200n,
+      mintLimit: 0n,
+      txLimit: 0n,
+      supply: shapeReleaseCollectionSupply({
+        totalSupply: 2n,
+        preparedTokenCount: 2n,
+      }),
+    };
+
+    expect(() => preflightReleaseDirectSaleMint({
+      status,
+      plan: planReleaseDirectSaleMint({ contract: COLLECTION_ADDRESS }),
+      buyer: WALLET_A,
+      nowSeconds: 100n,
+    })).toThrow('Release collection is sold out.');
+
+    expect(() => preflightReleaseDirectSaleMint({
+      status: {
+        ...status,
+        supply: shapeReleaseCollectionSupply({ totalSupply: 0n, preparedTokenCount: 2n }),
+      },
+      plan: planReleaseDirectSaleMint({ contract: COLLECTION_ADDRESS }),
+      buyer: WALLET_A,
+      nowSeconds: 100n,
+    })).toThrow('Active allowlist requires a proof.');
+
+    expect(() => preflightReleaseDirectSaleMint({
+      status: {
+        ...status,
+        allowlistRoot: '0x0000000000000000000000000000000000000000000000000000000000000000',
+        supply: shapeReleaseCollectionSupply({ totalSupply: 0n, preparedTokenCount: 2n }),
+      },
+      plan: planReleaseDirectSaleMint({
+        contract: COLLECTION_ADDRESS,
+        recipient: WALLET_C,
+      }),
+      buyer: WALLET_A,
+      nowSeconds: 100n,
+    })).toThrow('does not support a separate recipient');
   });
 });

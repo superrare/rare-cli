@@ -13,6 +13,7 @@ import {
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { getContractAddresses, resolveCurrency } from '../../src/contracts/addresses.js';
+import { rareMinterAbi } from '../../src/contracts/abis/rare-minter.js';
 import { parseJsonStdout, runCli } from '../helpers/cli.js';
 import { loadDotEnv } from './env.mjs';
 
@@ -32,6 +33,7 @@ const E2E_LAZY_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehyc
 const E2E_LAZY_UPDATED_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy-updated';
 const E2E_LAZY_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy-token-1.json';
 const E2E_ALLOWLIST_ROOT = '0xcbf843e9efe7be41ca4d3a03347d27e7bb96d83ae75b3b36983ad907d2109c65';
+const E2E_ETH_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 type DeployResult = {
   txHash: string;
@@ -133,6 +135,22 @@ type ReleaseStatusResult = {
   account?: string;
   accountMints?: string;
   accountTxs?: string;
+};
+
+type ReleaseMintDirectSaleResult = TxResult & {
+  contract: string;
+  minter: string;
+  buyer: string;
+  recipient: string;
+  quantity: number;
+  currency: string;
+  price: string;
+  totalPrice: string;
+  requiredPayment: string;
+  allowlistRequired: boolean;
+  tokenIdStart: string;
+  tokenIdEnd: string;
+  tokenIds: string[];
 };
 
 type MintResult = {
@@ -571,6 +589,77 @@ describeLive('live Sepolia CLI write commands', () => {
     expect(releaseStatus.account?.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
     expect(releaseStatus.accountMints).toBe('0');
     expect(releaseStatus.accountTxs).toBe('0');
+  });
+
+  it('mints a prepared RareMinter direct sale release', async () => {
+    const suffix = Date.now().toString(36);
+    const minter = getContractAddresses('sepolia').rareMinter!;
+    const created = await step('create direct sale Lazy Sovereign collection', () =>
+      jsonCommand<CreateSovereignResult>(live.sellerHome, [
+        'collection',
+        'create',
+        'lazy-sovereign',
+        `Rare CLI Direct Sale E2E ${suffix}`,
+        `RCD${suffix.slice(-4).toUpperCase()}`,
+        '--max-tokens',
+        '2',
+        '--chain',
+        'sepolia',
+      ]),
+    );
+    expectTx(created);
+
+    const prepared = await step('prepare direct sale lazy mint batch', () =>
+      jsonCommand<CollectionPrepareLazyMintResult>(live.sellerHome, [
+        'collection',
+        'prepare-lazy-mint',
+        '--contract',
+        created.contract,
+        '--base-uri',
+        E2E_LAZY_BASE_URI,
+        '--token-count',
+        '2',
+        '--minter',
+        minter,
+        '--chain',
+        'sepolia',
+      ]),
+    );
+    expectTx(prepared);
+
+    await step('prepare RareMinter direct sale config', () =>
+      prepareDirectSale(created.contract, minter),
+    );
+
+    const minted = await step('mint direct sale release', () =>
+      jsonCommand<ReleaseMintDirectSaleResult>(live.buyerHome, [
+        'release',
+        'mint',
+        '--contract',
+        created.contract,
+        '--quantity',
+        '2',
+        '--chain',
+        'sepolia',
+      ]),
+    );
+
+    expectTx(minted);
+    expect(minted.contract.toLowerCase()).toBe(created.contract.toLowerCase());
+    expect(minted.minter.toLowerCase()).toBe(minter.toLowerCase());
+    expect(minted.buyer.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
+    expect(minted.recipient.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
+    expect(minted.quantity).toBe(2);
+    expect(minted.currency).toBe(E2E_ETH_ADDRESS);
+    expect(minted.price).toBe('0');
+    expect(minted.totalPrice).toBe('0');
+    expect(minted.requiredPayment).toBe('0');
+    expect(minted.allowlistRequired).toBe(false);
+    expect(minted.tokenIdStart).toBe('1');
+    expect(minted.tokenIdEnd).toBe('2');
+    expect(minted.tokenIds).toEqual(['1', '2']);
+    await expectTokenOwner(live.buyerHome, created.contract, '1', live.buyerAddress, `${E2E_LAZY_BASE_URI}/1.json`);
+    await expectTokenOwner(live.buyerHome, created.contract, '2', live.buyerAddress, `${E2E_LAZY_BASE_URI}/2.json`);
   });
 
   it('mints directly to another recipient', async () => {
@@ -1042,7 +1131,13 @@ function expectTx(result: TxResult): void {
   expect(result.blockNumber).toMatch(/^\d+$/);
 }
 
-async function expectTokenOwner(home: string, contract: string, tokenId: string, owner: Address): Promise<void> {
+async function expectTokenOwner(
+  home: string,
+  contract: string,
+  tokenId: string,
+  owner: Address,
+  expectedTokenUri = E2E_TOKEN_URI,
+): Promise<void> {
   const status = await jsonCommand<{
     token: { owner: Address; tokenUri: string; tokenId: string } | null;
   }>(home, [
@@ -1057,7 +1152,7 @@ async function expectTokenOwner(home: string, contract: string, tokenId: string,
 
   expect(status.token).not.toBeNull();
   expect(status.token!.owner.toLowerCase()).toBe(owner.toLowerCase());
-  expect(status.token!.tokenUri).toBe(E2E_TOKEN_URI);
+  expect(status.token!.tokenUri).toBe(expectedTokenUri);
 }
 
 async function readErc20Balance(currency: Address, owner: Address): Promise<bigint> {
@@ -1095,6 +1190,30 @@ async function approveErc20(
     abi: erc20Abi,
     functionName: 'approve',
     args: [spender, amount],
+  });
+  await publicClient.waitForTransactionReceipt({ hash: txHash });
+}
+
+async function prepareDirectSale(contract: string, minter: Address): Promise<void> {
+  const publicClient = createLivePublicClient();
+  const walletClient = createWalletClient({
+    account: privateKeyToAccount(livePrivateKey('E2E_SELLER_PRIVATE_KEY')),
+    chain: sepolia,
+    transport: http(process.env.TEST_RPC_URL!),
+  });
+  const txHash = await walletClient.writeContract({
+    address: minter,
+    abi: rareMinterAbi,
+    functionName: 'prepareMintDirectSale',
+    args: [
+      contract as Address,
+      E2E_ETH_ADDRESS,
+      0n,
+      0n,
+      2n,
+      [live.sellerAddress],
+      [100],
+    ],
   });
   await publicClient.waitForTransactionReceipt({ hash: txHash });
 }

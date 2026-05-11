@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import { getAddress, isAddress, type Address, type Hex } from 'viem';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
-import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
+import { requireContractAddress, resolveCurrency, type SupportedChain } from '../contracts/addresses.js';
 import { printError } from '../errors.js';
 import { output, log } from '../output.js';
 import { createRareClient } from '../sdk/client.js';
@@ -49,6 +49,17 @@ type ReleaseStatusOptions = {
   contract: string;
   account?: string;
   chain?: string;
+};
+
+type ReleaseMintOptions = {
+  contract: string;
+  quantity?: string;
+  currency?: string;
+  price?: string;
+  proof?: string;
+  recipient?: string;
+  chain?: string;
+  autoApprove?: boolean;
 };
 
 type ReleaseLimitOptions = {
@@ -276,6 +287,8 @@ function createStatusCommand(): Command {
             txLimit: result.txLimit,
             sellerStakingMinimum: result.sellerStakingMinimum,
             sellerStakingMinimumEndTimestamp: result.sellerStakingMinimumEndTimestamp,
+            directSale: result.directSale,
+            supply: result.supply,
             account: result.account,
             accountMints: result.accountMints,
             accountTxs: result.accountTxs,
@@ -288,11 +301,105 @@ function createStatusCommand(): Command {
             console.log(`Transaction limit: ${result.txLimit.toString()}`);
             console.log(`Seller staking minimum: ${result.sellerStakingMinimum.toString()}`);
             console.log(`Seller staking minimum end timestamp: ${result.sellerStakingMinimumEndTimestamp.toString()}`);
+            console.log(`Direct sale configured: ${result.directSale.configured ? 'yes' : 'no'}`);
+            if (result.directSale.configured) {
+              console.log(`Direct sale seller: ${result.directSale.seller}`);
+              console.log(`Direct sale currency: ${result.directSale.currencyAddress}`);
+              console.log(`Direct sale price: ${result.directSale.price.toString()}`);
+              console.log(`Direct sale start timestamp: ${result.directSale.startTime.toString()}`);
+              console.log(`Direct sale max mints per tx: ${result.directSale.maxMints.toString()}`);
+            }
+            if (result.supply?.remaining !== undefined) {
+              console.log(`Remaining mint supply: ${result.supply.remaining.toString()}`);
+            }
             if (result.account !== undefined) {
               console.log(`Account: ${result.account}`);
               console.log(`Account mints: ${result.accountMints?.toString() ?? '0'}`);
               console.log(`Account transactions: ${result.accountTxs?.toString() ?? '0'}`);
             }
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createMintCommand(): Command {
+  const cmd = new Command('mint');
+  cmd.description('Mint from a RareMinter direct sale release');
+
+  cmd
+    .requiredOption('--contract <address>', 'release collection contract address')
+    .option('--quantity <number>', 'number of tokens to mint', '1')
+    .option('--currency <currency>', 'expected currency: eth, usdc, rare, or ERC20 address (defaults to configured sale currency)')
+    .option('--price <amount>', 'expected per-token price in ETH or token units (defaults to configured sale price)')
+    .option('--proof <path>', 'allowlist proof JSON from rare release allowlist proof')
+    .option('--recipient <address>', 'recipient when supported; RareMinter direct sales mint to the connected wallet')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--no-auto-approve', 'fail instead of approving ERC20 allowance when insufficient')
+    .action(async (opts: ReleaseMintOptions) => {
+      try {
+        const contract = parseAddressOption(opts.contract, '--contract');
+        const recipient = opts.recipient === undefined ? undefined : parseAddressOption(opts.recipient, '--recipient');
+        const proof = opts.proof === undefined ? undefined : await readProofFile(opts.proof);
+        const chain = getActiveChain(opts.chain);
+        const minterAddress = requireContractAddress(chain, 'rareMinter');
+        const currency = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain);
+        const { rare } = createWriteReleaseClient(chain);
+
+        log(`Minting RareMinter direct sale on ${chain}...`);
+        log(`  Contract: ${contract}`);
+        log(`  RareMinter: ${minterAddress}`);
+        log(`  Quantity: ${opts.quantity ?? '1'}`);
+        if (currency !== undefined) {
+          log(`  Currency: ${currency}`);
+        }
+        if (opts.price !== undefined) {
+          log(`  Expected price: ${opts.price}`);
+        }
+        if (proof !== undefined) {
+          log(`  Proof entries: ${proof.length}`);
+        }
+        log('Waiting for confirmation...');
+
+        const result = await rare.release.mintDirectSale({
+          contract,
+          quantity: opts.quantity,
+          currency,
+          price: opts.price,
+          proof,
+          recipient,
+          autoApprove: opts.autoApprove,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            approvalTxHash: result.approvalTxHash ?? null,
+            contract: result.contract,
+            minter: result.minter,
+            buyer: result.buyer,
+            recipient: result.recipient,
+            quantity: result.quantity,
+            currency: result.currency,
+            price: result.price,
+            totalPrice: result.totalPrice,
+            requiredPayment: result.requiredPayment,
+            allowlistRequired: result.allowlistRequired,
+            tokenIdStart: result.tokenIdStart,
+            tokenIdEnd: result.tokenIdEnd,
+            tokenIds: result.tokenIds,
+          },
+          () => {
+            if (result.approvalTxHash !== undefined) {
+              console.log(`Approval tx sent: ${result.approvalTxHash}`);
+            }
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Minted token IDs: ${result.tokenIds.map((tokenId) => tokenId.toString()).join(', ')}`);
           },
         );
       } catch (error) {
@@ -396,9 +503,10 @@ function createStakingCommand(): Command {
 
 export function releaseCommand(): Command {
   const cmd = new Command('release');
-  cmd.description('Configure and inspect RareMinter release settings');
+  cmd.description('Configure, inspect, and mint RareMinter releases');
   cmd.addCommand(createAllowlistCommand());
   cmd.addCommand(createStatusCommand());
+  cmd.addCommand(createMintCommand());
   cmd.addCommand(createLimitsCommand());
   cmd.addCommand(createStakingCommand());
   return cmd;
@@ -452,6 +560,34 @@ async function readAllowlistArtifact(
   });
 }
 
+async function readProofFile(inputPath: string): Promise<Hex[]> {
+  const content = await readFile(inputPath, 'utf8');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'invalid JSON';
+    throw new Error(`Could not parse --proof JSON: ${message}`);
+  }
+
+  const proof = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.proof)
+      ? parsed.proof
+      : undefined;
+
+  if (proof === undefined) {
+    throw new Error('--proof must be a JSON array or an object with a proof array.');
+  }
+
+  return proof.map((entry, index) => {
+    if (typeof entry !== 'string') {
+      throw new Error(`proof[${index}] must be a bytes32 hex string.`);
+    }
+    return normalizeBytes32(entry, `proof[${index}]`);
+  });
+}
+
 async function resolveAllowlistRoot(opts: AllowlistSetOptions): Promise<Hex> {
   if (opts.root !== undefined && opts.input !== undefined) {
     throw new Error('Pass either --root or --input, not both.');
@@ -500,6 +636,10 @@ function parseAddressOption(value: string, optionName: string): Address {
   }
 
   return getAddress(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 async function writeJson(path: string, data: unknown): Promise<void> {

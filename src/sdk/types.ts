@@ -6,8 +6,10 @@ import type {
 } from './collection-core.js';
 import type {
   BuildReleaseAllowlistParams,
+  ReleaseCollectionSupply,
   ReleaseAllowlistArtifact,
   ReleaseAllowlistProof,
+  ReleaseDirectSaleConfig,
 } from './release-core.js';
 import type {
   CollectionSearchParams,
@@ -257,6 +259,33 @@ export interface ReleaseSellerStakingMinimumResult extends TransactionResult {
   endTimestamp: bigint;
 }
 
+export interface ReleaseMintDirectSaleParams {
+  contract: Address;
+  quantity?: IntegerInput;
+  currency?: Address;
+  price?: AmountInput;
+  proof?: readonly Hex[];
+  recipient?: Address;
+  autoApprove?: boolean;
+}
+
+export interface ReleaseMintDirectSaleResult extends TransactionResult {
+  contract: Address;
+  minter: Address;
+  buyer: Address;
+  recipient: Address;
+  quantity: number;
+  currency: Address;
+  price: bigint;
+  totalPrice: bigint;
+  requiredPayment: bigint;
+  approvalTxHash?: Hash;
+  allowlistRequired: boolean;
+  tokenIdStart: bigint;
+  tokenIdEnd: bigint;
+  tokenIds: bigint[];
+}
+
 export interface ReleaseConfigParams {
   contract: Address;
   account?: Address;
@@ -271,6 +300,8 @@ export interface ReleaseConfig {
   txLimit: bigint;
   sellerStakingMinimum: bigint;
   sellerStakingMinimumEndTimestamp: bigint;
+  directSale: ReleaseDirectSaleConfig;
+  supply?: ReleaseCollectionSupply;
   account?: Address;
   accountMints?: bigint;
   accountTxs?: bigint;
@@ -509,6 +540,7 @@ export interface RareClient {
     setMintLimit(params: ReleaseLimitParams): Promise<ReleaseLimitResult>;
     setTxLimit(params: ReleaseLimitParams): Promise<ReleaseLimitResult>;
     setSellerStakingMinimum(params: ReleaseSellerStakingMinimumParams): Promise<ReleaseSellerStakingMinimumResult>;
+    mintDirectSale(params: ReleaseMintDirectSaleParams): Promise<ReleaseMintDirectSaleResult>;
   };
   user: {
     get(address: string): Promise<UserProfile>;

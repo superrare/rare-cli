@@ -1,5 +1,6 @@
 import {
   type Address,
+  type Hash,
   type PublicClient,
   type WalletClient,
   erc20Abi,
@@ -196,22 +197,64 @@ export async function preparePayment(opts: {
   currency: Address;
   amount: bigint;
 }): Promise<bigint> {
-  const { publicClient, walletClient, account, accountAddress, auctionAddress, currency, amount } = opts;
+  return (await preparePaymentForSpender({
+    publicClient: opts.publicClient,
+    walletClient: opts.walletClient,
+    account: opts.account,
+    accountAddress: opts.accountAddress,
+    marketplaceSettingsSource: opts.auctionAddress,
+    spenderAddress: opts.auctionAddress,
+    currency: opts.currency,
+    amount: opts.amount,
+  })).value;
+}
+
+export async function preparePaymentForSpender(opts: {
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  account: Address | WalletAccount;
+  accountAddress: Address;
+  marketplaceSettingsSource: Address;
+  spenderAddress: Address;
+  currency: Address;
+  amount: bigint;
+  autoApprove?: boolean;
+}): Promise<{
+  value: bigint;
+  requiredAmount: bigint;
+  approvalTxHash?: Hash;
+}> {
+  const {
+    publicClient,
+    walletClient,
+    account,
+    accountAddress,
+    marketplaceSettingsSource,
+    spenderAddress,
+    currency,
+    amount,
+  } = opts;
   const isEth = currency === ETH_ADDRESS;
+  const autoApprove = opts.autoApprove ?? true;
+
+  if (amount === 0n) {
+    return {
+      value: 0n,
+      requiredAmount: 0n,
+    };
+  }
+
+  const requiredAmount = await calculateMarketplacePaymentAmount(
+    publicClient,
+    marketplaceSettingsSource,
+    amount,
+  );
 
   if (isEth) {
-    const settingsAddress = await publicClient.readContract({
-      address: auctionAddress,
-      abi: auctionAbi,
-      functionName: 'marketplaceSettings',
-    });
-    const fee = await publicClient.readContract({
-      address: settingsAddress,
-      abi: marketplaceSettingsAbi,
-      functionName: 'calculateMarketplaceFee',
-      args: [amount],
-    });
-    return amount + fee;
+    return {
+      value: requiredAmount,
+      requiredAmount,
+    };
   }
 
   // ERC20: ensure sufficient allowance
@@ -221,24 +264,63 @@ export async function preparePayment(opts: {
       address: currency,
       abi: erc20Abi,
       functionName: 'allowance',
-      args: [accountAddress, auctionAddress],
+      args: [accountAddress, spenderAddress],
     });
   } catch (err) {
     // Allowance check failed (e.g. non-standard ERC20) — approve unconditionally
     console.warn('ERC20 allowance check failed, approving unconditionally:', (err as Error).message);
   }
 
-  if (allowance === undefined || allowance < amount) {
-    const approveTx = await walletClient.writeContract({
-      address: currency,
-      abi: erc20Abi,
-      functionName: 'approve',
-      args: [auctionAddress, maxUint256],
-      account,
-      chain: undefined,
-    });
-    await publicClient.waitForTransactionReceipt({ hash: approveTx });
+  if (allowance !== undefined && allowance >= requiredAmount) {
+    return {
+      value: 0n,
+      requiredAmount,
+    };
   }
 
-  return 0n;
+  if (!autoApprove) {
+    throw new Error(
+      `ERC20 allowance is below the required payment of ${requiredAmount.toString()} raw units for spender ${spenderAddress}.`,
+    );
+  }
+
+  const approvalTxHash = await walletClient.writeContract({
+    address: currency,
+    abi: erc20Abi,
+    functionName: 'approve',
+    args: [spenderAddress, maxUint256],
+    account,
+    chain: undefined,
+  });
+  await publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
+
+  return {
+    value: 0n,
+    requiredAmount,
+    approvalTxHash,
+  };
+}
+
+export async function calculateMarketplacePaymentAmount(
+  publicClient: PublicClient,
+  marketplaceSettingsSource: Address,
+  amount: bigint,
+): Promise<bigint> {
+  if (amount === 0n) {
+    return 0n;
+  }
+
+  const settingsAddress = await publicClient.readContract({
+    address: marketplaceSettingsSource,
+    abi: auctionAbi,
+    functionName: 'marketplaceSettings',
+  });
+  const fee = await publicClient.readContract({
+    address: settingsAddress,
+    abi: marketplaceSettingsAbi,
+    functionName: 'calculateMarketplaceFee',
+    args: [amount],
+  });
+
+  return amount + fee;
 }

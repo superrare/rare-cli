@@ -125,9 +125,11 @@ rare release limits set-mint --contract 0x... --limit 5
 rare release limits set-tx --contract 0x... --limit 2
 rare release staking set-minimum --contract 0x... --minimum 1000000000000000000 --end-timestamp 1778500000
 rare release status --contract 0x... --account 0x...
+rare release mint --contract 0x... --quantity 1
+rare release mint --contract 0x... --quantity 1 --proof proof.json
 ```
 
-`set-mint` limits the total mints per wallet, `set-tx` limits the number of mint transactions per wallet, and `staking set-minimum` configures the raw staking-token amount required while the end timestamp is active. Use `0` for a limit or minimum to disable that check on the contract.
+`set-mint` limits the total mints per wallet, `set-tx` limits the number of mint transactions per wallet, and `staking set-minimum` configures the raw staking-token amount required while the end timestamp is active. Use `0` for a limit or minimum to disable that check on the contract. `release mint` reads the configured direct sale currency and price by default; pass `--currency` or `--price` only when you want the command to fail if on-chain sale settings differ. RareMinter direct sales mint to the connected wallet.
 
 Inspect creator and royalty data on Sovereign-style collections:
 
@@ -479,7 +481,13 @@ const status = await rare.release.getConfig({
   account: '0x1111111111111111111111111111111111111111',
 });
 
-console.log(proof.valid, status.mintLimit);
+const minted = await rare.release.mintDirectSale({
+  contract: '0xLazySovereignContractAddress',
+  quantity: 1,
+  proof: proof.proof,
+});
+
+console.log(proof.valid, status.mintLimit, minted.tokenIds);
 ```
 
 ### Inspect and maintain collection owner settings
