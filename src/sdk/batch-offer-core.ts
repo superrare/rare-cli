@@ -36,6 +36,15 @@ export type BatchOfferAcceptPlan = {
   autoApprove: boolean;
 };
 
+export type BatchOfferRead = {
+  creator: Address;
+  rootHash: Hex;
+  amount: bigint;
+  currency: Address;
+  expiry: bigint;
+  feePercentage?: bigint;
+};
+
 const zeroAddress = '0x0000000000000000000000000000000000000000' as const;
 const zeroBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
@@ -91,14 +100,7 @@ export function planBatchOfferAccept(
 }
 
 export function shapeBatchOfferStatus(
-  offer: {
-    creator: Address;
-    rootHash: Hex;
-    amount: bigint;
-    currency: Address;
-    expiry: bigint;
-    feePercentage?: bigint;
-  },
+  offer: BatchOfferRead,
   expected: {
     creator: Address;
     root: Hex;
@@ -131,6 +133,21 @@ export function shapeBatchOfferStatus(
     state,
     isEth: offer.currency.toLowerCase() === ETH_ADDRESS,
   };
+}
+
+export function shapeBatchOfferRead(value: readonly [Address, Hex, bigint, Address, bigint, bigint?] | BatchOfferRead): BatchOfferRead {
+  if (Array.isArray(value)) {
+    return {
+      creator: value[0],
+      rootHash: value[1],
+      amount: value[2],
+      currency: value[3],
+      expiry: value[4],
+      feePercentage: value[5],
+    };
+  }
+
+  return value as BatchOfferRead;
 }
 
 export function resolveBatchOfferRoot(params: {

@@ -3,6 +3,7 @@ import {
   planBatchOfferAccept,
   planBatchOfferCreate,
   planBatchOfferRoot,
+  shapeBatchOfferRead,
   shapeBatchOfferStatus,
 } from '../../../src/sdk/batch-offer-core.js';
 import {
@@ -158,6 +159,17 @@ describe('batch offer core', () => {
       revoked: null,
       fillable: false,
       state: 'NONE',
+    });
+  });
+
+  it('shapes raw batch offer reads', () => {
+    expect(shapeBatchOfferRead([CREATOR, ROOT, 10n, ZERO_ADDRESS, 200n, 300n])).toEqual({
+      creator: CREATOR,
+      rootHash: ROOT,
+      amount: 10n,
+      currency: ZERO_ADDRESS,
+      expiry: 200n,
+      feePercentage: 300n,
     });
   });
 });

@@ -1,7 +1,6 @@
 import {
   parseEventLogs,
   type Address,
-  type Hex,
   type PublicClient,
 } from 'viem';
 import { batchOfferAbi } from '../contracts/abis/batch-offer.js';
@@ -18,6 +17,7 @@ import {
   planBatchOfferAccept,
   planBatchOfferCreate,
   planBatchOfferRoot,
+  shapeBatchOfferRead,
   shapeBatchOfferStatus,
 } from './batch-offer-core.js';
 
@@ -216,35 +216,4 @@ export function createBatchOfferNamespace(
       }, block.timestamp);
     },
   };
-}
-
-function shapeBatchOfferRead(value: unknown): {
-  creator: Address;
-  rootHash: Hex;
-  amount: bigint;
-  currency: Address;
-  expiry: bigint;
-  feePercentage?: bigint;
-} {
-  if (Array.isArray(value)) {
-    return {
-      creator: value[0] as Address,
-      rootHash: value[1] as Hex,
-      amount: value[2] as bigint,
-      currency: value[3] as Address,
-      expiry: value[4] as bigint,
-      feePercentage: value[5] as bigint | undefined,
-    };
-  }
-
-  const offer = value as {
-    creator: Address;
-    rootHash: Hex;
-    amount: bigint;
-    currency: Address;
-    expiry: bigint;
-    feePercentage?: bigint;
-  };
-
-  return offer;
 }
