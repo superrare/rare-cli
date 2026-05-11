@@ -88,6 +88,13 @@ rare collection create sovereign "My Collection" "MC" --max-tokens 1000
 rare collection create sovereign "Guarded Collection" "GC" --max-tokens 1000 --contract-type royalty-guard
 ```
 
+Use `collection create lazy-sovereign` when the collection will be configured as a release and minted through release sale settings after deployment.
+
+```bash
+rare collection create lazy-sovereign "My Release" "MR" --max-tokens 1000
+rare collection create lazy-sovereign "Guarded Release" "GR" --max-tokens 1000 --contract-type lazy-royalty-guard
+```
+
 ### Import an Existing Collection
 
 Import an existing ERC-721 contract into the RARE Protocol registry:
@@ -329,6 +336,20 @@ const created = await rare.collection.createSovereign({
 console.log(created.contract);
 ```
 
+### Create a Lazy Sovereign collection
+
+```ts
+const release = await rare.collection.createLazySovereign({
+  name: 'My Release',
+  symbol: 'MR',
+  maxTokens: 1000,
+  contractType: 'lazy',
+});
+
+console.log(release.contract);
+console.log(release.nextStep);
+```
+
 ### Import an ERC-721 collection
 
 `import.erc721` derives `chainId` from the client. If `owner` is omitted, it defaults to the configured account.
@@ -368,12 +389,12 @@ rare configure --show
 
 ## Contract Addresses
 
-| Network | Factory | Sovereign Factory | Auction |
-|---|---|---|---|
-| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` |
-| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` |
-| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | not configured | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` |
-| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | not configured | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` |
+| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Auction |
+|---|---|---|---|---|
+| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` |
+| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` |
+| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | not configured | not configured | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` |
+| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | not configured | not configured | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` |
 
 ## Underlying Solidity Contracts
 
@@ -382,6 +403,7 @@ If you want to inspect the on-chain contracts used by this CLI:
 - Token contract used when minting NFTs: [`SovereignBatchMint.sol`](https://github.com/superrare/core/blob/main/src/v2/token/ERC721/sovereign/SovereignBatchMint.sol)
 - Factory used for collection deployments: [`SovereignBatchMintFactory.sol`](https://github.com/superrare/core/blob/main/src/v2/token/ERC721/sovereign/SovereignBatchMintFactory.sol)
 - Factory used for Sovereign collection creation: [`SovereignNFTContractFactory.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/SovereignNFTContractFactory.sol)
+- Factory used for Lazy Sovereign release collection creation: [`LazySovereignNFTFactory.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/lazy/LazySovereignNFTFactory.sol)
 - Auction/market contract used for auction operations: [`SuperRareBazaar.sol`](https://github.com/superrare/core/blob/main/src/bazaar/SuperRareBazaar.sol)
 
 ## Development (Optional)

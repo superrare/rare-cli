@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCreateSovereignCollectionWrite,
+  normalizeLazySovereignCollectionContractType,
   normalizeSovereignCollectionContractType,
+  planCreateLazySovereignCollection,
   planCreateSovereignCollection,
 } from '../../../src/sdk/collection-core.js';
 
@@ -101,5 +103,40 @@ describe('Sovereign collection core', () => {
     expect(() => buildCreateSovereignCollectionWrite(guarded)).toThrow(
       'contractType is required for royalty-guard Sovereign collection writes.',
     );
+  });
+
+  it('normalizes supported lazy contract type aliases', () => {
+    expect(normalizeLazySovereignCollectionContractType(undefined)).toBeUndefined();
+    expect(normalizeLazySovereignCollectionContractType('lazy')).toBe('lazy');
+    expect(normalizeLazySovereignCollectionContractType('standard')).toBe('lazy');
+    expect(normalizeLazySovereignCollectionContractType('royalty-guard')).toBe('lazy-royalty-guard');
+    expect(normalizeLazySovereignCollectionContractType('deadman')).toBe('lazy-deadman-royalty-guard');
+  });
+
+  it('rejects unsupported lazy contract types', () => {
+    expect(() => normalizeLazySovereignCollectionContractType('batch')).toThrow(
+      'Unsupported Lazy Sovereign collection contract type "batch".',
+    );
+  });
+
+  it('plans lazy collection creation with required max supply and factory constant read', () => {
+    expect(planCreateLazySovereignCollection({
+      name: 'Release',
+      symbol: 'REL',
+      maxTokens: '100',
+    })).toEqual({
+      name: 'Release',
+      symbol: 'REL',
+      maxTokens: 100n,
+      contractType: 'lazy',
+      contractTypeReadName: 'LAZY_SOVEREIGN_NFT',
+    });
+
+    expect(planCreateLazySovereignCollection({
+      name: 'Guarded Release',
+      symbol: 'GRL',
+      maxTokens: 100,
+      contractType: 'lazy-deadman-royalty-guard',
+    }).contractTypeReadName).toBe('LAZY_ROYALTY_GUARD_DEADMAN');
   });
 });

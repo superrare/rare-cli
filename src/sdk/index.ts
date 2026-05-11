@@ -2,14 +2,21 @@ export { createRareClient } from './client.js';
 export type {
   CreateSovereignCollectionParams,
   CreateSovereignCollectionResult,
+  CreateLazySovereignCollectionParams,
+  CreateLazySovereignCollectionResult,
   RareClient,
   RareClientConfig,
 } from './types.js';
 export {
+  lazySovereignCollectionContractTypes,
+  normalizeLazySovereignCollectionContractType,
   normalizeSovereignCollectionContractType,
   sovereignCollectionContractTypes,
 } from './collection-core.js';
-export type { SovereignCollectionContractType } from './collection-core.js';
+export type {
+  LazySovereignCollectionContractType,
+  SovereignCollectionContractType,
+} from './collection-core.js';
 export type {
   CollectionSearchParams,
   ImportErc721Params,
@@ -36,5 +43,6 @@ export {
 export type { SupportedChain } from '../contracts/addresses.js';
 export { factoryAbi } from '../contracts/abis/factory.js';
 export { sovereignFactoryAbi } from '../contracts/abis/sovereign-factory.js';
+export { lazySovereignFactoryAbi } from '../contracts/abis/lazy-sovereign-factory.js';
 export { auctionAbi } from '../contracts/abis/auction.js';
 export { tokenAbi } from '../contracts/abis/token.js';

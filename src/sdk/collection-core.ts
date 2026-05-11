@@ -8,8 +8,19 @@ export const sovereignCollectionContractTypes = [
   'deadman-royalty-guard',
 ] as const;
 
+export const lazySovereignCollectionContractTypes = [
+  'lazy',
+  'lazy-royalty-guard',
+  'lazy-deadman-royalty-guard',
+] as const;
+
 export type SovereignCollectionContractType = (typeof sovereignCollectionContractTypes)[number];
 export type SovereignCollectionContractTypeReadName = 'SOVEREIGN_NFT' | 'ROYALTY_GUARD' | 'ROYALTY_GUARD_DEADMAN';
+export type LazySovereignCollectionContractType = (typeof lazySovereignCollectionContractTypes)[number];
+export type LazySovereignCollectionContractTypeReadName =
+  | 'LAZY_SOVEREIGN_NFT'
+  | 'LAZY_ROYALTY_GUARD'
+  | 'LAZY_ROYALTY_GUARD_DEADMAN';
 
 export interface PlanCreateSovereignCollectionParams {
   name: string;
@@ -30,6 +41,21 @@ export type CreateSovereignCollectionWrite = {
   functionName: 'createSovereignNFTContract';
   args: [string, string] | [string, string, bigint] | [string, string, bigint, Hex];
 };
+
+export interface PlanCreateLazySovereignCollectionParams {
+  name: string;
+  symbol: string;
+  maxTokens: IntegerInput;
+  contractType?: LazySovereignCollectionContractType;
+}
+
+export interface CreateLazySovereignCollectionPlan {
+  name: string;
+  symbol: string;
+  maxTokens: bigint;
+  contractType: LazySovereignCollectionContractType;
+  contractTypeReadName: LazySovereignCollectionContractTypeReadName;
+}
 
 export function normalizeSovereignCollectionContractType(
   input: string | undefined,
@@ -55,6 +81,40 @@ export function normalizeSovereignCollectionContractType(
 
   throw new Error(
     `Unsupported Sovereign collection contract type "${input}". Supported: ${sovereignCollectionContractTypes.join(', ')}.`,
+  );
+}
+
+export function normalizeLazySovereignCollectionContractType(
+  input: string | undefined,
+): LazySovereignCollectionContractType | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+
+  const normalized = input.trim().toLowerCase();
+  if (
+    normalized === 'lazy' ||
+    normalized === 'standard' ||
+    normalized === 'lazy-sovereign' ||
+    normalized === 'lazy-sovereign-nft'
+  ) {
+    return 'lazy';
+  }
+  if (normalized === 'lazy-royalty-guard' || normalized === 'royalty-guard') {
+    return 'lazy-royalty-guard';
+  }
+  if (
+    normalized === 'lazy-deadman-royalty-guard' ||
+    normalized === 'lazy-royalty-guard-deadman' ||
+    normalized === 'deadman-royalty-guard' ||
+    normalized === 'royalty-guard-deadman' ||
+    normalized === 'deadman'
+  ) {
+    return 'lazy-deadman-royalty-guard';
+  }
+
+  throw new Error(
+    `Unsupported Lazy Sovereign collection contract type "${input}". Supported: ${lazySovereignCollectionContractTypes.join(', ')}.`,
   );
 }
 
@@ -107,6 +167,20 @@ export function buildCreateSovereignCollectionWrite(
   };
 }
 
+export function planCreateLazySovereignCollection(
+  params: PlanCreateLazySovereignCollectionParams,
+): CreateLazySovereignCollectionPlan {
+  const contractType = params.contractType ?? 'lazy';
+
+  return {
+    name: params.name,
+    symbol: params.symbol,
+    maxTokens: toPositiveInteger(params.maxTokens, 'maxTokens'),
+    contractType,
+    contractTypeReadName: lazyContractTypeReadName(contractType),
+  };
+}
+
 function contractTypeReadName(
   contractType: SovereignCollectionContractType,
 ): SovereignCollectionContractTypeReadName | undefined {
@@ -117,4 +191,16 @@ function contractTypeReadName(
     return 'ROYALTY_GUARD_DEADMAN';
   }
   return undefined;
+}
+
+function lazyContractTypeReadName(
+  contractType: LazySovereignCollectionContractType,
+): LazySovereignCollectionContractTypeReadName {
+  if (contractType === 'lazy-royalty-guard') {
+    return 'LAZY_ROYALTY_GUARD';
+  }
+  if (contractType === 'lazy-deadman-royalty-guard') {
+    return 'LAZY_ROYALTY_GUARD_DEADMAN';
+  }
+  return 'LAZY_SOVEREIGN_NFT';
 }

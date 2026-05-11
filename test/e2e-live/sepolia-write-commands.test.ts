@@ -40,6 +40,7 @@ type CreateSovereignResult = {
   contract: string;
   factory: string;
   contractType: string;
+  nextStep?: string;
 };
 
 type MintResult = {
@@ -217,6 +218,29 @@ describeLive('live Sepolia CLI write commands', () => {
     expect(created.contract).toMatch(/^0x[0-9a-fA-F]{40}$/);
     expect(created.factory).toBe('0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf');
     expect(created.contractType).toBe('standard');
+  });
+
+  it('creates a Lazy Sovereign release collection through the lazy factory', async () => {
+    const suffix = Date.now().toString(36);
+    const created = await step('create Lazy Sovereign collection', () =>
+      jsonCommand<CreateSovereignResult>(live.sellerHome, [
+        'collection',
+        'create',
+        'lazy-sovereign',
+        `Rare CLI Lazy E2E ${suffix}`,
+        `RCL${suffix.slice(-4).toUpperCase()}`,
+        '--max-tokens',
+        '3',
+        '--chain',
+        'sepolia',
+      ]),
+    );
+
+    expectTx(created);
+    expect(created.contract).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(created.factory).toBe('0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA');
+    expect(created.contractType).toBe('lazy');
+    expect(created.nextStep).toContain('Configure release sale and mint settings');
   });
 
   it('mints directly to another recipient', async () => {

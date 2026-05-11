@@ -20,13 +20,18 @@ describe('chain and currency helpers', () => {
       factory: '0x3c7526a0975156299ceef369b8ff3c01cc670523',
       auction: '0xC8Edc7049b233641ad3723D6C60019D1c8771612',
       sovereignFactory: '0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf',
+      lazySovereignFactory: '0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA',
     });
   });
 
   it('requires optional contract addresses only where configured', () => {
     expect(requireContractAddress('sepolia', 'sovereignFactory')).toBe('0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf');
+    expect(requireContractAddress('sepolia', 'lazySovereignFactory')).toBe('0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA');
     expect(() => requireContractAddress('base', 'sovereignFactory')).toThrow(
       'RARE Protocol sovereignFactory contract is not configured on "base".',
+    );
+    expect(() => requireContractAddress('base', 'lazySovereignFactory')).toThrow(
+      'RARE Protocol lazySovereignFactory contract is not configured on "base".',
     );
   });
 
