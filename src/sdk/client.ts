@@ -39,11 +39,17 @@ export function createRareClient(config: RareClientConfig): RareClient {
         spaceFactory: addresses.spaceFactory,
         rareMinter: addresses.rareMinter,
         batchOfferCreator: addresses.batchOfferCreator,
+        batchAuctionHouse: addresses.batchAuctionHouse,
+        erc20ApprovalManager: addresses.erc20ApprovalManager,
+        erc721ApprovalManager: addresses.erc721ApprovalManager,
       }
     : {
         factory: addresses.factory,
         auction: addresses.auction,
         batchOfferCreator: addresses.batchOfferCreator,
+        batchAuctionHouse: addresses.batchAuctionHouse,
+        erc20ApprovalManager: addresses.erc20ApprovalManager,
+        erc721ApprovalManager: addresses.erc721ApprovalManager,
       };
 
   return {

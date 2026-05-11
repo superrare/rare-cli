@@ -239,6 +239,20 @@ describe('built CLI deterministic behavior', () => {
       expect(offerAccept.stdout).toContain('--proof <path>');
       expect(offerAccept.stdout).toContain('--creator <address>');
       expect(offerAccept.stderr).toBe('');
+
+      const auctionCreate = await runCli(['batch', 'auction', 'create', '--help'], { home });
+      expect(auctionCreate.code).toBe(0);
+      expect(auctionCreate.stdout).toContain('Usage: rare batch auction create [options]');
+      expect(auctionCreate.stdout).toContain('--reserve <amount>');
+      expect(auctionCreate.stdout).toContain('--duration <seconds>');
+      expect(auctionCreate.stderr).toBe('');
+
+      const auctionBid = await runCli(['batch', 'auction', 'bid', '--help'], { home });
+      expect(auctionBid.code).toBe(0);
+      expect(auctionBid.stdout).toContain('Usage: rare batch auction bid [options]');
+      expect(auctionBid.stdout).toContain('--proof <path>');
+      expect(auctionBid.stdout).toContain('--creator <address>');
+      expect(auctionBid.stderr).toBe('');
     });
   });
 

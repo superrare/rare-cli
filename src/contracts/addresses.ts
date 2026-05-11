@@ -39,6 +39,9 @@ type ContractSet = {
   spaceFactory?: Address;
   rareMinter?: Address;
   batchOfferCreator?: Address;
+  batchAuctionHouse?: Address;
+  erc20ApprovalManager?: Address;
+  erc721ApprovalManager?: Address;
 };
 
 export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
@@ -49,6 +52,9 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
     lazySovereignFactory: '0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA',
     rareMinter: '0xd28Dc0B89104d7BBd902F338a0193fF063617ccE',
     batchOfferCreator: '0x371cca54ef859bb0c7b910581a528ee47773fd56',
+    batchAuctionHouse: '0x293AE7701A7830B1d38A7608EdF86A106d9E2645',
+    erc20ApprovalManager: '0x4619eB29e84392CE91C27FC936A5c94d1D14b93f',
+    erc721ApprovalManager: '0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E',
   },
   mainnet: {
     factory: '0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1',
@@ -58,14 +64,19 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
     spaceFactory: '0x3b2d699110aa1788b2b1cae336e0ba8ff942a390',
     rareMinter: '0x5fa112EFeD8297bec0010b312208d223E0cE891E',
     batchOfferCreator: '0xe15cf80b25272ade261532efdb7912f9104851d4',
+    batchAuctionHouse: '0x71742c7196f1c334C4c038ce6dcDcEE98097F9Da',
+    erc20ApprovalManager: '0xa837a7eAff154Ab837617Cf7250648D3Ec0A4436',
+    erc721ApprovalManager: '0x4bb0Deea6d1A30C601338aAB776d394C2AE5c0F8',
   },
   base: {
     factory: '0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd',
     auction: '0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2',
+    batchAuctionHouse: '0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd',
   },
   'base-sepolia': {
     factory: '0x2b181ae0f1aea6fed75591b04991b1a3f9868d51',
     auction: '0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2',
+    batchAuctionHouse: '0x2b181ae0f1aea6fed75591b04991b1a3f9868d51',
   },
 };
 

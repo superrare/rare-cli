@@ -224,31 +224,56 @@ export async function preparePaymentForSpender(opts: {
   requiredAmount: bigint;
   approvalTxHash?: Hash;
 }> {
+  const requiredAmount = await calculateMarketplacePaymentAmount(
+    opts.publicClient,
+    opts.marketplaceSettingsSource,
+    opts.amount,
+  );
+
+  return preparePaymentAmountForSpender({
+    publicClient: opts.publicClient,
+    walletClient: opts.walletClient,
+    account: opts.account,
+    accountAddress: opts.accountAddress,
+    spenderAddress: opts.spenderAddress,
+    currency: opts.currency,
+    requiredAmount,
+    autoApprove: opts.autoApprove,
+  });
+}
+
+export async function preparePaymentAmountForSpender(opts: {
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  account: Address | WalletAccount;
+  accountAddress: Address;
+  spenderAddress: Address;
+  currency: Address;
+  requiredAmount: bigint;
+  autoApprove?: boolean;
+}): Promise<{
+  value: bigint;
+  requiredAmount: bigint;
+  approvalTxHash?: Hash;
+}> {
   const {
     publicClient,
     walletClient,
     account,
     accountAddress,
-    marketplaceSettingsSource,
     spenderAddress,
     currency,
-    amount,
+    requiredAmount,
   } = opts;
   const isEth = currency === ETH_ADDRESS;
   const autoApprove = opts.autoApprove ?? true;
 
-  if (amount === 0n) {
+  if (requiredAmount === 0n) {
     return {
       value: 0n,
       requiredAmount: 0n,
     };
   }
-
-  const requiredAmount = await calculateMarketplacePaymentAmount(
-    publicClient,
-    marketplaceSettingsSource,
-    amount,
-  );
 
   if (isEth) {
     return {
@@ -266,9 +291,12 @@ export async function preparePaymentForSpender(opts: {
       functionName: 'allowance',
       args: [accountAddress, spenderAddress],
     });
-  } catch (err) {
+  } catch (error) {
     // Allowance check failed (e.g. non-standard ERC20) — approve unconditionally
-    console.warn('ERC20 allowance check failed, approving unconditionally:', (err as Error).message);
+    console.warn(
+      'ERC20 allowance check failed, approving unconditionally:',
+      error instanceof Error ? error.message : String(error),
+    );
   }
 
   if (allowance !== undefined && allowance >= requiredAmount) {
