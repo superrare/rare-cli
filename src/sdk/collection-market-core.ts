@@ -92,6 +92,27 @@ export type CollectionMarketSalePriceRead = {
   splitRatios: number[];
 };
 
+export function shapeCollectionMarketSalePriceRead(
+  salePrice: readonly [Address, bigint, readonly Address[], readonly number[]] | CollectionMarketSalePriceRead,
+): CollectionMarketSalePriceRead {
+  if (Array.isArray(salePrice)) {
+    return {
+      currencyAddress: salePrice[0],
+      amount: salePrice[1],
+      splitRecipients: [...salePrice[2]],
+      splitRatios: [...salePrice[3]],
+    };
+  }
+
+  const shaped = salePrice as CollectionMarketSalePriceRead;
+  return {
+    currencyAddress: shaped.currencyAddress,
+    amount: shaped.amount,
+    splitRecipients: [...shaped.splitRecipients],
+    splitRatios: [...shaped.splitRatios],
+  };
+}
+
 export function planCollectionMarketOfferCreate(
   params: CollectionMarketOfferCreateParams,
 ): CollectionMarketOfferCreatePlan {

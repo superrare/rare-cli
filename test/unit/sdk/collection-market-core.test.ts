@@ -13,6 +13,7 @@ import {
   shapeCollectionMarketListingStatus,
   shapeCollectionMarketOfferRead,
   shapeCollectionMarketOfferStatus,
+  shapeCollectionMarketSalePriceRead,
 } from '../../../src/sdk/collection-market-core.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
@@ -288,6 +289,20 @@ describe('collection market listing planning', () => {
 });
 
 describe('collection market listing shaping', () => {
+  it('shapes raw sale price reads', () => {
+    expect(shapeCollectionMarketSalePriceRead([
+      erc20Currency,
+      parseEther('1'),
+      [sellerAddress],
+      [100],
+    ])).toEqual({
+      currencyAddress: erc20Currency,
+      amount: parseEther('1'),
+      splitRecipients: [sellerAddress],
+      splitRatios: [100],
+    });
+  });
+
   it('shapes active listing status with buy and cancel affordances', () => {
     expect(shapeCollectionMarketListingStatus(
       {
