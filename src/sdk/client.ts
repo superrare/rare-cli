@@ -21,6 +21,7 @@ import { createListingNamespace } from './listing.js';
 import { createTokenNamespace } from './token.js';
 import { createCollectionNamespace } from './collection.js';
 import { createReleaseNamespace } from './release.js';
+import { createBatchNamespace } from './batch.js';
 
 export type { RareClientConfig, RareClient } from './types.js';
 
@@ -80,6 +81,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
       },
     }),
     release: createReleaseNamespace(publicClient, config, chain),
+    batch: createBatchNamespace(),
     user: {
       async get(address) {
         return getUserApi(address);

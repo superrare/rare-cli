@@ -210,6 +210,24 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('exposes batch marketplace tree command help', async () => {
+    await withTempHome(async (home) => {
+      const build = await runCli(['batch', 'tree', 'build', '--help'], { home });
+      expect(build.code).toBe(0);
+      expect(build.stdout).toContain('Usage: rare batch tree build [options]');
+      expect(build.stdout).toContain('--input <path>');
+      expect(build.stdout).toContain('--chain-id <id>');
+      expect(build.stderr).toBe('');
+
+      const proof = await runCli(['batch', 'tree', 'proof', '--help'], { home });
+      expect(proof.code).toBe(0);
+      expect(proof.stdout).toContain('Usage: rare batch tree proof [options]');
+      expect(proof.stdout).toContain('--contract <address>');
+      expect(proof.stdout).toContain('--token-id <id>');
+      expect(proof.stderr).toBe('');
+    });
+  });
+
   it('builds and verifies release allowlist artifacts without wallet setup', async () => {
     await withTempHome(async (home) => {
       const input = join(home, 'allowlist.csv');
@@ -287,6 +305,126 @@ describe('built CLI deterministic behavior', () => {
         address: '0x2222222222222222222222222222222222222222',
         valid: true,
       });
+    });
+  });
+
+  it('builds and verifies batch marketplace token tree artifacts without wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const input = join(home, 'batch-tokens.csv');
+      const artifactPath = join(home, 'batch-token-artifact.json');
+      const proofPath = join(home, 'batch-token-proof.json');
+      await writeFile(input, [
+        'contract_address,token_id,chain_id',
+        '0x2222222222222222222222222222222222222222,2,11155111',
+        '0x1111111111111111111111111111111111111111,10,11155111',
+        '0x1111111111111111111111111111111111111111,1,11155111',
+        '',
+      ].join('\n'), 'utf8');
+
+      const build = parseJsonStdout<{
+        root: string;
+        count: number;
+        chainId: number;
+        output: string;
+      }>(await runCli([
+        '--json',
+        'batch',
+        'tree',
+        'build',
+        '--input',
+        input,
+        '--output',
+        artifactPath,
+      ], { home }));
+
+      expect(build).toEqual({
+        root: '0xc7f290f1b2d1f0644c2b52ff9de94e33f0d877c8708cc9e2abbcbfb6af169f4e',
+        count: 3,
+        chainId: 11_155_111,
+        output: artifactPath,
+      });
+
+      const artifact = JSON.parse(await readFile(artifactPath, 'utf8'));
+      expect(artifact.tokens).toEqual([
+        { contractAddress: '0x1111111111111111111111111111111111111111', tokenId: '1', chainId: 11_155_111 },
+        { contractAddress: '0x1111111111111111111111111111111111111111', tokenId: '10', chainId: 11_155_111 },
+        { contractAddress: '0x2222222222222222222222222222222222222222', tokenId: '2', chainId: 11_155_111 },
+      ]);
+
+      const proof = parseJsonStdout<{
+        root: string;
+        contractAddress: string;
+        tokenId: string;
+        proofLength: number;
+        valid: boolean;
+        output: string;
+      }>(await runCli([
+        '--json',
+        'batch',
+        'tree',
+        'proof',
+        '--input',
+        artifactPath,
+        '--contract',
+        '0x2222222222222222222222222222222222222222',
+        '--token-id',
+        '2',
+        '--output',
+        proofPath,
+      ], { home }));
+
+      expect(proof.root).toBe(build.root);
+      expect(proof.contractAddress).toBe('0x2222222222222222222222222222222222222222');
+      expect(proof.tokenId).toBe('2');
+      expect(proof.proofLength).toBe(1);
+      expect(proof.valid).toBe(true);
+      expect(proof.output).toBe(proofPath);
+
+      const verify = parseJsonStdout<{
+        root: string;
+        contractAddress: string;
+        tokenId: string;
+        valid: boolean;
+      }>(await runCli([
+        '--json',
+        'batch',
+        'tree',
+        'verify',
+        '--input',
+        artifactPath,
+        '--contract',
+        '0x2222222222222222222222222222222222222222',
+        '--token-id',
+        '2',
+        '--proof',
+        proofPath,
+      ], { home }));
+
+      expect(verify).toEqual({
+        root: build.root,
+        contractAddress: '0x2222222222222222222222222222222222222222',
+        tokenId: '2',
+        valid: true,
+      });
+    });
+  });
+
+  it('rejects malformed batch token trees before wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const input = join(home, 'bad-batch-tokens.csv');
+      await writeFile(input, 'contract,tokenId\nnot-an-address,1\n', 'utf8');
+
+      const result = await runCli([
+        'batch',
+        'tree',
+        'build',
+        '--input',
+        input,
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('batch token at index 0 contractAddress must be a valid 0x address.');
     });
   });
 

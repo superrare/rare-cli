@@ -12,6 +12,13 @@ import type {
   ReleaseDirectSaleConfig,
 } from './release-core.js';
 import type {
+  BatchTokenListArtifact,
+  BatchTokenProofArtifact,
+  BatchTokenProofParams,
+  BatchTokenProofVerifyParams,
+  BuildBatchTokenTreeParams,
+} from './batch-core.js';
+import type {
   CollectionSearchParams,
   ImportErc721Params,
   NftMediaEntry,
@@ -552,6 +559,11 @@ export interface RareClient {
     setTxLimit(params: ReleaseLimitParams): Promise<ReleaseLimitResult>;
     setSellerStakingMinimum(params: ReleaseSellerStakingMinimumParams): Promise<ReleaseSellerStakingMinimumResult>;
     mintDirectSale(params: ReleaseMintDirectSaleParams): Promise<ReleaseMintDirectSaleResult>;
+  };
+  batch: {
+    buildTree(params: BuildBatchTokenTreeParams): BatchTokenListArtifact;
+    getTreeProof(params: BatchTokenProofParams): BatchTokenProofArtifact;
+    verifyTreeProof(params: BatchTokenProofVerifyParams): boolean;
   };
   user: {
     get(address: string): Promise<UserProfile>;

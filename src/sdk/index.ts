@@ -14,6 +14,17 @@ export {
   sovereignCollectionContractTypes,
 } from './collection-core.js';
 export {
+  buildBatchTokenTreeArtifact,
+  getBatchTokenProof,
+  hashBatchToken,
+  normalizeBytes32 as normalizeBatchBytes32,
+  parseBatchTokenList,
+  parseBatchTokenListArtifact,
+  parseBatchTokenListArtifactOrBuild,
+  parseBatchTokenProofArtifact,
+  verifyBatchTokenProof,
+} from './batch-core.js';
+export {
   buildReleaseAllowlistArtifact,
   getReleaseAllowlistProof,
   normalizeBytes32,
@@ -26,6 +37,16 @@ export {
   planReleaseTxLimit,
   verifyReleaseAllowlistProof,
 } from './release-core.js';
+export type {
+  BatchToken,
+  BatchTokenListArtifact,
+  BatchTokenListInputFormat,
+  BatchTokenProofArtifact,
+  BatchTokenProofParams,
+  BatchTokenProofVerifyParams,
+  BatchTokenTreeEntry,
+  BuildBatchTokenTreeParams,
+} from './batch-core.js';
 export type {
   LazySovereignCollectionContractType,
   SovereignCollectionContractType,

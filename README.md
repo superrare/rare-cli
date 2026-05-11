@@ -131,6 +131,16 @@ rare release mint --contract 0x... --quantity 1 --proof proof.json
 
 `set-mint` limits the total mints per wallet, `set-tx` limits the number of mint transactions per wallet, and `staking set-minimum` configures the raw staking-token amount required while the end timestamp is active. Use `0` for a limit or minimum to disable that check on the contract. `release mint` reads the configured direct sale currency and price by default; pass `--currency` or `--price` only when you want the command to fail if on-chain sale settings differ. RareMinter direct sales mint to the connected wallet.
 
+Build batch marketplace token-list Merkle artifacts for later batch offer, batch listing, and batch auction flows. CSV files should include contract and token ID columns such as `contract_address,token_id`; JSON files can be an array of `{ "contractAddress": "0x...", "tokenId": "1" }` objects or a generated artifact. Pass `--chain-id` or include a `chain_id` column when the artifact should carry chain context.
+
+```bash
+rare batch tree build --input batch-tokens.csv --chain-id 11155111 --output batch-token-artifact.json
+rare batch tree proof --input batch-token-artifact.json --contract 0x... --token-id 1 --output proof.json
+rare batch tree verify --input batch-token-artifact.json --contract 0x... --token-id 1 --proof proof.json
+```
+
+Batch token artifacts use `type: "rare-batch-token-list"` and include `root`, `count`, optional `chainId`, canonical sorted `tokens`, and per-token `entries` with leaves and proofs. Proof artifacts use `type: "rare-batch-token-proof"` and include `root`, `contractAddress`, `tokenId`, optional `chainId`, `leaf`, `proof`, and `valid`.
+
 Inspect creator and royalty data on Sovereign-style collections:
 
 ```bash
@@ -503,6 +513,30 @@ const minted = await rare.release.mintDirectSale({
 console.log(proof.valid, status.mintLimit, minted.tokenIds);
 ```
 
+### Build batch marketplace token trees
+
+```ts
+const tree = rare.batch.buildTree({
+  content: 'contract_address,token_id,chain_id\n0x1111111111111111111111111111111111111111,1,11155111\n',
+  format: 'csv',
+});
+
+const tokenProof = rare.batch.getTreeProof({
+  artifact: tree,
+  contractAddress: '0x1111111111111111111111111111111111111111',
+  tokenId: 1,
+});
+
+const proofValid = rare.batch.verifyTreeProof({
+  root: tree.root,
+  contractAddress: tokenProof.contractAddress,
+  tokenId: tokenProof.tokenId,
+  proof: tokenProof.proof,
+});
+
+console.log(tree.root, tokenProof.proof, proofValid);
+```
+
 ### Inspect and maintain collection owner settings
 
 ```ts
@@ -589,6 +623,7 @@ If you want to inspect the on-chain contracts used by this CLI:
 - RareSpace collection contract: [`RareSpaceNFT.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/spaces/RareSpaceNFT.sol)
 - Factory used for RareSpace collection creation: [`RareSpaceNFTContractFactory.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/spaces/RareSpaceNFTContractFactory.sol)
 - Auction/market contract used for auction operations: [`SuperRareBazaar.sol`](https://github.com/superrare/core/blob/main/src/bazaar/SuperRareBazaar.sol)
+- Batch offer contract used by batch token Merkle roots and proofs: [`BatchOffer.sol`](https://github.com/rareprotocol/core/blob/main/src/batchoffer/BatchOffer.sol)
 
 ## Development (Optional)
 
