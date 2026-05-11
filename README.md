@@ -129,6 +129,29 @@ rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token
 rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token-count 100 --minter 0x...
 ```
 
+Inspect creator and royalty data on Sovereign-style collections:
+
+```bash
+rare collection creator --contract 0x... --token-id 1
+rare collection royalty status --contract 0x... --token-id 1
+```
+
+Owner wallets can update royalty receivers on Sovereign and Lazy Sovereign collections:
+
+```bash
+rare collection royalty set-default-receiver --contract 0x... --receiver 0x...
+rare collection royalty set-token-receiver --contract 0x... --token-id 1 --receiver 0x...
+```
+
+Lazy Sovereign collections support mutable prepared metadata until the owner locks it:
+
+```bash
+rare collection metadata status --contract 0x...
+rare collection metadata update-base-uri --contract 0x... --base-uri ipfs://...
+rare collection metadata update-token-uri --contract 0x... --token-id 1 --token-uri ipfs://.../1.json
+rare collection metadata lock-base-uri --contract 0x...
+```
+
 ### Import an Existing Collection
 
 Import an existing ERC-721 contract into the RARE Protocol registry:
@@ -560,6 +583,32 @@ const prepared = await rare.collection.prepareLazyMint({
 });
 
 console.log(prepared.tokenCount);
+```
+
+### Inspect and maintain collection owner settings
+
+```ts
+const creator = await rare.collection.getTokenCreator({
+  contract: '0xYourContractAddress',
+  tokenId: 1,
+});
+
+const royalty = await rare.collection.getRoyaltyInfo({
+  contract: '0xYourContractAddress',
+  tokenId: 1,
+});
+
+await rare.collection.setDefaultRoyaltyReceiver({
+  contract: '0xYourContractAddress',
+  receiver: '0xNewRoyaltyReceiver',
+});
+
+await rare.collection.updateBaseUri({
+  contract: '0xLazySovereignContractAddress',
+  baseUri: 'ipfs://updated-metadata-directory',
+});
+
+console.log(creator.creator, royalty.receiver);
 ```
 
 ### Import an ERC-721 collection

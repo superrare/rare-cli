@@ -303,6 +303,46 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('exposes collection owner tool command help', async () => {
+    await withTempHome(async (home) => {
+      const creator = await runCli(['collection', 'creator', '--help'], { home });
+      expect(creator.code).toBe(0);
+      expect(creator.stdout).toContain('Usage: rare collection creator [options]');
+      expect(creator.stdout).toContain('--token-id <id>');
+      expect(creator.stderr).toBe('');
+
+      const royalty = await runCli(['collection', 'royalty', 'status', '--help'], { home });
+      expect(royalty.code).toBe(0);
+      expect(royalty.stdout).toContain('Usage: rare collection royalty status [options]');
+      expect(royalty.stdout).toContain('--sale-price <raw>');
+      expect(royalty.stderr).toBe('');
+
+      const metadata = await runCli(['collection', 'metadata', 'update-base-uri', '--help'], { home });
+      expect(metadata.code).toBe(0);
+      expect(metadata.stdout).toContain('Usage: rare collection metadata update-base-uri [options]');
+      expect(metadata.stdout).toContain('--base-uri <uri>');
+      expect(metadata.stderr).toBe('');
+    });
+  });
+
+  it('rejects invalid collection owner tool addresses before wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const result = await runCli([
+        'collection',
+        'royalty',
+        'set-default-receiver',
+        '--contract',
+        'not-an-address',
+        '--receiver',
+        '0x2222222222222222222222222222222222222222',
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('Error: --contract must be a valid 0x address.');
+    });
+  });
+
   it('rejects Sovereign collection creation on chains without a configured factory before wallet setup', async () => {
     await withTempHome(async (home) => {
       const result = await runCli([
