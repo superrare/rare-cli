@@ -223,6 +223,72 @@ export function shapeBatchAuctionStatus(
   };
 }
 
+export function shapeBatchAuctionDetailsRead(details: readonly [
+  Address,
+  number,
+  bigint,
+  bigint,
+  Address,
+  bigint,
+  readonly Address[],
+  readonly number[],
+]): BatchAuctionReadDetails {
+  const [
+    seller,
+    creationBlock,
+    startingTime,
+    duration,
+    currency,
+    reserveAmount,
+    splitAddresses,
+    splitRatios,
+  ] = details;
+
+  return {
+    seller,
+    creationBlock: BigInt(creationBlock),
+    startingTime,
+    duration,
+    currency,
+    reserveAmount,
+    splitAddresses,
+    splitRatios,
+  };
+}
+
+export function shapeBatchAuctionCurrentBidRead(currentBid: readonly [
+  Address,
+  Address,
+  bigint,
+  number,
+]): BatchAuctionBidRead {
+  const [bidder, currency, amount, marketplaceFee] = currentBid;
+  return {
+    bidder,
+    currency,
+    amount,
+    marketplaceFee,
+  };
+}
+
+export function shapeBatchAuctionMerkleConfigRead(config: {
+  currency: Address;
+  startingAmount: bigint;
+  duration: bigint;
+  nonce: number;
+  splitAddresses: readonly Address[];
+  splitRatios: readonly number[];
+}): BatchAuctionMerkleConfigRead {
+  return {
+    currency: config.currency,
+    reserveAmount: config.startingAmount,
+    duration: config.duration,
+    nonce: config.nonce,
+    splitAddresses: config.splitAddresses,
+    splitRatios: config.splitRatios,
+  };
+}
+
 export function addMarketplaceFee(amount: bigint): bigint {
   return amount + ((amount * marketplaceFeePercentage) / 100n);
 }
