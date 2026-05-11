@@ -22,6 +22,7 @@ import {
   planCollectionMarketOfferCancel,
   planCollectionMarketOfferCreate,
   planCollectionMarketOfferStatus,
+  shapeCollectionMarketOfferRead,
   shapeCollectionMarketOfferStatus,
 } from './collection-market-core.js';
 
@@ -279,13 +280,5 @@ async function readCollectionOffer(
     args: [originCollection, buyer],
   });
 
-  if (Array.isArray(offer)) {
-    return {
-      currencyAddress: offer[0] as Address,
-      amount: offer[1] as bigint,
-      marketplaceFee: offer[2] as bigint,
-    };
-  }
-
-  return offer;
+  return shapeCollectionMarketOfferRead(offer);
 }

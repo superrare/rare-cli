@@ -42,6 +42,20 @@ export type CollectionMarketOfferRead = {
   marketplaceFee: bigint;
 };
 
+export function shapeCollectionMarketOfferRead(
+  offer: readonly [Address, bigint, bigint] | CollectionMarketOfferRead,
+): CollectionMarketOfferRead {
+  if (Array.isArray(offer)) {
+    return {
+      currencyAddress: offer[0],
+      amount: offer[1],
+      marketplaceFee: offer[2],
+    };
+  }
+
+  return offer as CollectionMarketOfferRead;
+}
+
 export function planCollectionMarketOfferCreate(
   params: CollectionMarketOfferCreateParams,
 ): CollectionMarketOfferCreatePlan {

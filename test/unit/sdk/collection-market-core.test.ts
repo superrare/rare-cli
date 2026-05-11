@@ -6,6 +6,7 @@ import {
   planCollectionMarketOfferCancel,
   planCollectionMarketOfferCreate,
   planCollectionMarketOfferStatus,
+  shapeCollectionMarketOfferRead,
   shapeCollectionMarketOfferStatus,
 } from '../../../src/sdk/collection-market-core.js';
 
@@ -90,6 +91,14 @@ describe('collection market offer planning', () => {
 });
 
 describe('collection market offer shaping', () => {
+  it('shapes raw offer reads', () => {
+    expect(shapeCollectionMarketOfferRead([erc20Currency, parseEther('1'), 3n])).toEqual({
+      currencyAddress: erc20Currency,
+      amount: parseEther('1'),
+      marketplaceFee: 3n,
+    });
+  });
+
   it('shapes active ETH status with wallet affordances', () => {
     expect(shapeCollectionMarketOfferStatus(
       {
