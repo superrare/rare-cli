@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildCreateSovereignCollectionWrite,
   normalizeSovereignCollectionContractType,
   planCreateSovereignCollection,
 } from '../../../src/sdk/collection-core.js';
@@ -67,5 +68,38 @@ describe('Sovereign collection core', () => {
       maxTokens: 10,
       contractType: 'deadman-royalty-guard',
     }).contractTypeReadName).toBe('ROYALTY_GUARD_DEADMAN');
+  });
+
+  it('builds overloaded Sovereign factory write arguments in core', () => {
+    expect(buildCreateSovereignCollectionWrite(planCreateSovereignCollection({
+      name: 'Test',
+      symbol: 'TST',
+    }))).toEqual({
+      functionName: 'createSovereignNFTContract',
+      args: ['Test', 'TST'],
+    });
+
+    expect(buildCreateSovereignCollectionWrite(planCreateSovereignCollection({
+      name: 'Capped',
+      symbol: 'CAP',
+      maxTokens: 10,
+    }))).toEqual({
+      functionName: 'createSovereignNFTContract',
+      args: ['Capped', 'CAP', 10n],
+    });
+
+    const guarded = planCreateSovereignCollection({
+      name: 'Guarded',
+      symbol: 'GRD',
+      maxTokens: 10,
+      contractType: 'royalty-guard',
+    });
+    expect(buildCreateSovereignCollectionWrite(guarded, `0x${'11'.repeat(32)}`)).toEqual({
+      functionName: 'createSovereignNFTContract',
+      args: ['Guarded', 'GRD', 10n, `0x${'11'.repeat(32)}`],
+    });
+    expect(() => buildCreateSovereignCollectionWrite(guarded)).toThrow(
+      'contractType is required for royalty-guard Sovereign collection writes.',
+    );
   });
 });

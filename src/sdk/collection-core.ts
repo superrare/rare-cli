@@ -1,3 +1,4 @@
+import type { Hex } from 'viem';
 import type { IntegerInput } from './types.js';
 import { toPositiveInteger } from './helpers.js';
 
@@ -24,6 +25,11 @@ export interface CreateSovereignCollectionPlan {
   contractType: SovereignCollectionContractType;
   contractTypeReadName?: SovereignCollectionContractTypeReadName;
 }
+
+export type CreateSovereignCollectionWrite = {
+  functionName: 'createSovereignNFTContract';
+  args: [string, string] | [string, string, bigint] | [string, string, bigint, Hex];
+};
 
 export function normalizeSovereignCollectionContractType(
   input: string | undefined,
@@ -70,6 +76,34 @@ export function planCreateSovereignCollection(
     maxTokens,
     contractType,
     contractTypeReadName: contractTypeReadName(contractType),
+  };
+}
+
+export function buildCreateSovereignCollectionWrite(
+  plan: CreateSovereignCollectionPlan,
+  contractType?: Hex,
+): CreateSovereignCollectionWrite {
+  if (plan.maxTokens === undefined) {
+    return {
+      functionName: 'createSovereignNFTContract',
+      args: [plan.name, plan.symbol],
+    };
+  }
+
+  if (plan.contractTypeReadName === undefined) {
+    return {
+      functionName: 'createSovereignNFTContract',
+      args: [plan.name, plan.symbol, plan.maxTokens],
+    };
+  }
+
+  if (contractType === undefined) {
+    throw new Error(`contractType is required for ${plan.contractType} Sovereign collection writes.`);
+  }
+
+  return {
+    functionName: 'createSovereignNFTContract',
+    args: [plan.name, plan.symbol, plan.maxTokens, contractType],
   };
 }
 

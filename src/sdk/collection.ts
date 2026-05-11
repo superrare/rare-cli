@@ -3,7 +3,10 @@ import { sovereignFactoryAbi } from '../contracts/abis/sovereign-factory.js';
 import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
 import type { RareClientConfig, RareClient } from './types.js';
 import { requireWallet } from './helpers.js';
-import { planCreateSovereignCollection } from './collection-core.js';
+import {
+  buildCreateSovereignCollectionWrite,
+  planCreateSovereignCollection,
+} from './collection-core.js';
 
 export function createCollectionNamespace(
   publicClient: PublicClient,
@@ -58,22 +61,24 @@ async function writeCreateSovereignCollection(
   },
 ): Promise<Hash> {
   if (opts.plan.maxTokens === undefined) {
+    const write = buildCreateSovereignCollectionWrite(opts.plan);
     return opts.walletClient.writeContract({
       address: opts.factoryAddress,
       abi: sovereignFactoryAbi,
-      functionName: 'createSovereignNFTContract',
-      args: [opts.plan.name, opts.plan.symbol],
+      functionName: write.functionName,
+      args: write.args,
       account: opts.account,
       chain: undefined,
     });
   }
 
   if (opts.plan.contractTypeReadName === undefined) {
+    const write = buildCreateSovereignCollectionWrite(opts.plan);
     return opts.walletClient.writeContract({
       address: opts.factoryAddress,
       abi: sovereignFactoryAbi,
-      functionName: 'createSovereignNFTContract',
-      args: [opts.plan.name, opts.plan.symbol, opts.plan.maxTokens],
+      functionName: write.functionName,
+      args: write.args,
       account: opts.account,
       chain: undefined,
     });
@@ -85,11 +90,12 @@ async function writeCreateSovereignCollection(
     functionName: opts.plan.contractTypeReadName,
   });
 
+  const write = buildCreateSovereignCollectionWrite(opts.plan, contractType);
   return opts.walletClient.writeContract({
     address: opts.factoryAddress,
     abi: sovereignFactoryAbi,
-    functionName: 'createSovereignNFTContract',
-    args: [opts.plan.name, opts.plan.symbol, opts.plan.maxTokens, contractType],
+    functionName: write.functionName,
+    args: write.args,
     account: opts.account,
     chain: undefined,
   });
