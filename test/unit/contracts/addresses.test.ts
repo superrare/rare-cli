@@ -37,6 +37,9 @@ describe('chain and currency helpers', () => {
     expect(requireContractAddress('sepolia', 'batchAuctionHouse')).toBe('0x293AE7701A7830B1d38A7608EdF86A106d9E2645');
     expect(requireContractAddress('sepolia', 'erc20ApprovalManager')).toBe('0x4619eB29e84392CE91C27FC936A5c94d1D14b93f');
     expect(requireContractAddress('sepolia', 'erc721ApprovalManager')).toBe('0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E');
+    expect(() => requireContractAddress('sepolia', 'collectionMarket')).toThrow(
+      'RARE Protocol collectionMarket contract is not configured on "sepolia".',
+    );
     expect(() => requireContractAddress('base', 'sovereignFactory')).toThrow(
       'RARE Protocol sovereignFactory contract is not configured on "base".',
     );

@@ -12,6 +12,14 @@ export type {
   BatchOfferRevokeResult,
   BatchOfferStatus,
   BatchOfferStatusParams,
+  CollectionMarketOfferAcceptParams,
+  CollectionMarketOfferAcceptResult,
+  CollectionMarketOfferCreateParams,
+  CollectionMarketOfferCreateResult,
+  CollectionMarketOfferCancelParams,
+  CollectionMarketOfferCancelResult,
+  CollectionMarketOfferStatus,
+  CollectionMarketOfferStatusParams,
   RareClient,
   RareClientConfig,
 } from './types.js';
@@ -21,6 +29,14 @@ export {
   normalizeSovereignCollectionContractType,
   sovereignCollectionContractTypes,
 } from './collection-core.js';
+export {
+  calculateCollectionOfferTopUp,
+  planCollectionMarketOfferAccept,
+  planCollectionMarketOfferCancel,
+  planCollectionMarketOfferCreate,
+  planCollectionMarketOfferStatus,
+  shapeCollectionMarketOfferStatus,
+} from './collection-market-core.js';
 export {
   planBatchOfferAccept,
   planBatchOfferCreate,
@@ -62,6 +78,12 @@ export type {
   BatchTokenTreeEntry,
   BuildBatchTokenTreeParams,
 } from './batch-core.js';
+export type {
+  CollectionMarketOfferAcceptPlan,
+  CollectionMarketOfferCreatePlan,
+  CollectionMarketOfferRead,
+  CollectionMarketOfferStatusPlan,
+} from './collection-market-core.js';
 export type {
   BatchOfferAcceptPlan,
   BatchOfferCreatePlan,
@@ -108,4 +130,5 @@ export { lazySovereignFactoryAbi } from '../contracts/abis/lazy-sovereign-factor
 export { rareMinterAbi } from '../contracts/abis/rare-minter.js';
 export { auctionAbi } from '../contracts/abis/auction.js';
 export { batchOfferAbi } from '../contracts/abis/batch-offer.js';
+export { collectionMarketAbi } from '../contracts/abis/collection-market.js';
 export { tokenAbi } from '../contracts/abis/token.js';

@@ -256,6 +256,30 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('exposes collection market offer command help', async () => {
+    await withTempHome(async (home) => {
+      const create = await runCli(['collection-market', 'offer', 'create', '--help'], { home });
+      expect(create.code).toBe(0);
+      expect(create.stdout).toContain('Usage: rare collection-market offer create [options]');
+      expect(create.stdout).toContain('--collection <address>');
+      expect(create.stdout).toContain('--amount <amount>');
+      expect(create.stderr).toBe('');
+
+      const accept = await runCli(['collection-market', 'offer', 'accept', '--help'], { home });
+      expect(accept.code).toBe(0);
+      expect(accept.stdout).toContain('Usage: rare collection-market offer accept [options]');
+      expect(accept.stdout).toContain('--buyer <address>');
+      expect(accept.stdout).toContain('--token-id <id>');
+      expect(accept.stderr).toBe('');
+
+      const status = await runCli(['collection-market', 'offer', 'status', '--help'], { home });
+      expect(status.code).toBe(0);
+      expect(status.stdout).toContain('Usage: rare collection-market offer status [options]');
+      expect(status.stdout).toContain('--account <address>');
+      expect(status.stderr).toBe('');
+    });
+  });
+
   it('builds and verifies release allowlist artifacts without wallet setup', async () => {
     await withTempHome(async (home) => {
       const input = join(home, 'allowlist.csv');

@@ -38,6 +38,13 @@ export const marketplaceSettingsAbi = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [],
+    name: 'getMarketplaceFeePercentage',
+    outputs: [{ name: '', type: 'uint8' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const;
 
 /**
@@ -343,8 +350,20 @@ export async function calculateMarketplacePaymentAmount(
     abi: auctionAbi,
     functionName: 'marketplaceSettings',
   });
+  return calculateMarketplacePaymentAmountFromSettings(publicClient, settingsAddress, amount);
+}
+
+export async function calculateMarketplacePaymentAmountFromSettings(
+  publicClient: PublicClient,
+  marketplaceSettings: Address,
+  amount: bigint,
+): Promise<bigint> {
+  if (amount === 0n) {
+    return 0n;
+  }
+
   const fee = await publicClient.readContract({
-    address: settingsAddress,
+    address: marketplaceSettings,
     abi: marketplaceSettingsAbi,
     functionName: 'calculateMarketplaceFee',
     args: [amount],
