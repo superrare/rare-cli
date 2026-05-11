@@ -3,6 +3,8 @@ import { sovereignFactoryAbi } from '../contracts/abis/sovereign-factory.js';
 import { lazySovereignFactoryAbi } from '../contracts/abis/lazy-sovereign-factory.js';
 import { collectionMintAbi } from '../contracts/abis/collection-mint.js';
 import { collectionOwnerAbi } from '../contracts/abis/collection-owner.js';
+import { rareSpaceFactoryAbi } from '../contracts/abis/rarespace-factory.js';
+import { rareSpaceAbi } from '../contracts/abis/rarespace.js';
 import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
 import type { RareClientConfig, RareClient } from './types.js';
 import { requireWallet } from './helpers.js';
@@ -20,8 +22,10 @@ import {
   planCollectionToken,
   planCollectionTokenReceiver,
   planCollectionTokenUri,
+  planCreateRareSpaceCollection,
   planCreateLazySovereignCollection,
   planCreateSovereignCollection,
+  planMintRareSpaceToken,
 } from './collection-core.js';
 
 export function createCollectionNamespace(
@@ -102,6 +106,70 @@ export function createCollectionNamespace(
         factory: factoryAddress,
         contractType: plan.contractType,
         nextStep: 'Configure release sale and mint settings for this collection before collector minting.',
+      };
+    },
+
+    async createSpace(params) {
+      const plan = planCreateRareSpaceCollection(params);
+      const factoryAddress = requireContractAddress(chain, 'spaceFactory');
+      const { walletClient, account } = requireWallet(config);
+      const txHash = await writeCreateRareSpaceCollection({
+        publicClient,
+        walletClient,
+        account,
+        factoryAddress,
+        plan,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const logs = parseEventLogs({
+        abi: rareSpaceFactoryAbi,
+        logs: receipt.logs,
+        eventName: 'RareSpaceNFTContractCreated',
+      });
+      const [createdLog] = logs;
+
+      if (!createdLog) {
+        throw new Error('RareSpace collection transaction succeeded but RareSpaceNFTContractCreated was not found in logs.');
+      }
+
+      return {
+        txHash,
+        receipt,
+        contract: createdLog.args._contractAddress,
+        factory: factoryAddress,
+        operator: createdLog.args._operator,
+      };
+    },
+
+    async mintSpace(params) {
+      const { walletClient, account, accountAddress } = requireWallet(config);
+      const plan = planMintRareSpaceToken(params, accountAddress);
+      const txHash = await writeMintRareSpaceToken({
+        publicClient,
+        walletClient,
+        account,
+        plan,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const logs = parseEventLogs({
+        abi: rareSpaceAbi,
+        logs: receipt.logs,
+        eventName: 'Transfer',
+      });
+      const [transferLog] = logs;
+
+      if (!transferLog) {
+        throw new Error('RareSpace mint transaction succeeded but Transfer event was not found in logs.');
+      }
+
+      return {
+        txHash,
+        receipt,
+        contract: plan.contract,
+        tokenId: transferLog.args.tokenId,
+        tokenUri: plan.tokenUri,
+        to: plan.to,
+        royaltyReceiver: plan.royaltyReceiver,
       };
     },
 
@@ -382,6 +450,63 @@ async function writeCreateSovereignCollection(
     abi: sovereignFactoryAbi,
     functionName: write.functionName,
     args: write.args,
+    account: opts.account,
+    chain: undefined,
+  });
+}
+
+async function writeCreateRareSpaceCollection(
+  opts: {
+    publicClient: PublicClient;
+    walletClient: NonNullable<RareClientConfig['walletClient']>;
+    account: ReturnType<typeof requireWallet>['account'];
+    factoryAddress: Address;
+    plan: ReturnType<typeof planCreateRareSpaceCollection>;
+  },
+): Promise<Hash> {
+  await opts.publicClient.simulateContract({
+    address: opts.factoryAddress,
+    abi: rareSpaceFactoryAbi,
+    functionName: 'createRareSpaceNFTContract',
+    args: [opts.plan.name, opts.plan.symbol],
+    account: opts.account,
+  });
+
+  return opts.walletClient.writeContract({
+    address: opts.factoryAddress,
+    abi: rareSpaceFactoryAbi,
+    functionName: 'createRareSpaceNFTContract',
+    args: [opts.plan.name, opts.plan.symbol],
+    account: opts.account,
+    chain: undefined,
+  });
+}
+
+async function writeMintRareSpaceToken(
+  opts: {
+    publicClient: PublicClient;
+    walletClient: NonNullable<RareClientConfig['walletClient']>;
+    account: ReturnType<typeof requireWallet>['account'];
+    plan: ReturnType<typeof planMintRareSpaceToken>;
+  },
+): Promise<Hash> {
+  try {
+    await opts.publicClient.simulateContract({
+      address: opts.plan.contract,
+      abi: rareSpaceAbi,
+      functionName: 'mintTo',
+      args: [opts.plan.tokenUri, opts.plan.to, opts.plan.royaltyReceiver],
+      account: opts.account,
+    });
+  } catch (error) {
+    throw contractSupportError('RareSpace mintTo', opts.plan.contract, error);
+  }
+
+  return opts.walletClient.writeContract({
+    address: opts.plan.contract,
+    abi: rareSpaceAbi,
+    functionName: 'mintTo',
+    args: [opts.plan.tokenUri, opts.plan.to, opts.plan.royaltyReceiver],
     account: opts.account,
     chain: undefined,
   });

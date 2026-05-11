@@ -41,6 +41,14 @@ type CollectionPrepareLazyMintOptions = {
   chain?: string;
 };
 
+type CollectionMintSpaceOptions = {
+  contract: string;
+  tokenUri: string;
+  to?: string;
+  royaltyReceiver?: string;
+  chain?: string;
+};
+
 type CollectionTokenOptions = {
   contract: string;
   tokenId: string;
@@ -668,11 +676,113 @@ function createMetadataCommand(): Command {
   return cmd;
 }
 
+function createRareSpaceCollectionCommand(): Command {
+  const cmd = new Command('space');
+  cmd.description('Create a RareSpace NFT collection');
+
+  cmd
+    .argument('<name>', 'name of the RareSpace collection')
+    .argument('<symbol>', 'symbol of the RareSpace collection')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (name: string, symbol: string, opts: { chain?: string }) => {
+      try {
+        const chain = getActiveChain(opts.chain);
+        const factoryAddress = requireContractAddress(chain, 'spaceFactory');
+        const { client } = getWalletClient(chain);
+        const publicClient = getPublicClient(chain);
+        const rare = createRareClient({ publicClient, walletClient: client });
+
+        log(`Creating RareSpace collection on ${chain}...`);
+        log(`  Name: ${name}`);
+        log(`  Symbol: ${symbol}`);
+        log(`  Factory: ${factoryAddress}`);
+        log('Waiting for confirmation...');
+
+        const result = await rare.collection.createSpace({ name, symbol });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            contract: result.contract,
+            factory: result.factory,
+            operator: result.operator,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`\nRareSpace collection created at: ${result.contract}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createMintSpaceCommand(): Command {
+  const cmd = new Command('mint-space');
+  cmd.description('Mint a token from a RareSpace collection');
+
+  cmd
+    .requiredOption('--contract <address>', 'RareSpace collection contract address')
+    .requiredOption('--token-uri <uri>', 'token metadata URI')
+    .option('--to <address>', 'token receiver address')
+    .option('--royalty-receiver <address>', 'royalty receiver address')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: CollectionMintSpaceOptions) => {
+      try {
+        const contract = parseAddressOption(opts.contract, '--contract');
+        const to = opts.to === undefined ? undefined : parseAddressOption(opts.to, '--to');
+        const royaltyReceiver = opts.royaltyReceiver === undefined
+          ? undefined
+          : parseAddressOption(opts.royaltyReceiver, '--royalty-receiver');
+        const { chain, rare } = createWriteCollectionClient(opts.chain);
+
+        log(`Minting RareSpace token on ${chain}...`);
+        log(`  Contract: ${contract}`);
+        log(`  Token URI: ${opts.tokenUri}`);
+        if (to !== undefined) log(`  Receiver: ${to}`);
+        if (royaltyReceiver !== undefined) log(`  Royalty receiver: ${royaltyReceiver}`);
+        log('Waiting for confirmation...');
+
+        const result = await rare.collection.mintSpace({
+          contract,
+          tokenUri: opts.tokenUri,
+          to,
+          royaltyReceiver,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            contract: result.contract,
+            tokenId: result.tokenId,
+            tokenUri: result.tokenUri,
+            to: result.to,
+            royaltyReceiver: result.royaltyReceiver,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Minted RareSpace token ID: ${result.tokenId.toString()}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
 function createCollectionCreateCommand(): Command {
   const cmd = new Command('create');
   cmd.description('Create NFT collections through RARE factories');
   cmd.addCommand(createSovereignCollectionCommand());
   cmd.addCommand(createLazySovereignCollectionCommand());
+  cmd.addCommand(createRareSpaceCollectionCommand());
   return cmd;
 }
 
@@ -685,6 +795,7 @@ export function collectionCommand(): Command {
   cmd.addCommand(createTokenCreatorCommand());
   cmd.addCommand(createRoyaltyCommand());
   cmd.addCommand(createMetadataCommand());
+  cmd.addCommand(createMintSpaceCommand());
   return cmd;
 }
 

@@ -189,6 +189,32 @@ export interface CollectionLockBaseUriResult extends TransactionResult {
   baseUri: string;
 }
 
+export interface CreateRareSpaceCollectionParams {
+  name: string;
+  symbol: string;
+}
+
+export interface CreateRareSpaceCollectionResult extends TransactionResult {
+  contract: Address;
+  factory: Address;
+  operator: Address;
+}
+
+export interface MintRareSpaceTokenParams {
+  contract: Address;
+  tokenUri: string;
+  to?: Address;
+  royaltyReceiver?: Address;
+}
+
+export interface MintRareSpaceTokenResult extends TransactionResult {
+  contract: Address;
+  tokenId: bigint;
+  tokenUri: string;
+  to: Address;
+  royaltyReceiver: Address;
+}
+
 export interface MintToParams {
   contract: Address;
   tokenUri: string;
@@ -348,6 +374,7 @@ export interface RareClient {
     auction: Address;
     sovereignFactory?: Address;
     lazySovereignFactory?: Address;
+    spaceFactory?: Address;
   };
   deploy: {
     erc721(params: DeployErc721Params): Promise<DeployErc721Result>;
@@ -397,6 +424,8 @@ export interface RareClient {
     updateBaseUri(params: CollectionUpdateBaseUriParams): Promise<CollectionUpdateBaseUriResult>;
     updateTokenUri(params: CollectionUpdateTokenUriParams): Promise<CollectionUpdateTokenUriResult>;
     lockBaseUri(params: CollectionLockBaseUriParams): Promise<CollectionLockBaseUriResult>;
+    createSpace(params: CreateRareSpaceCollectionParams): Promise<CreateRareSpaceCollectionResult>;
+    mintSpace(params: MintRareSpaceTokenParams): Promise<MintRareSpaceTokenResult>;
   };
   user: {
     get(address: string): Promise<UserProfile>;

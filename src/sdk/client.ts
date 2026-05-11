@@ -28,12 +28,13 @@ export function createRareClient(config: RareClientConfig): RareClient {
   const chain = resolveChainFromPublicClient(publicClient);
   const chainId = chainIds[chain];
   const addresses = getContractAddresses(chain);
-  const contracts = addresses.sovereignFactory || addresses.lazySovereignFactory
+  const contracts = addresses.sovereignFactory || addresses.lazySovereignFactory || addresses.spaceFactory
     ? {
         factory: addresses.factory,
         auction: addresses.auction,
         sovereignFactory: addresses.sovereignFactory,
         lazySovereignFactory: addresses.lazySovereignFactory,
+        spaceFactory: addresses.spaceFactory,
       }
     : {
         factory: addresses.factory,

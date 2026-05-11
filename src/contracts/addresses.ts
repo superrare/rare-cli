@@ -36,6 +36,7 @@ type ContractSet = {
   auction: Address;
   sovereignFactory?: Address;
   lazySovereignFactory?: Address;
+  spaceFactory?: Address;
 };
 
 export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
@@ -50,6 +51,7 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
     auction: '0x6D7c44773C52D396F43c2D511B81aa168E9a7a42',
     sovereignFactory: '0xe980ec62378529d95ba446433f4deb6324129c59',
     lazySovereignFactory: '0xba798BD606d86D207ca2751510173532899117a1',
+    spaceFactory: '0x3b2d699110aa1788b2b1cae336e0ba8ff942a390',
   },
   base: {
     factory: '0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd',
