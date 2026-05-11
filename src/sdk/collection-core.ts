@@ -88,6 +88,16 @@ export interface CollectionPrepareLazyMintPlan {
   minter?: Address;
 }
 
+export type CollectionMintBatchWrite = {
+  functionName: 'batchMint';
+  args: [string, bigint];
+};
+
+export type CollectionPrepareLazyMintWrite = {
+  functionName: 'prepareMint' | 'prepareMintWithMinter';
+  args: [string, bigint] | [string, bigint, Address];
+};
+
 export function normalizeSovereignCollectionContractType(
   input: string | undefined,
 ): SovereignCollectionContractType | undefined {
@@ -248,6 +258,31 @@ export function planCollectionPrepareLazyMint(
   return {
     ...basePlan,
     minter: params.minter,
+  };
+}
+
+export function buildCollectionMintBatchWrite(
+  plan: CollectionMintBatchPlan,
+): CollectionMintBatchWrite {
+  return {
+    functionName: 'batchMint',
+    args: [plan.baseUri, plan.tokenCount],
+  };
+}
+
+export function buildCollectionPrepareLazyMintWrite(
+  plan: CollectionPrepareLazyMintPlan,
+): CollectionPrepareLazyMintWrite {
+  if (plan.minter === undefined) {
+    return {
+      functionName: 'prepareMint',
+      args: [plan.baseUri, plan.tokenCount],
+    };
+  }
+
+  return {
+    functionName: 'prepareMintWithMinter',
+    args: [plan.baseUri, plan.tokenCount, plan.minter],
   };
 }
 

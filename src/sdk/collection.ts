@@ -6,6 +6,8 @@ import { requireContractAddress, type SupportedChain } from '../contracts/addres
 import type { RareClientConfig, RareClient } from './types.js';
 import { requireWallet } from './helpers.js';
 import {
+  buildCollectionMintBatchWrite,
+  buildCollectionPrepareLazyMintWrite,
   buildCreateLazySovereignCollectionWrite,
   buildCreateSovereignCollectionWrite,
   planCollectionMintBatch,
@@ -229,19 +231,20 @@ async function writeCollectionBatchMint(
     plan: ReturnType<typeof planCollectionMintBatch>;
   },
 ): Promise<Hash> {
+  const write = buildCollectionMintBatchWrite(opts.plan);
   await opts.publicClient.simulateContract({
     address: opts.plan.contract,
     abi: collectionMintAbi,
-    functionName: 'batchMint',
-    args: [opts.plan.baseUri, opts.plan.tokenCount],
+    functionName: write.functionName,
+    args: write.args,
     account: opts.account,
   });
 
   return opts.walletClient.writeContract({
     address: opts.plan.contract,
     abi: collectionMintAbi,
-    functionName: 'batchMint',
-    args: [opts.plan.baseUri, opts.plan.tokenCount],
+    functionName: write.functionName,
+    args: write.args,
     account: opts.account,
     chain: undefined,
   });
@@ -255,38 +258,20 @@ async function writeCollectionPrepareLazyMint(
     plan: ReturnType<typeof planCollectionPrepareLazyMint>;
   },
 ): Promise<Hash> {
-  if (opts.plan.minter === undefined) {
-    await opts.publicClient.simulateContract({
-      address: opts.plan.contract,
-      abi: collectionMintAbi,
-      functionName: 'prepareMint',
-      args: [opts.plan.baseUri, opts.plan.tokenCount],
-      account: opts.account,
-    });
-
-    return opts.walletClient.writeContract({
-      address: opts.plan.contract,
-      abi: collectionMintAbi,
-      functionName: 'prepareMint',
-      args: [opts.plan.baseUri, opts.plan.tokenCount],
-      account: opts.account,
-      chain: undefined,
-    });
-  }
-
+  const write = buildCollectionPrepareLazyMintWrite(opts.plan);
   await opts.publicClient.simulateContract({
     address: opts.plan.contract,
     abi: collectionMintAbi,
-    functionName: 'prepareMintWithMinter',
-    args: [opts.plan.baseUri, opts.plan.tokenCount, opts.plan.minter],
+    functionName: write.functionName,
+    args: write.args,
     account: opts.account,
   });
 
   return opts.walletClient.writeContract({
     address: opts.plan.contract,
     abi: collectionMintAbi,
-    functionName: 'prepareMintWithMinter',
-    args: [opts.plan.baseUri, opts.plan.tokenCount, opts.plan.minter],
+    functionName: write.functionName,
+    args: write.args,
     account: opts.account,
     chain: undefined,
   });

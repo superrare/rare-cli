@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildCollectionMintBatchWrite,
+  buildCollectionPrepareLazyMintWrite,
   buildCreateLazySovereignCollectionWrite,
   buildCreateSovereignCollectionWrite,
   normalizeLazySovereignCollectionContractType,
@@ -210,5 +212,38 @@ describe('Sovereign collection core', () => {
       baseUri: 'ipfs://lazy',
       tokenCount: '-1',
     })).toThrow('tokenCount must be greater than 0.');
+  });
+
+  it('builds collection mint write arguments in core', () => {
+    const batchPlan = planCollectionMintBatch({
+      contract: COLLECTION_ADDRESS,
+      baseUri: 'ipfs://batch',
+      tokenCount: '25',
+    });
+    expect(buildCollectionMintBatchWrite(batchPlan)).toEqual({
+      functionName: 'batchMint',
+      args: ['ipfs://batch', 25n],
+    });
+
+    const lazyPlan = planCollectionPrepareLazyMint({
+      contract: COLLECTION_ADDRESS,
+      baseUri: 'ipfs://lazy',
+      tokenCount: 3,
+    });
+    expect(buildCollectionPrepareLazyMintWrite(lazyPlan)).toEqual({
+      functionName: 'prepareMint',
+      args: ['ipfs://lazy', 3n],
+    });
+
+    const minterPlan = planCollectionPrepareLazyMint({
+      contract: COLLECTION_ADDRESS,
+      baseUri: 'ipfs://lazy',
+      tokenCount: 3,
+      minter: MINTER_ADDRESS,
+    });
+    expect(buildCollectionPrepareLazyMintWrite(minterPlan)).toEqual({
+      functionName: 'prepareMintWithMinter',
+      args: ['ipfs://lazy', 3n, MINTER_ADDRESS],
+    });
   });
 });
