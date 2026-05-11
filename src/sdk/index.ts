@@ -12,6 +12,14 @@ export type {
   BatchOfferRevokeResult,
   BatchOfferStatus,
   BatchOfferStatusParams,
+  CollectionMarketListingBuyParams,
+  CollectionMarketListingBuyResult,
+  CollectionMarketListingCancelParams,
+  CollectionMarketListingCancelResult,
+  CollectionMarketListingSetParams,
+  CollectionMarketListingSetResult,
+  CollectionMarketListingStatus,
+  CollectionMarketListingStatusParams,
   CollectionMarketOfferAcceptParams,
   CollectionMarketOfferAcceptResult,
   CollectionMarketOfferCreateParams,
@@ -31,10 +39,15 @@ export {
 } from './collection-core.js';
 export {
   calculateCollectionOfferTopUp,
+  planCollectionMarketListingBuy,
+  planCollectionMarketListingCancel,
+  planCollectionMarketListingSet,
+  planCollectionMarketListingStatus,
   planCollectionMarketOfferAccept,
   planCollectionMarketOfferCancel,
   planCollectionMarketOfferCreate,
   planCollectionMarketOfferStatus,
+  shapeCollectionMarketListingStatus,
   shapeCollectionMarketOfferStatus,
 } from './collection-market-core.js';
 export {
@@ -79,9 +92,13 @@ export type {
   BuildBatchTokenTreeParams,
 } from './batch-core.js';
 export type {
+  CollectionMarketListingBuyPlan,
+  CollectionMarketListingSetPlan,
+  CollectionMarketListingStatusPlan,
   CollectionMarketOfferAcceptPlan,
   CollectionMarketOfferCreatePlan,
   CollectionMarketOfferRead,
+  CollectionMarketSalePriceRead,
   CollectionMarketOfferStatusPlan,
 } from './collection-market-core.js';
 export type {

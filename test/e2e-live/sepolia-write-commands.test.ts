@@ -240,6 +240,29 @@ type CollectionMarketOfferStatusResult = {
   canAccept: boolean;
 };
 
+type CollectionMarketListingWriteResult = TxResult & {
+  collectionMarket: string;
+  seller: string;
+  buyer?: string;
+  originCollection: string;
+  tokenId?: string;
+  amount: string;
+  currency: string;
+  requiredPayment?: string;
+  hadListing?: boolean;
+};
+
+type CollectionMarketListingStatusResult = {
+  seller: string;
+  originCollection: string;
+  amount: string;
+  currency: string;
+  hasListing: boolean;
+  state: string;
+  canCancel: boolean;
+  canBuy: boolean;
+};
+
 type BatchAuctionWriteResult = TxResult & {
   batchAuctionHouse: string;
   creator: string;
@@ -312,7 +335,7 @@ describeLive('live Sepolia CLI write commands', () => {
           `Rare CLI E2E ${suffix}`,
           `RCE${suffix.slice(-4).toUpperCase()}`,
           '--max-tokens',
-          '14',
+          '15',
           '--chain',
           'sepolia',
         ]),
@@ -1170,13 +1193,12 @@ describeLive('live Sepolia CLI write commands', () => {
       return;
     }
 
-    const token = await step('mint collection-market offer token', () =>
+    const token = await step('mint collection-wide offer token', () =>
       mintToken(live.sellerHome, live.collection.contract),
     );
 
-    const createdForCancel = await step('create collection-market offer for cancellation', () =>
+    const createdForCancel = await step('create collection-wide offer for cancellation', () =>
       jsonCommand<CollectionMarketOfferWriteResult>(live.buyerHome, [
-        'collection-market',
         'offer',
         'create',
         '--collection',
@@ -1201,9 +1223,8 @@ describeLive('live Sepolia CLI write commands', () => {
       account: live.sellerAddress,
     });
 
-    const cancelled = await step('cancel collection-market offer', () =>
+    const cancelled = await step('cancel collection-wide offer', () =>
       jsonCommand<CollectionMarketOfferWriteResult>(live.buyerHome, [
-        'collection-market',
         'offer',
         'cancel',
         '--collection',
@@ -1224,9 +1245,8 @@ describeLive('live Sepolia CLI write commands', () => {
       account: live.sellerAddress,
     });
 
-    const createdForAccept = await step('create collection-market offer for acceptance', () =>
+    const createdForAccept = await step('create collection-wide offer for acceptance', () =>
       jsonCommand<CollectionMarketOfferWriteResult>(live.buyerHome, [
-        'collection-market',
         'offer',
         'create',
         '--collection',
@@ -1239,9 +1259,8 @@ describeLive('live Sepolia CLI write commands', () => {
     );
     expectTx(createdForAccept);
 
-    const accepted = await step('accept collection-market offer', () =>
+    const accepted = await step('accept collection-wide offer', () =>
       jsonCommand<CollectionMarketOfferWriteResult>(live.sellerHome, [
-        'collection-market',
         'offer',
         'accept',
         '--collection',
@@ -1266,6 +1285,108 @@ describeLive('live Sepolia CLI write commands', () => {
       hasOffer: false,
       canAccept: false,
       account: live.sellerAddress,
+    });
+    await expectTokenOwner(live.sellerHome, live.collection.contract, token.tokenId, live.buyerAddress);
+  });
+
+  it('sets, cancels, resets, and buys a collection-wide listing when RareCollectionMarket is configured', async () => {
+    const collectionMarket = getContractAddresses('sepolia').collectionMarket;
+    if (!collectionMarket) {
+      return;
+    }
+
+    const token = await step('mint collection-wide listing token', () =>
+      mintToken(live.sellerHome, live.collection.contract),
+    );
+
+    const setForCancel = await step('create collection-wide listing for cancellation', () =>
+      jsonCommand<CollectionMarketListingWriteResult>(live.sellerHome, [
+        'listing',
+        'create',
+        '--collection',
+        live.collection.contract,
+        '--amount',
+        '0.000001',
+        '--chain',
+        'sepolia',
+      ], 240_000),
+    );
+    expectTx(setForCancel);
+    expect(setForCancel.collectionMarket.toLowerCase()).toBe(collectionMarket.toLowerCase());
+    expect(setForCancel.seller.toLowerCase()).toBe(live.sellerAddress.toLowerCase());
+    expect(setForCancel.originCollection.toLowerCase()).toBe(live.collection.contract.toLowerCase());
+    await expectCollectionMarketListingStatus({
+      home: live.buyerHome,
+      seller: live.sellerAddress,
+      collection: live.collection.contract,
+      tokenId: token.tokenId,
+      hasListing: true,
+      canBuy: true,
+      account: live.buyerAddress,
+    });
+
+    const cancelled = await step('cancel collection-wide listing', () =>
+      jsonCommand<CollectionMarketListingWriteResult>(live.sellerHome, [
+        'listing',
+        'cancel',
+        '--collection',
+        live.collection.contract,
+        '--chain',
+        'sepolia',
+      ], 240_000),
+    );
+    expectTx(cancelled);
+    expect(cancelled.hadListing).toBe(true);
+    await expectCollectionMarketListingStatus({
+      home: live.buyerHome,
+      seller: live.sellerAddress,
+      collection: live.collection.contract,
+      tokenId: token.tokenId,
+      hasListing: false,
+      canBuy: false,
+      account: live.buyerAddress,
+    });
+
+    const setForBuy = await step('create collection-wide listing for purchase', () =>
+      jsonCommand<CollectionMarketListingWriteResult>(live.sellerHome, [
+        'listing',
+        'create',
+        '--collection',
+        live.collection.contract,
+        '--amount',
+        '0.000001',
+        '--chain',
+        'sepolia',
+      ], 240_000),
+    );
+    expectTx(setForBuy);
+
+    const bought = await step('buy collection-wide listing', () =>
+      jsonCommand<CollectionMarketListingWriteResult>(live.buyerHome, [
+        'listing',
+        'buy',
+        '--collection',
+        live.collection.contract,
+        '--seller',
+        live.sellerAddress,
+        '--token-id',
+        token.tokenId,
+        '--amount',
+        '0.000001',
+        '--chain',
+        'sepolia',
+      ], 240_000),
+    );
+    expectTx(bought);
+    expect(bought.buyer?.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
+    await expectCollectionMarketListingStatus({
+      home: live.buyerHome,
+      seller: live.sellerAddress,
+      collection: live.collection.contract,
+      tokenId: token.tokenId,
+      hasListing: true,
+      canBuy: false,
+      account: live.buyerAddress,
     });
     await expectTokenOwner(live.sellerHome, live.collection.contract, token.tokenId, live.buyerAddress);
   });
@@ -1614,7 +1735,6 @@ async function expectCollectionMarketOfferStatus(opts: {
   account: Address;
 }): Promise<void> {
   const status = await jsonCommand<CollectionMarketOfferStatusResult>(opts.home, [
-    'collection-market',
     'offer',
     'status',
     '--collection',
@@ -1634,6 +1754,37 @@ async function expectCollectionMarketOfferStatus(opts: {
   expect(status.hasOffer).toBe(opts.hasOffer);
   expect(status.state).toBe(opts.hasOffer ? 'ACTIVE' : 'NONE');
   expect(status.canAccept).toBe(opts.canAccept);
+}
+
+async function expectCollectionMarketListingStatus(opts: {
+  home: string;
+  seller: Address;
+  collection: string;
+  tokenId: string;
+  hasListing: boolean;
+  canBuy: boolean;
+  account: Address;
+}): Promise<void> {
+  const status = await jsonCommand<CollectionMarketListingStatusResult>(opts.home, [
+    'listing',
+    'status',
+    '--collection',
+    opts.collection,
+    '--seller',
+    opts.seller,
+    '--token-id',
+    opts.tokenId,
+    '--account',
+    opts.account,
+    '--chain',
+    'sepolia',
+  ]);
+
+  expect(status.seller.toLowerCase()).toBe(opts.seller.toLowerCase());
+  expect(status.originCollection.toLowerCase()).toBe(opts.collection.toLowerCase());
+  expect(status.hasListing).toBe(opts.hasListing);
+  expect(status.state).toBe(opts.hasListing ? 'ACTIVE' : 'NONE');
+  expect(status.canBuy).toBe(opts.canBuy);
 }
 
 async function expectBatchOfferStatus(
