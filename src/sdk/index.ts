@@ -81,6 +81,12 @@ export {
   planReleaseTxLimit,
   verifyReleaseAllowlistProof,
 } from './release-core.js';
+export {
+  buildMintPinMetadataParams,
+  isMintMetadataOptionsError,
+  parseMintAttribute,
+  planMintTokenUri,
+} from './mint-core.js';
 export type {
   BatchToken,
   BatchTokenListArtifact,
@@ -117,6 +123,14 @@ export type {
   ReleaseAllowlistInputFormat,
   ReleaseAllowlistProof,
 } from './release-core.js';
+export type {
+  MintGeneratedMetadataPlan,
+  MintMetadataMedia,
+  MintMetadataUploadPlan,
+  MintMetadataUploadRole,
+  MintTokenUriPlan,
+  MintTokenUriPlanParams,
+} from './mint-core.js';
 export type {
   CollectionSearchParams,
   ImportErc721Params,

@@ -595,6 +595,26 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('rejects generated mint metadata options before wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const result = await runCli([
+        'mint',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--name',
+        'Rare Test',
+        '--description',
+        'A test NFT',
+        '--chain',
+        'sepolia',
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('Error: --image is required when not using --token-uri');
+    });
+  });
+
   it('rejects invalid collection mint addresses before wallet setup', async () => {
     await withTempHome(async (home) => {
       const result = await runCli([
