@@ -739,12 +739,12 @@ rare configure --show
 
 ## Contract Addresses
 
-| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Space Factory | Auction | RareMinter | Batch Listing |
-|---|---|---|---|---|---|---|---|
-| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | — | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` | `0xd28Dc0B89104d7BBd902F338a0193fF063617ccE` | `0xF2bE72d4343beD375Cb6d0E799a3c003163860e0` |
-| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x3b2d699110aa1788b2b1cae336e0ba8ff942a390` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` | `0x5fa112EFeD8297bec0010b312208d223E0cE891E` | `0x6a190885A806D39A0A8C348bfA1ac762D72E608d` |
-| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | — | — | — | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` | — | — |
-| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | — | — | — | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` | — | — |
+| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Space Factory | Auction | RareMinter | Batch Listing | BatchOfferCreator |
+|---|---|---|---|---|---|---|---|---|
+| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | — | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` | `0xd28Dc0B89104d7BBd902F338a0193fF063617ccE` | `0xF2bE72d4343beD375Cb6d0E799a3c003163860e0` | `0x371cca54ef859bb0c7b910581a528ee47773fd56` |
+| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x3b2d699110aa1788b2b1cae336e0ba8ff942a390` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` | `0x5fa112EFeD8297bec0010b312208d223E0cE891E` | `0x6a190885A806D39A0A8C348bfA1ac762D72E608d` | `0xe15cf80b25272ade261532efdb7912f9104851d4` |
+| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | — | — | — | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` | — | — | — |
+| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | — | — | — | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` | — | — | — |
 
 ## Underlying Solidity Contracts
 

@@ -178,6 +178,20 @@ describe('built CLI deterministic behavior', () => {
       expect(proof.stdout).toContain('--contract <address>');
       expect(proof.stdout).toContain('--token-id <id>');
       expect(proof.stderr).toBe('');
+
+      const offerCreate = await runCli(['batch', 'offer', 'create', '--help'], { home });
+      expect(offerCreate.code).toBe(0);
+      expect(offerCreate.stdout).toContain('Usage: rare batch offer create [options]');
+      expect(offerCreate.stdout).toContain('--amount <amount>');
+      expect(offerCreate.stdout).toContain('--expiry <seconds>');
+      expect(offerCreate.stderr).toBe('');
+
+      const offerAccept = await runCli(['batch', 'offer', 'accept', '--help'], { home });
+      expect(offerAccept.code).toBe(0);
+      expect(offerAccept.stdout).toContain('Usage: rare batch offer accept [options]');
+      expect(offerAccept.stdout).toContain('--proof <path>');
+      expect(offerAccept.stdout).toContain('--creator <address>');
+      expect(offerAccept.stderr).toBe('');
     });
   });
 
@@ -298,6 +312,48 @@ describe('built CLI deterministic behavior', () => {
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('batch token at index 0 contractAddress must be a valid 0x address.');
+    });
+  });
+
+  it('rejects malformed batch offer inputs before wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const missingRoot = await runCli([
+        'batch',
+        'offer',
+        'create',
+        '--amount',
+        '0.1',
+        '--expiry',
+        '1778500000',
+      ], { home });
+
+      expect(missingRoot.code).toBe(1);
+      expect(missingRoot.stdout).toBe('');
+      expect(missingRoot.stderr).toContain('Pass --root or --input.');
+
+      const proof = join(home, 'bad-batch-proof.json');
+      await writeFile(proof, JSON.stringify({
+        root: '0xc7f290f1b2d1f0644c2b52ff9de94e33f0d877c8708cc9e2abbcbfb6af169f4e',
+        proof: ['0x1234'],
+      }), 'utf8');
+
+      const badProof = await runCli([
+        'batch',
+        'offer',
+        'accept',
+        '--creator',
+        '0x2222222222222222222222222222222222222222',
+        '--proof',
+        proof,
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+      ], { home });
+
+      expect(badProof.code).toBe(1);
+      expect(badProof.stdout).toBe('');
+      expect(badProof.stderr).toContain('proof[0] must be a bytes32 hex string.');
     });
   });
 

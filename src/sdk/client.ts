@@ -51,6 +51,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
       rareMinter: addresses.rareMinter,
       lazyBatchMintFactory: addresses.lazyBatchMintFactory,
       batchListing: addresses.batchListing,
+      batchOfferCreator: addresses.batchOfferCreator,
       marketplaceSettings: addresses.marketplaceSettings,
       erc20ApprovalManager: addresses.erc20ApprovalManager,
       erc721ApprovalManager: addresses.erc721ApprovalManager,
@@ -99,7 +100,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
         return addresses.erc721ApprovalManager;
       },
     }),
-    batch: createBatchNamespace(),
+    batch: createBatchNamespace(publicClient, config, chain),
     token: createTokenNamespace(publicClient, chain),
     search: {
       async nfts(params = {}): ReturnType<RareClient['search']['nfts']> {

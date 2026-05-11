@@ -1,4 +1,4 @@
-import type { Address, Hash, PublicClient, TransactionReceipt, WalletClient } from 'viem';
+import type { Address, Hash, Hex, PublicClient, TransactionReceipt, WalletClient } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
 import type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
 import type { LiquidFactoryConfig } from '../liquid/factory-config.js';
@@ -621,6 +621,84 @@ export type ReleaseStatus = {
   now: bigint;
 }
 
+export type BatchOfferCreateParams = {
+  root?: Hex;
+  artifact?: BatchTokenListArtifact;
+  amount: AmountInput;
+  currency?: Address;
+  expiry: IntegerInput;
+}
+
+export type BatchOfferCreateResult = {
+  batchOfferCreator: Address;
+  creator: Address;
+  root: Hex;
+  amount: bigint;
+  currency: Address;
+  expiry: bigint;
+  requiredPayment: bigint;
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type BatchOfferRevokeParams = {
+  root?: Hex;
+  artifact?: BatchTokenListArtifact;
+}
+
+export type BatchOfferRevokeResult = {
+  batchOfferCreator: Address;
+  creator: Address;
+  root: Hex;
+  amount: bigint;
+  currency: Address;
+} & TransactionResult
+
+export type BatchOfferAcceptParams = {
+  creator: Address;
+  root?: Hex;
+  proof?: readonly Hex[];
+  proofArtifact?: BatchTokenProofArtifact;
+  contract: Address;
+  tokenId: IntegerInput;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+  autoApprove?: boolean;
+}
+
+export type BatchOfferAcceptResult = {
+  batchOfferCreator: Address;
+  seller: Address;
+  buyer: Address;
+  creator: Address;
+  contract: Address;
+  tokenId: bigint;
+  root: Hex;
+  currency: Address;
+  amount: bigint;
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type BatchOfferStatusParams = {
+  creator: Address;
+  root?: Hex;
+  artifact?: BatchTokenListArtifact;
+}
+
+export type BatchOfferStatus = {
+  creator: Address;
+  root: Hex;
+  amount: bigint;
+  currency: Address;
+  expiry: bigint;
+  feePercentage: bigint;
+  hasOffer: boolean;
+  expired: boolean;
+  revoked: boolean | null;
+  fillable: boolean;
+  state: 'NONE' | 'ACTIVE' | 'EXPIRED';
+  isEth: boolean;
+}
+
 export type TokenContractInfo = {
   contract: Address;
   chain: SupportedChain;
@@ -820,6 +898,7 @@ export type RareClient = {
     rareMinter?: Address;
     lazyBatchMintFactory?: Address;
     batchListing?: Address;
+    batchOfferCreator?: Address;
     marketplaceSettings?: Address;
     erc20ApprovalManager?: Address;
     erc721ApprovalManager?: Address;
@@ -876,6 +955,12 @@ export type RareClient = {
     buildTree: (params: BuildBatchTokenTreeParams) => BatchTokenListArtifact;
     getTreeProof: (params: BatchTokenProofParams) => BatchTokenProofArtifact;
     verifyTreeProof: (params: BatchTokenProofVerifyParams) => boolean;
+    offer: {
+      create: (params: BatchOfferCreateParams) => Promise<BatchOfferCreateResult>;
+      revoke: (params: BatchOfferRevokeParams) => Promise<BatchOfferRevokeResult>;
+      accept: (params: BatchOfferAcceptParams) => Promise<BatchOfferAcceptResult>;
+      getStatus: (params: BatchOfferStatusParams) => Promise<BatchOfferStatus>;
+    };
   };
   search: {
     nfts: (params?: NftSearchParams) => Promise<SearchPageResponse<Nft>>;

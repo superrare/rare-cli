@@ -20,6 +20,14 @@ export type {
   CollectionMintBatchResult,
   CollectionPrepareLazyMintParams,
   CollectionPrepareLazyMintResult,
+  BatchOfferAcceptParams,
+  BatchOfferAcceptResult,
+  BatchOfferCreateParams,
+  BatchOfferCreateResult,
+  BatchOfferRevokeParams,
+  BatchOfferRevokeResult,
+  BatchOfferStatus,
+  BatchOfferStatusParams,
   ReleaseAllowlistArtifact,
   ReleaseAllowlistConfig,
   ReleaseAllowlistWalletProof,
@@ -55,6 +63,13 @@ export {
   sovereignCollectionContractTypes,
 } from './collection-core.js';
 export {
+  planBatchOfferAccept,
+  planBatchOfferCreate,
+  planBatchOfferRoot,
+  resolveBatchOfferRoot,
+  shapeBatchOfferStatus,
+} from './batch-offer-core.js';
+export {
   buildBatchTokenTreeArtifact,
   getBatchTokenProof,
   hashBatchToken,
@@ -75,6 +90,11 @@ export type {
   BatchTokenTreeEntry,
   BuildBatchTokenTreeParams,
 } from './batch-core.js';
+export type {
+  BatchOfferAcceptPlan,
+  BatchOfferCreatePlan,
+  BatchOfferRootPlan,
+} from './batch-offer-core.js';
 export type {
   LazySovereignCollectionContractType,
   SovereignCollectionContractType,
@@ -133,6 +153,7 @@ export { auctionAbi } from '../contracts/abis/auction.js';
 export { liquidFactoryAbi } from '../contracts/abis/liquid-factory.js';
 export { liquidRouterAbi } from '../contracts/abis/liquid-router.js';
 export { liquidEditionAbi } from '../contracts/abis/liquid-edition.js';
+export { batchOfferAbi } from '../contracts/abis/batch-offer.js';
 export { tokenAbi } from '../contracts/abis/token.js';
 export { batchListingAbi } from '../contracts/abis/batch-listing.js';
 export { collectionMintAbi } from '../contracts/abis/collection-mint.js';
