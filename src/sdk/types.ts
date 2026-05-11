@@ -335,6 +335,8 @@ export interface AuctionCreateParams {
   startingPrice: AmountInput;
   duration: IntegerInput;
   currency?: Address;
+  auctionType?: 'reserve' | 'scheduled';
+  startTime?: IntegerInput;
   splitAddresses?: Address[];
   splitRatios?: number[];
   autoApprove?: boolean;
@@ -370,12 +372,21 @@ export interface AuctionStatus {
   currency: Address;
   minimumBid: bigint;
   auctionType: `0x${string}`;
+  auctionTypeName: 'reserve' | 'scheduled' | 'none' | 'unknown';
   splitAddresses: Address[];
   splitRatios: number[];
   isEth: boolean;
+  hasAuction: boolean;
   started: boolean;
   endTime: bigint | null;
   status: 'PENDING' | 'RUNNING' | 'ENDED';
+  state: 'NONE' | 'RESERVE_NOT_MET' | 'SCHEDULED' | 'ACTIVE' | 'ENDED';
+  currentBidder: Address | null;
+  currentBid: bigint;
+  currentBidCurrency: Address;
+  currentBidMarketplaceFee: number;
+  minimumNextBid: bigint;
+  settlementEligible: boolean;
 }
 
 export interface OfferCreateParams {
@@ -487,7 +498,7 @@ export interface RareClient {
     mintTo(params: MintToParams): Promise<MintToResult>;
   };
   auction: {
-    create(params: AuctionCreateParams): Promise<TransactionResult & { approvalTxHash?: Hash }>;
+    create(params: AuctionCreateParams): Promise<TransactionResult & { approvalTxHash?: Hash; auctionType: 'reserve' | 'scheduled'; startTime: bigint }>;
     bid(params: AuctionBidParams): Promise<TransactionResult>;
     settle(params: AuctionSettleParams): Promise<TransactionResult>;
     cancel(params: AuctionCancelParams): Promise<TransactionResult>;

@@ -156,6 +156,19 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('exposes auction parity command help', async () => {
+    await withTempHome(async (home) => {
+      const create = await runCli(['auction', 'create', '--help'], { home });
+      expect(create.code).toBe(0);
+      expect(create.stdout).toContain('Usage: rare auction create [options]');
+      expect(create.stdout).toContain('--type <type>');
+      expect(create.stdout).toContain('--start-time <seconds>');
+      expect(create.stdout).toContain('--split-recipient <address>');
+      expect(create.stdout).toContain('--split-ratio <percent>');
+      expect(create.stderr).toBe('');
+    });
+  });
+
   it('exposes release allowlist and configuration command help', async () => {
     await withTempHome(async (home) => {
       const allowlist = await runCli(['release', 'allowlist', 'build', '--help'], { home });

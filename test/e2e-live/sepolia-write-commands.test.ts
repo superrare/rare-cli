@@ -153,6 +153,22 @@ type ReleaseMintDirectSaleResult = TxResult & {
   tokenIds: string[];
 };
 
+type AuctionCreateResult = TxResult & {
+  auctionType: string;
+  startTime: string;
+};
+
+type AuctionStatusResult = {
+  status: string;
+  state: string;
+  auctionTypeName: string;
+  currentBid: string;
+  currentBidder: string | null;
+  minimumNextBid: string;
+  settlementEligible: boolean;
+  startingTime: string;
+};
+
 type MintResult = {
   txHash: string;
   blockNumber: string;
@@ -178,6 +194,7 @@ type LiveState = {
   zeroPriceListingToken: MintResult;
   auctionCancelToken: MintResult;
   auctionSettleToken: MintResult;
+  scheduledAuctionToken: MintResult;
   buyerAuctionCancelToken: MintResult;
   offerCancelToken: MintResult;
   offerCancelCreate: TxResult;
@@ -258,6 +275,9 @@ describeLive('live Sepolia CLI write commands', () => {
         auctionSettleToken: await step('mint auction settle token', () =>
           mintToken(sellerHome, collection.contract),
         ),
+        scheduledAuctionToken: await step('mint scheduled auction token', () =>
+          mintToken(sellerHome, collection.contract),
+        ),
         buyerAuctionCancelToken: await step('mint buyer-owned auction token', () =>
           mintToken(sellerHome, collection.contract, { to: buyerAddress }),
         ),
@@ -295,6 +315,7 @@ describeLive('live Sepolia CLI write commands', () => {
       live.zeroPriceListingToken,
       live.auctionCancelToken,
       live.auctionSettleToken,
+      live.scheduledAuctionToken,
       live.buyerAuctionCancelToken,
       live.offerCancelToken,
       live.offerAcceptToken,
@@ -698,6 +719,71 @@ describeLive('live Sepolia CLI write commands', () => {
       ]),
     ));
     await expectListingStatus(live.sellerHome, live.collection.contract, live.listingCancelToken.tokenId, false);
+  });
+
+  it('creates and cancels a scheduled auction with explicit seller splits', async () => {
+    const startTime = Math.floor(Date.now() / 1000) + 3600;
+    const created = await step('create scheduled auction', () =>
+      jsonCommand<AuctionCreateResult>(live.sellerHome, [
+        'auction',
+        'create',
+        '--contract',
+        live.collection.contract,
+        '--token-id',
+        live.scheduledAuctionToken.tokenId,
+        '--starting-price',
+        '0.000001',
+        '--duration',
+        liveAuctionDurationSeconds().toString(),
+        '--type',
+        'scheduled',
+        '--start-time',
+        startTime.toString(),
+        '--split-recipient',
+        live.sellerAddress,
+        '--split-ratio',
+        '100',
+        '--chain',
+        'sepolia',
+      ]),
+    );
+    expectTx(created);
+    expect(created.auctionType).toBe('scheduled');
+    expect(created.startTime).toBe(startTime.toString());
+
+    const status = await step('read scheduled auction status', () =>
+      jsonCommand<AuctionStatusResult>(live.sellerHome, [
+        'auction',
+        'status',
+        '--contract',
+        live.collection.contract,
+        '--token-id',
+        live.scheduledAuctionToken.tokenId,
+        '--chain',
+        'sepolia',
+      ]),
+    );
+    expect(status.status).toBe('PENDING');
+    expect(status.state).toBe('SCHEDULED');
+    expect(status.auctionTypeName).toBe('scheduled');
+    expect(status.currentBid).toBe('0');
+    expect(status.currentBidder).toBeNull();
+    expect(status.settlementEligible).toBe(false);
+    expect(status.startingTime).toBe(startTime.toString());
+
+    expectTx(await step('cancel scheduled auction', () =>
+      jsonCommand<TxResult>(live.sellerHome, [
+        'auction',
+        'cancel',
+        '--contract',
+        live.collection.contract,
+        '--token-id',
+        live.scheduledAuctionToken.tokenId,
+        '--chain',
+        'sepolia',
+      ]),
+    ));
+    await expectTokenOwner(live.sellerHome, live.collection.contract, live.scheduledAuctionToken.tokenId, live.sellerAddress);
   });
 
   it('creates a zero-price listing as an inactive listing without repeating approval', async () => {
