@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  assertReleaseAllowlistConfigWriteMatches,
+  assertReleaseLimitWriteMatches,
+  assertReleaseSellerStakingMinimumWriteMatches,
   buildReleaseAllowlistArtifact,
   getReleaseAllowlistProof,
   normalizeBytes32,
@@ -149,5 +152,40 @@ describe('RareMinter release core', () => {
       contract: COLLECTION_ADDRESS,
       limit: -1,
     })).toThrow('limit must be greater than or equal to 0.');
+  });
+
+  it('verifies RareMinter write readbacks in pure core logic', () => {
+    const allowlistPlan = planReleaseAllowlistConfig({
+      contract: COLLECTION_ADDRESS,
+      root: EXPECTED_ROOT,
+      endTimestamp: 1778500000,
+    });
+    expect(() => assertReleaseAllowlistConfigWriteMatches(allowlistPlan, {
+      allowlistRoot: EXPECTED_ROOT,
+      allowlistEndTimestamp: 1778500000n,
+    })).not.toThrow();
+    expect(() => assertReleaseAllowlistConfigWriteMatches(allowlistPlan, {
+      allowlistRoot: EXPECTED_ROOT,
+      allowlistEndTimestamp: 1778500001n,
+    })).toThrow('RareMinter allowlist config write was mined but the verified read did not match.');
+
+    expect(() => assertReleaseLimitWriteMatches('mint limit', 2n, 2n)).not.toThrow();
+    expect(() => assertReleaseLimitWriteMatches('mint limit', 2n, 1n)).toThrow(
+      'RareMinter mint limit write was mined but the verified read did not match.',
+    );
+
+    const stakingPlan = planReleaseSellerStakingMinimum({
+      contract: COLLECTION_ADDRESS,
+      minimum: 5,
+      endTimestamp: 1778500000,
+    });
+    expect(() => assertReleaseSellerStakingMinimumWriteMatches(stakingPlan, {
+      sellerStakingMinimum: 5n,
+      sellerStakingMinimumEndTimestamp: 1778500000n,
+    })).not.toThrow();
+    expect(() => assertReleaseSellerStakingMinimumWriteMatches(stakingPlan, {
+      sellerStakingMinimum: 6n,
+      sellerStakingMinimumEndTimestamp: 1778500000n,
+    })).toThrow('RareMinter seller staking minimum write was mined but the verified read did not match.');
   });
 });

@@ -1,5 +1,5 @@
 import { concatHex, getAddress, isAddress, isHex, keccak256, type Address, type Hex } from 'viem';
-import type { IntegerInput } from './types.js';
+import type { IntegerInput, ReleaseConfig } from './types.js';
 import { toNonNegativeInteger } from './helpers.js';
 
 export type ReleaseAllowlistInputFormat = 'csv' | 'json';
@@ -221,6 +221,40 @@ export function planReleaseSellerStakingMinimum(params: {
     minimum: toNonNegativeInteger(params.minimum, 'minimum'),
     endTimestamp: toNonNegativeInteger(params.endTimestamp, 'endTimestamp'),
   };
+}
+
+export function assertReleaseAllowlistConfigWriteMatches(
+  plan: ReleaseAllowlistConfigPlan,
+  config: Pick<ReleaseConfig, 'allowlistRoot' | 'allowlistEndTimestamp'>,
+): void {
+  if (
+    config.allowlistRoot.toLowerCase() !== plan.root.toLowerCase() ||
+    config.allowlistEndTimestamp !== plan.endTimestamp
+  ) {
+    throw new Error('RareMinter allowlist config write was mined but the verified read did not match.');
+  }
+}
+
+export function assertReleaseLimitWriteMatches(
+  field: 'mint limit' | 'transaction limit',
+  expected: bigint,
+  actual: bigint,
+): void {
+  if (actual !== expected) {
+    throw new Error(`RareMinter ${field} write was mined but the verified read did not match.`);
+  }
+}
+
+export function assertReleaseSellerStakingMinimumWriteMatches(
+  plan: ReleaseSellerStakingMinimumPlan,
+  config: Pick<ReleaseConfig, 'sellerStakingMinimum' | 'sellerStakingMinimumEndTimestamp'>,
+): void {
+  if (
+    config.sellerStakingMinimum !== plan.minimum ||
+    config.sellerStakingMinimumEndTimestamp !== plan.endTimestamp
+  ) {
+    throw new Error('RareMinter seller staking minimum write was mined but the verified read did not match.');
+  }
 }
 
 export function normalizeBytes32(value: string, field: string): Hex {

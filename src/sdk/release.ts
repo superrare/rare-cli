@@ -4,6 +4,9 @@ import { requireContractAddress, type SupportedChain } from '../contracts/addres
 import { requireWallet } from './helpers.js';
 import type { RareClient, RareClientConfig, ReleaseConfig } from './types.js';
 import {
+  assertReleaseAllowlistConfigWriteMatches,
+  assertReleaseLimitWriteMatches,
+  assertReleaseSellerStakingMinimumWriteMatches,
   buildReleaseAllowlistArtifact,
   getReleaseAllowlistProof,
   planReleaseAllowlistConfig,
@@ -50,12 +53,7 @@ export function createReleaseNamespace(
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       const updated = await readReleaseConfig(publicClient, minterAddress, plan.contract);
 
-      if (
-        updated.allowlistRoot.toLowerCase() !== plan.root.toLowerCase() ||
-        updated.allowlistEndTimestamp !== plan.endTimestamp
-      ) {
-        throw new Error('RareMinter allowlist config write was mined but the verified read did not match.');
-      }
+      assertReleaseAllowlistConfigWriteMatches(plan, updated);
 
       return {
         txHash,
@@ -82,9 +80,7 @@ export function createReleaseNamespace(
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       const updated = await readReleaseConfig(publicClient, minterAddress, plan.contract);
 
-      if (updated.mintLimit !== plan.limit) {
-        throw new Error('RareMinter mint limit write was mined but the verified read did not match.');
-      }
+      assertReleaseLimitWriteMatches('mint limit', plan.limit, updated.mintLimit);
 
       return {
         txHash,
@@ -110,9 +106,7 @@ export function createReleaseNamespace(
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       const updated = await readReleaseConfig(publicClient, minterAddress, plan.contract);
 
-      if (updated.txLimit !== plan.limit) {
-        throw new Error('RareMinter transaction limit write was mined but the verified read did not match.');
-      }
+      assertReleaseLimitWriteMatches('transaction limit', plan.limit, updated.txLimit);
 
       return {
         txHash,
@@ -137,12 +131,7 @@ export function createReleaseNamespace(
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       const updated = await readReleaseConfig(publicClient, minterAddress, plan.contract);
 
-      if (
-        updated.sellerStakingMinimum !== plan.minimum ||
-        updated.sellerStakingMinimumEndTimestamp !== plan.endTimestamp
-      ) {
-        throw new Error('RareMinter seller staking minimum write was mined but the verified read did not match.');
-      }
+      assertReleaseSellerStakingMinimumWriteMatches(plan, updated);
 
       return {
         txHash,
