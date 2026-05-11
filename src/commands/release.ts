@@ -11,6 +11,7 @@ import {
   createRareClient,
   finalizeReleaseSplitAccumulator,
   getReleaseAllowlistProof,
+  normalizeReleaseAllowlistProof,
   parseReleaseAllowlistArtifactJson,
   type RareClient,
   type ReleaseAllowlistArtifact,
@@ -73,6 +74,15 @@ type ReleaseStatusOptions = ReleaseContractOptions & {
   account?: string;
 };
 
+type ReleaseMintOptions = ReleaseContractOptions & {
+  quantity?: string;
+  currency?: string;
+  price?: string;
+  proof?: string;
+  recipient?: string;
+  autoApprove?: boolean;
+};
+
 function formatTokenAmount(amount: bigint, decimals: number | null): string {
   if (decimals === null) {
     return amount.toString();
@@ -115,6 +125,10 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function detectAllowlistFormat(filePath: string, format?: string): ReleaseAllowlistInputFormat {
   if (format !== undefined) {
     if (format === 'csv' || format === 'json') {
@@ -145,6 +159,30 @@ function loadAllowlistArtifact(filePath: string): ReleaseAllowlistArtifact {
   return parseReleaseAllowlistArtifactJson(readTextFile(filePath, 'allowlist artifact'));
 }
 
+function readProofFile(filePath: string): Hex[] {
+  const content = readTextFile(filePath, 'allowlist proof');
+  const parsed: unknown = parseProofJson(content);
+  const proof = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.proof)
+      ? parsed.proof
+      : undefined;
+
+  if (proof === undefined) {
+    throw new Error('--proof must be a JSON array or an object with a proof array.');
+  }
+
+  return normalizeReleaseAllowlistProof(proof);
+}
+
+function parseProofJson(content: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch (error) {
+    throw new Error(`Unable to parse allowlist proof JSON: ${errorMessage(error)}`);
+  }
+}
+
 function releaseWriteClient(chain: ReturnType<typeof getActiveChain>): RareClient {
   const { client } = getWalletClient(chain);
   const publicClient = getPublicClient(chain);
@@ -153,7 +191,7 @@ function releaseWriteClient(chain: ReturnType<typeof getActiveChain>): RareClien
 
 export function releaseCommand(): Command {
   const cmd = new Command('release');
-  cmd.description('RareMinter release subcommands (configure, allowlist, limits, status)');
+  cmd.description('RareMinter release subcommands (configure, mint, allowlist, limits, status)');
 
   cmd
     .command('configure')
@@ -223,6 +261,86 @@ export function releaseCommand(): Command {
           () => {
             console.log(`\nTransaction sent: ${result.txHash}`);
             console.log(`Release configured! Block: ${result.receipt.blockNumber}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  cmd
+    .command('mint')
+    .description('Mint from a RareMinter direct sale release')
+    .requiredOption('--contract <address>', 'collection contract address')
+    .option('--quantity <number>', 'number of tokens to mint', '1')
+    .option('--currency <currency>', 'expected currency: eth, usdc, rare, or ERC20 address (defaults to configured sale currency)')
+    .option('--price <amount>', 'expected per-token price in ETH or token units (defaults to configured sale price)')
+    .option('--proof <file>', 'allowlist proof JSON from rare listing release allowlist proof')
+    .option('--recipient <address>', 'recipient when supported; RareMinter direct sales mint to the connected wallet')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--no-auto-approve', 'fail instead of approving ERC20 allowance when insufficient')
+    .action(async (opts: ReleaseMintOptions): Promise<void> => {
+      try {
+        assertAddressOption(opts.contract, 'contract');
+        if (opts.recipient !== undefined) {
+          assertAddressOption(opts.recipient, 'recipient');
+        }
+        const proof = opts.proof === undefined ? undefined : readProofFile(opts.proof);
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const rare = releaseWriteClient(chain);
+        const currency = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain);
+
+        log(`Minting direct sale release on ${chain}...`);
+        log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
+        log(`  Collection: ${opts.contract}`);
+        log(`  Quantity:   ${opts.quantity ?? '1'}`);
+        if (currency !== undefined) {
+          log(`  Currency:   ${currency}`);
+        }
+        if (opts.price !== undefined) {
+          log(`  Price:      ${opts.price}`);
+        }
+        if (proof !== undefined) {
+          log(`  Proof:      ${proof.length} entries`);
+        }
+
+        const result = await rare.listing.release.mintDirectSale({
+          contract: opts.contract,
+          quantity: opts.quantity,
+          currency,
+          price: opts.price,
+          proof,
+          recipient: opts.recipient,
+          autoApprove: opts.autoApprove,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            approvalTxHash: result.approvalTxHash ?? null,
+            rareMinter: result.rareMinter,
+            contract: result.contract,
+            buyer: result.buyer,
+            recipient: result.recipient,
+            quantity: result.quantity,
+            currencyAddress: result.currencyAddress,
+            price: result.price,
+            totalPrice: result.totalPrice,
+            requiredPayment: result.requiredPayment,
+            allowlistRequired: result.allowlistRequired,
+            tokenIdStart: result.tokenIdStart,
+            tokenIdEnd: result.tokenIdEnd,
+            tokenIds: result.tokenIds,
+          },
+          () => {
+            if (result.approvalTxHash !== undefined) {
+              console.log(`\nApproval transaction sent: ${result.approvalTxHash}`);
+            }
+            console.log(`\nTransaction sent: ${result.txHash}`);
+            console.log(`Release mint complete! Block: ${result.receipt.blockNumber}`);
+            console.log(`  Token IDs: ${result.tokenIds.map((tokenId) => tokenId.toString()).join(', ')}`);
           },
         );
       } catch (error) {
