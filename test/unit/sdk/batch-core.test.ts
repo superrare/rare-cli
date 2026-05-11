@@ -6,6 +6,8 @@ import {
   parseBatchTokenList,
   parseBatchTokenListArtifact,
   parseBatchTokenProofArtifact,
+  parseBatchTokenProofInput,
+  validateBatchTokenProofInputMatchesTarget,
   verifyBatchTokenProof,
 } from '../../../src/sdk/batch-core.js';
 
@@ -162,6 +164,47 @@ describe('batch marketplace token tree core', () => {
       ...proof,
       tokenId: '2',
     }))).toThrow('Batch token proof artifact leaf does not match');
+  });
+
+  it('parses proof JSON inputs and validates target metadata', () => {
+    const artifact = buildBatchTokenTreeArtifact({
+      content: JSON.stringify([
+        { contractAddress: CONTRACT_A, tokenId: '1', chainId: 11_155_111 },
+        { contractAddress: CONTRACT_B, tokenId: '2', chainId: 11_155_111 },
+      ]),
+      format: 'json',
+    });
+    const proof = getBatchTokenProof({
+      artifact,
+      contractAddress: CONTRACT_A,
+      tokenId: '1',
+    });
+    const proofInput = parseBatchTokenProofInput(JSON.stringify(proof));
+
+    expect(parseBatchTokenProofInput(JSON.stringify(proof.proof))).toEqual({
+      proof: proof.proof,
+    });
+    expect(proofInput).toMatchObject({
+      root: artifact.root,
+      contractAddress: CONTRACT_A,
+      tokenId: '1',
+      chainId: 11_155_111,
+      proof: proof.proof,
+    });
+    expect(() => validateBatchTokenProofInputMatchesTarget(proofInput, {
+      artifact,
+      contractAddress: CONTRACT_A,
+      tokenId: '01',
+      root: artifact.root,
+      allowRootOverride: false,
+    })).not.toThrow();
+    expect(() => validateBatchTokenProofInputMatchesTarget(proofInput, {
+      artifact,
+      contractAddress: CONTRACT_B,
+      tokenId: '1',
+      root: artifact.root,
+      allowRootOverride: false,
+    })).toThrow('Proof artifact contractAddress does not match --contract.');
   });
 
   it('rejects duplicate, malformed, and cross-chain token lists', () => {

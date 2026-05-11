@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import { getAddress, isAddress, isAddressEqual, isHex, type Address, type Hex } from 'viem';
+import { getAddress, isAddress, isAddressEqual, isHex, type Address } from 'viem';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
 import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
@@ -12,10 +12,12 @@ import {
   getBatchTokenProof,
   normalizeBytes32,
   parseBatchTokenListArtifactOrBuild,
-  parseBatchTokenProofArtifact,
+  parseBatchTokenProofInput,
+  validateBatchTokenProofInputMatchesTarget,
   verifyBatchTokenProof,
   type BatchTokenListArtifact,
   type BatchTokenListInputFormat,
+  type BatchTokenProofInput,
 } from '../sdk/batch-core.js';
 import {
   buildProofArtifact,
@@ -46,14 +48,6 @@ type TreeProofOptions = TreeInputOptions & {
 type TreeVerifyOptions = TreeProofOptions & {
   proof?: string;
   root?: string;
-};
-
-type BatchProofInput = {
-  root?: Hex;
-  contractAddress?: Address;
-  tokenId?: string;
-  chainId?: number;
-  proof: Hex[];
 };
 
 type MerkleProofOptions = {
@@ -241,7 +235,7 @@ function createTreeVerifyCommand(): Command {
           ? proofInput?.root ?? generatedProof?.root ?? artifact.root
           : normalizeBytes32(opts.root, '--root');
 
-        validateProofInputMatchesTarget(proofInput, {
+        validateBatchTokenProofInputMatchesTarget(proofInput, {
           artifact,
           contractAddress,
           tokenId: opts.tokenId,
@@ -584,95 +578,9 @@ async function readBatchTreeArtifact(opts: TreeInputOptions): Promise<BatchToken
   });
 }
 
-async function readBatchProofFile(inputPath: string): Promise<BatchProofInput> {
+async function readBatchProofFile(inputPath: string): Promise<BatchTokenProofInput> {
   const content = await readFile(inputPath, 'utf8');
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(content);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'invalid JSON';
-    throw new Error(`Could not parse --proof JSON: ${message}`);
-  }
-
-  if (isRecord(parsed) && parsed.type === 'rare-batch-token-proof') {
-    const proof = parseBatchTokenProofArtifact(content);
-    return {
-      root: proof.root,
-      contractAddress: proof.contractAddress,
-      tokenId: proof.tokenId,
-      chainId: proof.chainId,
-      proof: proof.proof,
-    };
-  }
-
-  const proof = Array.isArray(parsed)
-    ? parsed
-    : isRecord(parsed) && Array.isArray(parsed.proof)
-      ? parsed.proof
-      : undefined;
-
-  if (proof === undefined) {
-    throw new Error('--proof must be a JSON array or an object with a proof array.');
-  }
-
-  const root = isRecord(parsed) && typeof parsed.root === 'string'
-    ? normalizeBytes32(parsed.root, 'proof root')
-    : undefined;
-
-  return {
-    ...(root === undefined ? {} : { root }),
-    proof: proof.map((entry, index) => {
-      if (typeof entry !== 'string') {
-        throw new Error(`proof[${index}] must be a bytes32 hex string.`);
-      }
-      return normalizeBytes32(entry, `proof[${index}]`);
-    }),
-  };
-}
-
-function validateProofInputMatchesTarget(
-  proofInput: BatchProofInput | undefined,
-  target: {
-    artifact: BatchTokenListArtifact;
-    contractAddress: Address;
-    tokenId: string;
-    root: Hex;
-    allowRootOverride: boolean;
-  },
-): void {
-  if (proofInput === undefined) {
-    return;
-  }
-  if (
-    proofInput.root !== undefined &&
-    !target.allowRootOverride &&
-    proofInput.root.toLowerCase() !== target.artifact.root.toLowerCase()
-  ) {
-    throw new Error('Proof root does not match the input token list root.');
-  }
-  if (
-    proofInput.root !== undefined &&
-    target.allowRootOverride &&
-    proofInput.root.toLowerCase() !== target.root.toLowerCase()
-  ) {
-    throw new Error('Proof root does not match --root.');
-  }
-  if (
-    proofInput.contractAddress !== undefined &&
-    proofInput.contractAddress.toLowerCase() !== target.contractAddress.toLowerCase()
-  ) {
-    throw new Error('Proof artifact contractAddress does not match --contract.');
-  }
-  if (proofInput.tokenId !== undefined && proofInput.tokenId !== parseTokenIdOption(target.tokenId)) {
-    throw new Error('Proof artifact tokenId does not match --token-id.');
-  }
-  if (
-    proofInput.chainId !== undefined &&
-    target.artifact.chainId !== undefined &&
-    proofInput.chainId !== target.artifact.chainId
-  ) {
-    throw new Error('Proof artifact chainId does not match the input token list chainId.');
-  }
+  return parseBatchTokenProofInput(content);
 }
 
 function parseFormatOption(value: string | undefined): BatchTokenListInputFormat | undefined {
@@ -691,30 +599,6 @@ function parseAddressOption(value: string, optionName: string): Address {
   }
 
   return getAddress(value);
-}
-
-function parseTokenIdOption(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    throw new Error('--token-id must be an integer.');
-  }
-
-  try {
-    const tokenId = BigInt(trimmed);
-    if (tokenId < 0n) {
-      throw new Error('--token-id must be greater than or equal to 0.');
-    }
-    return tokenId.toString();
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith('--token-id')) {
-      throw error;
-    }
-    throw new Error('--token-id must be an integer.');
-  }
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 async function writeJson(path: string, data: unknown): Promise<void> {
