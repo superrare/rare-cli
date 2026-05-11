@@ -52,8 +52,6 @@ Cover:
 - Transaction preparation and write orchestration.
 - Realistic success and failure paths.
 
-Use stable fixtures and controlled services. For chain-dependent behavior, prefer a fork, or dedicated testnet setup over production dependencies. Document required RPC URLs, private keys, funding, chain selection, and cleanup expectations.
-
 ## CLI E2E Tests
 
 Test the built CLI as a user would. Assert observable behavior: exit codes, stdout/stderr, JSON output, config effects, and chain effects.
