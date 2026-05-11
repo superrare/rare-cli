@@ -294,6 +294,22 @@ export function shapeAuctionStatus(
   };
 }
 
+export function shapeAuctionBidRead(
+  bid: readonly [Address, Address, bigint, number] | AuctionBidRead,
+): AuctionBidRead {
+  if (Array.isArray(bid)) {
+    const [bidder, currencyAddress, amount, marketplaceFee] = bid;
+    return {
+      bidder,
+      currencyAddress,
+      amount,
+      marketplaceFee,
+    };
+  }
+
+  return bid;
+}
+
 function normalizeAuctionType(params: AuctionCreateParams): 'reserve' | 'scheduled' {
   if (params.auctionType !== undefined) {
     if (params.auctionType !== 'reserve' && params.auctionType !== 'scheduled') {

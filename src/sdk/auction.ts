@@ -12,10 +12,10 @@ import {
   waitForApproval,
 } from './helpers.js';
 import {
-  type AuctionBidRead,
   planAuctionBid,
   planAuctionCreate,
   planAuctionTokenAction,
+  shapeAuctionBidRead,
   shapeAuctionStatus,
 } from './marketplace-core.js';
 
@@ -194,20 +194,4 @@ export function createAuctionNamespace(
       });
     },
   };
-}
-
-function shapeAuctionBidRead(
-  bid: readonly [Address, Address, bigint, number] | AuctionBidRead,
-): AuctionBidRead {
-  if (Array.isArray(bid)) {
-    const [bidder, currencyAddress, amount, marketplaceFee] = bid;
-    return {
-      bidder,
-      currencyAddress,
-      amount,
-      marketplaceFee,
-    };
-  }
-
-  return bid;
 }

@@ -10,6 +10,7 @@ import {
   planOfferAccept,
   planOfferCancel,
   planOfferCreate,
+  shapeAuctionBidRead,
   shapeAuctionStatus,
   shapeListingStatus,
   shapeOfferStatus,
@@ -228,6 +229,15 @@ describe('marketplace result shaping', () => {
       started: true,
       endTime: now - 30n,
       settlementEligible: true,
+    });
+  });
+
+  it('shapes raw auction bid reads', () => {
+    expect(shapeAuctionBidRead([buyerAddress, erc20Currency, parseEther('1'), 3])).toEqual({
+      bidder: buyerAddress,
+      currencyAddress: erc20Currency,
+      amount: parseEther('1'),
+      marketplaceFee: 3,
     });
   });
 });
