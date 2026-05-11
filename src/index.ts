@@ -12,6 +12,7 @@ import { offerCommand } from './commands/offer.js';
 import { listingCommand } from './commands/listing.js';
 import { currenciesCommand } from './commands/currencies.js';
 import { collectionCommand } from './commands/collection.js';
+import { releaseCommand } from './commands/release.js';
 import { setJsonMode } from './output.js';
 import { printError } from './errors.js';
 
@@ -42,6 +43,7 @@ program.addCommand(offerCommand());
 program.addCommand(listingCommand());
 program.addCommand(currenciesCommand());
 program.addCommand(collectionCommand());
+program.addCommand(releaseCommand());
 
 program.parseAsync(process.argv).catch((err) => {
   printError(err);

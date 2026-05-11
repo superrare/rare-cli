@@ -115,6 +115,20 @@ rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token
 rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token-count 100 --minter 0x...
 ```
 
+Configure RareMinter release allowlists and limits from files or direct values. Allowlist CSV files can be a single address column or include an `address`, `user address`, `wallet`, or `wallet address` header. JSON files can be an array of address strings, address objects, or a generated artifact.
+
+```bash
+rare release allowlist build --input allowlist.csv --output allowlist-artifact.json
+rare release allowlist proof --input allowlist-artifact.json --address 0x...
+rare release allowlist set --contract 0x... --input allowlist-artifact.json --end-timestamp 1778500000
+rare release limits set-mint --contract 0x... --limit 5
+rare release limits set-tx --contract 0x... --limit 2
+rare release staking set-minimum --contract 0x... --minimum 1000000000000000000 --end-timestamp 1778500000
+rare release status --contract 0x... --account 0x...
+```
+
+`set-mint` limits the total mints per wallet, `set-tx` limits the number of mint transactions per wallet, and `staking set-minimum` configures the raw staking-token amount required while the end timestamp is active. Use `0` for a limit or minimum to disable that check on the contract.
+
 Inspect creator and royalty data on Sovereign-style collections:
 
 ```bash
@@ -436,6 +450,38 @@ const prepared = await rare.collection.prepareLazyMint({
 console.log(prepared.tokenCount);
 ```
 
+### Configure RareMinter release settings
+
+```ts
+const allowlist = rare.release.buildAllowlist({
+  content: 'address\n0x1111111111111111111111111111111111111111\n0x2222222222222222222222222222222222222222\n',
+  format: 'csv',
+});
+
+const proof = rare.release.getAllowlistProof({
+  artifact: allowlist,
+  address: '0x1111111111111111111111111111111111111111',
+});
+
+await rare.release.setAllowlistConfig({
+  contract: '0xLazySovereignContractAddress',
+  root: allowlist.root,
+  endTimestamp: 1778500000,
+});
+
+await rare.release.setMintLimit({
+  contract: '0xLazySovereignContractAddress',
+  limit: 5,
+});
+
+const status = await rare.release.getConfig({
+  contract: '0xLazySovereignContractAddress',
+  account: '0x1111111111111111111111111111111111111111',
+});
+
+console.log(proof.valid, status.mintLimit);
+```
+
 ### Inspect and maintain collection owner settings
 
 ```ts
@@ -501,12 +547,12 @@ rare configure --show
 
 ## Contract Addresses
 
-| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Space Factory | Auction |
-|---|---|---|---|---|---|
-| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | not configured | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` |
-| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x3b2d699110aa1788b2b1cae336e0ba8ff942a390` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` |
-| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | not configured | not configured | not configured | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` |
-| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | not configured | not configured | not configured | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` |
+| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Space Factory | RareMinter | Auction |
+|---|---|---|---|---|---|---|
+| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | not configured | `0xd28Dc0B89104d7BBd902F338a0193fF063617ccE` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` |
+| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x3b2d699110aa1788b2b1cae336e0ba8ff942a390` | `0x5fa112EFeD8297bec0010b312208d223E0cE891E` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` |
+| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | not configured | not configured | not configured | not configured | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` |
+| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | not configured | not configured | not configured | not configured | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` |
 
 ## Underlying Solidity Contracts
 
@@ -518,6 +564,7 @@ If you want to inspect the on-chain contracts used by this CLI:
 - Factory used for Sovereign collection creation: [`SovereignNFTContractFactory.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/SovereignNFTContractFactory.sol)
 - Token contract used for Lazy Sovereign mint preparation: [`LazySovereignNFT.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/lazy/LazySovereignNFT.sol)
 - Factory used for Lazy Sovereign release collection creation: [`LazySovereignNFTFactory.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/lazy/LazySovereignNFTFactory.sol)
+- Minter used for release allowlists, mint limits, transaction limits, and seller staking requirements: [`RareMinter.sol`](https://github.com/rareprotocol/core/blob/main/src/collection/RareMinter.sol)
 - RareSpace collection contract: [`RareSpaceNFT.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/spaces/RareSpaceNFT.sol)
 - Factory used for RareSpace collection creation: [`RareSpaceNFTContractFactory.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/spaces/RareSpaceNFTContractFactory.sol)
 - Auction/market contract used for auction operations: [`SuperRareBazaar.sol`](https://github.com/superrare/core/blob/main/src/bazaar/SuperRareBazaar.sol)

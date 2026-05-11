@@ -20,6 +20,7 @@ import { createOfferNamespace } from './offer.js';
 import { createListingNamespace } from './listing.js';
 import { createTokenNamespace } from './token.js';
 import { createCollectionNamespace } from './collection.js';
+import { createReleaseNamespace } from './release.js';
 
 export type { RareClientConfig, RareClient } from './types.js';
 
@@ -28,13 +29,14 @@ export function createRareClient(config: RareClientConfig): RareClient {
   const chain = resolveChainFromPublicClient(publicClient);
   const chainId = chainIds[chain];
   const addresses = getContractAddresses(chain);
-  const contracts = addresses.sovereignFactory || addresses.lazySovereignFactory || addresses.spaceFactory
+  const contracts = addresses.sovereignFactory || addresses.lazySovereignFactory || addresses.spaceFactory || addresses.rareMinter
     ? {
         factory: addresses.factory,
         auction: addresses.auction,
         sovereignFactory: addresses.sovereignFactory,
         lazySovereignFactory: addresses.lazySovereignFactory,
         spaceFactory: addresses.spaceFactory,
+        rareMinter: addresses.rareMinter,
       }
     : {
         factory: addresses.factory,
@@ -77,6 +79,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
         return getCollectionEventsApi(id, opts);
       },
     }),
+    release: createReleaseNamespace(publicClient, config, chain),
     user: {
       async get(address) {
         return getUserApi(address);

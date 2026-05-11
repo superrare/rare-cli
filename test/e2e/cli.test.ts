@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isAddress } from 'viem';
@@ -156,6 +156,127 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('exposes release allowlist and configuration command help', async () => {
+    await withTempHome(async (home) => {
+      const allowlist = await runCli(['release', 'allowlist', 'build', '--help'], { home });
+      expect(allowlist.code).toBe(0);
+      expect(allowlist.stdout).toContain('Usage: rare release allowlist build [options]');
+      expect(allowlist.stdout).toContain('--input <path>');
+      expect(allowlist.stderr).toBe('');
+
+      const set = await runCli(['release', 'allowlist', 'set', '--help'], { home });
+      expect(set.code).toBe(0);
+      expect(set.stdout).toContain('Usage: rare release allowlist set [options]');
+      expect(set.stdout).toContain('--end-timestamp <seconds>');
+      expect(set.stderr).toBe('');
+
+      const limits = await runCli(['release', 'limits', 'set-mint', '--help'], { home });
+      expect(limits.code).toBe(0);
+      expect(limits.stdout).toContain('Usage: rare release limits set-mint [options]');
+      expect(limits.stdout).toContain('--limit <number>');
+      expect(limits.stderr).toBe('');
+    });
+  });
+
+  it('builds and verifies release allowlist artifacts without wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const input = join(home, 'allowlist.csv');
+      const artifactPath = join(home, 'allowlist-artifact.json');
+      await writeFile(input, [
+        'address',
+        '0x2222222222222222222222222222222222222222',
+        '0x1111111111111111111111111111111111111111',
+        '',
+      ].join('\n'), 'utf8');
+
+      const build = parseJsonStdout<{
+        root: string;
+        count: number;
+        output: string;
+      }>(await runCli([
+        '--json',
+        'release',
+        'allowlist',
+        'build',
+        '--input',
+        input,
+        '--output',
+        artifactPath,
+      ], { home }));
+
+      expect(build.root).toMatch(/^0x[0-9a-f]{64}$/);
+      expect(build.count).toBe(2);
+      expect(build.output).toBe(artifactPath);
+
+      const artifact = JSON.parse(await readFile(artifactPath, 'utf8'));
+      expect(artifact.root).toBe(build.root);
+      expect(artifact.addresses).toEqual([
+        '0x1111111111111111111111111111111111111111',
+        '0x2222222222222222222222222222222222222222',
+      ]);
+
+      const proof = parseJsonStdout<{
+        root: string;
+        address: string;
+        valid: boolean;
+        proof: string[];
+      }>(await runCli([
+        '--json',
+        'release',
+        'allowlist',
+        'proof',
+        '--input',
+        artifactPath,
+        '--address',
+        '0x2222222222222222222222222222222222222222',
+      ], { home }));
+
+      expect(proof.root).toBe(build.root);
+      expect(proof.valid).toBe(true);
+      expect(proof.proof).toHaveLength(1);
+
+      const verify = parseJsonStdout<{
+        root: string;
+        address: string;
+        valid: boolean;
+      }>(await runCli([
+        '--json',
+        'release',
+        'allowlist',
+        'verify',
+        '--input',
+        artifactPath,
+        '--address',
+        '0x2222222222222222222222222222222222222222',
+      ], { home }));
+
+      expect(verify).toEqual({
+        root: build.root,
+        address: '0x2222222222222222222222222222222222222222',
+        valid: true,
+      });
+    });
+  });
+
+  it('rejects malformed release allowlists before wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const input = join(home, 'bad-allowlist.csv');
+      await writeFile(input, 'address\nnot-an-address\n', 'utf8');
+
+      const result = await runCli([
+        'release',
+        'allowlist',
+        'build',
+        '--input',
+        input,
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('allowlist address at index 0 must be a valid 0x address.');
+    });
+  });
+
   it('rejects invalid collection mint addresses before wallet setup', async () => {
     await withTempHome(async (home) => {
       const result = await runCli([
@@ -190,6 +311,23 @@ describe('built CLI deterministic behavior', () => {
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('RARE Protocol spaceFactory contract is not configured on "sepolia".');
+    });
+  });
+
+  it('rejects RareMinter release reads on chains without a configured minter before wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const result = await runCli([
+        'release',
+        'status',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--chain',
+        'base',
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('RARE Protocol rareMinter contract is not configured on "base".');
     });
   });
 

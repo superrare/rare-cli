@@ -21,17 +21,22 @@ describe('chain and currency helpers', () => {
       auction: '0xC8Edc7049b233641ad3723D6C60019D1c8771612',
       sovereignFactory: '0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf',
       lazySovereignFactory: '0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA',
+      rareMinter: '0xd28Dc0B89104d7BBd902F338a0193fF063617ccE',
     });
   });
 
   it('requires optional contract addresses only where configured', () => {
     expect(requireContractAddress('sepolia', 'sovereignFactory')).toBe('0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf');
     expect(requireContractAddress('sepolia', 'lazySovereignFactory')).toBe('0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA');
+    expect(requireContractAddress('sepolia', 'rareMinter')).toBe('0xd28Dc0B89104d7BBd902F338a0193fF063617ccE');
     expect(() => requireContractAddress('base', 'sovereignFactory')).toThrow(
       'RARE Protocol sovereignFactory contract is not configured on "base".',
     );
     expect(() => requireContractAddress('base', 'lazySovereignFactory')).toThrow(
       'RARE Protocol lazySovereignFactory contract is not configured on "base".',
+    );
+    expect(() => requireContractAddress('base', 'rareMinter')).toThrow(
+      'RARE Protocol rareMinter contract is not configured on "base".',
     );
   });
 

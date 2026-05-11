@@ -31,6 +31,7 @@ const E2E_BATCH_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehy
 const E2E_LAZY_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy';
 const E2E_LAZY_UPDATED_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy-updated';
 const E2E_LAZY_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy-token-1.json';
+const E2E_ALLOWLIST_ROOT = '0xcbf843e9efe7be41ca4d3a03347d27e7bb96d83ae75b3b36983ad907d2109c65';
 
 type DeployResult = {
   txHash: string;
@@ -100,6 +101,38 @@ type CollectionMetadataWriteResult = {
   baseUri?: string;
   tokenId?: string;
   tokenUri?: string;
+};
+
+type ReleaseAllowlistConfigResult = {
+  txHash: string;
+  blockNumber: string;
+  contract: string;
+  minter: string;
+  root: string;
+  endTimestamp: string;
+};
+
+type ReleaseLimitResult = {
+  txHash: string;
+  blockNumber: string;
+  contract: string;
+  minter: string;
+  limit: string;
+};
+
+type ReleaseStatusResult = {
+  chain: string;
+  contract: string;
+  minter: string;
+  allowlistRoot: string;
+  allowlistEndTimestamp: string;
+  mintLimit: string;
+  txLimit: string;
+  sellerStakingMinimum: string;
+  sellerStakingMinimumEndTimestamp: string;
+  account?: string;
+  accountMints?: string;
+  accountTxs?: string;
 };
 
 type MintResult = {
@@ -364,6 +397,7 @@ describeLive('live Sepolia CLI write commands', () => {
 
   it('creates a Lazy Sovereign release collection through the lazy factory', async () => {
     const suffix = Date.now().toString(36);
+    const allowlistEndTimestamp = Math.floor(Date.now() / 1000) + 3600;
     const created = await step('create Lazy Sovereign collection', () =>
       jsonCommand<CreateSovereignResult>(live.sellerHome, [
         'collection',
@@ -464,6 +498,79 @@ describeLive('live Sepolia CLI write commands', () => {
     const lockedMetadata = await readCollectionMetadata(live.sellerHome, created.contract);
     expect(lockedMetadata.baseUri).toBe(E2E_LAZY_UPDATED_BASE_URI);
     expect(lockedMetadata.lockedMetadata).toBe(true);
+
+    const allowlist = await step('set release allowlist config', () =>
+      jsonCommand<ReleaseAllowlistConfigResult>(live.sellerHome, [
+        'release',
+        'allowlist',
+        'set',
+        '--contract',
+        created.contract,
+        '--root',
+        E2E_ALLOWLIST_ROOT,
+        '--end-timestamp',
+        allowlistEndTimestamp.toString(),
+        '--chain',
+        'sepolia',
+      ]),
+    );
+    expectTx(allowlist);
+    expect(allowlist.contract.toLowerCase()).toBe(created.contract.toLowerCase());
+    expect(allowlist.root).toBe(E2E_ALLOWLIST_ROOT);
+    expect(allowlist.endTimestamp).toBe(allowlistEndTimestamp.toString());
+
+    const mintLimit = await step('set release mint limit', () =>
+      jsonCommand<ReleaseLimitResult>(live.sellerHome, [
+        'release',
+        'limits',
+        'set-mint',
+        '--contract',
+        created.contract,
+        '--limit',
+        '2',
+        '--chain',
+        'sepolia',
+      ]),
+    );
+    expectTx(mintLimit);
+    expect(mintLimit.limit).toBe('2');
+
+    const txLimit = await step('set release transaction limit', () =>
+      jsonCommand<ReleaseLimitResult>(live.sellerHome, [
+        'release',
+        'limits',
+        'set-tx',
+        '--contract',
+        created.contract,
+        '--limit',
+        '1',
+        '--chain',
+        'sepolia',
+      ]),
+    );
+    expectTx(txLimit);
+    expect(txLimit.limit).toBe('1');
+
+    const releaseStatus = await step('read release config', () =>
+      jsonCommand<ReleaseStatusResult>(live.sellerHome, [
+        'release',
+        'status',
+        '--contract',
+        created.contract,
+        '--account',
+        live.buyerAddress,
+        '--chain',
+        'sepolia',
+      ]),
+    );
+    expect(releaseStatus.contract.toLowerCase()).toBe(created.contract.toLowerCase());
+    expect(releaseStatus.allowlistRoot).toBe(E2E_ALLOWLIST_ROOT);
+    expect(releaseStatus.allowlistEndTimestamp).toBe(allowlistEndTimestamp.toString());
+    expect(releaseStatus.mintLimit).toBe('2');
+    expect(releaseStatus.txLimit).toBe('1');
+    expect(releaseStatus.account?.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
+    expect(releaseStatus.accountMints).toBe('0');
+    expect(releaseStatus.accountTxs).toBe('0');
   });
 
   it('mints directly to another recipient', async () => {

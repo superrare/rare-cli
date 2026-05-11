@@ -1,9 +1,14 @@
-import type { Address, Hash, PublicClient, TransactionReceipt, WalletClient } from 'viem';
+import type { Address, Hash, Hex, PublicClient, TransactionReceipt, WalletClient } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
 import type {
   LazySovereignCollectionContractType,
   SovereignCollectionContractType,
 } from './collection-core.js';
+import type {
+  BuildReleaseAllowlistParams,
+  ReleaseAllowlistArtifact,
+  ReleaseAllowlistProof,
+} from './release-core.js';
 import type {
   CollectionSearchParams,
   ImportErc721Params,
@@ -215,6 +220,73 @@ export interface MintRareSpaceTokenResult extends TransactionResult {
   royaltyReceiver: Address;
 }
 
+export interface ReleaseAllowlistConfigParams {
+  contract: Address;
+  root: Hex;
+  endTimestamp: IntegerInput;
+}
+
+export interface ReleaseAllowlistConfigResult extends TransactionResult {
+  contract: Address;
+  minter: Address;
+  root: Hex;
+  endTimestamp: bigint;
+}
+
+export interface ReleaseLimitParams {
+  contract: Address;
+  limit: IntegerInput;
+}
+
+export interface ReleaseLimitResult extends TransactionResult {
+  contract: Address;
+  minter: Address;
+  limit: bigint;
+}
+
+export interface ReleaseSellerStakingMinimumParams {
+  contract: Address;
+  minimum: IntegerInput;
+  endTimestamp: IntegerInput;
+}
+
+export interface ReleaseSellerStakingMinimumResult extends TransactionResult {
+  contract: Address;
+  minter: Address;
+  minimum: bigint;
+  endTimestamp: bigint;
+}
+
+export interface ReleaseConfigParams {
+  contract: Address;
+  account?: Address;
+}
+
+export interface ReleaseConfig {
+  contract: Address;
+  minter: Address;
+  allowlistRoot: Hex;
+  allowlistEndTimestamp: bigint;
+  mintLimit: bigint;
+  txLimit: bigint;
+  sellerStakingMinimum: bigint;
+  sellerStakingMinimumEndTimestamp: bigint;
+  account?: Address;
+  accountMints?: bigint;
+  accountTxs?: bigint;
+}
+
+export interface ReleaseAllowlistProofParams {
+  artifact: ReleaseAllowlistArtifact;
+  address: Address;
+}
+
+export interface ReleaseAllowlistVerifyParams {
+  root: Hex;
+  address: Address;
+  proof: readonly Hex[];
+}
+
 export interface MintToParams {
   contract: Address;
   tokenUri: string;
@@ -375,6 +447,7 @@ export interface RareClient {
     sovereignFactory?: Address;
     lazySovereignFactory?: Address;
     spaceFactory?: Address;
+    rareMinter?: Address;
   };
   deploy: {
     erc721(params: DeployErc721Params): Promise<DeployErc721Result>;
@@ -426,6 +499,16 @@ export interface RareClient {
     lockBaseUri(params: CollectionLockBaseUriParams): Promise<CollectionLockBaseUriResult>;
     createSpace(params: CreateRareSpaceCollectionParams): Promise<CreateRareSpaceCollectionResult>;
     mintSpace(params: MintRareSpaceTokenParams): Promise<MintRareSpaceTokenResult>;
+  };
+  release: {
+    buildAllowlist(params: BuildReleaseAllowlistParams): ReleaseAllowlistArtifact;
+    getAllowlistProof(params: ReleaseAllowlistProofParams): ReleaseAllowlistProof;
+    verifyAllowlistProof(params: ReleaseAllowlistVerifyParams): boolean;
+    getConfig(params: ReleaseConfigParams): Promise<ReleaseConfig>;
+    setAllowlistConfig(params: ReleaseAllowlistConfigParams): Promise<ReleaseAllowlistConfigResult>;
+    setMintLimit(params: ReleaseLimitParams): Promise<ReleaseLimitResult>;
+    setTxLimit(params: ReleaseLimitParams): Promise<ReleaseLimitResult>;
+    setSellerStakingMinimum(params: ReleaseSellerStakingMinimumParams): Promise<ReleaseSellerStakingMinimumResult>;
   };
   user: {
     get(address: string): Promise<UserProfile>;
