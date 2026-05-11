@@ -1,8 +1,14 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { describe, expect, it } from 'vitest';
 import { isAddress } from 'viem';
 import { parseJsonStdout, runCli, withTempHome } from '../helpers/cli.js';
+
+const cliPath = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
+const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 
 describe('built CLI deterministic behavior', () => {
   it('prints top-level help and version', async () => {
@@ -746,4 +752,83 @@ describe('built CLI deterministic behavior', () => {
       expect(result.stderr).toContain('RARE Protocol lazySovereignFactory contract is not configured on "base".');
     });
   });
+
+  it('exposes MCP serve help', async () => {
+    await withTempHome(async (home) => {
+      const result = await runCli(['mcp', 'serve', '--help'], { home });
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('Usage: rare mcp serve [options]');
+      expect(result.stdout).toContain('--allow-writes');
+      expect(result.stderr).toBe('');
+    });
+  });
+
+  it('serves read-only MCP tools by default and hides write tools', async () => {
+    await withTempHome(async (home) => {
+      await withMcpClient({ home }, async (client) => {
+        const tools = await client.listTools();
+        const names = tools.tools.map((tool) => tool.name);
+        expect(names).toContain('config_summary');
+        expect(names).toContain('auction_status');
+        expect(names).not.toContain('mint');
+
+        const config = await client.callTool({ name: 'config_summary', arguments: {} });
+        expect(config.structuredContent).toEqual({
+          defaultChain: 'sepolia',
+          chains: {},
+        });
+      });
+    });
+  });
+
+  it('registers MCP write tools only with --allow-writes and reports missing wallet as structured error', async () => {
+    await withTempHome(async (home) => {
+      await withMcpClient({ home, args: ['--allow-writes'] }, async (client) => {
+        const tools = await client.listTools();
+        const names = tools.tools.map((tool) => tool.name);
+        expect(names).toContain('mint');
+
+        const result = await client.callTool({
+          name: 'mint',
+          arguments: {
+            chain: 'sepolia',
+            contract: '0x1111111111111111111111111111111111111111',
+            tokenUri: 'ipfs://metadata',
+          },
+        });
+        expect(result.isError).toBe(true);
+        expect(result.structuredContent).toEqual({
+          error: {
+            code: 'missing_wallet',
+            message: 'No private key configured for chain "sepolia". Run rare configure or use the CLI wallet setup outside MCP.',
+          },
+        });
+      });
+    });
+  });
 });
+
+async function withMcpClient<T>(
+  opts: { home: string; args?: string[] },
+  fn: (client: Client) => Promise<T>,
+): Promise<T> {
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [cliPath, 'mcp', 'serve', ...(opts.args ?? [])],
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      HOME: opts.home,
+      USERPROFILE: opts.home,
+    },
+    stderr: 'pipe',
+  });
+  const client = new Client({ name: 'rare-cli-e2e', version: '1.0.0' });
+  await client.connect(transport);
+  try {
+    return await fn(client);
+  } finally {
+    await client.close();
+  }
+}
