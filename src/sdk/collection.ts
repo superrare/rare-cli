@@ -5,6 +5,7 @@ import { requireContractAddress, type SupportedChain } from '../contracts/addres
 import type { RareClientConfig, RareClient } from './types.js';
 import { requireWallet } from './helpers.js';
 import {
+  buildCreateLazySovereignCollectionWrite,
   buildCreateSovereignCollectionWrite,
   planCreateLazySovereignCollection,
   planCreateSovereignCollection,
@@ -60,11 +61,12 @@ export function createCollectionNamespace(
         abi: lazySovereignFactoryAbi,
         functionName: plan.contractTypeReadName,
       });
+      const write = buildCreateLazySovereignCollectionWrite(plan, contractType);
       const txHash = await walletClient.writeContract({
         address: factoryAddress,
         abi: lazySovereignFactoryAbi,
-        functionName: 'createSovereignNFTContract',
-        args: [plan.name, plan.symbol, plan.maxTokens, contractType],
+        functionName: write.functionName,
+        args: write.args,
         account,
         chain: undefined,
       });

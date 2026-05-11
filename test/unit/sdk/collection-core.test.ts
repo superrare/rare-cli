@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildCreateLazySovereignCollectionWrite,
   buildCreateSovereignCollectionWrite,
   normalizeLazySovereignCollectionContractType,
   normalizeSovereignCollectionContractType,
@@ -138,5 +139,19 @@ describe('Sovereign collection core', () => {
       maxTokens: 100,
       contractType: 'lazy-deadman-royalty-guard',
     }).contractTypeReadName).toBe('LAZY_ROYALTY_GUARD_DEADMAN');
+  });
+
+  it('builds Lazy Sovereign factory write arguments in core', () => {
+    const plan = planCreateLazySovereignCollection({
+      name: 'Release',
+      symbol: 'REL',
+      maxTokens: '100',
+    });
+    const contractType = `0x${'11'.repeat(32)}` as const;
+
+    expect(buildCreateLazySovereignCollectionWrite(plan, contractType)).toEqual({
+      functionName: 'createSovereignNFTContract',
+      args: ['Release', 'REL', 100n, contractType],
+    });
   });
 });

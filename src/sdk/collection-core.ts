@@ -57,6 +57,11 @@ export interface CreateLazySovereignCollectionPlan {
   contractTypeReadName: LazySovereignCollectionContractTypeReadName;
 }
 
+export type CreateLazySovereignCollectionWrite = {
+  functionName: 'createSovereignNFTContract';
+  args: [string, string, bigint, Hex];
+};
+
 export function normalizeSovereignCollectionContractType(
   input: string | undefined,
 ): SovereignCollectionContractType | undefined {
@@ -178,6 +183,16 @@ export function planCreateLazySovereignCollection(
     maxTokens: toPositiveInteger(params.maxTokens, 'maxTokens'),
     contractType,
     contractTypeReadName: lazyContractTypeReadName(contractType),
+  };
+}
+
+export function buildCreateLazySovereignCollectionWrite(
+  plan: CreateLazySovereignCollectionPlan,
+  contractType: Hex,
+): CreateLazySovereignCollectionWrite {
+  return {
+    functionName: 'createSovereignNFTContract',
+    args: [plan.name, plan.symbol, plan.maxTokens, contractType],
   };
 }
 
