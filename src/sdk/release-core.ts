@@ -10,8 +10,11 @@ import {
 } from 'viem';
 import type {
   AmountInput,
+  ReleaseAllowlistConfig,
   IntegerInput,
   ReleaseConfigureParams,
+  ReleaseLimitConfig,
+  ReleaseSellerStakingMinimum,
   ReleaseStatus,
   TimestampInput,
 } from './types.js';
@@ -548,6 +551,84 @@ export function verifyReleaseAllowlistProof(opts: {
     hash = hashMerklePair(hash, normalizeBytes32(sibling, 'allowlist proof item'));
   }
   return hexEquals(hash, root);
+}
+
+export function shapeReleaseAllowlistConfig(opts: {
+  rareMinter: Address;
+  contract: Address;
+  allowlist: RawAllowlistConfig;
+  nowSeconds: bigint;
+}): ReleaseAllowlistConfig {
+  return {
+    rareMinter: opts.rareMinter,
+    contract: opts.contract,
+    root: opts.allowlist.root,
+    endTimestamp: opts.allowlist.endTimestamp,
+    active: opts.allowlist.root !== ZERO_BYTES32 && opts.allowlist.endTimestamp > opts.nowSeconds,
+    now: opts.nowSeconds,
+  };
+}
+
+export function shapeReleaseLimitConfig(opts: {
+  rareMinter: Address;
+  contract: Address;
+  limit: bigint;
+}): ReleaseLimitConfig {
+  return {
+    rareMinter: opts.rareMinter,
+    contract: opts.contract,
+    limit: opts.limit,
+    enabled: opts.limit > 0n,
+  };
+}
+
+export function shapeReleaseSellerStakingMinimum(opts: {
+  rareMinter: Address;
+  contract: Address;
+  stakingMinimum: RawStakingMinimum;
+  nowSeconds: bigint;
+}): ReleaseSellerStakingMinimum {
+  return {
+    rareMinter: opts.rareMinter,
+    contract: opts.contract,
+    amount: opts.stakingMinimum.amount,
+    endTimestamp: opts.stakingMinimum.endTimestamp,
+    active: opts.stakingMinimum.amount > 0n && opts.stakingMinimum.endTimestamp > opts.nowSeconds,
+    now: opts.nowSeconds,
+  };
+}
+
+export function assertReleaseAllowlistConfigMatches(expected: {
+  root: `0x${string}`;
+  endTimestamp: bigint;
+}, actual: RawAllowlistConfig): void {
+  if (
+    actual.root.toLowerCase() !== expected.root.toLowerCase() ||
+    actual.endTimestamp !== expected.endTimestamp
+  ) {
+    throw new Error(
+      `RareMinter allowlist verification failed. Expected root ${expected.root} ending ${expected.endTimestamp}, ` +
+        `read root ${actual.root} ending ${actual.endTimestamp}.`,
+    );
+  }
+}
+
+export function assertReleaseLimitMatches(field: string, expected: bigint, actual: bigint): void {
+  if (actual !== expected) {
+    throw new Error(`RareMinter ${field} verification failed. Expected ${expected}, read ${actual}.`);
+  }
+}
+
+export function assertReleaseSellerStakingMinimumMatches(expected: {
+  amount: bigint;
+  endTimestamp: bigint;
+}, actual: RawStakingMinimum): void {
+  if (actual.amount !== expected.amount || actual.endTimestamp !== expected.endTimestamp) {
+    throw new Error(
+      `RareMinter seller staking minimum verification failed. Expected amount ${expected.amount} ending ${expected.endTimestamp}, ` +
+        `read amount ${actual.amount} ending ${actual.endTimestamp}.`,
+    );
+  }
 }
 
 export function shapeReleaseStatus(opts: {

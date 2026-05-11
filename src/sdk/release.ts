@@ -12,6 +12,9 @@ import type {
 import { ETH_ADDRESS, requireWallet } from './helpers.js';
 import {
   assertReleaseContractOwner,
+  assertReleaseAllowlistConfigMatches,
+  assertReleaseLimitMatches,
+  assertReleaseSellerStakingMinimumMatches,
   buildReleaseAllowlistArtifactFromInput,
   getReleaseAllowlistProof,
   planReleaseConfigure,
@@ -21,8 +24,10 @@ import {
   planReleaseSellerStakingMinimum,
   parseReleaseAllowlistArtifactJson,
   requireRareMinterAddress,
+  shapeReleaseAllowlistConfig,
+  shapeReleaseLimitConfig,
+  shapeReleaseSellerStakingMinimum,
   shapeReleaseStatus,
-  ZERO_BYTES32,
   type RawAllowlistConfig,
   type RawDirectSaleConfig,
   type RawStakingMinimum,
@@ -188,84 +193,6 @@ async function readSellerStakingMinimum(opts: {
   }) as Promise<RawStakingMinimum>;
 }
 
-function shapeAllowlistConfig(opts: {
-  rareMinter: Address;
-  contract: Address;
-  allowlist: RawAllowlistConfig;
-  nowSeconds: bigint;
-}) {
-  return {
-    rareMinter: opts.rareMinter,
-    contract: opts.contract,
-    root: opts.allowlist.root,
-    endTimestamp: opts.allowlist.endTimestamp,
-    active: opts.allowlist.root !== ZERO_BYTES32 && opts.allowlist.endTimestamp > opts.nowSeconds,
-    now: opts.nowSeconds,
-  };
-}
-
-function shapeLimitConfig(opts: {
-  rareMinter: Address;
-  contract: Address;
-  limit: bigint;
-}) {
-  return {
-    rareMinter: opts.rareMinter,
-    contract: opts.contract,
-    limit: opts.limit,
-    enabled: opts.limit > 0n,
-  };
-}
-
-function shapeSellerStakingMinimum(opts: {
-  rareMinter: Address;
-  contract: Address;
-  stakingMinimum: RawStakingMinimum;
-  nowSeconds: bigint;
-}) {
-  return {
-    rareMinter: opts.rareMinter,
-    contract: opts.contract,
-    amount: opts.stakingMinimum.amount,
-    endTimestamp: opts.stakingMinimum.endTimestamp,
-    active: opts.stakingMinimum.amount > 0n && opts.stakingMinimum.endTimestamp > opts.nowSeconds,
-    now: opts.nowSeconds,
-  };
-}
-
-function assertAllowlistConfigMatches(expected: {
-  root: `0x${string}`;
-  endTimestamp: bigint;
-}, actual: RawAllowlistConfig): void {
-  if (
-    actual.root.toLowerCase() !== expected.root.toLowerCase() ||
-    actual.endTimestamp !== expected.endTimestamp
-  ) {
-    throw new Error(
-      `RareMinter allowlist verification failed. Expected root ${expected.root} ending ${expected.endTimestamp}, ` +
-        `read root ${actual.root} ending ${actual.endTimestamp}.`,
-    );
-  }
-}
-
-function assertLimitMatches(field: string, expected: bigint, actual: bigint): void {
-  if (actual !== expected) {
-    throw new Error(`RareMinter ${field} verification failed. Expected ${expected}, read ${actual}.`);
-  }
-}
-
-function assertSellerStakingMinimumMatches(expected: {
-  amount: bigint;
-  endTimestamp: bigint;
-}, actual: RawStakingMinimum): void {
-  if (actual.amount !== expected.amount || actual.endTimestamp !== expected.endTimestamp) {
-    throw new Error(
-      `RareMinter seller staking minimum verification failed. Expected amount ${expected.amount} ending ${expected.endTimestamp}, ` +
-        `read amount ${actual.amount} ending ${actual.endTimestamp}.`,
-    );
-  }
-}
-
 export function createReleaseNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
@@ -344,7 +271,7 @@ export function createReleaseNamespace(
         rareMinter,
         contract: params.contract,
       });
-      return shapeAllowlistConfig({
+      return shapeReleaseAllowlistConfig({
         rareMinter,
         contract: params.contract,
         allowlist,
@@ -377,12 +304,12 @@ export function createReleaseNamespace(
         rareMinter,
         contract: plan.contract,
       });
-      assertAllowlistConfigMatches(plan, allowlist);
+      assertReleaseAllowlistConfigMatches(plan, allowlist);
 
       return {
         txHash,
         receipt,
-        config: shapeAllowlistConfig({
+        config: shapeReleaseAllowlistConfig({
           rareMinter,
           contract: plan.contract,
           allowlist,
@@ -416,12 +343,12 @@ export function createReleaseNamespace(
         rareMinter,
         contract: plan.contract,
       });
-      assertAllowlistConfigMatches(plan, allowlist);
+      assertReleaseAllowlistConfigMatches(plan, allowlist);
 
       return {
         txHash,
         receipt,
-        config: shapeAllowlistConfig({
+        config: shapeReleaseAllowlistConfig({
           rareMinter,
           contract: plan.contract,
           allowlist,
@@ -437,7 +364,7 @@ export function createReleaseNamespace(
         rareMinter,
         contract: params.contract,
       });
-      return shapeLimitConfig({ rareMinter, contract: params.contract, limit });
+      return shapeReleaseLimitConfig({ rareMinter, contract: params.contract, limit });
     },
 
     async setMintLimit(params) {
@@ -461,12 +388,12 @@ export function createReleaseNamespace(
       });
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       const limit = await readMintLimit({ publicClient, rareMinter, contract: plan.contract });
-      assertLimitMatches('mint limit', plan.limit, limit);
+      assertReleaseLimitMatches('mint limit', plan.limit, limit);
 
       return {
         txHash,
         receipt,
-        config: shapeLimitConfig({ rareMinter, contract: plan.contract, limit }),
+        config: shapeReleaseLimitConfig({ rareMinter, contract: plan.contract, limit }),
       };
     },
 
@@ -477,7 +404,7 @@ export function createReleaseNamespace(
         rareMinter,
         contract: params.contract,
       });
-      return shapeLimitConfig({ rareMinter, contract: params.contract, limit });
+      return shapeReleaseLimitConfig({ rareMinter, contract: params.contract, limit });
     },
 
     async setTxLimit(params) {
@@ -501,12 +428,12 @@ export function createReleaseNamespace(
       });
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       const limit = await readTxLimit({ publicClient, rareMinter, contract: plan.contract });
-      assertLimitMatches('transaction limit', plan.limit, limit);
+      assertReleaseLimitMatches('transaction limit', plan.limit, limit);
 
       return {
         txHash,
         receipt,
-        config: shapeLimitConfig({ rareMinter, contract: plan.contract, limit }),
+        config: shapeReleaseLimitConfig({ rareMinter, contract: plan.contract, limit }),
       };
     },
 
@@ -517,7 +444,7 @@ export function createReleaseNamespace(
         rareMinter,
         contract: params.contract,
       });
-      return shapeSellerStakingMinimum({
+      return shapeReleaseSellerStakingMinimum({
         rareMinter,
         contract: params.contract,
         stakingMinimum,
@@ -550,12 +477,12 @@ export function createReleaseNamespace(
         rareMinter,
         contract: plan.contract,
       });
-      assertSellerStakingMinimumMatches(plan, stakingMinimum);
+      assertReleaseSellerStakingMinimumMatches(plan, stakingMinimum);
 
       return {
         txHash,
         receipt,
-        config: shapeSellerStakingMinimum({
+        config: shapeReleaseSellerStakingMinimum({
           rareMinter,
           contract: plan.contract,
           stakingMinimum,

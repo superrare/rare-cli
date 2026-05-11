@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { parseEther, parseUnits } from 'viem';
 import {
   ZERO_BYTES32,
+  assertReleaseAllowlistConfigMatches,
   assertReleaseContractOwner,
+  assertReleaseLimitMatches,
+  assertReleaseSellerStakingMinimumMatches,
   buildReleaseAllowlistArtifact,
   buildReleaseAllowlistArtifactFromInput,
   collectReleaseSplit,
@@ -17,6 +20,9 @@ import {
   planReleaseLimitConfig,
   planReleaseSellerStakingMinimum,
   resolveReleaseSplits,
+  shapeReleaseAllowlistConfig,
+  shapeReleaseLimitConfig,
+  shapeReleaseSellerStakingMinimum,
   shapeReleaseStatus,
   verifyReleaseAllowlistProof,
 } from '../../../src/sdk/release-core.js';
@@ -270,6 +276,70 @@ describe('release allowlist and limit planning', () => {
         amount: '1',
       }),
     ).toThrow('endTimestamp is required.');
+  });
+});
+
+describe('release config result shaping and verification', () => {
+  it('shapes allowlist, limit, and staking config reads in the core', () => {
+    expect(shapeReleaseAllowlistConfig({
+      rareMinter,
+      contract: collection,
+      allowlist: { root: `0x${'11'.repeat(32)}`, endTimestamp: 2_000n },
+      nowSeconds: 1_000n,
+    })).toEqual({
+      rareMinter,
+      contract: collection,
+      root: `0x${'11'.repeat(32)}`,
+      endTimestamp: 2_000n,
+      active: true,
+      now: 1_000n,
+    });
+
+    expect(shapeReleaseLimitConfig({
+      rareMinter,
+      contract: collection,
+      limit: 0n,
+    })).toEqual({
+      rareMinter,
+      contract: collection,
+      limit: 0n,
+      enabled: false,
+    });
+
+    expect(shapeReleaseSellerStakingMinimum({
+      rareMinter,
+      contract: collection,
+      stakingMinimum: { amount: 1n, endTimestamp: 900n },
+      nowSeconds: 1_000n,
+    })).toEqual({
+      rareMinter,
+      contract: collection,
+      amount: 1n,
+      endTimestamp: 900n,
+      active: false,
+      now: 1_000n,
+    });
+  });
+
+  it('verifies RareMinter config readbacks without SDK shell logic', () => {
+    const allowlist = { root: `0x${'22'.repeat(32)}` as const, endTimestamp: 123n };
+    expect(() => assertReleaseAllowlistConfigMatches(allowlist, allowlist)).not.toThrow();
+    expect(() => assertReleaseAllowlistConfigMatches(allowlist, {
+      ...allowlist,
+      endTimestamp: 124n,
+    })).toThrow('RareMinter allowlist verification failed.');
+
+    expect(() => assertReleaseLimitMatches('mint limit', 2n, 2n)).not.toThrow();
+    expect(() => assertReleaseLimitMatches('mint limit', 2n, 1n)).toThrow(
+      'RareMinter mint limit verification failed.',
+    );
+
+    const staking = { amount: 5n, endTimestamp: 999n };
+    expect(() => assertReleaseSellerStakingMinimumMatches(staking, staking)).not.toThrow();
+    expect(() => assertReleaseSellerStakingMinimumMatches(staking, {
+      ...staking,
+      amount: 6n,
+    })).toThrow('RareMinter seller staking minimum verification failed.');
   });
 });
 
