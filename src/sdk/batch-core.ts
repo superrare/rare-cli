@@ -47,6 +47,14 @@ export type BatchTokenProofArtifact = {
   valid: boolean;
 };
 
+export type BatchTokenProofInput = {
+  root?: Hex;
+  contractAddress?: Address;
+  tokenId?: string;
+  chainId?: number;
+  proof: Hex[];
+};
+
 export type BuildBatchTokenTreeParams = {
   content: string;
   format?: BatchTokenListInputFormat;
@@ -308,6 +316,90 @@ export function parseBatchTokenProofArtifact(content: string): BatchTokenProofAr
     proof,
     valid,
   };
+}
+
+export function parseBatchTokenProofInput(content: string): BatchTokenProofInput {
+  const parsed: unknown = parseJson(content, '--proof JSON');
+
+  if (isRecord(parsed) && parsed.type === 'rare-batch-token-proof') {
+    const proof = parseBatchTokenProofArtifact(content);
+    return {
+      root: proof.root,
+      contractAddress: proof.contractAddress,
+      tokenId: proof.tokenId,
+      chainId: proof.chainId,
+      proof: proof.proof,
+    };
+  }
+
+  const proof = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.proof)
+      ? parsed.proof
+      : undefined;
+
+  if (proof === undefined) {
+    throw new Error('--proof must be a JSON array or an object with a proof array.');
+  }
+
+  const root = isRecord(parsed) && typeof parsed.root === 'string'
+    ? normalizeBytes32(parsed.root, 'proof root')
+    : undefined;
+
+  return {
+    ...(root === undefined ? {} : { root }),
+    proof: proof.map((entry, index) => {
+      if (typeof entry !== 'string') {
+        throw new Error(`proof[${index}] must be a bytes32 hex string.`);
+      }
+      return normalizeBytes32(entry, `proof[${index}]`);
+    }),
+  };
+}
+
+export function validateBatchTokenProofInputMatchesTarget(
+  proofInput: BatchTokenProofInput | undefined,
+  target: {
+    artifact: BatchTokenListArtifact;
+    contractAddress: Address;
+    tokenId: IntegerInput;
+    root: Hex;
+    allowRootOverride: boolean;
+  },
+): void {
+  if (proofInput === undefined) {
+    return;
+  }
+  if (
+    proofInput.root !== undefined &&
+    !target.allowRootOverride &&
+    proofInput.root.toLowerCase() !== target.artifact.root.toLowerCase()
+  ) {
+    throw new Error('Proof root does not match the input token list root.');
+  }
+  if (
+    proofInput.root !== undefined &&
+    target.allowRootOverride &&
+    proofInput.root.toLowerCase() !== target.root.toLowerCase()
+  ) {
+    throw new Error('Proof root does not match --root.');
+  }
+  if (
+    proofInput.contractAddress !== undefined &&
+    proofInput.contractAddress.toLowerCase() !== target.contractAddress.toLowerCase()
+  ) {
+    throw new Error('Proof artifact contractAddress does not match --contract.');
+  }
+  if (proofInput.tokenId !== undefined && proofInput.tokenId !== normalizeTokenId(target.tokenId, '--token-id')) {
+    throw new Error('Proof artifact tokenId does not match --token-id.');
+  }
+  if (
+    proofInput.chainId !== undefined &&
+    target.artifact.chainId !== undefined &&
+    proofInput.chainId !== target.artifact.chainId
+  ) {
+    throw new Error('Proof artifact chainId does not match the input token list chainId.');
+  }
 }
 
 export function hashBatchToken(contractAddress: Address, tokenId: IntegerInput): Hex {
