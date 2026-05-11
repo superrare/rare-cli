@@ -24,6 +24,7 @@ import { createLiquidNamespace } from './liquid.js';
 import { createSwapNamespace } from './swap.js';
 import { createReleaseNamespace } from './release.js';
 import { createCollectionNamespace } from './collection.js';
+import { createBatchNamespace } from './batch.js';
 
 export type { RareClientConfig, RareClient } from './types.js';
 
@@ -98,6 +99,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
         return addresses.erc721ApprovalManager;
       },
     }),
+    batch: createBatchNamespace(),
     token: createTokenNamespace(publicClient, chain),
     search: {
       async nfts(params = {}): ReturnType<RareClient['search']['nfts']> {

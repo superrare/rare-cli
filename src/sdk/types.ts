@@ -7,6 +7,13 @@ import type {
   SovereignCollectionContractType,
 } from './collection-core.js';
 import type {
+  BatchTokenListArtifact,
+  BatchTokenProofArtifact,
+  BatchTokenProofParams,
+  BatchTokenProofVerifyParams,
+  BuildBatchTokenTreeParams,
+} from './batch-core.js';
+import type {
   CollectionSearchParams,
   ImportErc721Params,
   NftMediaEntry,
@@ -864,6 +871,11 @@ export type RareClient = {
     buy: (params: BatchListingBuyParams) => Promise<TransactionResult>;
     setAllowList: (params: BatchListingSetAllowListParams) => Promise<TransactionResult>;
     getStatus: (params: BatchListingStatusParams) => Promise<BatchListingStatus>;
+  };
+  batch: {
+    buildTree: (params: BuildBatchTokenTreeParams) => BatchTokenListArtifact;
+    getTreeProof: (params: BatchTokenProofParams) => BatchTokenProofArtifact;
+    verifyTreeProof: (params: BatchTokenProofVerifyParams) => boolean;
   };
   search: {
     nfts: (params?: NftSearchParams) => Promise<SearchPageResponse<Nft>>;

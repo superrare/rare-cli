@@ -136,6 +136,16 @@ rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token
 rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token-count 100 --minter 0x...
 ```
 
+Build batch marketplace token-list Merkle artifacts for later batch offer, batch listing, and batch auction flows. CSV files should include contract and token ID columns such as `contract_address,token_id`; JSON files can be an array of `{ "contractAddress": "0x...", "tokenId": "1" }` objects or a generated artifact. Pass `--chain-id` or include a `chain_id` column when the artifact should carry chain context.
+
+```bash
+rare batch tree build --input batch-tokens.csv --chain-id 11155111 --output batch-token-artifact.json
+rare batch tree proof --input batch-token-artifact.json --contract 0x... --token-id 1 --output proof.json
+rare batch tree verify --input batch-token-artifact.json --contract 0x... --token-id 1 --proof proof.json
+```
+
+Batch token artifacts use `type: "rare-batch-token-list"` and include `root`, `count`, optional `chainId`, canonical sorted `tokens`, and per-token `entries` with leaves and proofs. Proof artifacts use `type: "rare-batch-token-proof"` and include `root`, `contractAddress`, `tokenId`, optional `chainId`, `leaf`, `proof`, and `valid`.
+
 Inspect creator and royalty data on Sovereign-style collections:
 
 ```bash
@@ -638,6 +648,30 @@ const prepared = await rare.collection.prepareLazyMint({
 });
 
 console.log(prepared.tokenCount);
+```
+
+### Build batch marketplace token trees
+
+```ts
+const tree = rare.batch.buildTree({
+  content: 'contract_address,token_id,chain_id\n0x1111111111111111111111111111111111111111,1,11155111\n',
+  format: 'csv',
+});
+
+const tokenProof = rare.batch.getTreeProof({
+  artifact: tree,
+  contractAddress: '0x1111111111111111111111111111111111111111',
+  tokenId: 1,
+});
+
+const proofValid = rare.batch.verifyTreeProof({
+  root: tree.root,
+  contractAddress: tokenProof.contractAddress,
+  tokenId: tokenProof.tokenId,
+  proof: tokenProof.proof,
+});
+
+console.log(tree.root, tokenProof.proof, proofValid);
 ```
 
 ### Inspect and maintain collection owner settings
