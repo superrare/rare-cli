@@ -45,6 +45,7 @@ export type ContractAddresses = {
   auction: Address;
   sovereignFactory?: Address;
   lazySovereignFactory?: Address;
+  spaceFactory?: Address;
   rareMinter?: Address;
   lazyBatchMintFactory?: Address;
   batchListing?: Address;
@@ -82,6 +83,7 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
     auction: getAddress('0x6D7c44773C52D396F43c2D511B81aa168E9a7a42'),
     sovereignFactory: getAddress('0xe980ec62378529d95ba446433f4deb6324129c59'),
     lazySovereignFactory: getAddress('0xba798BD606d86D207ca2751510173532899117a1'),
+    spaceFactory: getAddress('0x3b2d699110aa1788b2b1cae336e0ba8ff942a390'),
     rareMinter: getAddress('0x5fa112EFeD8297bec0010b312208d223E0cE891E'),
     lazyBatchMintFactory: getAddress('0x40F9E4b420D5A8fF5aED32B5F72A37013c0739B6'),
     batchListing: getAddress('0x6a190885A806D39A0A8C348bfA1ac762D72E608d'),

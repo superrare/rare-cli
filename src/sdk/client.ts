@@ -46,6 +46,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
       auction: addresses.auction,
       sovereignFactory: addresses.sovereignFactory,
       lazySovereignFactory: addresses.lazySovereignFactory,
+      spaceFactory: addresses.spaceFactory,
       rareMinter: addresses.rareMinter,
       lazyBatchMintFactory: addresses.lazyBatchMintFactory,
       batchListing: addresses.batchListing,
