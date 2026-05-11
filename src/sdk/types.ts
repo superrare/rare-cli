@@ -349,6 +349,83 @@ export type OfferStatus = {
   canCancel: boolean | null;
 }
 
+export type CollectionMarketOfferCreateParams = {
+  originCollection: Address;
+  currency?: Address;
+  amount: AmountInput;
+  autoApprove?: boolean;
+}
+
+export type CollectionMarketOfferCreateResult = {
+  collectionMarket: Address;
+  buyer: Address;
+  originCollection: Address;
+  currency: Address;
+  amount: bigint;
+  requiredPayment: bigint;
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type CollectionMarketOfferCancelParams = {
+  originCollection: Address;
+}
+
+export type CollectionMarketOfferCancelResult = {
+  collectionMarket: Address;
+  buyer: Address;
+  originCollection: Address;
+  hadOffer: boolean;
+  currency: Address;
+  amount: bigint;
+} & TransactionResult
+
+export type CollectionMarketOfferAcceptParams = {
+  buyer: Address;
+  originCollection: Address;
+  tokenId: IntegerInput;
+  currency?: Address;
+  amount: AmountInput;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+  autoApprove?: boolean;
+}
+
+export type CollectionMarketOfferAcceptResult = {
+  collectionMarket: Address;
+  seller: Address;
+  buyer: Address;
+  originCollection: Address;
+  tokenId: bigint;
+  currency: Address;
+  amount: bigint;
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type CollectionMarketOfferStatusParams = {
+  buyer: Address;
+  originCollection: Address;
+  tokenId?: IntegerInput;
+  account?: Address;
+}
+
+export type CollectionMarketOfferStatus = {
+  buyer: Address;
+  originCollection: Address;
+  amount: bigint;
+  currency: Address;
+  marketplaceFee: bigint;
+  requiredPayment: bigint;
+  hasOffer: boolean;
+  state: 'NONE' | 'ACTIVE';
+  isEth: boolean;
+  expiry: null;
+  currentWallet?: Address;
+  tokenId?: bigint;
+  tokenOwner?: Address;
+  canCancel: boolean;
+  canAccept: boolean;
+}
+
 export type ListingCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
@@ -1011,6 +1088,7 @@ export type RareClient = {
     rareMinter?: Address;
     lazyBatchMintFactory?: Address;
     batchListing?: Address;
+    collectionMarket?: Address;
     batchOfferCreator?: Address;
     batchAuctionHouse?: Address;
     marketplaceSettings?: Address;
@@ -1056,6 +1134,14 @@ export type RareClient = {
     cancel: (params: OfferCancelParams) => Promise<TransactionResult>;
     accept: (params: OfferAcceptParams) => Promise<TransactionResult>;
     getStatus: (params: OfferStatusParams) => Promise<OfferStatus>;
+  };
+  collectionMarket: {
+    offer: {
+      create: (params: CollectionMarketOfferCreateParams) => Promise<CollectionMarketOfferCreateResult>;
+      cancel: (params: CollectionMarketOfferCancelParams) => Promise<CollectionMarketOfferCancelResult>;
+      accept: (params: CollectionMarketOfferAcceptParams) => Promise<CollectionMarketOfferAcceptResult>;
+      getStatus: (params: CollectionMarketOfferStatusParams) => Promise<CollectionMarketOfferStatus>;
+    };
   };
   listing: ListingNamespace;
   batchListing: {

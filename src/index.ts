@@ -13,6 +13,7 @@ import { listingCommand } from './commands/listing.js';
 import { collectionCommand } from './commands/collection.js';
 import { currenciesCommand } from './commands/currencies.js';
 import { swapCommand } from './commands/swap.js';
+import { collectionMarketCommand } from './commands/collection-market.js';
 import { batchCommand } from './commands/batch.js';
 import { printError } from './errors.js';
 
@@ -38,6 +39,7 @@ program.addCommand(listingCommand());
 program.addCommand(collectionCommand());
 program.addCommand(currenciesCommand());
 program.addCommand(swapCommand());
+program.addCommand(collectionMarketCommand());
 program.addCommand(batchCommand());
 
 program.parseAsync(process.argv).catch((err: unknown) => {

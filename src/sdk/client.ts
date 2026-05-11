@@ -19,6 +19,7 @@ import { createAuctionNamespace } from './auction.js';
 import { createOfferNamespace } from './offer.js';
 import { createListingNamespace } from './listing.js';
 import { createBatchListingNamespace } from './batch-listing.js';
+import { createCollectionMarketNamespace } from './collection-market.js';
 import { createTokenNamespace } from './token.js';
 import { createLiquidNamespace } from './liquid.js';
 import { createSwapNamespace } from './swap.js';
@@ -51,6 +52,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
       rareMinter: addresses.rareMinter,
       lazyBatchMintFactory: addresses.lazyBatchMintFactory,
       batchListing: addresses.batchListing,
+      collectionMarket: addresses.collectionMarket,
       batchOfferCreator: addresses.batchOfferCreator,
       batchAuctionHouse: addresses.batchAuctionHouse,
       marketplaceSettings: addresses.marketplaceSettings,
@@ -66,6 +68,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
     swap: createSwapNamespace(config, chain, chainId, addresses),
     auction: createAuctionNamespace(publicClient, config, addresses),
     offer: createOfferNamespace(publicClient, config, addresses),
+    collectionMarket: createCollectionMarketNamespace(publicClient, config, chain),
     listing,
     batchListing: createBatchListingNamespace(publicClient, config, {
       get batchListing() {
