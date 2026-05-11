@@ -31,6 +31,7 @@ describe('chain and currency helpers', () => {
       lazyBatchMintFactory: getAddress('0xE5efBA88D556aDA98124654fE505465b8d494858'),
       batchListing: getAddress('0xF2bE72d4343beD375Cb6d0E799a3c003163860e0'),
       batchOfferCreator: getAddress('0x371cca54ef859bb0c7b910581a528ee47773fd56'),
+      batchAuctionHouse: getAddress('0x293AE7701A7830B1d38A7608EdF86A106d9E2645'),
       marketplaceSettings: getAddress('0x972dEe8fa339ad2D9c6cbDA31b67f98Fac242d13'),
       erc20ApprovalManager: getAddress('0x4619eB29e84392CE91C27FC936A5c94d1D14b93f'),
       erc721ApprovalManager: getAddress('0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E'),
@@ -68,6 +69,7 @@ describe('chain and currency helpers', () => {
     expect(requireContractAddress('sepolia', 'lazySovereignFactory')).toBe('0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA');
     expect(requireContractAddress('sepolia', 'rareMinter')).toBe('0xd28Dc0B89104d7BBd902F338a0193fF063617ccE');
     expect(requireContractAddress('sepolia', 'batchOfferCreator')).toBe('0x371cca54ef859bb0c7b910581a528ee47773fd56');
+    expect(requireContractAddress('sepolia', 'batchAuctionHouse')).toBe('0x293AE7701A7830B1d38A7608EdF86A106d9E2645');
     expect(() => requireContractAddress('base', 'sovereignFactory')).toThrow(
       'RARE Protocol sovereignFactory contract is not configured on "base".',
     );

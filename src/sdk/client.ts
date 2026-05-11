@@ -52,6 +52,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
       lazyBatchMintFactory: addresses.lazyBatchMintFactory,
       batchListing: addresses.batchListing,
       batchOfferCreator: addresses.batchOfferCreator,
+      batchAuctionHouse: addresses.batchAuctionHouse,
       marketplaceSettings: addresses.marketplaceSettings,
       erc20ApprovalManager: addresses.erc20ApprovalManager,
       erc721ApprovalManager: addresses.erc721ApprovalManager,

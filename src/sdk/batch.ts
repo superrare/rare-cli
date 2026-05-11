@@ -7,6 +7,7 @@ import {
   verifyBatchTokenProof,
 } from './batch-core.js';
 import { createBatchOfferNamespace } from './batch-offer.js';
+import { createBatchAuctionNamespace } from './batch-auction.js';
 
 export function createBatchNamespace(
   publicClient: PublicClient,
@@ -27,5 +28,6 @@ export function createBatchNamespace(
     },
 
     offer: createBatchOfferNamespace(publicClient, config, chain),
+    auction: createBatchAuctionNamespace(publicClient, config, chain),
   };
 }

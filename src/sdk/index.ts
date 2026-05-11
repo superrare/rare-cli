@@ -28,6 +28,16 @@ export type {
   BatchOfferRevokeResult,
   BatchOfferStatus,
   BatchOfferStatusParams,
+  BatchAuctionBidParams,
+  BatchAuctionBidResult,
+  BatchAuctionCancelParams,
+  BatchAuctionCancelResult,
+  BatchAuctionCreateParams,
+  BatchAuctionCreateResult,
+  BatchAuctionSettleParams,
+  BatchAuctionSettleResult,
+  BatchAuctionStatus,
+  BatchAuctionStatusParams,
   ReleaseAllowlistArtifact,
   ReleaseAllowlistConfig,
   ReleaseAllowlistWalletProof,
@@ -70,6 +80,16 @@ export {
   shapeBatchOfferStatus,
 } from './batch-offer-core.js';
 export {
+  addMarketplaceFee,
+  planBatchAuctionBid,
+  planBatchAuctionCreate,
+  planBatchAuctionRoot,
+  planBatchAuctionStatus,
+  planBatchAuctionToken,
+  resolveBatchAuctionRoot,
+  shapeBatchAuctionStatus,
+} from './batch-auction-core.js';
+export {
   buildBatchTokenTreeArtifact,
   getBatchTokenProof,
   hashBatchToken,
@@ -95,6 +115,17 @@ export type {
   BatchOfferCreatePlan,
   BatchOfferRootPlan,
 } from './batch-offer-core.js';
+export type {
+  BatchAuctionBidPlan,
+  BatchAuctionBidRead,
+  BatchAuctionCreatePlan,
+  BatchAuctionMerkleConfigRead,
+  BatchAuctionReadDetails,
+  BatchAuctionRootContext,
+  BatchAuctionRootPlan,
+  BatchAuctionStatusPlan,
+  BatchAuctionTokenPlan,
+} from './batch-auction-core.js';
 export type {
   LazySovereignCollectionContractType,
   SovereignCollectionContractType,
@@ -154,6 +185,7 @@ export { liquidFactoryAbi } from '../contracts/abis/liquid-factory.js';
 export { liquidRouterAbi } from '../contracts/abis/liquid-router.js';
 export { liquidEditionAbi } from '../contracts/abis/liquid-edition.js';
 export { batchOfferAbi } from '../contracts/abis/batch-offer.js';
+export { batchAuctionHouseAbi } from '../contracts/abis/batch-auctionhouse.js';
 export { tokenAbi } from '../contracts/abis/token.js';
 export { batchListingAbi } from '../contracts/abis/batch-listing.js';
 export { collectionMintAbi } from '../contracts/abis/collection-mint.js';
