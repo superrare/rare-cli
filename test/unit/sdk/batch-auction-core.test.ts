@@ -52,7 +52,7 @@ describe('batch auction core', () => {
     expect(planBatchAuctionRoot({ root: ROOT })).toEqual({ root: ROOT });
   });
 
-  it('honors no-auto-approve and validates create inputs', () => {
+  it('honors disabled auto approval and validates create inputs', () => {
     const artifact = buildArtifact();
 
     expect(planBatchAuctionCreate({
