@@ -1,5 +1,15 @@
 export { createRareClient } from './client.js';
-export type { RareClient, RareClientConfig } from './types.js';
+export type {
+  CreateSovereignCollectionParams,
+  CreateSovereignCollectionResult,
+  RareClient,
+  RareClientConfig,
+} from './types.js';
+export {
+  normalizeSovereignCollectionContractType,
+  sovereignCollectionContractTypes,
+} from './collection-core.js';
+export type { SovereignCollectionContractType } from './collection-core.js';
 export type {
   CollectionSearchParams,
   ImportErc721Params,
@@ -21,8 +31,10 @@ export {
   viemChains,
   getContractAddresses,
   isSupportedChain,
+  requireContractAddress,
 } from '../contracts/addresses.js';
 export type { SupportedChain } from '../contracts/addresses.js';
 export { factoryAbi } from '../contracts/abis/factory.js';
+export { sovereignFactoryAbi } from '../contracts/abis/sovereign-factory.js';
 export { auctionAbi } from '../contracts/abis/auction.js';
 export { tokenAbi } from '../contracts/abis/token.js';

@@ -34,6 +34,14 @@ type DeployResult = {
   contract: string;
 };
 
+type CreateSovereignResult = {
+  txHash: string;
+  blockNumber: string;
+  contract: string;
+  factory: string;
+  contractType: string;
+};
+
 type MintResult = {
   txHash: string;
   blockNumber: string;
@@ -187,6 +195,28 @@ describeLive('live Sepolia CLI write commands', () => {
       expect(token.tokenUri).toBe(E2E_TOKEN_URI);
       expect(token.tokenId).toMatch(/^\d+$/);
     }
+  });
+
+  it('creates a standard Sovereign collection through the newer factory', async () => {
+    const suffix = Date.now().toString(36);
+    const created = await step('create standard Sovereign collection', () =>
+      jsonCommand<CreateSovereignResult>(live.sellerHome, [
+        'collection',
+        'create',
+        'sovereign',
+        `Rare CLI Sovereign E2E ${suffix}`,
+        `RCS${suffix.slice(-4).toUpperCase()}`,
+        '--max-tokens',
+        '3',
+        '--chain',
+        'sepolia',
+      ]),
+    );
+
+    expectTx(created);
+    expect(created.contract).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(created.factory).toBe('0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf');
+    expect(created.contractType).toBe('standard');
   });
 
   it('mints directly to another recipient', async () => {

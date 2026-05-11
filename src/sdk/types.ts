@@ -1,5 +1,6 @@
 import type { Address, Hash, PublicClient, TransactionReceipt, WalletClient } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
+import type { SovereignCollectionContractType } from './collection-core.js';
 import type {
   CollectionSearchParams,
   ImportErc721Params,
@@ -36,6 +37,19 @@ export interface DeployErc721Params {
 
 export interface DeployErc721Result extends TransactionResult {
   contract: Address;
+}
+
+export interface CreateSovereignCollectionParams {
+  name: string;
+  symbol: string;
+  maxTokens?: IntegerInput;
+  contractType?: SovereignCollectionContractType;
+}
+
+export interface CreateSovereignCollectionResult extends TransactionResult {
+  contract: Address;
+  factory: Address;
+  contractType: SovereignCollectionContractType;
 }
 
 export interface MintToParams {
@@ -195,6 +209,7 @@ export interface RareClient {
   contracts: {
     factory: Address;
     auction: Address;
+    sovereignFactory?: Address;
   };
   deploy: {
     erc721(params: DeployErc721Params): Promise<DeployErc721Result>;
@@ -232,6 +247,7 @@ export interface RareClient {
   collection: {
     get(id: string): Promise<Collection>;
     events(id: string, opts?: { page?: number; perPage?: number; eventType?: string | string[]; sortBy?: 'newest' | 'oldest' }): Promise<SearchPageResponse<NftEvent>>;
+    createSovereign(params: CreateSovereignCollectionParams): Promise<CreateSovereignCollectionResult>;
   };
   user: {
     get(address: string): Promise<UserProfile>;

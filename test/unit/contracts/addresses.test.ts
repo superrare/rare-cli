@@ -3,6 +3,7 @@ import {
   chainIds,
   getContractAddresses,
   isSupportedChain,
+  requireContractAddress,
   resolveCurrency,
 } from '../../../src/contracts/addresses.js';
 
@@ -18,7 +19,15 @@ describe('chain and currency helpers', () => {
     expect(getContractAddresses('sepolia')).toEqual({
       factory: '0x3c7526a0975156299ceef369b8ff3c01cc670523',
       auction: '0xC8Edc7049b233641ad3723D6C60019D1c8771612',
+      sovereignFactory: '0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf',
     });
+  });
+
+  it('requires optional contract addresses only where configured', () => {
+    expect(requireContractAddress('sepolia', 'sovereignFactory')).toBe('0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf');
+    expect(() => requireContractAddress('base', 'sovereignFactory')).toThrow(
+      'RARE Protocol sovereignFactory contract is not configured on "base".',
+    );
   });
 
   it('resolves named currencies and custom ERC20 addresses', () => {

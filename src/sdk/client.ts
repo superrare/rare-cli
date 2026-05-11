@@ -19,6 +19,7 @@ import { createAuctionNamespace } from './auction.js';
 import { createOfferNamespace } from './offer.js';
 import { createListingNamespace } from './listing.js';
 import { createTokenNamespace } from './token.js';
+import { createCollectionNamespace } from './collection.js';
 
 export type { RareClientConfig, RareClient } from './types.js';
 
@@ -27,14 +28,21 @@ export function createRareClient(config: RareClientConfig): RareClient {
   const chain = resolveChainFromPublicClient(publicClient);
   const chainId = chainIds[chain];
   const addresses = getContractAddresses(chain);
+  const contracts = addresses.sovereignFactory
+    ? {
+        factory: addresses.factory,
+        auction: addresses.auction,
+        sovereignFactory: addresses.sovereignFactory,
+      }
+    : {
+        factory: addresses.factory,
+        auction: addresses.auction,
+      };
 
   return {
     chain,
     chainId,
-    contracts: {
-      factory: addresses.factory,
-      auction: addresses.auction,
-    },
+    contracts,
     deploy: createDeployNamespace(publicClient, config, addresses),
     mint: createMintNamespace(publicClient, config),
     auction: createAuctionNamespace(publicClient, config, addresses),
@@ -59,14 +67,14 @@ export function createRareClient(config: RareClientConfig): RareClient {
         return getNftEventsApi(universalTokenId, opts);
       },
     },
-    collection: {
+    collection: createCollectionNamespace(publicClient, config, chain, {
       async get(id) {
         return getCollectionApi(id);
       },
       async events(id, opts) {
         return getCollectionEventsApi(id, opts);
       },
-    },
+    }),
     user: {
       async get(address) {
         return getUserApi(address);

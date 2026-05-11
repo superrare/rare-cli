@@ -1,5 +1,5 @@
 import { sepolia, mainnet, base, baseSepolia } from 'viem/chains';
-import type { Chain } from 'viem';
+import type { Address, Chain } from 'viem';
 
 export const supportedChains = [
   'mainnet',
@@ -31,16 +31,22 @@ export const defaultRpcUrls: Partial<Record<SupportedChain, string>> = {
   'base-sepolia': 'https://sepolia.base.org',
 };
 
-type ContractSet = { factory: `0x${string}`; auction: `0x${string}` };
+type ContractSet = {
+  factory: Address;
+  auction: Address;
+  sovereignFactory?: Address;
+};
 
 export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
   sepolia: {
     factory: '0x3c7526a0975156299ceef369b8ff3c01cc670523',
     auction: '0xC8Edc7049b233641ad3723D6C60019D1c8771612',
+    sovereignFactory: '0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf',
   },
   mainnet: {
     factory: '0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1',
     auction: '0x6D7c44773C52D396F43c2D511B81aa168E9a7a42',
+    sovereignFactory: '0xe980ec62378529d95ba446433f4deb6324129c59',
   },
   base: {
     factory: '0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd',
@@ -102,6 +108,17 @@ export function getContractAddresses(chain: SupportedChain): ContractSet {
     );
   }
   return addresses;
+}
+
+export function requireContractAddress(
+  chain: SupportedChain,
+  contractName: keyof ContractSet,
+): Address {
+  const address = getContractAddresses(chain)[contractName];
+  if (!address) {
+    throw new Error(`RARE Protocol ${contractName} contract is not configured on "${chain}".`);
+  }
+  return address;
 }
 
 export function isSupportedChain(value: string): value is SupportedChain {
