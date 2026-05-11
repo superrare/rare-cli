@@ -20,9 +20,10 @@ import {
   planBatchAuctionCreate,
   planBatchAuctionRoot,
   planBatchAuctionStatus,
+  shapeBatchAuctionCurrentBidRead,
+  shapeBatchAuctionDetailsRead,
+  shapeBatchAuctionMerkleConfigRead,
   shapeBatchAuctionStatus,
-  type BatchAuctionBidRead,
-  type BatchAuctionMerkleConfigRead,
   type BatchAuctionReadDetails,
   type BatchAuctionRootContext,
 } from './batch-auction-core.js';
@@ -245,7 +246,7 @@ export function createBatchAuctionNamespace(
         }),
         publicClient.getBlock(),
       ]);
-      const shapedDetails = shapeAuctionDetails(details);
+      const shapedDetails = shapeBatchAuctionDetailsRead(details);
       const eventContext = await resolveEventContext({
         publicClient,
         batchAuctionHouse,
@@ -266,7 +267,7 @@ export function createBatchAuctionNamespace(
 
       return shapeBatchAuctionStatus(
         shapedDetails,
-        shapeCurrentBid(currentBid),
+        shapeBatchAuctionCurrentBidRead(currentBid),
         rootContext,
         block.timestamp,
       );
@@ -336,54 +337,6 @@ async function approveNftContract(opts: {
   await opts.publicClient.waitForTransactionReceipt({ hash: txHash });
   await waitForApproval(opts.publicClient, opts.nftAddress, opts.accountAddress, opts.operator);
   return txHash;
-}
-
-function shapeAuctionDetails(details: readonly [
-  Address,
-  number,
-  bigint,
-  bigint,
-  Address,
-  bigint,
-  readonly Address[],
-  readonly number[],
-]): BatchAuctionReadDetails {
-  const [
-    seller,
-    creationBlock,
-    startingTime,
-    duration,
-    currency,
-    reserveAmount,
-    splitAddresses,
-    splitRatios,
-  ] = details;
-
-  return {
-    seller,
-    creationBlock: BigInt(creationBlock),
-    startingTime,
-    duration,
-    currency,
-    reserveAmount,
-    splitAddresses,
-    splitRatios,
-  };
-}
-
-function shapeCurrentBid(currentBid: readonly [
-  Address,
-  Address,
-  bigint,
-  number,
-]): BatchAuctionBidRead {
-  const [bidder, currency, amount, marketplaceFee] = currentBid;
-  return {
-    bidder,
-    currency,
-    amount,
-    marketplaceFee,
-  };
 }
 
 async function resolveEventContext(opts: {
@@ -464,26 +417,8 @@ async function resolveRootContext(opts: {
   return {
     creator: opts.creator,
     root: opts.root,
-    config: shapeMerkleConfig(config),
+    config: shapeBatchAuctionMerkleConfigRead(config),
     rootNonce,
     tokenNonce,
-  };
-}
-
-function shapeMerkleConfig(config: {
-  currency: Address;
-  startingAmount: bigint;
-  duration: bigint;
-  nonce: number;
-  splitAddresses: readonly Address[];
-  splitRatios: readonly number[];
-}): BatchAuctionMerkleConfigRead {
-  return {
-    currency: config.currency,
-    reserveAmount: config.startingAmount,
-    duration: config.duration,
-    nonce: config.nonce,
-    splitAddresses: config.splitAddresses,
-    splitRatios: config.splitRatios,
   };
 }

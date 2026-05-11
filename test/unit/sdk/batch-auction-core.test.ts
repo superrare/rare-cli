@@ -5,6 +5,9 @@ import {
   planBatchAuctionCreate,
   planBatchAuctionRoot,
   planBatchAuctionStatus,
+  shapeBatchAuctionCurrentBidRead,
+  shapeBatchAuctionDetailsRead,
+  shapeBatchAuctionMerkleConfigRead,
   shapeBatchAuctionStatus,
 } from '../../../src/sdk/batch-auction-core.js';
 import {
@@ -201,6 +204,49 @@ describe('batch auction core', () => {
       hasRootConfig: false,
       hasAuction: false,
       root: null,
+    });
+  });
+
+  it('shapes raw batch auction reads', () => {
+    expect(shapeBatchAuctionDetailsRead([
+      CREATOR,
+      123,
+      100n,
+      60n,
+      ZERO_ADDRESS,
+      10n,
+      [CREATOR],
+      [100],
+    ])).toEqual({
+      seller: CREATOR,
+      creationBlock: 123n,
+      startingTime: 100n,
+      duration: 60n,
+      currency: ZERO_ADDRESS,
+      reserveAmount: 10n,
+      splitAddresses: [CREATOR],
+      splitRatios: [100],
+    });
+    expect(shapeBatchAuctionCurrentBidRead([ACCOUNT, ZERO_ADDRESS, 12n, 3])).toEqual({
+      bidder: ACCOUNT,
+      currency: ZERO_ADDRESS,
+      amount: 12n,
+      marketplaceFee: 3,
+    });
+    expect(shapeBatchAuctionMerkleConfigRead({
+      currency: ZERO_ADDRESS,
+      startingAmount: 10n,
+      duration: 60n,
+      nonce: 1,
+      splitAddresses: [CREATOR],
+      splitRatios: [100],
+    })).toEqual({
+      currency: ZERO_ADDRESS,
+      reserveAmount: 10n,
+      duration: 60n,
+      nonce: 1,
+      splitAddresses: [CREATOR],
+      splitRatios: [100],
     });
   });
 });
