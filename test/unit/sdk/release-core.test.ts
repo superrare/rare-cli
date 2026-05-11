@@ -4,6 +4,7 @@ import {
   assertReleaseLimitWriteMatches,
   assertReleaseSellerStakingMinimumWriteMatches,
   buildReleaseAllowlistArtifact,
+  buildReleaseTokenIdRange,
   getReleaseAllowlistProof,
   normalizeBytes32,
   parseReleaseAllowlistAddresses,
@@ -315,5 +316,10 @@ describe('RareMinter release core', () => {
       buyer: WALLET_A,
       nowSeconds: 100n,
     })).toThrow('does not support a separate recipient');
+  });
+
+  it('builds inclusive direct sale token id ranges', () => {
+    expect(buildReleaseTokenIdRange(10n, 12n)).toEqual([10n, 11n, 12n]);
+    expect(buildReleaseTokenIdRange(12n, 10n)).toEqual([]);
   });
 });

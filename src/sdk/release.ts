@@ -10,6 +10,7 @@ import {
   assertReleaseLimitWriteMatches,
   assertReleaseSellerStakingMinimumWriteMatches,
   buildReleaseAllowlistArtifact,
+  buildReleaseTokenIdRange,
   getReleaseAllowlistProof,
   planReleaseAllowlistConfig,
   planReleaseDirectSaleMint,
@@ -105,7 +106,7 @@ export function createReleaseNamespace(
         allowlistRequired: mint.allowlistRequired,
         tokenIdStart: mintLog.args._tokenIdStart,
         tokenIdEnd: mintLog.args._tokenIdEnd,
-        tokenIds: buildTokenIdRange(mintLog.args._tokenIdStart, mintLog.args._tokenIdEnd),
+        tokenIds: buildReleaseTokenIdRange(mintLog.args._tokenIdStart, mintLog.args._tokenIdEnd),
       };
     },
 
@@ -401,14 +402,6 @@ async function writeMintDirectSale(
     chain: undefined,
     value: opts.value,
   });
-}
-
-function buildTokenIdRange(start: bigint, end: bigint): bigint[] {
-  const tokenIds: bigint[] = [];
-  for (let tokenId = start; tokenId <= end; tokenId += 1n) {
-    tokenIds.push(tokenId);
-  }
-  return tokenIds;
 }
 
 async function writeSetAllowlistConfig(

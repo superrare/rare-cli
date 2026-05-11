@@ -380,6 +380,14 @@ export function shapeReleaseCollectionSupply(params: {
   };
 }
 
+export function buildReleaseTokenIdRange(start: bigint, end: bigint): bigint[] {
+  const tokenIds: bigint[] = [];
+  for (let tokenId = start; tokenId <= end; tokenId += 1n) {
+    tokenIds.push(tokenId);
+  }
+  return tokenIds;
+}
+
 export function preflightReleaseDirectSaleMint(params: {
   status: ReleaseDirectSalePreflightStatus;
   plan: ReleaseDirectSaleMintPlan;
