@@ -4,9 +4,14 @@ import {
   buildCreateSovereignCollectionWrite,
   normalizeLazySovereignCollectionContractType,
   normalizeSovereignCollectionContractType,
+  planCollectionMintBatch,
+  planCollectionPrepareLazyMint,
   planCreateLazySovereignCollection,
   planCreateSovereignCollection,
 } from '../../../src/sdk/collection-core.js';
+
+const COLLECTION_ADDRESS = '0x1111111111111111111111111111111111111111';
+const MINTER_ADDRESS = '0x2222222222222222222222222222222222222222';
 
 describe('Sovereign collection core', () => {
   it('normalizes supported contract type aliases', () => {
@@ -153,5 +158,57 @@ describe('Sovereign collection core', () => {
       functionName: 'createSovereignNFTContract',
       args: ['Release', 'REL', 100n, contractType],
     });
+  });
+
+  it('plans collection batch mint with positive token count', () => {
+    expect(planCollectionMintBatch({
+      contract: COLLECTION_ADDRESS,
+      baseUri: 'ipfs://batch',
+      tokenCount: '25',
+    })).toEqual({
+      contract: COLLECTION_ADDRESS,
+      baseUri: 'ipfs://batch',
+      tokenCount: 25n,
+    });
+  });
+
+  it('rejects non-positive collection batch mint counts', () => {
+    expect(() => planCollectionMintBatch({
+      contract: COLLECTION_ADDRESS,
+      baseUri: 'ipfs://batch',
+      tokenCount: 0,
+    })).toThrow('tokenCount must be greater than 0.');
+  });
+
+  it('plans lazy prepare mint with optional minter', () => {
+    expect(planCollectionPrepareLazyMint({
+      contract: COLLECTION_ADDRESS,
+      baseUri: 'ipfs://lazy',
+      tokenCount: 3,
+    })).toEqual({
+      contract: COLLECTION_ADDRESS,
+      baseUri: 'ipfs://lazy',
+      tokenCount: 3n,
+    });
+
+    expect(planCollectionPrepareLazyMint({
+      contract: COLLECTION_ADDRESS,
+      baseUri: 'ipfs://lazy',
+      tokenCount: '3',
+      minter: MINTER_ADDRESS,
+    })).toEqual({
+      contract: COLLECTION_ADDRESS,
+      baseUri: 'ipfs://lazy',
+      tokenCount: 3n,
+      minter: MINTER_ADDRESS,
+    });
+  });
+
+  it('rejects non-positive lazy prepare mint counts', () => {
+    expect(() => planCollectionPrepareLazyMint({
+      contract: COLLECTION_ADDRESS,
+      baseUri: 'ipfs://lazy',
+      tokenCount: '-1',
+    })).toThrow('tokenCount must be greater than 0.');
   });
 });

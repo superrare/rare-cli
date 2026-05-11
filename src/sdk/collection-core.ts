@@ -1,4 +1,4 @@
-import type { Hex } from 'viem';
+import type { Address, Hex } from 'viem';
 import type { IntegerInput } from './types.js';
 import { toPositiveInteger } from './helpers.js';
 
@@ -61,6 +61,32 @@ export type CreateLazySovereignCollectionWrite = {
   functionName: 'createSovereignNFTContract';
   args: [string, string, bigint, Hex];
 };
+
+export interface PlanCollectionMintBatchParams {
+  contract: Address;
+  baseUri: string;
+  tokenCount: IntegerInput;
+}
+
+export interface CollectionMintBatchPlan {
+  contract: Address;
+  baseUri: string;
+  tokenCount: bigint;
+}
+
+export interface PlanCollectionPrepareLazyMintParams {
+  contract: Address;
+  baseUri: string;
+  tokenCount: IntegerInput;
+  minter?: Address;
+}
+
+export interface CollectionPrepareLazyMintPlan {
+  contract: Address;
+  baseUri: string;
+  tokenCount: bigint;
+  minter?: Address;
+}
 
 export function normalizeSovereignCollectionContractType(
   input: string | undefined,
@@ -193,6 +219,35 @@ export function buildCreateLazySovereignCollectionWrite(
   return {
     functionName: 'createSovereignNFTContract',
     args: [plan.name, plan.symbol, plan.maxTokens, contractType],
+  };
+}
+
+export function planCollectionMintBatch(
+  params: PlanCollectionMintBatchParams,
+): CollectionMintBatchPlan {
+  return {
+    contract: params.contract,
+    baseUri: params.baseUri,
+    tokenCount: toPositiveInteger(params.tokenCount, 'tokenCount'),
+  };
+}
+
+export function planCollectionPrepareLazyMint(
+  params: PlanCollectionPrepareLazyMintParams,
+): CollectionPrepareLazyMintPlan {
+  const basePlan = {
+    contract: params.contract,
+    baseUri: params.baseUri,
+    tokenCount: toPositiveInteger(params.tokenCount, 'tokenCount'),
+  };
+
+  if (params.minter === undefined) {
+    return basePlan;
+  }
+
+  return {
+    ...basePlan,
+    minter: params.minter,
   };
 }
 

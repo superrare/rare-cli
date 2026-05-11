@@ -27,6 +27,8 @@ const requiredEnv = [
 const missingEnv = requiredEnv.filter((name) => !process.env[name]);
 const describeLive = missingEnv.length === 0 ? describe.sequential : describe.skip;
 const E2E_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/metadata.json';
+const E2E_BATCH_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/batch';
+const E2E_LAZY_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy';
 
 type DeployResult = {
   txHash: string;
@@ -41,6 +43,26 @@ type CreateSovereignResult = {
   factory: string;
   contractType: string;
   nextStep?: string;
+};
+
+type CollectionMintBatchResult = {
+  txHash: string;
+  blockNumber: string;
+  contract: string;
+  baseUri: string;
+  tokenCount: string;
+  fromTokenId: string;
+  toTokenId: string;
+  owner: string;
+};
+
+type CollectionPrepareLazyMintResult = {
+  txHash: string;
+  blockNumber: string;
+  contract: string;
+  baseUri: string;
+  tokenCount: string;
+  minter?: string;
 };
 
 type MintResult = {
@@ -218,6 +240,29 @@ describeLive('live Sepolia CLI write commands', () => {
     expect(created.contract).toMatch(/^0x[0-9a-fA-F]{40}$/);
     expect(created.factory).toBe('0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf');
     expect(created.contractType).toBe('standard');
+
+    const minted = await step('batch mint standard Sovereign collection', () =>
+      jsonCommand<CollectionMintBatchResult>(live.sellerHome, [
+        'collection',
+        'mint-batch',
+        '--contract',
+        created.contract,
+        '--base-uri',
+        E2E_BATCH_BASE_URI,
+        '--token-count',
+        '2',
+        '--chain',
+        'sepolia',
+      ]),
+    );
+
+    expectTx(minted);
+    expect(minted.contract).toBe(created.contract);
+    expect(minted.baseUri).toBe(E2E_BATCH_BASE_URI);
+    expect(minted.tokenCount).toBe('2');
+    expect(minted.fromTokenId).toBe('1');
+    expect(minted.toTokenId).toBe('2');
+    expect(minted.owner.toLowerCase()).toBe(live.sellerAddress.toLowerCase());
   });
 
   it('creates a Lazy Sovereign release collection through the lazy factory', async () => {
@@ -241,6 +286,29 @@ describeLive('live Sepolia CLI write commands', () => {
     expect(created.factory).toBe('0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA');
     expect(created.contractType).toBe('lazy');
     expect(created.nextStep).toContain('Configure release sale and mint settings');
+
+    const prepared = await step('prepare lazy mint batch', () =>
+      jsonCommand<CollectionPrepareLazyMintResult>(live.sellerHome, [
+        'collection',
+        'prepare-lazy-mint',
+        '--contract',
+        created.contract,
+        '--base-uri',
+        E2E_LAZY_BASE_URI,
+        '--token-count',
+        '2',
+        '--minter',
+        live.buyerAddress,
+        '--chain',
+        'sepolia',
+      ]),
+    );
+
+    expectTx(prepared);
+    expect(prepared.contract).toBe(created.contract);
+    expect(prepared.baseUri).toBe(E2E_LAZY_BASE_URI);
+    expect(prepared.tokenCount).toBe('2');
+    expect(prepared.minter?.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
   });
 
   it('mints directly to another recipient', async () => {

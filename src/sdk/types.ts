@@ -69,6 +69,35 @@ export interface CreateLazySovereignCollectionResult extends TransactionResult {
   nextStep: string;
 }
 
+export interface CollectionMintBatchParams {
+  contract: Address;
+  baseUri: string;
+  tokenCount: IntegerInput;
+}
+
+export interface CollectionMintBatchResult extends TransactionResult {
+  contract: Address;
+  baseUri: string;
+  tokenCount: bigint;
+  fromTokenId: bigint;
+  toTokenId: bigint;
+  owner: Address;
+}
+
+export interface CollectionPrepareLazyMintParams {
+  contract: Address;
+  baseUri: string;
+  tokenCount: IntegerInput;
+  minter?: Address;
+}
+
+export interface CollectionPrepareLazyMintResult extends TransactionResult {
+  contract: Address;
+  baseUri: string;
+  tokenCount: bigint;
+  minter?: Address;
+}
+
 export interface MintToParams {
   contract: Address;
   tokenUri: string;
@@ -267,6 +296,8 @@ export interface RareClient {
     events(id: string, opts?: { page?: number; perPage?: number; eventType?: string | string[]; sortBy?: 'newest' | 'oldest' }): Promise<SearchPageResponse<NftEvent>>;
     createSovereign(params: CreateSovereignCollectionParams): Promise<CreateSovereignCollectionResult>;
     createLazySovereign(params: CreateLazySovereignCollectionParams): Promise<CreateLazySovereignCollectionResult>;
+    mintBatch(params: CollectionMintBatchParams): Promise<CollectionMintBatchResult>;
+    prepareLazyMint(params: CollectionPrepareLazyMintParams): Promise<CollectionPrepareLazyMintResult>;
   };
   user: {
     get(address: string): Promise<UserProfile>;
