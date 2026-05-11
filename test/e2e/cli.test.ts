@@ -237,6 +237,34 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('exposes collection-wide listing flags on the listing commands', async () => {
+    await withTempHome(async (home) => {
+      const create = await runCli(['listing', 'create', '--help'], { home });
+      expect(create.code).toBe(0);
+      expect(create.stdout).toContain('Usage: rare listing create [options]');
+      expect(create.stdout).toContain('--contract <address>');
+      expect(create.stdout).toContain('--token-id <id>');
+      expect(create.stdout).toContain('--collection <address>');
+      expect(create.stdout).toContain('--amount <amount>');
+      expect(create.stderr).toBe('');
+
+      const buy = await runCli(['listing', 'buy', '--help'], { home });
+      expect(buy.code).toBe(0);
+      expect(buy.stdout).toContain('Usage: rare listing buy [options]');
+      expect(buy.stdout).toContain('--collection <address>');
+      expect(buy.stdout).toContain('--seller <address>');
+      expect(buy.stdout).toContain('--token-id <id>');
+      expect(buy.stderr).toBe('');
+
+      const status = await runCli(['listing', 'status', '--help'], { home });
+      expect(status.code).toBe(0);
+      expect(status.stdout).toContain('Usage: rare listing status [options]');
+      expect(status.stdout).toContain('--collection <address>');
+      expect(status.stdout).toContain('--account <address>');
+      expect(status.stderr).toBe('');
+    });
+  });
+
   it('builds and verifies batch marketplace token tree artifacts without wallet setup', async () => {
     await withTempHome(async (home) => {
       const input = join(home, 'batch-tokens.csv');

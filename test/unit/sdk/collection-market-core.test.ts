@@ -2,10 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { parseEther } from 'viem';
 import {
   calculateCollectionOfferTopUp,
+  planCollectionMarketListingBuy,
+  planCollectionMarketListingCancel,
+  planCollectionMarketListingSet,
+  planCollectionMarketListingStatus,
   planCollectionMarketOfferAccept,
   planCollectionMarketOfferCancel,
   planCollectionMarketOfferCreate,
   planCollectionMarketOfferStatus,
+  shapeCollectionMarketListingStatus,
   shapeCollectionMarketOfferRead,
   shapeCollectionMarketOfferStatus,
 } from '../../../src/sdk/collection-market-core.js';
@@ -207,5 +212,162 @@ describe('collection market offer shaping', () => {
         marketplaceFee: 3n,
       },
     })).toBe(parseEther('2.06'));
+  });
+});
+
+describe('collection market listing planning', () => {
+  it('plans set, cancel, buy, and status inputs', () => {
+    expect(planCollectionMarketListingSet({
+      originCollection: collectionAddress,
+      amount: '1.5',
+      splitAddresses: [accountAddress, sellerAddress],
+      splitRatios: [80, 20],
+      autoApprove: false,
+    }, accountAddress)).toEqual({
+      originCollection: collectionAddress,
+      currency: ETH_ADDRESS,
+      amount: parseEther('1.5'),
+      splitAddresses: [accountAddress, sellerAddress],
+      splitRatios: [80, 20],
+      autoApprove: false,
+    });
+
+    expect(planCollectionMarketListingCancel({ originCollection: collectionAddress })).toEqual({
+      originCollection: collectionAddress,
+    });
+
+    expect(planCollectionMarketListingBuy({
+      seller: sellerAddress,
+      originCollection: collectionAddress,
+      tokenId: '7',
+      amount: '1.5',
+      currency: erc20Currency,
+      autoApprove: false,
+    })).toEqual({
+      seller: sellerAddress,
+      originCollection: collectionAddress,
+      tokenId: 7n,
+      currency: erc20Currency,
+      amount: parseEther('1.5'),
+      autoApprove: false,
+    });
+
+    expect(planCollectionMarketListingStatus({
+      seller: sellerAddress,
+      originCollection: collectionAddress,
+      tokenId: '7',
+      account: buyerAddress,
+    })).toEqual({
+      seller: sellerAddress,
+      originCollection: collectionAddress,
+      tokenId: 7n,
+      account: buyerAddress,
+    });
+  });
+
+  it('rejects unsafe listing amounts, token IDs, and split values', () => {
+    expect(() => planCollectionMarketListingSet({
+      originCollection: collectionAddress,
+      amount: '0',
+    }, accountAddress)).toThrow('amount must be greater than 0.');
+
+    expect(() => planCollectionMarketListingBuy({
+      seller: sellerAddress,
+      originCollection: collectionAddress,
+      tokenId: '-1',
+      amount: '1',
+    })).toThrow('tokenId must be greater than or equal to 0.');
+
+    expect(() => planCollectionMarketListingSet({
+      originCollection: collectionAddress,
+      amount: '1',
+      splitAddresses: [accountAddress, sellerAddress],
+      splitRatios: [50],
+    }, accountAddress)).toThrow('splitAddresses and splitRatios must have the same length.');
+  });
+});
+
+describe('collection market listing shaping', () => {
+  it('shapes active listing status with buy and cancel affordances', () => {
+    expect(shapeCollectionMarketListingStatus(
+      {
+        currencyAddress: ETH_ADDRESS,
+        amount: parseEther('1'),
+        splitRecipients: [sellerAddress],
+        splitRatios: [100],
+      },
+      {
+        seller: sellerAddress,
+        originCollection: collectionAddress,
+        marketplaceFee: 3n,
+        requiredPayment: parseEther('1.03'),
+        tokenId: 4n,
+        account: buyerAddress,
+        tokenOwner: sellerAddress,
+      },
+    )).toEqual({
+      seller: sellerAddress,
+      originCollection: collectionAddress,
+      amount: parseEther('1'),
+      currency: ETH_ADDRESS,
+      splitRecipients: [sellerAddress],
+      splitRatios: [100],
+      marketplaceFee: 3n,
+      requiredPayment: parseEther('1.03'),
+      hasListing: true,
+      state: 'ACTIVE',
+      isEth: true,
+      currentWallet: buyerAddress,
+      tokenId: 4n,
+      tokenOwner: sellerAddress,
+      canCancel: false,
+      canBuy: true,
+    });
+  });
+
+  it('shapes empty status and seller cancellation rights', () => {
+    expect(shapeCollectionMarketListingStatus(
+      {
+        currencyAddress: ETH_ADDRESS,
+        amount: 0n,
+        splitRecipients: [],
+        splitRatios: [],
+      },
+      {
+        seller: sellerAddress,
+        originCollection: collectionAddress,
+        marketplaceFee: 0n,
+        requiredPayment: 0n,
+        account: sellerAddress,
+      },
+    )).toMatchObject({
+      hasListing: false,
+      state: 'NONE',
+      canCancel: false,
+      canBuy: false,
+    });
+
+    expect(shapeCollectionMarketListingStatus(
+      {
+        currencyAddress: erc20Currency,
+        amount: parseEther('2'),
+        splitRecipients: [sellerAddress],
+        splitRatios: [100],
+      },
+      {
+        seller: sellerAddress,
+        originCollection: collectionAddress,
+        marketplaceFee: 1n,
+        requiredPayment: parseEther('2.02'),
+        account: sellerAddress,
+        tokenOwner: sellerAddress,
+      },
+    )).toMatchObject({
+      hasListing: true,
+      state: 'ACTIVE',
+      canCancel: true,
+      canBuy: false,
+      isEth: false,
+    });
   });
 });

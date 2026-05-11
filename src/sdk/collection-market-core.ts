@@ -5,6 +5,10 @@ import {
   toPositiveWei,
 } from './helpers.js';
 import type {
+  CollectionMarketListingBuyParams,
+  CollectionMarketListingSetParams,
+  CollectionMarketListingStatus,
+  CollectionMarketListingStatusParams,
   CollectionMarketOfferAcceptParams,
   CollectionMarketOfferCreateParams,
   CollectionMarketOfferStatus,
@@ -36,6 +40,31 @@ export type CollectionMarketOfferStatusPlan = {
   account?: Address;
 };
 
+export type CollectionMarketListingSetPlan = {
+  originCollection: Address;
+  currency: Address;
+  amount: bigint;
+  splitAddresses: Address[];
+  splitRatios: number[];
+  autoApprove: boolean;
+};
+
+export type CollectionMarketListingBuyPlan = {
+  seller: Address;
+  originCollection: Address;
+  tokenId: bigint;
+  currency: Address;
+  amount: bigint;
+  autoApprove: boolean;
+};
+
+export type CollectionMarketListingStatusPlan = {
+  seller: Address;
+  originCollection: Address;
+  tokenId?: bigint;
+  account?: Address;
+};
+
 export type CollectionMarketOfferRead = {
   currencyAddress: Address;
   amount: bigint;
@@ -55,6 +84,13 @@ export function shapeCollectionMarketOfferRead(
 
   return offer as CollectionMarketOfferRead;
 }
+
+export type CollectionMarketSalePriceRead = {
+  currencyAddress: Address;
+  amount: bigint;
+  splitRecipients: Address[];
+  splitRatios: number[];
+};
 
 export function planCollectionMarketOfferCreate(
   params: CollectionMarketOfferCreateParams,
@@ -101,6 +137,51 @@ export function planCollectionMarketOfferStatus(
   };
 }
 
+export function planCollectionMarketListingSet(
+  params: CollectionMarketListingSetParams,
+  accountAddress: Address,
+): CollectionMarketListingSetPlan {
+  return {
+    originCollection: params.originCollection,
+    currency: params.currency ?? ETH_ADDRESS,
+    amount: toPositiveWei(params.amount, 'amount'),
+    ...planSplitRecipients(params.splitAddresses, params.splitRatios, accountAddress),
+    autoApprove: params.autoApprove ?? true,
+  };
+}
+
+export function planCollectionMarketListingCancel(params: {
+  originCollection: Address;
+}): { originCollection: Address } {
+  return {
+    originCollection: params.originCollection,
+  };
+}
+
+export function planCollectionMarketListingBuy(
+  params: CollectionMarketListingBuyParams,
+): CollectionMarketListingBuyPlan {
+  return {
+    seller: params.seller,
+    originCollection: params.originCollection,
+    tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
+    currency: params.currency ?? ETH_ADDRESS,
+    amount: toPositiveWei(params.amount, 'amount'),
+    autoApprove: params.autoApprove ?? true,
+  };
+}
+
+export function planCollectionMarketListingStatus(
+  params: CollectionMarketListingStatusParams,
+): CollectionMarketListingStatusPlan {
+  return {
+    seller: params.seller,
+    originCollection: params.originCollection,
+    tokenId: params.tokenId === undefined ? undefined : toNonNegativeInteger(params.tokenId, 'tokenId'),
+    account: params.account,
+  };
+}
+
 export function shapeCollectionMarketOfferStatus(
   offer: CollectionMarketOfferRead,
   expected: {
@@ -141,6 +222,55 @@ export function shapeCollectionMarketOfferStatus(
     tokenOwner: expected.tokenOwner,
     canCancel,
     canAccept,
+  };
+}
+
+export function shapeCollectionMarketListingStatus(
+  salePrice: CollectionMarketSalePriceRead,
+  expected: {
+    seller: Address;
+    originCollection: Address;
+    marketplaceFee: bigint;
+    requiredPayment: bigint;
+    tokenId?: bigint;
+    account?: Address;
+    tokenOwner?: Address;
+  },
+): CollectionMarketListingStatus {
+  const hasListing = salePrice.amount > 0n;
+  const currentWallet = expected.account;
+  const tokenOwnedBySeller = Boolean(
+    expected.tokenOwner !== undefined &&
+    expected.tokenOwner.toLowerCase() === expected.seller.toLowerCase(),
+  );
+  const canCancel = Boolean(
+    hasListing &&
+    currentWallet !== undefined &&
+    currentWallet.toLowerCase() === expected.seller.toLowerCase(),
+  );
+  const canBuy = Boolean(
+    hasListing &&
+    tokenOwnedBySeller &&
+    (currentWallet === undefined || currentWallet.toLowerCase() !== expected.seller.toLowerCase()),
+  );
+
+  return {
+    seller: expected.seller,
+    originCollection: expected.originCollection,
+    amount: salePrice.amount,
+    currency: salePrice.currencyAddress,
+    splitRecipients: salePrice.splitRecipients,
+    splitRatios: salePrice.splitRatios,
+    marketplaceFee: expected.marketplaceFee,
+    requiredPayment: expected.requiredPayment,
+    hasListing,
+    state: hasListing ? 'ACTIVE' : 'NONE',
+    isEth: salePrice.currencyAddress.toLowerCase() === ETH_ADDRESS,
+    currentWallet,
+    tokenId: expected.tokenId,
+    tokenOwner: expected.tokenOwner,
+    canCancel,
+    canBuy,
   };
 }
 

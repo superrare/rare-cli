@@ -22,6 +22,25 @@ export const collectionMarketAbi = [
     type: 'function',
   },
   {
+    inputs: [{ name: '_originContract', type: 'address' }],
+    name: 'cancelCollectionSalePrice',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: '_originContract', type: 'address' },
+      { name: '_tokenId', type: 'uint256' },
+      { name: '_currencyAddress', type: 'address' },
+      { name: '_amount', type: 'uint256' },
+    ],
+    name: 'buyFromCollection',
+    outputs: [],
+    stateMutability: 'payable',
+    type: 'function',
+  },
+  {
     inputs: [
       { name: '_originContract', type: 'address' },
       { name: '_buyer', type: 'address' },
@@ -33,6 +52,27 @@ export const collectionMarketAbi = [
           { name: 'currencyAddress', type: 'address' },
           { name: 'amount', type: 'uint256' },
           { name: 'marketplaceFee', type: 'uint256' },
+        ],
+        name: '',
+        type: 'tuple',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: '_originContract', type: 'address' },
+      { name: '_seller', type: 'address' },
+    ],
+    name: 'getCollectionSalePrice',
+    outputs: [
+      {
+        components: [
+          { name: 'currencyAddress', type: 'address' },
+          { name: 'amount', type: 'uint256' },
+          { name: 'splitRecipients', type: 'address[]' },
+          { name: 'splitRatios', type: 'uint8[]' },
         ],
         name: '',
         type: 'tuple',
@@ -75,6 +115,19 @@ export const collectionMarketAbi = [
     type: 'function',
   },
   {
+    inputs: [
+      { name: '_originContract', type: 'address' },
+      { name: '_currencyAddress', type: 'address' },
+      { name: '_amount', type: 'uint256' },
+      { name: '_splitAddrs', type: 'address[]' },
+      { name: '_splitRatios', type: 'uint8[]' },
+    ],
+    name: 'setCollectionSalePrice',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
     anonymous: false,
     inputs: [
       { indexed: true, name: '_seller', type: 'address' },
@@ -105,6 +158,39 @@ export const collectionMarketAbi = [
       { indexed: false, name: '_amount', type: 'uint256' },
     ],
     name: 'CollectionOfferPlaced',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: '_seller', type: 'address' },
+      { indexed: true, name: '_originContract', type: 'address' },
+    ],
+    name: 'CollectionSalePriceCancelled',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: '_seller', type: 'address' },
+      { indexed: true, name: '_originContract', type: 'address' },
+      { indexed: true, name: '_currencyAddress', type: 'address' },
+      { indexed: false, name: '_amount', type: 'uint256' },
+    ],
+    name: 'CollectionSalePriceSet',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, name: '_seller', type: 'address' },
+      { indexed: true, name: '_buyer', type: 'address' },
+      { indexed: true, name: '_originContract', type: 'address' },
+      { indexed: false, name: '_currencyAddress', type: 'address' },
+      { indexed: false, name: '_amount', type: 'uint256' },
+      { indexed: false, name: '_tokenId', type: 'uint256' },
+    ],
+    name: 'Sold',
     type: 'event',
   },
 ] as const;

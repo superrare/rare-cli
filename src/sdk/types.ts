@@ -426,6 +426,86 @@ export type CollectionMarketOfferStatus = {
   canAccept: boolean;
 }
 
+export type CollectionMarketListingSetParams = {
+  originCollection: Address;
+  currency?: Address;
+  amount: AmountInput;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+  autoApprove?: boolean;
+}
+
+export type CollectionMarketListingSetResult = {
+  collectionMarket: Address;
+  seller: Address;
+  originCollection: Address;
+  currency: Address;
+  amount: bigint;
+  splitRecipients: Address[];
+  splitRatios: number[];
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type CollectionMarketListingCancelParams = {
+  originCollection: Address;
+}
+
+export type CollectionMarketListingCancelResult = {
+  collectionMarket: Address;
+  seller: Address;
+  originCollection: Address;
+  hadListing: boolean;
+  currency: Address;
+  amount: bigint;
+} & TransactionResult
+
+export type CollectionMarketListingBuyParams = {
+  originCollection: Address;
+  seller: Address;
+  tokenId: IntegerInput;
+  currency?: Address;
+  amount: AmountInput;
+  autoApprove?: boolean;
+}
+
+export type CollectionMarketListingBuyResult = {
+  collectionMarket: Address;
+  seller: Address;
+  buyer: Address;
+  originCollection: Address;
+  tokenId: bigint;
+  currency: Address;
+  amount: bigint;
+  requiredPayment: bigint;
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type CollectionMarketListingStatusParams = {
+  originCollection: Address;
+  seller: Address;
+  tokenId?: IntegerInput;
+  account?: Address;
+}
+
+export type CollectionMarketListingStatus = {
+  seller: Address;
+  originCollection: Address;
+  amount: bigint;
+  currency: Address;
+  splitRecipients: Address[];
+  splitRatios: number[];
+  marketplaceFee: bigint;
+  requiredPayment: bigint;
+  hasListing: boolean;
+  state: 'NONE' | 'ACTIVE';
+  isEth: boolean;
+  currentWallet?: Address;
+  tokenId?: bigint;
+  tokenOwner?: Address;
+  canCancel: boolean;
+  canBuy: boolean;
+}
+
 export type ListingCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
@@ -1141,6 +1221,12 @@ export type RareClient = {
       cancel: (params: CollectionMarketOfferCancelParams) => Promise<CollectionMarketOfferCancelResult>;
       accept: (params: CollectionMarketOfferAcceptParams) => Promise<CollectionMarketOfferAcceptResult>;
       getStatus: (params: CollectionMarketOfferStatusParams) => Promise<CollectionMarketOfferStatus>;
+    };
+    listing: {
+      set(params: CollectionMarketListingSetParams): Promise<CollectionMarketListingSetResult>;
+      cancel(params: CollectionMarketListingCancelParams): Promise<CollectionMarketListingCancelResult>;
+      buy(params: CollectionMarketListingBuyParams): Promise<CollectionMarketListingBuyResult>;
+      getStatus(params: CollectionMarketListingStatusParams): Promise<CollectionMarketListingStatus>;
     };
   };
   listing: ListingNamespace;
