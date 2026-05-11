@@ -38,6 +38,7 @@ type ContractSet = {
   lazySovereignFactory?: Address;
   spaceFactory?: Address;
   rareMinter?: Address;
+  batchOfferCreator?: Address;
 };
 
 export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
@@ -47,6 +48,7 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
     sovereignFactory: '0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf',
     lazySovereignFactory: '0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA',
     rareMinter: '0xd28Dc0B89104d7BBd902F338a0193fF063617ccE',
+    batchOfferCreator: '0x371cca54ef859bb0c7b910581a528ee47773fd56',
   },
   mainnet: {
     factory: '0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1',
@@ -55,6 +57,7 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractSet>> = {
     lazySovereignFactory: '0xba798BD606d86D207ca2751510173532899117a1',
     spaceFactory: '0x3b2d699110aa1788b2b1cae336e0ba8ff942a390',
     rareMinter: '0x5fa112EFeD8297bec0010b312208d223E0cE891E',
+    batchOfferCreator: '0xe15cf80b25272ade261532efdb7912f9104851d4',
   },
   base: {
     factory: '0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd',

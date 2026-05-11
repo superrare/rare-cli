@@ -38,10 +38,12 @@ export function createRareClient(config: RareClientConfig): RareClient {
         lazySovereignFactory: addresses.lazySovereignFactory,
         spaceFactory: addresses.spaceFactory,
         rareMinter: addresses.rareMinter,
+        batchOfferCreator: addresses.batchOfferCreator,
       }
     : {
         factory: addresses.factory,
         auction: addresses.auction,
+        batchOfferCreator: addresses.batchOfferCreator,
       };
 
   return {
@@ -81,7 +83,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
       },
     }),
     release: createReleaseNamespace(publicClient, config, chain),
-    batch: createBatchNamespace(),
+    batch: createBatchNamespace(publicClient, config, chain),
     user: {
       async get(address) {
         return getUserApi(address);

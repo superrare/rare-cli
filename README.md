@@ -141,6 +141,15 @@ rare batch tree verify --input batch-token-artifact.json --contract 0x... --toke
 
 Batch token artifacts use `type: "rare-batch-token-list"` and include `root`, `count`, optional `chainId`, canonical sorted `tokens`, and per-token `entries` with leaves and proofs. Proof artifacts use `type: "rare-batch-token-proof"` and include `root`, `contractAddress`, `tokenId`, optional `chainId`, `leaf`, `proof`, and `valid`.
 
+Use the generated root and proof artifacts with batch offer commands. Batch offers escrow the offer amount plus marketplace fee in the `BatchOfferCreator`; accepting a batch offer validates the proof, verifies the connected wallet owns the token, and auto-approves the NFT transfer unless `--no-auto-approve` is passed.
+
+```bash
+rare batch offer create --input batch-token-artifact.json --amount 1.0 --expiry 1778500000
+rare batch offer status --creator 0x... --input batch-token-artifact.json
+rare batch offer accept --creator 0x... --proof proof.json --contract 0x... --token-id 1
+rare batch offer revoke --input batch-token-artifact.json
+```
+
 Inspect creator and royalty data on Sovereign-style collections:
 
 ```bash
@@ -537,6 +546,30 @@ const proofValid = rare.batch.verifyTreeProof({
 console.log(tree.root, tokenProof.proof, proofValid);
 ```
 
+### Create and accept batch offers
+
+```ts
+const createdOffer = await rare.batch.offer.create({
+  artifact: tree,
+  amount: '1.0',
+  expiry: 1778500000,
+});
+
+const offerStatus = await rare.batch.offer.getStatus({
+  creator: createdOffer.creator,
+  root: tree.root,
+});
+
+const acceptedOffer = await rare.batch.offer.accept({
+  creator: createdOffer.creator,
+  proofArtifact: tokenProof,
+  contract: tokenProof.contractAddress,
+  tokenId: tokenProof.tokenId,
+});
+
+console.log(offerStatus.state, acceptedOffer.txHash);
+```
+
 ### Inspect and maintain collection owner settings
 
 ```ts
@@ -602,12 +635,12 @@ rare configure --show
 
 ## Contract Addresses
 
-| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Space Factory | RareMinter | Auction |
-|---|---|---|---|---|---|---|
-| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | not configured | `0xd28Dc0B89104d7BBd902F338a0193fF063617ccE` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` |
-| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x3b2d699110aa1788b2b1cae336e0ba8ff942a390` | `0x5fa112EFeD8297bec0010b312208d223E0cE891E` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` |
-| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | not configured | not configured | not configured | not configured | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` |
-| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | not configured | not configured | not configured | not configured | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` |
+| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Space Factory | RareMinter | Auction | BatchOfferCreator |
+|---|---|---|---|---|---|---|---|
+| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | not configured | `0xd28Dc0B89104d7BBd902F338a0193fF063617ccE` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` | `0x371cca54ef859bb0c7b910581a528ee47773fd56` |
+| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x3b2d699110aa1788b2b1cae336e0ba8ff942a390` | `0x5fa112EFeD8297bec0010b312208d223E0cE891E` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` | `0xe15cf80b25272ade261532efdb7912f9104851d4` |
+| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | not configured | not configured | not configured | not configured | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` | not configured |
+| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | not configured | not configured | not configured | not configured | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` | not configured |
 
 ## Underlying Solidity Contracts
 

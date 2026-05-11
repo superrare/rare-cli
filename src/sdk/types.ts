@@ -472,6 +472,84 @@ export interface ListingStatus {
   isEth: boolean;
 }
 
+export interface BatchOfferCreateParams {
+  root?: Hex;
+  artifact?: BatchTokenListArtifact;
+  amount: AmountInput;
+  currency?: Address;
+  expiry: IntegerInput;
+}
+
+export interface BatchOfferCreateResult extends TransactionResult {
+  batchOfferCreator: Address;
+  creator: Address;
+  root: Hex;
+  amount: bigint;
+  currency: Address;
+  expiry: bigint;
+  requiredPayment: bigint;
+  approvalTxHash?: Hash;
+}
+
+export interface BatchOfferRevokeParams {
+  root?: Hex;
+  artifact?: BatchTokenListArtifact;
+}
+
+export interface BatchOfferRevokeResult extends TransactionResult {
+  batchOfferCreator: Address;
+  creator: Address;
+  root: Hex;
+  amount: bigint;
+  currency: Address;
+}
+
+export interface BatchOfferAcceptParams {
+  creator: Address;
+  root?: Hex;
+  proof?: readonly Hex[];
+  proofArtifact?: BatchTokenProofArtifact;
+  contract: Address;
+  tokenId: IntegerInput;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+  autoApprove?: boolean;
+}
+
+export interface BatchOfferAcceptResult extends TransactionResult {
+  batchOfferCreator: Address;
+  seller: Address;
+  buyer: Address;
+  creator: Address;
+  contract: Address;
+  tokenId: bigint;
+  root: Hex;
+  currency: Address;
+  amount: bigint;
+  approvalTxHash?: Hash;
+}
+
+export interface BatchOfferStatusParams {
+  creator: Address;
+  root?: Hex;
+  artifact?: BatchTokenListArtifact;
+}
+
+export interface BatchOfferStatus {
+  creator: Address;
+  root: Hex;
+  amount: bigint;
+  currency: Address;
+  expiry: bigint;
+  feePercentage: bigint;
+  hasOffer: boolean;
+  expired: boolean;
+  revoked: boolean | null;
+  fillable: boolean;
+  state: 'NONE' | 'ACTIVE' | 'EXPIRED';
+  isEth: boolean;
+}
+
 export interface TokenContractInfo {
   contract: Address;
   chain: SupportedChain;
@@ -497,6 +575,7 @@ export interface RareClient {
     lazySovereignFactory?: Address;
     spaceFactory?: Address;
     rareMinter?: Address;
+    batchOfferCreator?: Address;
   };
   deploy: {
     erc721(params: DeployErc721Params): Promise<DeployErc721Result>;
@@ -564,6 +643,12 @@ export interface RareClient {
     buildTree(params: BuildBatchTokenTreeParams): BatchTokenListArtifact;
     getTreeProof(params: BatchTokenProofParams): BatchTokenProofArtifact;
     verifyTreeProof(params: BatchTokenProofVerifyParams): boolean;
+    offer: {
+      create(params: BatchOfferCreateParams): Promise<BatchOfferCreateResult>;
+      revoke(params: BatchOfferRevokeParams): Promise<BatchOfferRevokeResult>;
+      accept(params: BatchOfferAcceptParams): Promise<BatchOfferAcceptResult>;
+      getStatus(params: BatchOfferStatusParams): Promise<BatchOfferStatus>;
+    };
   };
   user: {
     get(address: string): Promise<UserProfile>;

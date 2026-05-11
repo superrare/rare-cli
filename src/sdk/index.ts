@@ -4,6 +4,14 @@ export type {
   CreateSovereignCollectionResult,
   CreateLazySovereignCollectionParams,
   CreateLazySovereignCollectionResult,
+  BatchOfferAcceptParams,
+  BatchOfferAcceptResult,
+  BatchOfferCreateParams,
+  BatchOfferCreateResult,
+  BatchOfferRevokeParams,
+  BatchOfferRevokeResult,
+  BatchOfferStatus,
+  BatchOfferStatusParams,
   RareClient,
   RareClientConfig,
 } from './types.js';
@@ -13,6 +21,13 @@ export {
   normalizeSovereignCollectionContractType,
   sovereignCollectionContractTypes,
 } from './collection-core.js';
+export {
+  planBatchOfferAccept,
+  planBatchOfferCreate,
+  planBatchOfferRoot,
+  resolveBatchOfferRoot,
+  shapeBatchOfferStatus,
+} from './batch-offer-core.js';
 export {
   buildBatchTokenTreeArtifact,
   getBatchTokenProof,
@@ -47,6 +62,11 @@ export type {
   BatchTokenTreeEntry,
   BuildBatchTokenTreeParams,
 } from './batch-core.js';
+export type {
+  BatchOfferAcceptPlan,
+  BatchOfferCreatePlan,
+  BatchOfferRootPlan,
+} from './batch-offer-core.js';
 export type {
   LazySovereignCollectionContractType,
   SovereignCollectionContractType,
@@ -87,4 +107,5 @@ export { sovereignFactoryAbi } from '../contracts/abis/sovereign-factory.js';
 export { lazySovereignFactoryAbi } from '../contracts/abis/lazy-sovereign-factory.js';
 export { rareMinterAbi } from '../contracts/abis/rare-minter.js';
 export { auctionAbi } from '../contracts/abis/auction.js';
+export { batchOfferAbi } from '../contracts/abis/batch-offer.js';
 export { tokenAbi } from '../contracts/abis/token.js';

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -183,6 +183,42 @@ type TxResult = {
   approvalTxHash?: string | null;
 };
 
+type BatchTreeBuildResult = {
+  root: string;
+  count: number;
+  chainId: number;
+  output: string;
+};
+
+type BatchTreeProofResult = {
+  root: string;
+  contractAddress: string;
+  tokenId: string;
+  proofLength: number;
+  valid: boolean;
+  output: string;
+};
+
+type BatchOfferWriteResult = TxResult & {
+  batchOfferCreator: string;
+  creator: string;
+  root: string;
+  amount: string;
+  currency: string;
+  requiredPayment?: string;
+};
+
+type BatchOfferStatusResult = {
+  creator: string;
+  root: string;
+  amount: string;
+  currency: string;
+  hasOffer: boolean;
+  expired: boolean;
+  fillable: boolean;
+  state: string;
+};
+
 type LiveState = {
   sellerHome: string;
   buyerHome: string;
@@ -202,6 +238,7 @@ type LiveState = {
   offerAcceptToken: MintResult;
   buyerMintToken: MintResult;
   rareOfferAcceptToken: MintResult;
+  batchOfferToken: MintResult;
 };
 
 let live: LiveState;
@@ -293,6 +330,9 @@ describeLive('live Sepolia CLI write commands', () => {
         rareOfferAcceptToken: await step('mint RARE offer accept token', () =>
           mintToken(sellerHome, collection.contract),
         ),
+        batchOfferToken: await step('mint batch offer token', () =>
+          mintToken(sellerHome, collection.contract),
+        ),
       };
     } catch (error) {
       await cleanupTempHome(sellerHome);
@@ -321,6 +361,7 @@ describeLive('live Sepolia CLI write commands', () => {
       live.offerAcceptToken,
       live.buyerMintToken,
       live.rareOfferAcceptToken,
+      live.batchOfferToken,
     ]) {
       expectTx(token);
       expect(token.contract).toBe(live.collection.contract);
@@ -1070,6 +1111,129 @@ describeLive('live Sepolia CLI write commands', () => {
     ));
     await expectOfferStatus(live.sellerHome, live.collection.contract, live.rareOfferAcceptToken.tokenId, false, E2E_RARE_CURRENCY);
   });
+
+  it('creates, revokes, recreates, and accepts a batch offer', async () => {
+    const tokenCsv = join(live.sellerHome, 'batch-offer-tokens.csv');
+    const artifactPath = join(live.sellerHome, 'batch-offer-artifact.json');
+    const proofPath = join(live.sellerHome, 'batch-offer-proof.json');
+    await writeFile(tokenCsv, [
+      'contract_address,token_id,chain_id',
+      `${live.collection.contract},${live.batchOfferToken.tokenId},11155111`,
+    ].join('\n'), 'utf8');
+
+    const artifact = await step('build batch offer token tree artifact', () =>
+      jsonCommand<BatchTreeBuildResult>(live.sellerHome, [
+        'batch',
+        'tree',
+        'build',
+        '--input',
+        tokenCsv,
+        '--output',
+        artifactPath,
+      ]),
+    );
+    expect(artifact.count).toBe(1);
+    expect(artifact.chainId).toBe(11_155_111);
+    expect(artifact.output).toBe(artifactPath);
+
+    const proof = await step('build batch offer token proof', () =>
+      jsonCommand<BatchTreeProofResult>(live.sellerHome, [
+        'batch',
+        'tree',
+        'proof',
+        '--input',
+        artifactPath,
+        '--contract',
+        live.collection.contract,
+        '--token-id',
+        live.batchOfferToken.tokenId,
+        '--output',
+        proofPath,
+      ]),
+    );
+    expect(proof.root).toBe(artifact.root);
+    expect(proof.valid).toBe(true);
+    expect(proof.output).toBe(proofPath);
+
+    const expiry = Math.floor(Date.now() / 1000) + 3600;
+    const createdForRevoke = await step('create batch offer for revocation', () =>
+      jsonCommand<BatchOfferWriteResult>(live.buyerHome, [
+        'batch',
+        'offer',
+        'create',
+        '--input',
+        artifactPath,
+        '--amount',
+        '0.000001',
+        '--expiry',
+        expiry.toString(),
+        '--chain',
+        'sepolia',
+      ], 240_000),
+    );
+    expectTx(createdForRevoke);
+    expect(createdForRevoke.creator.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
+    expect(createdForRevoke.root).toBe(artifact.root);
+    expect(createdForRevoke.currency).toBe(E2E_ETH_ADDRESS);
+    expect(BigInt(createdForRevoke.requiredPayment ?? '0')).toBeGreaterThanOrEqual(parseEther('0.000001'));
+    await expectBatchOfferStatus(live.sellerHome, live.buyerAddress, artifactPath, true);
+
+    const revoked = await step('revoke batch offer', () =>
+      jsonCommand<BatchOfferWriteResult>(live.buyerHome, [
+        'batch',
+        'offer',
+        'revoke',
+        '--input',
+        artifactPath,
+        '--chain',
+        'sepolia',
+      ]),
+    );
+    expectTx(revoked);
+    expect(revoked.root).toBe(artifact.root);
+    await expectBatchOfferStatus(live.sellerHome, live.buyerAddress, artifactPath, false);
+
+    const createdForAccept = await step('create batch offer for acceptance', () =>
+      jsonCommand<BatchOfferWriteResult>(live.buyerHome, [
+        'batch',
+        'offer',
+        'create',
+        '--input',
+        artifactPath,
+        '--amount',
+        '0.000001',
+        '--expiry',
+        expiry.toString(),
+        '--chain',
+        'sepolia',
+      ], 240_000),
+    );
+    expectTx(createdForAccept);
+    expect(createdForAccept.root).toBe(artifact.root);
+
+    const accepted = await step('accept batch offer', () =>
+      jsonCommand<BatchOfferWriteResult>(live.sellerHome, [
+        'batch',
+        'offer',
+        'accept',
+        '--creator',
+        live.buyerAddress,
+        '--proof',
+        proofPath,
+        '--contract',
+        live.collection.contract,
+        '--token-id',
+        live.batchOfferToken.tokenId,
+        '--chain',
+        'sepolia',
+      ], 240_000),
+    );
+    expectTx(accepted);
+    expect(accepted.approvalTxHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+    expect(accepted.root).toBe(artifact.root);
+    await expectBatchOfferStatus(live.sellerHome, live.buyerAddress, artifactPath, false);
+    await expectTokenOwner(live.sellerHome, live.collection.contract, live.batchOfferToken.tokenId, live.buyerAddress);
+  });
 });
 
 async function configureLiveHome(home: string, privateKey: string): Promise<void> {
@@ -1154,6 +1318,29 @@ async function expectOfferStatus(
 
   const status = await jsonCommand<{ hasOffer: boolean }>(home, args);
   expect(status.hasOffer).toBe(hasOffer);
+}
+
+async function expectBatchOfferStatus(
+  home: string,
+  creator: Address,
+  artifactPath: string,
+  hasOffer: boolean,
+): Promise<void> {
+  const status = await jsonCommand<BatchOfferStatusResult>(home, [
+    'batch',
+    'offer',
+    'status',
+    '--creator',
+    creator,
+    '--input',
+    artifactPath,
+    '--chain',
+    'sepolia',
+  ]);
+
+  expect(status.hasOffer).toBe(hasOffer);
+  expect(status.fillable).toBe(hasOffer);
+  expect(status.state).toBe(hasOffer ? 'ACTIVE' : 'NONE');
 }
 
 async function expectAuctionStatus(
