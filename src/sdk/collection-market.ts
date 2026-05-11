@@ -30,6 +30,7 @@ import {
   shapeCollectionMarketListingStatus,
   shapeCollectionMarketOfferRead,
   shapeCollectionMarketOfferStatus,
+  shapeCollectionMarketSalePriceRead,
 } from './collection-market-core.js';
 
 export function createCollectionMarketNamespace(
@@ -551,19 +552,5 @@ async function readCollectionSalePrice(
     args: [originCollection, seller],
   });
 
-  if (Array.isArray(salePrice)) {
-    return {
-      currencyAddress: salePrice[0] as Address,
-      amount: salePrice[1] as bigint,
-      splitRecipients: [...salePrice[2]] as Address[],
-      splitRatios: [...salePrice[3]] as number[],
-    };
-  }
-
-  return {
-    currencyAddress: salePrice.currencyAddress,
-    amount: salePrice.amount,
-    splitRecipients: [...salePrice.splitRecipients],
-    splitRatios: [...salePrice.splitRatios],
-  };
+  return shapeCollectionMarketSalePriceRead(salePrice);
 }
