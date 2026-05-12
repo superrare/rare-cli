@@ -1,12 +1,16 @@
 import {
   type Address,
   type PublicClient,
+  type WalletClient,
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
-import type { RareClientConfig, RareClient } from './types.js';
+import { tokenAbi } from '../contracts/abis/token.js';
+import type { RareClientConfig, RareClient, WalletAccount } from './types.js';
 import {
+  approvalAbi,
   preparePayment,
   requireWallet,
+  waitForApproval,
 } from './helpers.js';
 import {
   planOfferAccept,
@@ -15,6 +19,34 @@ import {
   planOfferStatus,
   shapeOfferStatus,
 } from './marketplace-core.js';
+
+async function ensureNftApproved(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  account: Address | WalletAccount,
+  accountAddress: Address,
+  nftAddress: Address,
+  marketAddress: Address,
+): Promise<void> {
+  const isApproved = await publicClient.readContract({
+    address: nftAddress,
+    abi: approvalAbi,
+    functionName: 'isApprovedForAll',
+    args: [accountAddress, marketAddress],
+  });
+  if (isApproved) return;
+
+  const approvalTxHash = await walletClient.writeContract({
+    address: nftAddress,
+    abi: approvalAbi,
+    functionName: 'setApprovalForAll',
+    args: [marketAddress, true],
+    account,
+    chain: undefined,
+  });
+  await publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
+  await waitForApproval(publicClient, nftAddress, accountAddress, marketAddress);
+}
 
 export function createOfferNamespace(
   publicClient: PublicClient,
@@ -35,7 +67,7 @@ export function createOfferNamespace(
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'offer',
-        args: [params.contract, plan.tokenId, plan.currency, plan.amount, plan.convertible],
+        args: [params.contract, plan.tokenId, plan.currency, plan.amount, false],
         account,
         chain: undefined,
         value,
@@ -66,6 +98,11 @@ export function createOfferNamespace(
       const { walletClient, account, accountAddress } = requireWallet(config);
       const plan = planOfferAccept(params, accountAddress);
 
+      await ensureNftApproved(
+        publicClient, walletClient, account, accountAddress,
+        params.contract, addresses.auction,
+      );
+
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
@@ -89,14 +126,47 @@ export function createOfferNamespace(
     async getStatus(params): ReturnType<RareClient['offer']['getStatus']> {
       const plan = planOfferStatus(params);
 
-      const result = await publicClient.readContract({
-        address: addresses.auction,
-        abi: auctionAbi,
-        functionName: 'tokenCurrentOffers',
-        args: [params.contract, plan.tokenId, plan.currency],
+      const [offerResult, ownerResult, delayResult] = await publicClient.multicall({
+        contracts: [
+          {
+            address: addresses.auction,
+            abi: auctionAbi,
+            functionName: 'tokenCurrentOffers',
+            args: [params.contract, plan.tokenId, plan.currency],
+          },
+          {
+            address: params.contract,
+            abi: tokenAbi,
+            functionName: 'ownerOf',
+            args: [plan.tokenId],
+          },
+          {
+            address: addresses.auction,
+            abi: auctionAbi,
+            functionName: 'offerCancelationDelay',
+          },
+        ],
       });
 
-      return shapeOfferStatus(result);
+      if (offerResult.status !== 'success') {
+        throw offerResult.error;
+      }
+      if (ownerResult.status !== 'success') {
+        throw ownerResult.error;
+      }
+      if (delayResult.status !== 'success') {
+        throw delayResult.error;
+      }
+
+      const wallet = config.account ?? config.walletClient?.account?.address ?? null;
+
+      return shapeOfferStatus(offerResult.result, {
+        currency: plan.currency,
+        tokenOwner: ownerResult.result,
+        cancellationDelay: delayResult.result,
+        wallet,
+        nowSeconds: BigInt(Math.floor(Date.now() / 1000)),
+      });
     },
   };
 }

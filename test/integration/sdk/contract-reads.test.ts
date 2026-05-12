@@ -57,7 +57,6 @@ describeLive('SDK contract read integration', () => {
 
     expect(isAddress(offer.buyer)).toBe(true);
     expect(offer.hasOffer).toBe(offer.amount > 0n);
-    expect(typeof offer.convertible).toBe('boolean');
 
     expect(isAddress(auction.seller)).toBe(true);
     expect(['PENDING', 'RUNNING', 'ENDED']).toContain(auction.status);

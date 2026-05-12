@@ -230,7 +230,7 @@ async function configureLiveHome(home: string, chain: SupportedChain, privateKey
   expect(result.stderr).toBe('');
 }
 
-function livePrivateKey(name: 'E2E_SELLER_PRIVATE_KEY' | 'E2E_BUYER_PRIVATE_KEY'): `0x${string}` {
+export function livePrivateKey(name: 'E2E_SELLER_PRIVATE_KEY' | 'E2E_BUYER_PRIVATE_KEY'): `0x${string}` {
   const value = process.env[name];
   if (!value || !isHex(value)) {
     throw new Error(`${name} must be set to a 0x-prefixed private key.`);
@@ -238,7 +238,7 @@ function livePrivateKey(name: 'E2E_SELLER_PRIVATE_KEY' | 'E2E_BUYER_PRIVATE_KEY'
   return value;
 }
 
-function liveRpcUrl(): string {
+export function liveRpcUrl(): string {
   const value = process.env.TEST_RPC_URL;
   if (!value) {
     throw new Error('TEST_RPC_URL must be set.');

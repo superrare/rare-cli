@@ -107,7 +107,6 @@ export type OfferCreateParams = {
   tokenId: IntegerInput;
   currency?: Address;
   amount: AmountInput;
-  convertible?: boolean;
 }
 
 export type OfferCancelParams = {
@@ -136,8 +135,12 @@ export type OfferStatus = {
   amount: bigint;
   timestamp: bigint;
   marketplaceFee: number;
-  convertible: boolean;
   hasOffer: boolean;
+  currency: Address;
+  tokenOwner: Address | null;
+  cancellableAfter: bigint | null;
+  canAccept: boolean | null;
+  canCancel: boolean | null;
 }
 
 export type ListingCreateParams = {
