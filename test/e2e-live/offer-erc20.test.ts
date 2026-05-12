@@ -1,27 +1,22 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import {
-  createWalletClient,
-  erc20Abi,
-  http,
-  type Address,
-} from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import type { Address } from 'viem';
 import {
   getContractAddresses,
-  viemChains,
 } from '../../src/contracts/addresses.js';
 import {
+  approveToken,
   cleanupLiveFixture,
   createLiveFixture,
   expectTx,
   jsonCommand,
-  livePrivateKey,
-  liveRpcUrl,
   LiveFixtureRef,
   missingEnv,
   parseTokenAmount,
   readTokenBalance,
+  readTokenAllowance,
+  requireBuyerFixture,
   step,
+  type BuyerLiveFixture,
   type LiveFixture,
   type TxResult,
 } from './helpers/live-harness.js';
@@ -75,9 +70,9 @@ describeLive('live ERC20 offer CLI write command', () => {
     }
 
     await step('set buyer ERC20 allowance below required offer escrow', () =>
-      approveErc20(fixture, currency, auctionAddress, amountWei),
+      approveToken(fixture, currency, auctionAddress, amountWei, 'E2E_BUYER_PRIVATE_KEY'),
     );
-    expect(await readErc20Allowance(fixture, currency, fixture.buyerAddress, auctionAddress)).toBe(amountWei);
+    expect(await readTokenAllowance(fixture, currency, fixture.buyerAddress, auctionAddress)).toBe(amountWei);
 
     expectTx(await step('create ERC20 offer for acceptance', () =>
       jsonCommand<TxResult>(fixture.buyerHome, [
@@ -96,7 +91,7 @@ describeLive('live ERC20 offer CLI write command', () => {
       ], 240_000),
     ));
 
-    expect(await readErc20Allowance(fixture, currency, fixture.buyerAddress, auctionAddress)).toBeGreaterThan(amountWei);
+    expect(await readTokenAllowance(fixture, currency, fixture.buyerAddress, auctionAddress)).toBeGreaterThan(amountWei);
     await expectOfferStatus(fixture, fixture.sellerHome, fixture.collection.contract, fixture.rareOfferAcceptToken.tokenId, true);
 
     expectTx(await step('accept ERC20 offer', () =>
@@ -119,26 +114,10 @@ describeLive('live ERC20 offer CLI write command', () => {
   });
 });
 
-type Erc20OfferFixture = LiveFixture & {
-  buyerHome: string;
-  buyerAddress: NonNullable<LiveFixture['buyerAddress']>;
+type Erc20OfferFixture = BuyerLiveFixture & {
   collection: DeployErc721Result;
   rareOfferAcceptToken: MintResult;
 };
-
-function requireBuyerFixture(fixture: LiveFixture): LiveFixture & {
-  buyerHome: string;
-  buyerAddress: NonNullable<LiveFixture['buyerAddress']>;
-} {
-  if (fixture.buyerHome === undefined || fixture.buyerAddress === undefined) {
-    throw new Error(`Live environment is not configured: ${missingEnv.join(', ')}`);
-  }
-  return {
-    ...fixture,
-    buyerHome: fixture.buyerHome,
-    buyerAddress: fixture.buyerAddress,
-  };
-}
 
 async function expectOfferStatus(
   liveFixture: LiveFixture,
@@ -160,40 +139,6 @@ async function expectOfferStatus(
     liveFixture.chain,
   ]);
   expect(status.hasOffer).toBe(hasOffer);
-}
-
-async function readErc20Allowance(
-  liveFixture: LiveFixture,
-  currency: Address,
-  owner: Address,
-  spender: Address,
-): Promise<bigint> {
-  return liveFixture.publicClient.readContract({
-    address: currency,
-    abi: erc20Abi,
-    functionName: 'allowance',
-    args: [owner, spender],
-  });
-}
-
-async function approveErc20(
-  liveFixture: LiveFixture,
-  currency: Address,
-  spender: Address,
-  amount: bigint,
-): Promise<void> {
-  const walletClient = createWalletClient({
-    account: privateKeyToAccount(livePrivateKey('E2E_BUYER_PRIVATE_KEY')),
-    chain: viemChains[liveFixture.chain],
-    transport: http(liveRpcUrl()),
-  });
-  const txHash = await walletClient.writeContract({
-    address: currency,
-    abi: erc20Abi,
-    functionName: 'approve',
-    args: [spender, amount],
-  });
-  await liveFixture.publicClient.waitForTransactionReceipt({ hash: txHash });
 }
 
 function liveRareOfferAmount(): string {

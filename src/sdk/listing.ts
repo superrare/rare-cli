@@ -107,11 +107,12 @@ export function createListingNamespace(
       const result = await publicClient.readContract({
         address: addresses.auction,
         abi: auctionAbi,
-        functionName: 'tokenSalePrices',
+        functionName: 'getSalePrice',
         args: [params.contract, plan.tokenId, plan.target],
       });
 
-      return shapeListingStatus(result);
+      const wallet = config.account ?? config.walletClient?.account?.address ?? null;
+      return shapeListingStatus(result, { target: plan.target, wallet });
     },
   };
 }

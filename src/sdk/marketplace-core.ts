@@ -72,14 +72,16 @@ export type AuctionBidPlan = {
 };
 
 export function planListingCreate(params: ListingCreateParams, accountAddress: Address): ListingCreatePlan {
+  const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
+
   return {
     nftAddress: params.contract,
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
     price: toNonNegativeWei(params.price, 'price'),
     target: params.target ?? PUBLIC_LISTING_TARGET,
-    splitAddresses: params.splitAddresses ?? [accountAddress],
-    splitRatios: params.splitRatios ?? [100],
+    splitAddresses: splits.addresses,
+    splitRatios: splits.ratios,
   };
 }
 
@@ -105,17 +107,44 @@ export function planListingStatus(params: ListingStatusParams): { tokenId: bigin
   };
 }
 
-export function shapeListingStatus([seller, currencyAddress, amount]: readonly [
-  Address,
-  Address,
-  bigint,
-]): ListingStatus {
+export function shapeListingStatus(
+  [
+    seller,
+    currencyAddress,
+    amount,
+    splitAddresses,
+    splitRatios,
+  ]: readonly [
+    Address,
+    Address,
+    bigint,
+    readonly Address[],
+    readonly number[],
+  ],
+  opts: {
+    target: Address;
+    wallet?: Address | null;
+  },
+): ListingStatus {
+  const hasListing = amount > 0n;
+  const wallet = opts.wallet ?? null;
+  const canBuy =
+    wallet === null
+      ? null
+      : hasListing &&
+        !isAddressEqual(wallet, seller) &&
+        (isAddressEqual(opts.target, PUBLIC_LISTING_TARGET) || isAddressEqual(opts.target, wallet));
+
   return {
     seller,
     currencyAddress,
     amount,
-    hasListing: amount > 0n,
-    isEth: currencyAddress === ETH_ADDRESS,
+    hasListing,
+    isEth: isAddressEqual(currencyAddress, ETH_ADDRESS),
+    target: opts.target,
+    splitAddresses: [...splitAddresses],
+    splitRatios: [...splitRatios],
+    canBuy,
   };
 }
 

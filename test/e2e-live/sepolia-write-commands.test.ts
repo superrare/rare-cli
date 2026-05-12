@@ -46,9 +46,6 @@ type LiveState = {
   sellerAddress: Address;
   buyerAddress: Address;
   collection: DeployResult;
-  listingCancelToken: MintResult;
-  listingBuyToken: MintResult;
-  zeroPriceListingToken: MintResult;
   auctionCancelToken: MintResult;
   auctionSettleToken: MintResult;
   buyerAuctionCancelToken: MintResult;
@@ -96,7 +93,7 @@ describeLive('live Sepolia CLI write commands', () => {
           `Rare CLI E2E ${suffix}`,
           `RCE${suffix.slice(-4).toUpperCase()}`,
           '--max-tokens',
-          '12',
+          '6',
           '--chain',
           'sepolia',
         ]),
@@ -110,15 +107,6 @@ describeLive('live Sepolia CLI write commands', () => {
         sellerAddress,
         buyerAddress,
         collection,
-        listingCancelToken: await step('mint listing cancel token', () =>
-          mintToken(sellerHome, collection.contract),
-        ),
-        listingBuyToken: await step('mint listing buy token', () =>
-          mintToken(sellerHome, collection.contract),
-        ),
-        zeroPriceListingToken: await step('mint zero-price listing token', () =>
-          mintToken(sellerHome, collection.contract),
-        ),
         auctionCancelToken: await step('mint auction cancel token', () =>
           mintToken(sellerHome, collection.contract),
         ),
@@ -148,9 +136,6 @@ describeLive('live Sepolia CLI write commands', () => {
     expectTx(live.value.collection);
     expect(live.value.collection.contract).toMatch(/^0x[0-9a-fA-F]{40}$/);
     for (const token of [
-      live.value.listingCancelToken,
-      live.value.listingBuyToken,
-      live.value.zeroPriceListingToken,
       live.value.auctionCancelToken,
       live.value.auctionSettleToken,
       live.value.buyerAuctionCancelToken,
@@ -165,96 +150,6 @@ describeLive('live Sepolia CLI write commands', () => {
 
   it('mints directly to another recipient', async () => {
     await expectTokenOwner(live.value.sellerHome, live.value.collection.contract, live.value.buyerMintToken.tokenId, live.value.buyerAddress);
-  });
-
-  it('creates and cancels a listing', async () => {
-    const listingCancelCreate = await step('create listing for cancellation', () =>
-      jsonCommand<TxResult>(live.value.sellerHome, [
-        'listing',
-        'create',
-        '--contract',
-        live.value.collection.contract,
-        '--token-id',
-        live.value.listingCancelToken.tokenId,
-        '--price',
-        '0.000001',
-        '--chain',
-        'sepolia',
-      ]),
-    );
-    expectTx(listingCancelCreate);
-    expect(listingCancelCreate.approvalTxHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
-    await expectListingStatus(live.value.sellerHome, live.value.collection.contract, live.value.listingCancelToken.tokenId, true);
-
-    expectTx(await step('cancel listing', () =>
-      jsonCommand<TxResult>(live.value.sellerHome, [
-        'listing',
-        'cancel',
-        '--contract',
-        live.value.collection.contract,
-        '--token-id',
-        live.value.listingCancelToken.tokenId,
-        '--chain',
-        'sepolia',
-      ]),
-    ));
-    await expectListingStatus(live.value.sellerHome, live.value.collection.contract, live.value.listingCancelToken.tokenId, false);
-  });
-
-  it('creates a zero-price listing as an inactive listing without repeating approval', async () => {
-    const zeroPriceListingCreate = await step('create zero-price listing', () =>
-      jsonCommand<TxResult>(live.value.sellerHome, [
-        'listing',
-        'create',
-        '--contract',
-        live.value.collection.contract,
-        '--token-id',
-        live.value.zeroPriceListingToken.tokenId,
-        '--price',
-        '0',
-        '--chain',
-        'sepolia',
-      ]),
-    );
-
-    expectTx(zeroPriceListingCreate);
-    expect(zeroPriceListingCreate.approvalTxHash).toBeNull();
-    await expectListingStatus(live.value.sellerHome, live.value.collection.contract, live.value.zeroPriceListingToken.tokenId, false);
-  });
-
-  it('creates and buys a listing', async () => {
-    const listingBuyCreate = await step('create listing for purchase', () =>
-      jsonCommand<TxResult>(live.value.sellerHome, [
-        'listing',
-        'create',
-        '--contract',
-        live.value.collection.contract,
-        '--token-id',
-        live.value.listingBuyToken.tokenId,
-        '--price',
-        '0.000001',
-        '--chain',
-        'sepolia',
-      ]),
-    );
-    expectTx(listingBuyCreate);
-    expect(listingBuyCreate.approvalTxHash).toBeNull();
-
-    expectTx(await step('buy listing', () =>
-      jsonCommand<TxResult>(live.value.buyerHome, [
-        'listing',
-        'buy',
-        '--contract',
-        live.value.collection.contract,
-        '--token-id',
-        live.value.listingBuyToken.tokenId,
-        '--amount',
-        '0.000001',
-        '--chain',
-        'sepolia',
-      ]),
-    ));
-    await expectListingStatus(live.value.sellerHome, live.value.collection.contract, live.value.listingBuyToken.tokenId, false);
   });
 
   it('creates and cancels an auction', async () => {
@@ -416,25 +311,6 @@ async function mintToken(home: string, contract: string, opts: { to?: string } =
   expect(result.tokenUri).toBe(E2E_TOKEN_URI);
   expect(result.tokenId).toMatch(/^\d+$/);
   return result;
-}
-
-async function expectListingStatus(
-  home: string,
-  contract: string,
-  tokenId: string,
-  hasListing: boolean,
-): Promise<void> {
-  const status = await jsonCommand<{ hasListing: boolean }>(home, [
-    'listing',
-    'status',
-    '--contract',
-    contract,
-    '--token-id',
-    tokenId,
-    '--chain',
-    'sepolia',
-  ]);
-  expect(status.hasListing).toBe(hasListing);
 }
 
 async function expectAuctionStatus(

@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { formatEther, type Address } from 'viem';
+import { formatEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
 import { printError } from '../errors.js';
@@ -7,6 +7,7 @@ import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
 import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
+import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 
 type OfferCreateOptions = {
   contract: string;
@@ -27,32 +28,6 @@ type OfferAcceptOptions = OfferTokenOptions & {
   amount: string;
   split?: SplitAccumulator;
 };
-
-type SplitAccumulator = {
-  addresses: Address[];
-  ratios: number[];
-};
-
-function collectSplit(value: string, prev: SplitAccumulator | undefined): SplitAccumulator {
-  const acc: SplitAccumulator = prev ?? { addresses: [], ratios: [] };
-  const idx = value.indexOf('=');
-  if (idx <= 0 || idx === value.length - 1) {
-    throw new Error(`Invalid --split format: "${value}". Expected ADDRESS=RATIO (e.g. 0xabc...=70).`);
-  }
-  const address = parseAddress(value.slice(0, idx).trim(), '--split');
-  const ratioStr = value.slice(idx + 1).trim();
-  return {
-    addresses: [...acc.addresses, address],
-    ratios: [...acc.ratios, Number(ratioStr)],
-  };
-}
-
-function finalizeSplits(acc: SplitAccumulator | undefined):
-  | { addresses: Address[]; ratios: number[] }
-  | undefined {
-  if (!acc || acc.addresses.length === 0) return undefined;
-  return { addresses: acc.addresses, ratios: acc.ratios };
-}
 
 export function offerCommand(): Command {
   const cmd = new Command('offer');
@@ -169,8 +144,8 @@ export function offerCommand(): Command {
       log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
       if (splits) {
         log(`  Splits:`);
-        splits.addresses.forEach((address, index) => {
-          log(`    ${address} = ${splits.ratios[index]}%`);
+        formatSplitLines(splits).forEach((line) => {
+          log(line);
         });
       }
 

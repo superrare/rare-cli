@@ -12,9 +12,11 @@ import {
   missingEnv,
   parseTokenAmount,
   readTokenBalance,
+  requireBuyerFixture,
   step,
   uniqueSymbol,
   uniqueTokenName,
+  type BuyerLiveFixture,
   type LiveFixture,
 } from './helpers/live-harness.js';
 import { deployLiquidEdition } from './helpers/live-liquid-edition.js';
@@ -24,7 +26,7 @@ import {
 } from './helpers/live-swap.js';
 
 const describeLive = missingEnv.length === 0 ? describe.sequential : describe.skip;
-const live = new LiveFixtureRef<LiveFixtureWithBuyer>(`Live environment is not configured: ${missingEnv.join(', ')}`);
+const live = new LiveFixtureRef<BuyerLiveFixture>(`Live environment is not configured: ${missingEnv.join(', ')}`);
 
 describeLive('live Liquid Edition user flow', () => {
   beforeAll(async () => {
@@ -86,22 +88,6 @@ describeLive('live Liquid Edition user flow', () => {
     expect(balanceAfterSell).toBeLessThan(balanceAfterBuy);
   });
 });
-
-type LiveFixtureWithBuyer = LiveFixture & {
-  buyerHome: string;
-  buyerAddress: NonNullable<LiveFixture['buyerAddress']>;
-};
-
-function requireBuyerFixture(fixture: LiveFixture): LiveFixtureWithBuyer {
-  if (fixture.buyerHome === undefined || fixture.buyerAddress === undefined) {
-    throw new Error(`Live environment is not configured: ${missingEnv.join(', ')}`);
-  }
-  return {
-    ...fixture,
-    buyerHome: fixture.buyerHome,
-    buyerAddress: fixture.buyerAddress,
-  };
-}
 
 async function formatTinySellAmount(live: LiveFixture, token: `0x${string}`, balance: bigint): Promise<string> {
   const preferred = await parseTokenAmount(live, token, liveLiquidEditionSellAmount());

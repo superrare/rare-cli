@@ -1,12 +1,13 @@
 import { Command } from 'commander';
-import { formatEther } from 'viem';
+import { formatEther, isAddressEqual } from 'viem';
 import { getActiveChain } from '../config.js';
-import { getPublicClient, getWalletClient } from '../client.js';
+import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
 import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '../contracts/addresses.js';
 import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
+import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 
 type ListingCreateOptions = {
   contract: string;
@@ -14,6 +15,7 @@ type ListingCreateOptions = {
   price: string;
   currency?: string;
   target?: string;
+  split?: SplitAccumulator;
   chain?: string;
 };
 
@@ -45,8 +47,14 @@ export function listingCommand(): Command {
     .requiredOption('--price <amount>', 'listing price in ETH (or token units)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--target <address>', 'target buyer address (defaults to public listing)')
+    .option(
+      '--split <addr=ratio>',
+      'payout split recipient (repeatable). Format: 0xADDR=RATIO. Ratios must sum to 100. If omitted, 100% goes to the connected wallet.',
+      collectSplit,
+    )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts: ListingCreateOptions): Promise<void> => {
+      const splits = finalizeSplits(opts.split);
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
@@ -61,7 +69,13 @@ export function listingCommand(): Command {
       log(`  NFT contract: ${contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Price: ${opts.price} ${isEth ? 'ETH' : currency}`);
-      log(`  Target: ${target === PUBLIC_LISTING_TARGET ? 'public' : target}`);
+      log(`  Target: ${isAddressEqual(target, PUBLIC_LISTING_TARGET) ? 'public' : target}`);
+      if (splits) {
+        log(`  Splits:`);
+        formatSplitLines(splits).forEach((line) => {
+          log(line);
+        });
+      }
 
       try {
         const result = await rare.listing.create({
@@ -70,6 +84,8 @@ export function listingCommand(): Command {
           price: opts.price,
           currency,
           target,
+          splitAddresses: splits?.addresses,
+          splitRatios: splits?.ratios,
         });
 
         output(
@@ -183,7 +199,11 @@ export function listingCommand(): Command {
     .action(async (opts: ListingCancelOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const publicClient = getPublicClient(chain);
-      const rare = createRareClient({ publicClient });
+      const wallet = tryGetWalletClient(chain);
+      const rare = createRareClient({
+        publicClient,
+        walletClient: wallet?.client,
+      });
       const contract = parseAddress(opts.contract, '--contract');
       const target = opts.target ? parseAddress(opts.target, '--target') : PUBLIC_LISTING_TARGET;
 
@@ -201,6 +221,16 @@ export function listingCommand(): Command {
           console.log(`  Seller:   ${result.seller}`);
           console.log(`  Amount:   ${formatEther(result.amount)} ${result.isEth ? 'ETH' : result.currencyAddress}`);
           console.log(`  Currency: ${result.isEth ? 'ETH' : result.currencyAddress}`);
+          console.log(`  Target:   ${isAddressEqual(result.target, PUBLIC_LISTING_TARGET) ? 'public' : result.target}`);
+          if (result.splitAddresses.length > 0) {
+            console.log('  Splits:');
+            formatSplitLines({ addresses: result.splitAddresses, ratios: result.splitRatios }).forEach((line) => {
+              console.log(line);
+            });
+          }
+          if (result.canBuy !== null) {
+            console.log(`  Can buy:  ${result.canBuy ? 'yes' : 'no'}`);
+          }
         }
       });
     });
