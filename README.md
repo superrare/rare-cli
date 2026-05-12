@@ -221,13 +221,13 @@ rare mint \
 After creating and preparing a lazy collection, configure its RareMinter direct sale:
 
 ```bash
-rare listing release configure \
+rare listing lazy-sale configure \
   --contract 0x... \
   --price 0.1 \
   --max-mints 5
 
 # Optional payout splits. If omitted, 100% goes to the configured wallet.
-rare listing release configure \
+rare listing lazy-sale configure \
   --contract 0x... \
   --price 100 \
   --currency rare \
@@ -237,23 +237,23 @@ rare listing release configure \
   --split 0x...collaborator=20
 
 # Check release status (read-only)
-rare listing release status --contract 0x...
+rare listing lazy-sale status --contract 0x...
 
 # Include account-specific mint and transaction usage
-rare listing release status --contract 0x... --account 0x...
+rare listing lazy-sale status --contract 0x... --account 0x...
 
 # Mint from the configured direct sale release
-rare listing release mint \
+rare listing lazy-sale mint \
   --contract 0x... \
   --quantity 1
 
 # Mint during an active allowlist window with a proof file
-rare listing release allowlist proof \
+rare listing lazy-sale allowlist proof \
   --input ./allowlist-artifact.json \
   --account 0x... \
   --output ./proof.json
 
-rare listing release mint \
+rare listing lazy-sale mint \
   --contract 0x... \
   --quantity 2 \
   --proof ./proof.json
@@ -268,7 +268,7 @@ Release minting uses `RareMinter.mintDirectSale`; the contract mints to the conn
 Allowlists are two-step. First, build a reusable proof artifact from creator-provided wallet input. CSV files can put wallet addresses in the first column or use an `address`/`wallet` header. JSON files can be an array of address strings, an array of objects with `address` or `wallet`, or an object with `wallets`/`addresses`.
 
 ```bash
-rare listing release allowlist build \
+rare listing lazy-sale allowlist build \
   --input ./allowlist.csv \
   --output ./allowlist-artifact.json
 ```
@@ -276,36 +276,36 @@ rare listing release allowlist build \
 The artifact contains the Merkle root plus one proof per wallet. Configure the release with that root and the allowlist end time:
 
 ```bash
-rare listing release allowlist set \
+rare listing lazy-sale allowlist set \
   --contract 0x... \
   --input ./allowlist-artifact.json \
   --end-timestamp 2026-06-01T16:00:00Z
 
 # Or set a known root directly
-rare listing release allowlist set \
+rare listing lazy-sale allowlist set \
   --contract 0x... \
   --root 0x... \
   --end-timestamp 1767283200
 
 # Read a reusable proof for an account
-rare listing release allowlist proof \
+rare listing lazy-sale allowlist proof \
   --input ./allowlist-artifact.json \
   --account 0x...
 ```
 
-Rare listing release minting checks the configured on-chain root while the allowlist window is active. The proof artifact is the portable file that maps each wallet to the proof needed by a mint client or service. Keep the artifact alongside release operations; the chain stores only the root and end timestamp.
+Rare listing lazy-sale minting checks the configured on-chain root while the allowlist window is active. The proof artifact is the portable file that maps each wallet to the proof needed by a mint client or service. Keep the artifact alongside release operations; the chain stores only the root and end timestamp.
 
 Creator-facing RareMinter limits are configured separately and verified after each write:
 
 ```bash
 # Per-wallet token count across the release; 0 disables it.
-rare listing release limits set-mint --contract 0x... --limit 2
+rare listing lazy-sale limits set-mint --contract 0x... --limit 2
 
 # Per-wallet mint transaction count; 0 disables it.
-rare listing release limits set-tx --contract 0x... --limit 1
+rare listing lazy-sale limits set-tx --contract 0x... --limit 1
 
 # Minimum seller staking requirement in RARE; 0 disables it.
-rare listing release staking set-minimum \
+rare listing lazy-sale staking set-minimum \
   --contract 0x... \
   --minimum 100 \
   --end-timestamp 2026-06-01T16:00:00Z

@@ -10,7 +10,7 @@ import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 import { batchCommand } from './batch.js';
-import { releaseCommand } from './release.js';
+import { lazySaleCommand } from './release.js';
 
 type ListingCreateOptions = {
   contract?: string;
@@ -56,9 +56,9 @@ type ListingStatusOptions = {
 
 export function listingCommand(): Command {
   const cmd = new Command('listing');
-  cmd.description('Listing subcommands (create, cancel, buy, status, batch, release)');
+  cmd.description('Listing subcommands (create, cancel, buy, status, batch, lazy-sale)');
   cmd.addCommand(batchCommand());
-  cmd.addCommand(releaseCommand());
+  cmd.addCommand(lazySaleCommand());
 
   cmd
     .command('create')

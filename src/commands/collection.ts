@@ -200,7 +200,7 @@ function createSovereignCollectionCommand(): Command {
 
 function createLazySovereignCollectionCommand(): Command {
   const cmd = new Command('lazy-sovereign');
-  cmd.description('Create a Lazy Sovereign NFT collection for release minting');
+  cmd.description('Create a Lazy Sovereign NFT collection for lazy-sale minting');
 
   cmd
     .argument('<name>', 'name of the NFT collection')

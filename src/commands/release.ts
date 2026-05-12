@@ -189,9 +189,9 @@ function releaseWriteClient(chain: ReturnType<typeof getActiveChain>): RareClien
   return createRareClient({ publicClient, walletClient: client });
 }
 
-export function releaseCommand(): Command {
-  const cmd = new Command('release');
-  cmd.description('RareMinter release subcommands (configure, mint, allowlist, limits, status)');
+export function lazySaleCommand(): Command {
+  const cmd = new Command('lazy-sale');
+  cmd.description('RareMinter lazy sale subcommands (configure, mint, allowlist, limits, status)');
 
   cmd
     .command('configure')
@@ -275,7 +275,7 @@ export function releaseCommand(): Command {
     .option('--quantity <number>', 'number of tokens to mint', '1')
     .option('--currency <currency>', 'expected currency: eth, usdc, rare, or ERC20 address (defaults to configured sale currency)')
     .option('--price <amount>', 'expected per-token price in ETH or token units (defaults to configured sale price)')
-    .option('--proof <file>', 'allowlist proof JSON from rare listing release allowlist proof')
+    .option('--proof <file>', 'allowlist proof JSON from rare listing lazy-sale allowlist proof')
     .option('--recipient <address>', 'recipient when supported; RareMinter direct sales mint to the connected wallet')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')

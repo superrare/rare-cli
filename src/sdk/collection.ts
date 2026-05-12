@@ -105,7 +105,7 @@ export function createCollectionNamespace(
         contract: createdLog.args.contractAddress,
         factory: factoryAddress,
         contractType: plan.contractType,
-        nextStep: 'Configure release sale and mint settings for this collection before collector minting.',
+        nextStep: 'Configure lazy-sale mint settings for this collection before collector minting.',
       };
     },
 
