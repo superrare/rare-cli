@@ -12,7 +12,6 @@ import { offerCommand } from './commands/offer.js';
 import { listingCommand } from './commands/listing.js';
 import { currenciesCommand } from './commands/currencies.js';
 import { collectionCommand } from './commands/collection.js';
-import { collectionMarketCommand } from './commands/collection-market.js';
 import { releaseCommand } from './commands/release.js';
 import { batchCommand } from './commands/batch.js';
 import { setJsonMode } from './output.js';
@@ -45,7 +44,6 @@ program.addCommand(offerCommand());
 program.addCommand(listingCommand());
 program.addCommand(currenciesCommand());
 program.addCommand(collectionCommand());
-program.addCommand(collectionMarketCommand());
 program.addCommand(releaseCommand());
 program.addCommand(batchCommand());
 
