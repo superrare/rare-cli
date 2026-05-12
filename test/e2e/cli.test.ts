@@ -170,6 +170,18 @@ describe('built CLI deterministic behavior', () => {
       expect(set.stdout).toContain('--end-timestamp <seconds>');
       expect(set.stderr).toBe('');
 
+      const proof = await runCli(['release', 'allowlist', 'proof', '--help'], { home });
+      expect(proof.code).toBe(0);
+      expect(proof.stdout).toContain('--account <address>');
+      expect(proof.stdout).not.toContain('--address <address>');
+      expect(proof.stderr).toBe('');
+
+      const verify = await runCli(['release', 'allowlist', 'verify', '--help'], { home });
+      expect(verify.code).toBe(0);
+      expect(verify.stdout).toContain('--account <address>');
+      expect(verify.stdout).not.toContain('--address <address>');
+      expect(verify.stderr).toBe('');
+
       const limits = await runCli(['release', 'limits', 'set-mint', '--help'], { home });
       expect(limits.code).toBe(0);
       expect(limits.stdout).toContain('Usage: rare release limits set-mint [options]');
@@ -227,7 +239,7 @@ describe('built CLI deterministic behavior', () => {
         'proof',
         '--input',
         artifactPath,
-        '--address',
+        '--account',
         '0x2222222222222222222222222222222222222222',
       ], { home }));
 
@@ -246,7 +258,7 @@ describe('built CLI deterministic behavior', () => {
         'verify',
         '--input',
         artifactPath,
-        '--address',
+        '--account',
         '0x2222222222222222222222222222222222222222',
       ], { home }));
 

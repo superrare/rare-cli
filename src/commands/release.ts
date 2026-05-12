@@ -29,7 +29,7 @@ type AllowlistInputOptions = {
 };
 
 type AllowlistProofOptions = AllowlistInputOptions & {
-  address: string;
+  account: string;
 };
 
 type AllowlistVerifyOptions = AllowlistProofOptions & {
@@ -103,16 +103,16 @@ function createAllowlistBuildCommand(): Command {
 
 function createAllowlistProofCommand(): Command {
   const cmd = new Command('proof');
-  cmd.description('Generate a RareMinter allowlist proof for one address');
+  cmd.description('Generate a RareMinter allowlist proof for one account');
 
   cmd
     .requiredOption('--input <path>', 'allowlist artifact, CSV, or JSON wallet input file')
-    .requiredOption('--address <address>', 'wallet address to prove')
+    .requiredOption('--account <address>', 'account address to prove')
     .option('--format <format>', 'input format (csv, json)')
     .option('--output <path>', 'write the proof JSON to a file')
     .action(async (opts: AllowlistProofOptions) => {
       try {
-        const address = parseAddressOption(opts.address, '--address');
+        const address = parseAddressOption(opts.account, '--account');
         const artifact = await readAllowlistArtifact(opts.input, opts.format);
         const proof = getReleaseAllowlistProof(artifact, address);
 
@@ -148,16 +148,16 @@ function createAllowlistProofCommand(): Command {
 
 function createAllowlistVerifyCommand(): Command {
   const cmd = new Command('verify');
-  cmd.description('Verify an address proof from an allowlist artifact or wallet file');
+  cmd.description('Verify an account proof from an allowlist artifact or wallet file');
 
   cmd
     .requiredOption('--input <path>', 'allowlist artifact, CSV, or JSON wallet input file')
-    .requiredOption('--address <address>', 'wallet address to verify')
+    .requiredOption('--account <address>', 'account address to verify')
     .option('--root <bytes32>', 'expected Merkle root; defaults to the input root')
     .option('--format <format>', 'input format (csv, json)')
     .action(async (opts: AllowlistVerifyOptions) => {
       try {
-        const address = parseAddressOption(opts.address, '--address');
+        const address = parseAddressOption(opts.account, '--account');
         const root = opts.root === undefined ? undefined : normalizeBytes32(opts.root, '--root');
         const artifact = await readAllowlistArtifact(opts.input, opts.format);
         const proof = getReleaseAllowlistProof(artifact, address);

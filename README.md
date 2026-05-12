@@ -119,7 +119,7 @@ Configure RareMinter release allowlists and limits from files or direct values. 
 
 ```bash
 rare release allowlist build --input allowlist.csv --output allowlist-artifact.json
-rare release allowlist proof --input allowlist-artifact.json --address 0x...
+rare release allowlist proof --input allowlist-artifact.json --account 0x...
 rare release allowlist set --contract 0x... --input allowlist-artifact.json --end-timestamp 1778500000
 rare release limits set-mint --contract 0x... --limit 5
 rare release limits set-tx --contract 0x... --limit 2
