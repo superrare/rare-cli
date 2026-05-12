@@ -1,8 +1,14 @@
-import { type Address, type Hash, type PublicClient } from 'viem';
+import { isAddressEqual, type Address, type Hash, type PublicClient } from 'viem';
 import { batchListingAbi } from '../contracts/abis/batch-listing.js';
-import type { RareClientConfig, RareClient } from './types.js';
+import { ETH_ADDRESS } from '../contracts/addresses.js';
+import type {
+  BatchListingCreateResult,
+  BatchListingStatus,
+  RareClient,
+  RareClientConfig,
+  TransactionResult,
+} from './types.js';
 import {
-  ETH_ADDRESS,
   approvalAbi,
   preparePayment,
   requireWallet,
@@ -11,7 +17,6 @@ import {
   waitForApproval,
 } from './helpers.js';
 
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
 export function createBatchListingNamespace(
@@ -20,23 +25,19 @@ export function createBatchListingNamespace(
   addresses: { batchListing: Address; erc721ApprovalManager: Address },
 ): RareClient['batchListing'] {
   return {
-    async create(params) {
+    async create(params): Promise<BatchListingCreateResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const { artifact } = params;
 
-      if (!artifact.tokens.length) {
+      if (artifact.tokens.length === 0) {
         throw new Error('Root artifact must contain at least one token');
       }
 
-      const uniqueContracts = Array.from(
-        new Set(artifact.tokens.map((t) => t.contract.toLowerCase())),
-      ) as Address[];
+      const uniqueContracts = uniqueAddresses(artifact.tokens.map((token) => token.contract));
 
-      const ownerSampleSize = Math.min(3, artifact.tokens.length);
-      for (let i = 0; i < ownerSampleSize; i++) {
-        const t = artifact.tokens[i]!;
+      for (const token of artifact.tokens.slice(0, 3)) {
         const owner = (await publicClient.readContract({
-          address: t.contract,
+          address: token.contract,
           abi: [
             {
               type: 'function',
@@ -47,26 +48,28 @@ export function createBatchListingNamespace(
             },
           ] as const,
           functionName: 'ownerOf',
-          args: [BigInt(t.tokenId)],
-        })) as Address;
-        if (owner.toLowerCase() !== accountAddress.toLowerCase()) {
+          args: [BigInt(token.tokenId)],
+        }));
+        if (!isAddressEqual(owner, accountAddress)) {
           throw new Error(
-            `Token ${t.contract}/${t.tokenId} is owned by ${owner}, not the configured account ${accountAddress}. ` +
+            `Token ${token.contract}/${token.tokenId} is owned by ${owner}, not the configured account ${accountAddress}. ` +
               `Re-check the token set before registering this batch listing.`,
           );
         }
       }
 
-      const approvalTxHashes: Hash[] = [];
-      if (params.autoApprove !== false) {
-        for (const nftAddress of uniqueContracts) {
-          const isApproved = await publicClient.readContract({
-            address: nftAddress,
-            abi: approvalAbi,
-            functionName: 'isApprovedForAll',
-            args: [accountAddress, addresses.erc721ApprovalManager],
-          });
-          if (!isApproved) {
+      const approvalTxHashes = params.autoApprove === false
+        ? []
+        : await Promise.all(
+          uniqueContracts.map(async (nftAddress): Promise<Hash | undefined> => {
+            const isApproved = await publicClient.readContract({
+              address: nftAddress,
+              abi: approvalAbi,
+              functionName: 'isApprovedForAll',
+              args: [accountAddress, addresses.erc721ApprovalManager],
+            });
+            if (isApproved) return undefined;
+
             const approvalTxHash = await walletClient.writeContract({
               address: nftAddress,
               abi: approvalAbi,
@@ -77,10 +80,9 @@ export function createBatchListingNamespace(
             });
             await publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
             await waitForApproval(publicClient, nftAddress, accountAddress, addresses.erc721ApprovalManager);
-            approvalTxHashes.push(approvalTxHash);
-          }
-        }
-      }
+            return approvalTxHash;
+          }),
+        ).then((hashes) => hashes.filter(isHash));
 
       const txHash = await walletClient.writeContract({
         address: addresses.batchListing,
@@ -97,10 +99,10 @@ export function createBatchListingNamespace(
         chain: undefined,
       });
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return { txHash, receipt, approvalTxHashes: approvalTxHashes.length ? approvalTxHashes : undefined };
+      return { txHash, receipt, approvalTxHashes: approvalTxHashes.length > 0 ? approvalTxHashes : undefined };
     },
 
-    async cancel(params) {
+    async cancel(params): Promise<TransactionResult> {
       const { walletClient, account } = requireWallet(config);
       const txHash = await walletClient.writeContract({
         address: addresses.batchListing,
@@ -114,7 +116,7 @@ export function createBatchListingNamespace(
       return { txHash, receipt };
     },
 
-    async buy(params) {
+    async buy(params): Promise<TransactionResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
 
       const amount = toWei(params.amount);
@@ -153,7 +155,7 @@ export function createBatchListingNamespace(
       return { txHash, receipt };
     },
 
-    async setAllowList(params) {
+    async setAllowList(params): Promise<TransactionResult> {
       const { walletClient, account } = requireWallet(config);
       const txHash = await walletClient.writeContract({
         address: addresses.batchListing,
@@ -167,76 +169,102 @@ export function createBatchListingNamespace(
       return { txHash, receipt };
     },
 
-    async getStatus(params) {
-      const config = (await publicClient.readContract({
+    async getStatus(params): Promise<BatchListingStatus> {
+      const listingConfig = (await publicClient.readContract({
         address: addresses.batchListing,
         abi: batchListingAbi,
         functionName: 'getMerkleSalePriceConfig',
         args: [params.creator, params.root],
-      })) as {
-        currency: Address;
-        amount: bigint;
-        splitRecipients: readonly Address[];
-        splitRatios: readonly number[];
-        nonce: bigint;
-      };
+      }));
 
       const cancellationNonce = (await publicClient.readContract({
         address: addresses.batchListing,
         abi: batchListingAbi,
         functionName: 'getCreatorSalePriceMerkleRootNonce',
         args: [params.creator, params.root],
-      })) as bigint;
+      }));
 
       const hasListing =
-        config.amount > 0n && config.currency !== ZERO_ADDRESS && cancellationNonce === config.nonce;
-
-      let allowList: { root: `0x${string}`; endTimestamp: bigint } | undefined;
-      try {
-        const al = (await publicClient.readContract({
-          address: addresses.batchListing,
-          abi: batchListingAbi,
-          functionName: 'getAllowListConfig',
-          args: [params.creator, params.root],
-        })) as { root: `0x${string}`; endTimestamp: bigint };
-        if (al.root !== ZERO_BYTES32) {
-          allowList = { root: al.root, endTimestamp: al.endTimestamp };
-        }
-      } catch {
-        // contract may revert if no allowlist set; treat as absent
-      }
-
-      let tokenInRoot: boolean | undefined;
-      let tokenNonce: bigint | undefined;
-      if (params.contract && params.tokenId !== undefined && params.proof) {
-        tokenInRoot = (await publicClient.readContract({
-          address: addresses.batchListing,
-          abi: batchListingAbi,
-          functionName: 'isTokenInRoot',
-          args: [params.root, params.contract, toInteger(params.tokenId, 'tokenId'), params.proof],
-        })) as boolean;
-        tokenNonce = (await publicClient.readContract({
-          address: addresses.batchListing,
-          abi: batchListingAbi,
-          functionName: 'getTokenSalePriceNonce',
-          args: [params.creator, params.root, params.contract, toInteger(params.tokenId, 'tokenId')],
-        })) as bigint;
-      }
+        listingConfig.amount > 0n &&
+        !isAddressEqual(listingConfig.currency, ETH_ADDRESS) &&
+        cancellationNonce === listingConfig.nonce;
+      const allowList = await readAllowListConfig(publicClient, addresses.batchListing, params.creator, params.root);
+      const tokenStatus = await readTokenStatus(publicClient, addresses.batchListing, params);
 
       return {
         root: params.root,
         seller: params.creator,
-        currencyAddress: config.currency,
-        amount: config.amount,
-        splitRecipients: [...config.splitRecipients],
-        splitRatios: [...config.splitRatios],
-        nonce: config.nonce,
-        isEth: config.currency === ETH_ADDRESS,
+        currencyAddress: listingConfig.currency,
+        amount: listingConfig.amount,
+        splitRecipients: [...listingConfig.splitRecipients],
+        splitRatios: [...listingConfig.splitRatios],
+        nonce: listingConfig.nonce,
+        isEth: isAddressEqual(listingConfig.currency, ETH_ADDRESS),
         hasListing,
         allowList,
-        tokenInRoot,
-        tokenNonce,
+        ...tokenStatus,
       };
     },
   };
+}
+
+function isHash(value: Hash | undefined): value is Hash {
+  return value !== undefined;
+}
+
+function uniqueAddresses(addresses: Address[]): Address[] {
+  return addresses.reduce<Address[]>(
+    (unique, address) => unique.some((existing) => isAddressEqual(existing, address)) ? unique : [...unique, address],
+    [],
+  );
+}
+
+async function readAllowListConfig(
+  publicClient: PublicClient,
+  batchListingAddress: Address,
+  creator: Address,
+  root: `0x${string}`,
+): Promise<{ root: `0x${string}`; endTimestamp: bigint } | undefined> {
+  try {
+    const allowList = await publicClient.readContract({
+      address: batchListingAddress,
+      abi: batchListingAbi,
+      functionName: 'getAllowListConfig',
+      args: [creator, root],
+    });
+    return allowList.root === ZERO_BYTES32
+      ? undefined
+      : { root: allowList.root, endTimestamp: allowList.endTimestamp };
+  } catch {
+    // Contract may revert if no allowlist is set.
+    return undefined;
+  }
+}
+
+async function readTokenStatus(
+  publicClient: PublicClient,
+  batchListingAddress: Address,
+  params: Parameters<RareClient['batchListing']['getStatus']>[0],
+): Promise<Pick<BatchListingStatus, 'tokenInRoot' | 'tokenNonce'>> {
+  if (params.contract === undefined || params.tokenId === undefined || params.proof === undefined) {
+    return {};
+  }
+
+  const tokenId = toInteger(params.tokenId, 'tokenId');
+  const [tokenInRoot, tokenNonce] = await Promise.all([
+    publicClient.readContract({
+      address: batchListingAddress,
+      abi: batchListingAbi,
+      functionName: 'isTokenInRoot',
+      args: [params.root, params.contract, tokenId, params.proof],
+    }),
+    publicClient.readContract({
+      address: batchListingAddress,
+      abi: batchListingAbi,
+      functionName: 'getTokenSalePriceNonce',
+      args: [params.creator, params.root, params.contract, tokenId],
+    }),
+  ]);
+
+  return { tokenInRoot, tokenNonce };
 }

@@ -1,5 +1,20 @@
 export { createRareClient } from './client.js';
-export type { RareClient, RareClientConfig } from './types.js';
+export type {
+  RareClient,
+  RareClientConfig,
+  BuyRareQuote,
+  BuyTokenParams,
+  SellTokenParams,
+  TokenTradeQuote,
+  TokenTradeResult,
+  GeneratePresetCurvesParams,
+  GeneratePresetCurvesResult,
+  ValidateLiquidCurvesParams,
+  DeployLiquidEditionParams,
+  DeployLiquidEditionResult,
+} from './types.js';
+export type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
+export type { LiquidFactoryConfig } from '../liquid/factory-config.js';
 export type {
   CollectionSearchParams,
   ImportErc721Params,
@@ -16,19 +31,25 @@ export type {
 } from './api.js';
 
 export {
+  canonicalV4Pools,
   contractAddresses,
   chainIds,
   viemChains,
+  getCanonicalV4Pools,
   getContractAddresses,
   getBatchListingAddress,
   getErc721ApprovalManagerAddress,
   isSupportedChain,
 } from '../contracts/addresses.js';
-export type { SupportedChain } from '../contracts/addresses.js';
+export type { CanonicalV4Pool, CanonicalV4Pools, ContractAddresses, SupportedChain } from '../contracts/addresses.js';
 export { factoryAbi } from '../contracts/abis/factory.js';
 export { auctionAbi } from '../contracts/abis/auction.js';
+export { liquidFactoryAbi } from '../contracts/abis/liquid-factory.js';
+export { liquidRouterAbi } from '../contracts/abis/liquid-router.js';
+export { liquidEditionAbi } from '../contracts/abis/liquid-edition.js';
 export { tokenAbi } from '../contracts/abis/token.js';
 export { batchListingAbi } from '../contracts/abis/batch-listing.js';
+export { uniswapV4QuoterAbi } from '../contracts/abis/uniswap-v4-quoter.js';
 
 export {
   buildBatchListingTree,

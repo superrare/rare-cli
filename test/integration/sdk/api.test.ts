@@ -14,10 +14,11 @@ describe('SDK API live integration', () => {
 
     expect(search.pagination).toMatchObject({ page: 1, perPage: 1 });
     expect(search.data).toHaveLength(1);
-    expect(search.data[0].universalTokenId).toEqual(expect.any(String));
+    const [firstNft] = search.data;
+    expect(firstNft!.universalTokenId).toEqual(expect.any(String));
 
-    const nft = await getNft(search.data[0].universalTokenId);
-    expect(nft.universalTokenId).toBe(search.data[0].universalTokenId);
+    const nft = await getNft(firstNft!.universalTokenId);
+    expect(nft.universalTokenId).toBe(firstNft!.universalTokenId);
 
     const events = await getNftEvents(nft.universalTokenId, { page: 1, perPage: 1 });
     expect(events.pagination).toMatchObject({ page: 1, perPage: 1 });
@@ -29,10 +30,11 @@ describe('SDK API live integration', () => {
 
     expect(search.pagination).toMatchObject({ page: 1, perPage: 1 });
     expect(search.data).toHaveLength(1);
-    expect(search.data[0].collectionId).toEqual(expect.any(String));
+    const [firstCollection] = search.data;
+    expect(firstCollection!.collectionId).toEqual(expect.any(String));
 
-    const collection = await getCollection(search.data[0].collectionId);
-    expect(collection.collectionId).toBe(search.data[0].collectionId);
+    const collection = await getCollection(firstCollection!.collectionId);
+    expect(collection.collectionId).toBe(firstCollection!.collectionId);
   }, 30_000);
 
   it('fetches token prices from the SuperRare API', async () => {

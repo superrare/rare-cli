@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseEther } from 'viem';
+import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '../../../src/contracts/addresses.js';
 import {
   planAuctionBid,
   planAuctionCreate,
@@ -15,7 +16,6 @@ import {
   shapeOfferStatus,
 } from '../../../src/sdk/marketplace-core.js';
 
-const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 const accountAddress = '0x0000000000000000000000000000000000000001' as const;
 const buyerAddress = '0x0000000000000000000000000000000000000002' as const;
 const nftContract = '0x1000000000000000000000000000000000000000' as const;
@@ -29,7 +29,7 @@ describe('marketplace transaction planning', () => {
       tokenId: 1n,
       currency: ETH_ADDRESS,
       price: parseEther('0.5'),
-      target: ETH_ADDRESS,
+      target: PUBLIC_LISTING_TARGET,
       splitAddresses: [accountAddress],
       splitRatios: [100],
     });
@@ -39,10 +39,59 @@ describe('marketplace transaction planning', () => {
     expect(planListingCreate({ contract: nftContract, tokenId: '1', price: '0' }, accountAddress).price).toBe(0n);
   });
 
+  it('plans listing create with custom splits and validates them before contract writes', () => {
+    expect(
+      planListingCreate(
+        {
+          contract: nftContract,
+          tokenId: '1',
+          price: '0.5',
+          splitAddresses: [accountAddress, buyerAddress],
+          splitRatios: [70, 30],
+        },
+        accountAddress,
+      ),
+    ).toMatchObject({
+      splitAddresses: [accountAddress, buyerAddress],
+      splitRatios: [70, 30],
+    });
+
+    expect(() =>
+      planListingCreate(
+        { contract: nftContract, tokenId: '1', price: '1', splitAddresses: [], splitRatios: [] },
+        accountAddress,
+      ),
+    ).toThrow('splitAddresses must include at least 1 address.');
+    expect(() =>
+      planListingCreate(
+        {
+          contract: nftContract,
+          tokenId: '1',
+          price: '1',
+          splitAddresses: [accountAddress, buyerAddress],
+          splitRatios: [100],
+        },
+        accountAddress,
+      ),
+    ).toThrow('splitAddresses and splitRatios must have the same length.');
+    expect(() =>
+      planListingCreate(
+        {
+          contract: nftContract,
+          tokenId: '1',
+          price: '1',
+          splitAddresses: [accountAddress, buyerAddress],
+          splitRatios: [60, 20],
+        },
+        accountAddress,
+      ),
+    ).toThrow('splitRatios must sum to 100 (got 80).');
+  });
+
   it('plans listing cancel and buy inputs', () => {
     expect(planListingCancel({ contract: nftContract, tokenId: '3' })).toEqual({
       tokenId: 3n,
-      target: ETH_ADDRESS,
+      target: PUBLIC_LISTING_TARGET,
     });
     expect(planListingBuy({ contract: nftContract, tokenId: '4', amount: '1', currency: erc20Currency })).toEqual({
       tokenId: 4n,
@@ -84,7 +133,6 @@ describe('marketplace transaction planning', () => {
       tokenId: 5n,
       currency: erc20Currency,
       amount: parseEther('2'),
-      convertible: false,
     });
     expect(planOfferCancel({ contract: nftContract, tokenId: '11' })).toEqual({
       tokenId: 11n,
@@ -96,6 +144,21 @@ describe('marketplace transaction planning', () => {
       amount: parseEther('1'),
       splitAddresses: [accountAddress],
       splitRatios: [100],
+    });
+    expect(
+      planOfferAccept(
+        {
+          contract: nftContract,
+          tokenId: '12',
+          amount: '1',
+          splitAddresses: [accountAddress, buyerAddress],
+          splitRatios: [70, 30],
+        },
+        accountAddress,
+      ),
+    ).toMatchObject({
+      splitAddresses: [accountAddress, buyerAddress],
+      splitRatios: [70, 30],
     });
   });
 
@@ -113,31 +176,117 @@ describe('marketplace transaction planning', () => {
       'tokenId must be greater than or equal to 0.',
     );
   });
+
+  it('validates offer accept splits before contract writes', () => {
+    expect(() =>
+      planOfferAccept(
+        { contract: nftContract, tokenId: '1', amount: '1', splitAddresses: [], splitRatios: [] },
+        accountAddress,
+      ),
+    ).toThrow('splitAddresses must include at least 1 address.');
+    expect(() =>
+      planOfferAccept(
+        {
+          contract: nftContract,
+          tokenId: '1',
+          amount: '1',
+          splitAddresses: [accountAddress, buyerAddress],
+          splitRatios: [100],
+        },
+        accountAddress,
+      ),
+    ).toThrow('splitAddresses and splitRatios must have the same length.');
+    expect(() =>
+      planOfferAccept(
+        {
+          contract: nftContract,
+          tokenId: '1',
+          amount: '1',
+          splitAddresses: [accountAddress, buyerAddress],
+          splitRatios: [60, 20],
+        },
+        accountAddress,
+      ),
+    ).toThrow('splitRatios must sum to 100 (got 80).');
+  });
 });
 
 describe('marketplace result shaping', () => {
   it('shapes listing status', () => {
-    expect(shapeListingStatus([accountAddress, ETH_ADDRESS, parseEther('1')])).toEqual({
+    expect(
+      shapeListingStatus([accountAddress, ETH_ADDRESS, parseEther('1'), [accountAddress], [100]], {
+        target: PUBLIC_LISTING_TARGET,
+        wallet: buyerAddress,
+      }),
+    ).toEqual({
       seller: accountAddress,
       currencyAddress: ETH_ADDRESS,
       amount: parseEther('1'),
       hasListing: true,
       isEth: true,
+      target: PUBLIC_LISTING_TARGET,
+      splitAddresses: [accountAddress],
+      splitRatios: [100],
+      canBuy: true,
     });
-    expect(shapeListingStatus([accountAddress, ETH_ADDRESS, 0n])).toMatchObject({
+    expect(
+      shapeListingStatus([accountAddress, ETH_ADDRESS, 0n, [], []], {
+        target: PUBLIC_LISTING_TARGET,
+        wallet: buyerAddress,
+      }),
+    ).toMatchObject({
       amount: 0n,
       hasListing: false,
+      canBuy: false,
     });
   });
 
+  it('shapes listing buyer eligibility from wallet and target', () => {
+    const activeListing = [accountAddress, ETH_ADDRESS, parseEther('1'), [accountAddress], [100]] as const;
+
+    expect(shapeListingStatus(activeListing, { target: PUBLIC_LISTING_TARGET, wallet: accountAddress }).canBuy).toBe(false);
+    expect(shapeListingStatus(activeListing, { target: PUBLIC_LISTING_TARGET, wallet: buyerAddress }).canBuy).toBe(true);
+    expect(shapeListingStatus(activeListing, { target: buyerAddress, wallet: buyerAddress }).canBuy).toBe(true);
+    expect(shapeListingStatus(activeListing, { target: accountAddress, wallet: buyerAddress }).canBuy).toBe(false);
+    expect(shapeListingStatus(activeListing, { target: PUBLIC_LISTING_TARGET }).canBuy).toBeNull();
+  });
+
   it('shapes offer status', () => {
-    expect(shapeOfferStatus([buyerAddress, parseEther('1'), 123n, 3, true])).toEqual({
+    expect(shapeOfferStatus([buyerAddress, parseEther('1'), 123n, 3, true], { nowSeconds: 200n })).toEqual({
       buyer: buyerAddress,
       amount: parseEther('1'),
       timestamp: 123n,
       marketplaceFee: 3,
-      convertible: true,
       hasOffer: true,
+      currency: ETH_ADDRESS,
+      tokenOwner: null,
+      cancellableAfter: null,
+      canAccept: null,
+      canCancel: null,
+    });
+  });
+
+  it('uses Bazaar strict offer cancellation delay semantics', () => {
+    expect(
+      shapeOfferStatus([buyerAddress, parseEther('1'), 100n, 3, false], {
+        cancellationDelay: 5n,
+        wallet: buyerAddress,
+        nowSeconds: 105n,
+      }),
+    ).toMatchObject({
+      cancellableAfter: 106n,
+      canCancel: false,
+    });
+
+    expect(
+      shapeOfferStatus([buyerAddress, parseEther('1'), 100n, 3, false], {
+        cancellationDelay: 5n,
+        wallet: buyerAddress,
+        nowSeconds: 106n,
+      }),
+    ).toMatchObject({
+      cancellableAfter: 106n,
+      canCancel: true,
     });
   });
 

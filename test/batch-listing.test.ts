@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax, @typescript-eslint/explicit-function-return-type, functional/immutable-data */
 import { describe, expect, it } from 'vitest';
 import type { Address } from 'viem';
 import { createBatchListingNamespace } from '../src/sdk/batch-listing.js';
@@ -6,7 +7,7 @@ import { getBatchListingAddress } from '../src/contracts/addresses.js';
 const batchListingAddress = '0xF2bE72d4343beD375Cb6d0E799a3c003163860e0' as Address;
 const approvalManagerAddress = '0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E' as Address;
 const accountAddress = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as Address;
-const hex32 = (byte: string) => (`0x${byte.repeat(64)}` as `0x${string}`);
+const hex32 = (byte: string) => (`0x${byte.repeat(64)}`);
 
 function receipt() {
   return { blockNumber: 1n } as never;
@@ -143,7 +144,7 @@ describe('batch listing namespace', () => {
           if (params.functionName === 'getCreatorSalePriceMerkleRootNonce') return 4n;
           if (params.functionName === 'getAllowListConfig') {
             return {
-              root: `0x${'00'.repeat(32)}` as `0x${string}`,
+              root: `0x${'00'.repeat(32)}`,
               endTimestamp: 0n,
             };
           }

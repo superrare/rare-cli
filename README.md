@@ -163,12 +163,22 @@ rare offer create --contract 0x... --token-id 1 --amount 100 --currency usdc
 # Accept an offer on a token you own
 rare offer accept --contract 0x... --token-id 1 --amount 0.5
 
+# Accept with payout splits (must sum to 100; caller is NOT auto-included)
+rare offer accept --contract 0x... --token-id 1 --amount 0.5 \
+  --split 0xCollab=30 --split 0xMyWallet=70
+
 # Cancel your offer
 rare offer cancel --contract 0x... --token-id 1
 
 # Check offer status (read-only)
 rare offer status --contract 0x... --token-id 1
 ```
+
+`--amount` on `accept` is a slippage assertion: the on-chain offer must still match the value you pass, otherwise the tx reverts. Re-run `offer status` if you suspect drift.
+
+`--split <ADDR=RATIO>` is repeatable for up to 5 recipients. Ratios must sum to exactly 100. If you omit `--split`, the SDK defaults to `[caller, 100]` (100% to your wallet). If you pass any `--split`, you must specify the complete list — the caller is **not** auto-appended.
+
+NFT approval (`setApprovalForAll`) is auto-handled by `offer accept` when needed, just like `auction create` and `listing create`.
 
 ### Listings
 
@@ -179,15 +189,22 @@ rare listing create --contract 0x... --token-id 1 --price 1.0
 # List with ERC20 currency or a targeted buyer
 rare listing create --contract 0x... --token-id 1 --price 100 --currency rare --target 0x...buyer
 
+# List with payout splits (must sum to 100; caller is NOT auto-included)
+rare listing create --contract 0x... --token-id 1 --price 1.0 \
+  --split 0xCollab=30 --split 0xMyWallet=70
+
 # Buy a listed token
 rare listing buy --contract 0x... --token-id 1 --amount 1.0
 
 # Cancel a listing
 rare listing cancel --contract 0x... --token-id 1
 
-# Check listing status (read-only)
+# Check listing status (read-only) — includes seller, amount, currency, target,
+# split recipients, and whether the connected wallet can buy
 rare listing status --contract 0x... --token-id 1
 ```
+
+`--split <ADDR=RATIO>` is repeatable. Ratios must sum to exactly 100. If you omit `--split`, the SDK defaults to `[caller, 100]` (100% to your wallet). If you pass any `--split`, you must specify the complete list — the caller is **not** auto-appended.
 
 ### Batch Listings
 

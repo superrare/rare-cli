@@ -16,6 +16,45 @@ The imperative shell is the thin orchestration layer. It reads config and enviro
 - Pass dependencies into shell code instead of burying side effects inside core logic.
 - Return structured data from core logic instead of printing, exiting, or mutating external state.
 
+## Error Handling
+
+The rule of thumb is: **if the caller wants to handle the failure differently in code, return it; if the failure should abort and surface to the user, throw it.**
+
+### Throw when
+
+- Crossing an I/O boundary — RPC, HTTP, filesystem, wallet, contract calls. Viem and `openapi-fetch` already throw rich errors with `.cause` chains; do not catch-and-wrap unless you have a specific reason. Let them flow to `printError` (`src/errors.ts`), which walks the cause chain, mines viem's `shortMessage` / `reason` / `metaMessages`, and honors `--json` mode.
+- The failure is a bug-class invariant — impossible states, unreachable branches, programmer errors. `throw new Error('unreachable: ...')`.
+- The failure is at the SDK's public surface. SDK consumers (the CLI and external users via `dist/client.js`) expect Promise rejections, not Result types. Throwing keeps the SDK ergonomic and consistent with the JS ecosystem.
+- The failure is a user-input error inside a CLI command action. The top-level `program.parseAsync(...).catch(printError)` in `src/index.ts` is the single exit ramp. Do not call `console.error` + `process.exit(1)` inline — that bypasses `--json` mode and the unified formatting.
+
+### Return a discriminated result when
+
+- The failure is expected and part of the function's contract — input validation, parsing, business-rule checks. `src/liquid/curve-config.ts`'s `{ isValid: true, ... } | { isValid: false, error, errorMessage }` is the model.
+- The caller often wants to branch on the failure mode (re-prompt, accumulate errors, try alternatives) rather than propagate.
+- The function lives in the functional core. The core's whole point is that decisions return structured data. Throwing from the core makes outputs harder to test and reason about.
+- The caller wants to enumerate failure cases at compile time. Pair a tagged union with `@typescript-eslint/switch-exhaustiveness-check` (already on) so new failure modes force handling.
+
+### Return `undefined` / `null` when
+
+- A lookup has a single "not found" mode and no useful "why." `find(...)`-style returns.
+- Avoid when the absent value is ambiguous (not found vs not loaded vs intentionally empty).
+
+### Anti-patterns
+
+- **Try/catch as control flow inside the core.** If you find yourself doing `try { parseFoo(x) } catch { ... }` to pick a code path, `parseFoo` should return a Result instead.
+- **Boolean returns for failure.** `function doThing(): boolean` discards the reason. Either throw or return a Result.
+- **Catch-rewrap-rethrow without `cause`.** If you must wrap, always set `{ cause: original }` so `printError` can walk the chain.
+- **Catching `unknown` and swallowing it.** `catch { return undefined }` silently hides real bugs.
+- **`console.error` + `process.exit(1)` from shell code.** Throw instead and let `printError` handle it.
+- **Domain errors with no `instanceof` discriminator.** If you add a custom error class, model it on `RareApiError` in `src/data-access/errors.ts` so `errors.ts` can pull specific fields out of it.
+
+### Where the two patterns currently live
+
+- Throwing: `src/sdk/**` (SDK methods, viem/API errors), `src/sdk/validation.ts` (parsers called from command setup), `src/commands/**` (action handlers).
+- Returning: `src/liquid/curve-config.ts` (interactive wizard validators — re-prompts on failure rather than aborting).
+
+Both are correct because they sit on opposite sides of the I/O boundary. Match new code to whichever side it belongs on.
+
 ## Testing Approach
 
 The core/shell split guides test scope. Use the cheapest test that gives real confidence.
@@ -51,8 +90,6 @@ Cover:
 - Contract read flows.
 - Transaction preparation and write orchestration.
 - Realistic success and failure paths.
-
-Use stable fixtures and controlled services. For chain-dependent behavior, prefer a fork, or dedicated testnet setup over production dependencies. Document required RPC URLs, private keys, funding, chain selection, and cleanup expectations.
 
 ## CLI E2E Tests
 
