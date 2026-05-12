@@ -69,7 +69,7 @@ Resolve an existing token, quote its billable bytes, and optionally preserve it 
 ```bash
 rare backup token --contract <addr> --token-id <id> [--chain <chain>] --quote-only
 rare backup token --contract <addr> --token-id <id> [--chain <chain>] --payment-chain <chain>
-rare backup token --universal-token-id <chainId-contract-tokenId> [--payment-chain <chain>]
+rare backup token --contract <addr> --token-id <id> [--chain-id <id>] [--payment-chain-id <id>]
 ```
 
 Backup requests default to `https://api.superrare.com`, and IPFS fetches/receipt links default to `https://superrare.myfilebase.com`.

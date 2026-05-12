@@ -134,6 +134,54 @@ test('backup token preserves successfully with --yes in non-interactive mode', a
   }
 });
 
+test('backup token quote-only accepts source and payment chain IDs', async () => {
+  const server = await startPreservationServer();
+  const homeDir = createTempHome();
+
+  try {
+    writeRareConfig(homeDir, {
+      chains: {
+        sepolia: {
+          rpcUrl: `${server.baseUrl}/rpc`,
+        },
+      },
+      preservation: {},
+    });
+
+    const result = await runCli(
+      [
+        'backup',
+        'token',
+        '--contract',
+        '0x3333333333333333333333333333333333333333',
+        '--token-id',
+        '7',
+        '--chain-id',
+        '11155111',
+        '--payment-chain-id',
+        '8453',
+        '--service-url',
+        server.baseUrl,
+        '--gateway',
+        server.baseUrl,
+        '--quote-only',
+      ],
+      { env: { HOME: homeDir } },
+    );
+
+    assert.equal(result.code, 0);
+    assert.match(result.stdout, /Preservation quote:/);
+    assert.match(result.stdout, /Payment chain:\s+base/);
+    assert.equal(result.stderr, '');
+    assert.equal(server.counters.quoteRequests, 1);
+    assert.equal(server.counters.uploadSessionRequests, 0);
+    assert.equal(server.counters.finalizeRequests, 0);
+  } finally {
+    server.close();
+    rmSync(homeDir, { recursive: true, force: true });
+  }
+});
+
 function createTempHome() {
   return mkdtempSync(path.join(os.tmpdir(), 'rare-cli-home-'));
 }

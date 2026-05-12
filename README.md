@@ -142,12 +142,8 @@ rare backup token \
 rare backup token \
   --contract 0x... \
   --token-id 1 \
-  --chain mainnet \
+  --chain-id 1 \
   --payment-chain base
-
-# Or resolve by universal token ID
-rare backup token \
-  --universal-token-id 1-0x...-1
 ```
 
 Useful options:
@@ -162,7 +158,7 @@ rare backup token \
 
 The CLI defaults to `https://api.superrare.com` for preservation requests and uses `https://superrare.myfilebase.com` as its IPFS gateway. Use `--service-url` only when you need to point the backup flow at a different API host.
 
-For paid preserves, the selected `--payment-chain` must have both a private key and RPC URL configured. The backup flow does not auto-generate wallets. Before any payment-capable request, the CLI now prints the quote and asks for confirmation. Use `--yes` to skip the prompt in automation.
+For paid preserves, the selected `--payment-chain` or `--payment-chain-id` must have both a private key and RPC URL configured. The backup flow does not auto-generate wallets. Before any payment-capable request, the CLI now prints the quote and asks for confirmation. Use `--yes` to skip the prompt in automation.
 
 Preservation currently only supports CID-backed IPFS metadata and media references. Use `ipfs://...` URIs or IPFS gateway URLs like `https://ipfs.io/ipfs/<cid>...`.
 

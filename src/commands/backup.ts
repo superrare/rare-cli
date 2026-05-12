@@ -6,7 +6,7 @@ import { getWalletClientStrict, getPublicClient } from '../client.js';
 import { getActiveChain } from '../config.js';
 import { supportedChainFromChainId, type SupportedChain } from '../contracts/addresses.js';
 import { output, log, isJsonMode } from '../output.js';
-import { parseUniversalTokenId, resolveTokenPreservation, type ResolvedTokenPreservation } from '../sdk/backup-resolver.js';
+import { resolveTokenPreservation, type ResolvedTokenPreservation } from '../sdk/backup-resolver.js';
 import {
   DEFAULT_PRESERVATION_GATEWAY_URL,
   DEFAULT_PRESERVATION_MAX_BYTES,
@@ -35,9 +35,10 @@ export function backupCommand(): Command {
     .description('Back up an existing NFT metadata URI and its directly referenced media')
     .option('--contract <address>', 'token contract address')
     .option('--token-id <id>', 'token ID to preserve')
-    .option('--universal-token-id <id>', 'canonical token identifier in chainId-contract-tokenId format')
-    .option('--chain <chain>', 'chain to use for on-chain tokenURI resolution')
-    .option('--payment-chain <chain>', 'chain to use for RARE/x402 payment')
+    .option('--chain <chain>', 'source chain name for on-chain tokenURI resolution')
+    .option('--chain-id <id>', 'source chain ID for on-chain tokenURI resolution')
+    .option('--payment-chain <chain>', 'payment chain name for RARE/x402 payment')
+    .option('--payment-chain-id <id>', 'payment chain ID for RARE/x402 payment')
     .option('--quote-only', 'resolve bytes and request a quote without paying')
     .option('-y, --yes', 'approve the quoted preservation cost without prompting')
     .option('--service-url <url>', `override the preservation service URL (default: ${DEFAULT_PRESERVATION_SERVICE_URL})`)
@@ -67,7 +68,6 @@ export function backupCommand(): Command {
         serviceUrl,
         contract: opts.contract as `0x${string}` | undefined,
         tokenId: opts.tokenId,
-        universalTokenId: opts.universalTokenId as string | undefined,
         sourceChain,
         paymentChain,
         gatewayUrl,
@@ -94,7 +94,6 @@ export function backupCommand(): Command {
         chain: sourceChain,
         contract: backupParams.contract,
         tokenId: backupParams.tokenId,
-        universalTokenId: backupParams.universalTokenId,
         gatewayUrl: backupParams.gatewayUrl,
         maxBytes: backupParams.maxBytes,
       });
@@ -136,41 +135,64 @@ export function backupCommand(): Command {
 function validateTargetOptions(opts: {
   contract?: string;
   tokenId?: string;
-  universalTokenId?: string;
 }): void {
-  const hasContractTarget = Boolean(opts.contract || opts.tokenId);
-  const hasUniversalTarget = Boolean(opts.universalTokenId);
-
-  if (hasUniversalTarget && hasContractTarget) {
-    throw new Error('Use either --universal-token-id or --contract/--token-id, not both.');
-  }
-
-  if (!hasUniversalTarget && !hasContractTarget) {
-    throw new Error('Pass either --universal-token-id or both --contract and --token-id.');
-  }
-
-  if (hasContractTarget && (!opts.contract || !opts.tokenId)) {
-    throw new Error('--contract and --token-id must be provided together.');
+  if (!opts.contract || !opts.tokenId) {
+    throw new Error('Pass both --contract and --token-id.');
   }
 }
 
-function resolveSourceChain(opts: { chain?: string; universalTokenId?: string }): SupportedChain {
-  if (opts.universalTokenId) {
-    return parseUniversalTokenId(opts.universalTokenId).chain;
-  }
-
-  return getActiveChain(opts.chain);
+function resolveSourceChain(opts: { chain?: string; chainId?: string }): SupportedChain {
+  return resolveChainSelection({
+    chain: opts.chain,
+    chainId: opts.chainId,
+    chainFlag: '--chain',
+    chainIdFlag: '--chain-id',
+    defaultChain: () => getActiveChain(),
+  });
 }
 
 function resolvePaymentChain(
-  opts: { paymentChain?: string },
+  opts: { paymentChain?: string; paymentChainId?: string },
   sourceChain: SupportedChain,
 ): SupportedChain {
-  if (opts.paymentChain) {
-    return getActiveChain(opts.paymentChain);
+  return resolveChainSelection({
+    chain: opts.paymentChain,
+    chainId: opts.paymentChainId,
+    chainFlag: '--payment-chain',
+    chainIdFlag: '--payment-chain-id',
+    defaultChain: () => sourceChain,
+  });
+}
+
+function resolveChainSelection(opts: {
+  chain?: string;
+  chainId?: string;
+  chainFlag: string;
+  chainIdFlag: string;
+  defaultChain: () => SupportedChain;
+}): SupportedChain {
+  const namedChain = opts.chain ? getActiveChain(opts.chain) : undefined;
+  const idChain = opts.chainId ? parseSupportedChainId(opts.chainId, opts.chainIdFlag) : undefined;
+
+  if (namedChain && idChain && namedChain !== idChain) {
+    throw new Error(`${opts.chainFlag} and ${opts.chainIdFlag} refer to different chains.`);
   }
 
-  return sourceChain;
+  return namedChain ?? idChain ?? opts.defaultChain();
+}
+
+function parseSupportedChainId(rawValue: string, flagName: string): SupportedChain {
+  if (!/^\d+$/.test(rawValue)) {
+    throw new Error(`${flagName} must be an integer chain ID.`);
+  }
+
+  const chainId = Number.parseInt(rawValue, 10);
+  const chain = supportedChainFromChainId(chainId);
+  if (!chain) {
+    throw new Error(`${flagName} must be one of: 1, 11155111, 8453, 84532.`);
+  }
+
+  return chain;
 }
 
 function parseMaxBytes(rawValue: string | undefined): number {
