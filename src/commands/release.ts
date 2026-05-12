@@ -212,17 +212,17 @@ export function releaseCommand(): Command {
 
   allowlist
     .command('proof')
-    .description('Read an address proof from a RareMinter allowlist artifact')
+    .description('Read an account proof from a RareMinter allowlist artifact')
     .requiredOption('--input <file>', 'allowlist proof artifact JSON')
-    .requiredOption('--address <address>', 'address to prove')
+    .requiredOption('--account <address>', 'account address to prove')
     .option('--output <file>', 'write the proof JSON to a file')
     .action((opts) => {
       try {
-        assertAddressOption(opts.address, 'address');
+        assertAddressOption(opts.account, 'account');
         const artifact = loadAllowlistArtifact(opts.input);
-        const proof = getReleaseAllowlistProof({ artifact, address: opts.address });
+        const proof = getReleaseAllowlistProof({ artifact, address: opts.account });
         if (!proof) {
-          throw new Error(`Address ${opts.address} is not present in allowlist artifact ${opts.input}.`);
+          throw new Error(`Account ${opts.account} is not present in allowlist artifact ${opts.input}.`);
         }
 
         if (opts.output) {
@@ -232,7 +232,7 @@ export function releaseCommand(): Command {
         output({ root: artifact.root, ...proof, outputPath: opts.output ?? null }, () => {
           console.log('\nAllowlist proof:');
           console.log(`  Root:   ${artifact.root}`);
-          console.log(`  Address: ${proof.address}`);
+          console.log(`  Account: ${proof.address}`);
           console.log(`  Leaf:   ${proof.leaf}`);
           console.log(`  Proof:  ${proof.proof.length === 0 ? '[]' : proof.proof.join(', ')}`);
           if (opts.output) {

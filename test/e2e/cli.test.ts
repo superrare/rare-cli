@@ -109,10 +109,11 @@ describe('built CLI deterministic behavior', () => {
       const allowlistProofHelp = await runCli(['release', 'allowlist', 'proof', '--help'], { home });
       expect(allowlistProofHelp.code).toBe(0);
       expect(allowlistProofHelp.stdout).toContain('--input <file>');
-      expect(allowlistProofHelp.stdout).toContain('--address <address>');
+      expect(allowlistProofHelp.stdout).toContain('--account <address>');
       expect(allowlistProofHelp.stdout).toContain('--output <file>');
       expect(allowlistProofHelp.stdout).not.toContain('--artifact');
       expect(allowlistProofHelp.stdout).not.toContain('--wallet');
+      expect(allowlistProofHelp.stdout).not.toContain('--address');
 
       const result = await runCli(['release', 'status', '--contract', 'not-an-address'], { home });
       expect(result.code).toBe(1);
@@ -154,7 +155,7 @@ describe('built CLI deterministic behavior', () => {
           'proof',
           '--input',
           artifactPath,
-          '--address',
+          '--account',
           wallet,
         ], { home }),
       );

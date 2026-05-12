@@ -180,10 +180,10 @@ rare release allowlist set \
   --root 0x... \
   --end-timestamp 1767283200
 
-# Read a reusable proof for an address
+# Read a reusable proof for an account
 rare release allowlist proof \
   --input ./allowlist-artifact.json \
-  --address 0x...
+  --account 0x...
 ```
 
 Rare release minting checks the configured on-chain root while the allowlist window is active. The proof artifact is the portable file that maps each wallet to the proof needed by a mint client or service. Keep the artifact alongside release operations; the chain stores only the root and end timestamp.
