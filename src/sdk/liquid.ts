@@ -49,7 +49,7 @@ function missingLiquidTokenAddressError(txHash: Hash, receipt: TransactionReceip
     ? 'succeeded'
     : `was confirmed with status "${receipt.status}"`;
   const message =
-    `Liquid token deploy transaction ${statusPhrase}, but the deployed contract address could not be read ` +
+    `Liquid Edition deploy transaction ${statusPhrase}, but the deployed contract address could not be read ` +
     `from the LiquidTokenCreated event logs after ${LIQUID_TOKEN_CREATED_LOG_RETRY_ATTEMPTS + 1} attempts. ` +
     `Transaction hash: ${txHash}. Block: ${receipt.blockNumber}. The connected RPC may be delayed or returning ` +
     'incomplete receipt logs; retry with a synced RPC or inspect the transaction hash.';

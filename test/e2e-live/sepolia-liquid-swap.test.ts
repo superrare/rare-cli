@@ -120,12 +120,12 @@ describeLive('live Sepolia Liquid Editions and swap CLI write commands', () => {
     await cleanupTempHome(live?.tempDir);
   });
 
-  it('deploys a Liquid Editions token from an explicit curves file', async () => {
+  it('deploys a Liquid Edition from an explicit curves file', async () => {
     const suffix = Date.now().toString(36).slice(-6).toUpperCase();
-    const deployed = await step('deploy liquid token', () =>
+    const deployed = await step('deploy liquid edition', () =>
       jsonCommand<DeployLiquidResult>([
         'deploy',
-        'liquid-token',
+        'liquid-edition',
         `Rare CLI Liquid E2E ${suffix}`,
         `LQE${suffix}`,
         '--curves-file',

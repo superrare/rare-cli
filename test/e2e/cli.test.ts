@@ -79,6 +79,23 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('exposes liquid edition deployment help', async () => {
+    await withTempHome(async (home) => {
+      const deploy = await runCli(['deploy', '--help'], { home });
+      expect(deploy.code).toBe(0);
+      expect(deploy.stdout).toContain('liquid-edition');
+      expect(deploy.stdout).not.toContain('liquid-token');
+      expect(deploy.stderr).toBe('');
+
+      const liquid = await runCli(['deploy', 'liquid-edition', '--help'], { home });
+      expect(liquid.code).toBe(0);
+      expect(liquid.stdout).toContain('Usage: rare deploy liquid-edition [options] <name> <symbol>');
+      expect(liquid.stdout).toContain('--curves-file <path>');
+      expect(liquid.stdout).toContain('--initial-rare-liquidity <amount>');
+      expect(liquid.stderr).toBe('');
+    });
+  });
+
   it('returns a non-zero exit and stderr for invalid non-chain configuration input', async () => {
     await withTempHome(async (home) => {
       const result = await runCli(['configure', '--default-chain', 'not-a-chain'], { home });

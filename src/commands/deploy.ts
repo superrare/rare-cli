@@ -195,13 +195,13 @@ function deployErc721Command(): Command {
   return cmd;
 }
 
-function deployLiquidTokenCommand(): Command {
-  const cmd = new Command('liquid-token');
-  cmd.description('Deploy a new Liquid Editions token via the liquid factory');
+function deployLiquidEditionCommand(): Command {
+  const cmd = new Command('liquid-edition');
+  cmd.description('Deploy a new Liquid Edition via the liquid factory');
 
   cmd
-    .argument('<name>', 'name of the liquid token')
-    .argument('<symbol>', 'symbol of the liquid token')
+    .argument('<name>', 'name of the liquid edition')
+    .argument('<symbol>', 'symbol of the liquid edition')
     .option('--curves-file <path>', 'path to curve JSON')
     .option('--curve-preset <preset>', 'curve preset to generate (low-demand, medium-demand, high-demand)')
     .option('--write-curves-file <path>', 'write generated curves to a JSON file')
@@ -258,7 +258,7 @@ function deployLiquidTokenCommand(): Command {
           }
 
           const tokenUri = await resolveTokenUri(rare, name, opts);
-          log(`Deploying liquid token on ${chain}...`);
+          log(`Deploying liquid edition on ${chain}...`);
           log(`  Factory: ${rare.contracts.liquidFactory}`);
           log(`  Name: ${name}`);
           log(`  Symbol: ${symbol}`);
@@ -292,7 +292,7 @@ function deployLiquidTokenCommand(): Command {
             },
             () => {
               console.log(`Transaction sent: ${result.txHash}`);
-              console.log(`\nLiquid token deployed at: ${result.contract}`);
+              console.log(`\nLiquid Edition deployed at: ${result.contract}`);
               console.log(`Liquid Editions URL: ${liquidEditionUrl}`);
             },
           );
@@ -310,7 +310,7 @@ export function deployCommand(): Command {
   cmd.description('Deploy a new contract via the RARE protocol');
 
   cmd.addCommand(deployErc721Command());
-  cmd.addCommand(deployLiquidTokenCommand());
+  cmd.addCommand(deployLiquidEditionCommand());
 
   return cmd;
 }
