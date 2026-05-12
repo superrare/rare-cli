@@ -70,7 +70,9 @@ Private keys are masked in the output.
 
 All commands accept `--chain` to select a network. Defaults to `sepolia`.
 
-Supported chains (including deploy, mint, import, and auction flows): `mainnet`, `sepolia`, `base`, `base-sepolia`
+Supported chains: `mainnet`, `sepolia`, `base`, `base-sepolia`
+
+Batch listing marketplace support is currently deployed on `mainnet` and `sepolia` only.
 
 ### Deploy an NFT Collection
 
@@ -204,11 +206,69 @@ rare listing status --contract 0x... --token-id 1
 
 `--split <ADDR=RATIO>` is repeatable. Ratios must sum to exactly 100. If you omit `--split`, the SDK defaults to `[caller, 100]` (100% to your wallet). If you pass any `--split`, you must specify the complete list — the caller is **not** auto-appended.
 
+### Batch Listings
+
+Batch listings use Merkle artifacts: one root artifact describing the token set and listing config, and one proof artifact per token purchase.
+Root artifacts are produced outside the CLI. Token sets and allowlists must each contain at least two entries because the batch listing contract rejects empty Merkle proofs. If no split is provided, registration defaults to 100% to the connected seller wallet.
+
+```bash
+# Build a proof artifact for one token in the root
+rare listing batch merkle proof \
+  --root ./root.json \
+  --contract 0x... \
+  --token-id 1 \
+  --output ./proof.json
+
+# If the root has an allowlist, include the buyer when generating the proof
+rare listing batch merkle proof \
+  --root ./root.json \
+  --contract 0x... \
+  --token-id 1 \
+  --buyer 0x... \
+  --output ./proof.json
+
+# Register the batch listing from the root artifact
+rare listing batch create --root ./root.json --yes
+
+# Buy one token using a proof artifact
+rare listing batch buy \
+  --proof ./proof.json \
+  --creator 0x...seller \
+  --currency usdc \
+  --amount 25
+
+# Inspect the listing config
+rare listing batch status --root ./root.json --creator 0x...seller
+
+# Narrow status to a specific token with its proof
+rare listing batch status \
+  --root ./root.json \
+  --creator 0x...seller \
+  --contract 0x... \
+  --token-id 1 \
+  --proof ./proof.json
+
+# Attach an allowlist config to an existing root
+rare listing batch set-allowlist \
+  --root ./root.json
+
+# Or pass explicit values when using a hex root instead of an artifact path
+rare listing batch set-allowlist \
+  --root 0x... \
+  --allowlist-root 0x... \
+  --end-timestamp 1735689600
+
+# Cancel the listing root
+rare listing batch cancel --root ./root.json
+```
+
+Named currencies are parsed with chain-aware decimals. Arbitrary ERC20 addresses are supported and their `decimals()` values are resolved from chain RPC when sending buys.
+
 ### Currencies
 
 All marketplace commands (`auction`, `offer`, `listing`) accept `--currency` to specify a payment token. Named currencies (`eth`, `usdc`, `rare`) are resolved per-chain automatically. You can also pass any ERC20 address directly.
 
-ERC20 allowances are auto-approved when needed for bids, offers, and purchases.
+ERC20 allowances are auto-approved when needed for bids, offers, listing purchases, and batch-listing purchases.
 
 ```bash
 # List supported currencies and their addresses
@@ -363,12 +423,12 @@ rare configure --show
 
 ## Contract Addresses
 
-| Network | Factory | Auction |
-|---|---|---|
-| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` |
-| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` |
-| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` |
-| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` |
+| Network | Factory | Auction | Batch Listing |
+|---|---|---|---|
+| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` | `0xF2bE72d4343beD375Cb6d0E799a3c003163860e0` |
+| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` | `0x6a190885A806D39A0A8C348bfA1ac762D72E608d` |
+| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` | — |
+| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` | — |
 
 ## Underlying Solidity Contracts
 

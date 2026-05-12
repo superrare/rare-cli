@@ -4,16 +4,16 @@ import { loadDotEnv } from './env.js';
 
 loadDotEnv();
 
+export function hasTestRpcUrl(): boolean {
+  return Boolean(process.env.TEST_RPC_URL);
+}
+
 export function getTestRpcUrl(): string {
   const rpcUrl = process.env.TEST_RPC_URL;
   if (!rpcUrl) {
     throw new Error('TEST_RPC_URL is required. Set it in .env before running integration tests.');
   }
   return rpcUrl;
-}
-
-export function hasTestRpcUrl(): boolean {
-  return Boolean(process.env.TEST_RPC_URL);
 }
 
 export function createTestSepoliaPublicClient(): PublicClient {

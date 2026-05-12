@@ -185,6 +185,79 @@ export type ListingStatus = {
   canBuy: boolean | null;
 }
 
+export type BatchListingTokenEntry = {
+  contract: Address;
+  tokenId: IntegerInput;
+}
+
+export type BatchListingRootArtifact = {
+  root: `0x${string}`;
+  currency: Address;
+  amount: string;
+  splitAddresses: Address[];
+  splitRatios: number[];
+  tokens: { contract: Address; tokenId: string }[];
+  allowList?: { root: `0x${string}`; addresses: Address[]; endTimestamp?: string };
+}
+
+export type BatchListingProofArtifact = {
+  root: `0x${string}`;
+  contract: Address;
+  tokenId: string;
+  proof: `0x${string}`[];
+  allowListProof?: `0x${string}`[];
+  allowListAddress?: Address;
+}
+
+export type BatchListingCreateParams = {
+  artifact: BatchListingRootArtifact;
+  autoApprove?: boolean;
+}
+
+export type BatchListingCreateResult = {
+  approvalTxHashes?: Hash[];
+} & TransactionResult
+
+export type BatchListingCancelParams = {
+  root: `0x${string}`;
+}
+
+export type BatchListingBuyParams = {
+  proofArtifact: BatchListingProofArtifact;
+  creator: Address;
+  currency: Address;
+  amount: AmountInput;
+}
+
+export type BatchListingSetAllowListParams = {
+  root: `0x${string}`;
+  allowListRoot: `0x${string}`;
+  endTimestamp: IntegerInput;
+}
+
+export type BatchListingStatusParams = {
+  root: `0x${string}`;
+  creator: Address;
+  contract?: Address;
+  tokenId?: IntegerInput;
+  proof?: `0x${string}`[];
+}
+
+export type BatchListingStatus = {
+  root: `0x${string}`;
+  seller: Address;
+  currencyAddress: Address;
+  amount: bigint;
+  splitRecipients: Address[];
+  splitRatios: number[];
+  nonce: bigint;
+  isEth: boolean;
+  hasListing: boolean;
+  allowList?: { root: `0x${string}`; endTimestamp: bigint };
+  tokenInRoot?: boolean;
+  tokenNonce?: bigint;
+}
+
 export type TokenContractInfo = {
   contract: Address;
   chain: SupportedChain;
@@ -349,6 +422,10 @@ export type RareClient = {
   contracts: {
     factory: Address;
     auction: Address;
+    batchListing?: Address;
+    marketplaceSettings?: Address;
+    erc20ApprovalManager?: Address;
+    erc721ApprovalManager?: Address;
     liquidFactory?: Address;
     swapRouter?: Address;
     v4Quoter?: Address;
@@ -394,6 +471,13 @@ export type RareClient = {
     cancel: (params: ListingCancelParams) => Promise<TransactionResult>;
     buy: (params: ListingBuyParams) => Promise<TransactionResult>;
     getStatus: (params: ListingStatusParams) => Promise<ListingStatus>;
+  };
+  batchListing: {
+    create: (params: BatchListingCreateParams) => Promise<BatchListingCreateResult>;
+    cancel: (params: BatchListingCancelParams) => Promise<TransactionResult>;
+    buy: (params: BatchListingBuyParams) => Promise<TransactionResult>;
+    setAllowList: (params: BatchListingSetAllowListParams) => Promise<TransactionResult>;
+    getStatus: (params: BatchListingStatusParams) => Promise<BatchListingStatus>;
   };
   search: {
     nfts: (params?: NftSearchParams) => Promise<SearchPageResponse<Nft>>;

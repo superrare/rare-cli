@@ -8,6 +8,10 @@ The functional core is pure business logic: inputs in, outputs out. It owns vali
 
 The imperative shell is the thin orchestration layer. It reads config and environment, calls APIs/RPC/wallets, writes files, logs output, handles process behavior, and passes plain data into the functional core. In this repo, CLI command modules, API clients, wallet setup, config I/O, and output rendering are shell code. In NestJS-style codebases, services often play this role.
 
+Tip: Compare sdk functionality against actual contract implementations in core repo:
+- https://github.com/superrare/core
+- https://github.com/superrare/core/blob/main/README.md
+
 ## Boundaries
 
 - Put decisions in pure functions before wiring them into commands or SDK methods.
@@ -95,7 +99,8 @@ Cover:
 
 Test the built CLI as a user would. Assert observable behavior: exit codes, stdout/stderr, JSON output, config effects, and chain effects.
 
-CLI E2E tests should cover all on-chain write commands.
+E2E tests should target the CLI as a user would.
+E2E-live tests should cover all on-chain write commands against the CLI.
 
 ## Review Checklist
 

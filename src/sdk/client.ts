@@ -18,6 +18,7 @@ import { createMintNamespace } from './mint.js';
 import { createAuctionNamespace } from './auction.js';
 import { createOfferNamespace } from './offer.js';
 import { createListingNamespace } from './listing.js';
+import { createBatchListingNamespace } from './batch-listing.js';
 import { createTokenNamespace } from './token.js';
 import { createLiquidNamespace } from './liquid.js';
 import { createSwapNamespace } from './swap.js';
@@ -36,6 +37,10 @@ export function createRareClient(config: RareClientConfig): RareClient {
     contracts: {
       factory: addresses.factory,
       auction: addresses.auction,
+      batchListing: addresses.batchListing,
+      marketplaceSettings: addresses.marketplaceSettings,
+      erc20ApprovalManager: addresses.erc20ApprovalManager,
+      erc721ApprovalManager: addresses.erc721ApprovalManager,
       liquidFactory: addresses.liquidFactory,
       swapRouter: addresses.swapRouter,
       v4Quoter: addresses.v4Quoter,
@@ -47,6 +52,40 @@ export function createRareClient(config: RareClientConfig): RareClient {
     auction: createAuctionNamespace(publicClient, config, addresses),
     offer: createOfferNamespace(publicClient, config, addresses),
     listing: createListingNamespace(publicClient, config, addresses),
+    batchListing: createBatchListingNamespace(publicClient, config, {
+      get batchListing() {
+        if (!addresses.batchListing) {
+          throw new Error(
+            `Batch listing marketplace is not deployed on "${chain}". Available on: mainnet, sepolia.`,
+          );
+        }
+        return addresses.batchListing;
+      },
+      get marketplaceSettings() {
+        if (!addresses.marketplaceSettings) {
+          throw new Error(
+            `Marketplace settings is not configured for batch listings on "${chain}". Available on: mainnet, sepolia.`,
+          );
+        }
+        return addresses.marketplaceSettings;
+      },
+      get erc20ApprovalManager() {
+        if (!addresses.erc20ApprovalManager) {
+          throw new Error(
+            `ERC20 approval manager is not deployed on "${chain}". Available on: mainnet, sepolia.`,
+          );
+        }
+        return addresses.erc20ApprovalManager;
+      },
+      get erc721ApprovalManager() {
+        if (!addresses.erc721ApprovalManager) {
+          throw new Error(
+            `ERC721 approval manager is not deployed on "${chain}". Available on: mainnet, sepolia.`,
+          );
+        }
+        return addresses.erc721ApprovalManager;
+      },
+    }),
     token: createTokenNamespace(publicClient, chain),
     search: {
       async nfts(params = {}): ReturnType<RareClient['search']['nfts']> {

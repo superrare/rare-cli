@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import { supportedChains, isSupportedChain, type SupportedChain } from './contracts/addresses.js';
+import { chainIds, supportedChains, isSupportedChain, type SupportedChain } from './contracts/addresses.js';
 import { isHexString } from './sdk/validation.js';
 
 export type ChainConfig = {
@@ -49,15 +49,19 @@ export function setChainConfig(config: Config, chain: SupportedChain, updates: C
   };
 }
 
-export function getActiveChain(chainFlag?: string): SupportedChain {
-  if (chainFlag) {
-    if (!isSupportedChain(chainFlag)) {
-      throw new Error(
-        `unsupported chain "${chainFlag}". Supported chains: ${supportedChains.join(', ')}`,
-      );
-    }
-    return chainFlag;
+export function getActiveChain(chainFlag?: string, chainIdFlag?: string): SupportedChain {
+  const chainFromName = chainFlag === undefined ? undefined : parseChainName(chainFlag);
+  const chainFromId = chainIdFlag === undefined ? undefined : parseChainId(chainIdFlag);
+
+  if (chainFromName !== undefined && chainFromId !== undefined && chainFromName !== chainFromId) {
+    throw new Error(
+      `--chain "${chainFromName}" does not match --chain-id "${chainIdFlag}". Supported chain IDs: ${formatSupportedChainIds()}`,
+    );
   }
+
+  if (chainFromName !== undefined) return chainFromName;
+  if (chainFromId !== undefined) return chainFromId;
+
   const config = readConfig();
   return config.defaultChain ?? 'sepolia';
 }
@@ -65,6 +69,31 @@ export function getActiveChain(chainFlag?: string): SupportedChain {
 export function getChainConfig(chain: SupportedChain): ChainConfig {
   const config = readConfig();
   return config.chains[chain] ?? {};
+}
+
+function parseChainName(value: string): SupportedChain {
+  if (!isSupportedChain(value)) {
+    throw new Error(`unsupported chain "${value}". Supported chains: ${supportedChains.join(', ')}`);
+  }
+  return value;
+}
+
+function parseChainId(value: string): SupportedChain {
+  const chainId = Number(value);
+  if (!Number.isInteger(chainId)) {
+    throw new Error(`unsupported chain ID "${value}". Supported chain IDs: ${formatSupportedChainIds()}`);
+  }
+
+  const match = supportedChains.find((chain) => chainIds[chain] === chainId);
+  if (match === undefined) {
+    throw new Error(`unsupported chain ID "${value}". Supported chain IDs: ${formatSupportedChainIds()}`);
+  }
+
+  return match;
+}
+
+function formatSupportedChainIds(): string {
+  return supportedChains.map((chain) => `${chainIds[chain]} (${chain})`).join(', ');
 }
 
 function parseConfig(value: unknown): Config {

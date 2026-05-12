@@ -109,6 +109,26 @@ describe('built CLI deterministic behavior', () => {
       expect(result.stderr).toContain('Error: --default-chain must be one of: mainnet, sepolia, base, base-sepolia');
     });
   });
+
+  it('exposes aligned batch listing flags', async () => {
+    await withTempHome(async (home) => {
+      const proofHelp = await runCli(['listing', 'batch', 'merkle', 'proof', '--help'], { home });
+      expect(proofHelp.code).toBe(0);
+      expect(proofHelp.stdout).toContain('--output <path>');
+      expect(proofHelp.stdout).toContain('--buyer <address>');
+
+      const createHelp = await runCli(['listing', 'batch', 'create', '--help'], { home });
+      expect(createHelp.code).toBe(0);
+      expect(createHelp.stdout).toContain('--yes');
+      expect(createHelp.stdout).toContain('--chain-id <id>');
+      expect(createHelp.stdout).not.toContain('--no-approve');
+
+      const setAllowListHelp = await runCli(['listing', 'batch', 'set-allowlist', '--help'], { home });
+      expect(setAllowListHelp.code).toBe(0);
+      expect(setAllowListHelp.stdout).toContain('--allowlist-root <hex>');
+      expect(setAllowListHelp.stdout).toContain('--end-timestamp <unix>');
+    });
+  });
 });
 
 function isConfigWithSepoliaPrivateKey(value: unknown): value is {

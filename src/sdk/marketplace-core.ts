@@ -226,7 +226,7 @@ export function shapeOfferStatus(
   };
 }
 
-function planSplits(
+export function planSplits(
   splitAddresses: Address[] | undefined,
   splitRatios: number[] | undefined,
   accountAddress: Address,
@@ -239,6 +239,13 @@ function planSplits(
     throw new Error('splitAddresses and splitRatios must both be provided.');
   }
 
+  return planProvidedSplits(splitAddresses, splitRatios);
+}
+
+export function planProvidedSplits(
+  splitAddresses: Address[],
+  splitRatios: number[],
+): { addresses: Address[]; ratios: number[] } {
   if (splitAddresses.length === 0) {
     throw new Error('splitAddresses must include at least 1 address.');
   }
