@@ -8,6 +8,7 @@ import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '../contract
 import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
+import { batchCommand } from './batch.js';
 
 type ListingCreateOptions = {
   contract: string;
@@ -36,7 +37,8 @@ type ListingBuyOptions = {
 
 export function listingCommand(): Command {
   const cmd = new Command('listing');
-  cmd.description('Listing subcommands (create, cancel, buy, status)');
+  cmd.description('Listing subcommands (create, cancel, buy, status, batch)');
+  cmd.addCommand(batchCommand());
 
   // listing create
   cmd

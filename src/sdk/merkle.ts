@@ -18,23 +18,13 @@ import type {
   IntegerInput,
 } from './types.js';
 
-export type BuildRootArtifactInput = {
-  tokens: BatchListingTokenEntry[];
-  currency: Address;
-  amount: bigint;
-  splitAddresses?: Address[];
-  splitRatios?: number[];
-  allowListAddresses?: Address[];
-  allowListEndTimestamp?: IntegerInput;
-}
-
-export type BuildBatchListingTreeResult = {
+type BuildBatchListingTreeResult = {
   root: `0x${string}`;
   tree: MerkleTree;
   sortedTokens: { contract: Address; tokenId: string }[];
 }
 
-export type BuildAllowListTreeResult = {
+type BuildAllowListTreeResult = {
   root: `0x${string}`;
   tree: MerkleTree;
   sortedAddresses: Address[];
@@ -44,12 +34,6 @@ type NormalizedTokenEntry = {
   contract: Address;
   tokenId: string;
   tokenIdBigInt: bigint;
-};
-
-type AllowListFile = {
-  addresses: Address[];
-  expectedRoot?: `0x${string}`;
-  endTimestamp?: bigint;
 };
 
 type AllowListProofFields = {
@@ -101,11 +85,11 @@ function normalizeTokenEntry(token: BatchListingTokenEntry): NormalizedTokenEntr
   };
 }
 
-export function buildBatchListingTree(
+function buildBatchListingTree(
   tokens: BatchListingTokenEntry[],
 ): BuildBatchListingTreeResult {
-  if (tokens.length === 0) {
-    throw new Error('buildBatchListingTree requires at least one token');
+  if (tokens.length < 2) {
+    throw new Error('buildBatchListingTree requires at least two tokens');
   }
 
   const sorted = tokens.map(normalizeTokenEntry).sort(compareTokenEntries);
@@ -121,9 +105,9 @@ export function buildBatchListingTree(
   };
 }
 
-export function buildAllowListTree(addresses: Address[]): BuildAllowListTreeResult {
-  if (addresses.length === 0) {
-    throw new Error('buildAllowListTree requires at least one address');
+function buildAllowListTree(addresses: Address[]): BuildAllowListTreeResult {
+  if (addresses.length < 2) {
+    throw new Error('buildAllowListTree requires at least two addresses');
   }
 
   const sorted = addresses
@@ -156,59 +140,6 @@ export function getTokenProof(
 export function getAddressProof(tree: MerkleTree, address: Address): `0x${string}`[] {
   const leaf = addressLeaf(getAddress(address));
   return parseBytes32Array(tree.getHexProof(leaf), 'proof');
-}
-
-export function buildRootArtifact(input: BuildRootArtifactInput): BatchListingRootArtifact {
-  const { root: nftRoot, sortedTokens } = buildBatchListingTree(input.tokens);
-  const splitAddresses = input.splitAddresses ?? [];
-  const splitRatios = input.splitRatios ?? [];
-
-  validateSplits(splitAddresses, splitRatios);
-
-  const allowList = input.allowListAddresses !== undefined && input.allowListAddresses.length > 0
-    ? buildAllowListArtifact(input.allowListAddresses, input.allowListEndTimestamp)
-    : undefined;
-
-  return {
-    root: nftRoot,
-    currency: getAddress(input.currency),
-    amount: input.amount.toString(),
-    splitAddresses: splitAddresses.map((address) => getAddress(address)),
-    splitRatios,
-    tokens: sortedTokens.map((token) => ({ contract: token.contract, tokenId: token.tokenId })),
-    ...(allowList === undefined ? {} : { allowList }),
-  };
-}
-
-function validateSplits(splitAddresses: Address[], splitRatios: number[]): void {
-  if (splitAddresses.length !== splitRatios.length) {
-    throw new Error('splitAddresses and splitRatios must have the same length');
-  }
-  if (splitRatios.length === 0) return;
-
-  const sum = splitRatios.reduce((acc, ratio) => acc + ratio, 0);
-  if (sum !== 100) {
-    throw new Error(`splitRatios must sum to 100, got ${sum}`);
-  }
-  splitRatios.forEach((ratio) => {
-    if (!Number.isInteger(ratio) || ratio < 0 || ratio > 255) {
-      throw new Error(`splitRatios entries must be uint8 (0-255), got ${ratio}`);
-    }
-  });
-}
-
-function buildAllowListArtifact(
-  allowListAddresses: Address[],
-  allowListEndTimestamp: IntegerInput | undefined,
-): NonNullable<BatchListingRootArtifact['allowList']> {
-  const { root, sortedAddresses } = buildAllowListTree(allowListAddresses);
-  return {
-    root,
-    addresses: sortedAddresses,
-    ...(allowListEndTimestamp === undefined
-      ? {}
-      : { endTimestamp: toInteger(allowListEndTimestamp, 'allowListEndTimestamp').toString() }),
-  };
 }
 
 export function buildProofArtifact(
@@ -304,8 +235,8 @@ export function validateRootArtifact(value: unknown): asserts value is BatchList
   if (typeof value.amount !== 'string') throw new Error('amount must be a string (base units)');
   if (!Array.isArray(value.splitAddresses)) throw new Error('splitAddresses must be an array');
   if (!Array.isArray(value.splitRatios)) throw new Error('splitRatios must be an array');
-  if (!Array.isArray(value.tokens) || value.tokens.length === 0) {
-    throw new Error('tokens must be a non-empty array');
+  if (!Array.isArray(value.tokens) || value.tokens.length < 2) {
+    throw new Error('tokens must contain at least two entries');
   }
   value.tokens.forEach((token) => {
     assertRecord(token, 'tokens[]');
@@ -316,6 +247,9 @@ export function validateRootArtifact(value: unknown): asserts value is BatchList
     assertRecord(value.allowList, 'allowList');
     assertHexRoot(value.allowList.root, 'allowList.root');
     if (!Array.isArray(value.allowList.addresses)) throw new Error('allowList.addresses must be an array');
+    if (value.allowList.addresses.length < 2) {
+      throw new Error('allowList.addresses must contain at least two entries');
+    }
   }
 }
 
@@ -325,6 +259,7 @@ export function validateProofArtifact(value: unknown): asserts value is BatchLis
   assertAddress(value.contract, 'contract');
   if (typeof value.tokenId !== 'string') throw new Error('tokenId must be a string');
   if (!Array.isArray(value.proof)) throw new Error('proof must be an array of bytes32 hex');
+  if (value.proof.length === 0) throw new Error('proof must not be empty');
   value.proof.forEach((proof) => {
     assertHexRoot(proof, 'proof entry');
   });
@@ -351,105 +286,4 @@ export async function loadProofArtifact(path: string): Promise<BatchListingProof
 
 export async function writeArtifact(path: string, data: unknown): Promise<void> {
   await writeFile(path, `${JSON.stringify(data, null, 2)}\n`);
-}
-
-/**
- * Token-set input file accepts two shapes:
- *   1. [{contract, tokenId}, ...]
- *   2. {tokens: [{chainId?, contract, tokenId}, ...]}
- * Detection is by top-level type (array vs object).
- */
-export async function loadTokenSet(path: string): Promise<BatchListingTokenEntry[]> {
-  return parseTokenSet(parseJson(await readFile(path, 'utf8')));
-}
-
-function parseTokenSet(value: unknown): BatchListingTokenEntry[] {
-  const rawTokens = Array.isArray(value) ? value : getTokenSetTokens(value);
-  if (rawTokens.length === 0) throw new Error('Token-set file is empty');
-  return rawTokens.map(parseTokenSetEntry);
-}
-
-function getTokenSetTokens(value: unknown): unknown[] {
-  assertRecord(value, 'Token-set file');
-  if (!Array.isArray(value.tokens)) {
-    throw new Error('Token-set file must be a JSON array or an object with a "tokens" array');
-  }
-  return value.tokens;
-}
-
-function parseTokenSetEntry(entry: unknown, index: number): BatchListingTokenEntry {
-  assertRecord(entry, `tokens[${index}]`);
-  assertAddress(entry.contract, `tokens[${index}].contract`);
-  if (
-    typeof entry.tokenId !== 'string' &&
-    typeof entry.tokenId !== 'number' &&
-    typeof entry.tokenId !== 'bigint'
-  ) {
-    throw new Error(`tokens[${index}].tokenId must be a string, number, or bigint`);
-  }
-  return {
-    contract: getAddress(entry.contract),
-    tokenId: typeof entry.tokenId === 'bigint' ? entry.tokenId : String(entry.tokenId),
-  };
-}
-
-/**
- * Allowlist input accepts:
- *   1. ["0x..", "0x.."]
- *   2. {addresses: ["0x.."], root?: "0x..", endTimestamp?: ...}
- * If `root` is present, it is recomputed and verified against the addresses.
- */
-export async function loadAllowList(path: string): Promise<AllowListFile> {
-  const allowList = parseAllowList(parseJson(await readFile(path, 'utf8')));
-  verifyExpectedAllowListRoot(allowList);
-  return allowList;
-}
-
-function parseAllowList(value: unknown): AllowListFile {
-  if (Array.isArray(value)) {
-    return { addresses: value.map(parseAllowListAddress) };
-  }
-
-  assertRecord(value, 'Allowlist file');
-  if (!Array.isArray(value.addresses)) {
-    throw new Error('Allowlist file must be a string[] or {addresses: string[]}');
-  }
-
-  return {
-    addresses: value.addresses.map(parseAllowListAddress),
-    ...parseOptionalAllowListRoot(value.root),
-    ...parseOptionalAllowListEndTimestamp(value.endTimestamp),
-  };
-}
-
-function parseAllowListAddress(value: unknown, index: number): Address {
-  if (typeof value !== 'string' || !isAddress(value)) {
-    throw new Error(`addresses[${index}] must be a valid 0x address`);
-  }
-  return getAddress(value);
-}
-
-function parseOptionalAllowListRoot(value: unknown): Pick<AllowListFile, 'expectedRoot'> {
-  if (value === undefined || value === null) return {};
-  assertHexRoot(value, 'allowList.root');
-  return { expectedRoot: value };
-}
-
-function parseOptionalAllowListEndTimestamp(value: unknown): Pick<AllowListFile, 'endTimestamp'> {
-  if (value === undefined || value === null) return {};
-  if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'bigint') {
-    throw new Error('allowList.endTimestamp must be a string, number, or bigint');
-  }
-  return { endTimestamp: toInteger(value, 'allowList.endTimestamp') };
-}
-
-function verifyExpectedAllowListRoot(allowList: AllowListFile): void {
-  if (allowList.expectedRoot === undefined) return;
-
-  const { root } = buildAllowListTree(allowList.addresses);
-  if (root !== allowList.expectedRoot) {
-    throw new Error(
-      `Allowlist root mismatch: file says ${allowList.expectedRoot}, recomputed ${root}`,
-    );
-  }
 }

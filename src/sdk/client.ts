@@ -38,6 +38,8 @@ export function createRareClient(config: RareClientConfig): RareClient {
       factory: addresses.factory,
       auction: addresses.auction,
       batchListing: addresses.batchListing,
+      marketplaceSettings: addresses.marketplaceSettings,
+      erc20ApprovalManager: addresses.erc20ApprovalManager,
       erc721ApprovalManager: addresses.erc721ApprovalManager,
       liquidFactory: addresses.liquidFactory,
       swapRouter: addresses.swapRouter,
@@ -58,6 +60,22 @@ export function createRareClient(config: RareClientConfig): RareClient {
           );
         }
         return addresses.batchListing;
+      },
+      get marketplaceSettings() {
+        if (!addresses.marketplaceSettings) {
+          throw new Error(
+            `Marketplace settings is not configured for batch listings on "${chain}". Available on: mainnet, sepolia.`,
+          );
+        }
+        return addresses.marketplaceSettings;
+      },
+      get erc20ApprovalManager() {
+        if (!addresses.erc20ApprovalManager) {
+          throw new Error(
+            `ERC20 approval manager is not deployed on "${chain}". Available on: mainnet, sepolia.`,
+          );
+        }
+        return addresses.erc20ApprovalManager;
       },
       get erc721ApprovalManager() {
         if (!addresses.erc721ApprovalManager) {

@@ -52,16 +52,9 @@ export { batchListingAbi } from '../contracts/abis/batch-listing.js';
 export { uniswapV4QuoterAbi } from '../contracts/abis/uniswap-v4-quoter.js';
 
 export {
-  buildBatchListingTree,
-  buildAllowListTree,
-  getTokenProof,
-  getAddressProof,
-  buildRootArtifact,
   buildProofArtifact,
   loadRootArtifact,
   loadProofArtifact,
-  loadTokenSet,
-  loadAllowList,
   validateRootArtifact,
   validateProofArtifact,
   writeArtifact,

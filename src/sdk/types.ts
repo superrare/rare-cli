@@ -423,6 +423,8 @@ export type RareClient = {
     factory: Address;
     auction: Address;
     batchListing?: Address;
+    marketplaceSettings?: Address;
+    erc20ApprovalManager?: Address;
     erc721ApprovalManager?: Address;
     liquidFactory?: Address;
     swapRouter?: Address;

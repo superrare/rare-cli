@@ -1,37 +1,43 @@
-import { isAddressEqual, type Address, type Hash, type PublicClient } from 'viem';
+import { isAddressEqual, type Address, type Hash, type PublicClient, type WalletClient } from 'viem';
 import { batchListingAbi } from '../contracts/abis/batch-listing.js';
 import { ETH_ADDRESS } from '../contracts/addresses.js';
 import type {
   BatchListingCreateResult,
+  BatchListingRootArtifact,
   BatchListingStatus,
   RareClient,
   RareClientConfig,
   TransactionResult,
+  WalletAccount,
 } from './types.js';
 import {
   approvalAbi,
-  preparePayment,
+  ensureTokenAllowance,
+  marketplaceSettingsAbi,
   requireWallet,
   toInteger,
-  toWei,
+  toTokenAmount,
   waitForApproval,
 } from './helpers.js';
+import { planSplits } from './marketplace-core.js';
 
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
 export function createBatchListingNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
-  addresses: { batchListing: Address; erc721ApprovalManager: Address },
+  addresses: {
+    batchListing: Address;
+    marketplaceSettings: Address;
+    erc20ApprovalManager: Address;
+    erc721ApprovalManager: Address;
+  },
 ): RareClient['batchListing'] {
   return {
     async create(params): Promise<BatchListingCreateResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const { artifact } = params;
-
-      if (artifact.tokens.length === 0) {
-        throw new Error('Root artifact must contain at least one token');
-      }
+      const splitConfig = prepareRootRegistrationConfig(artifact, accountAddress);
 
       const uniqueContracts = uniqueAddresses(artifact.tokens.map((token) => token.contract));
 
@@ -92,8 +98,8 @@ export function createBatchListingNamespace(
           artifact.root,
           artifact.currency,
           BigInt(artifact.amount),
-          artifact.splitAddresses,
-          artifact.splitRatios,
+          splitConfig.splitAddresses,
+          splitConfig.splitRatios,
         ],
         account,
         chain: undefined,
@@ -119,16 +125,21 @@ export function createBatchListingNamespace(
     async buy(params): Promise<TransactionResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
 
-      const amount = toWei(params.amount);
+      if (params.proofArtifact.proof.length === 0) {
+        throw new Error('Proof artifact proof must not be empty; the batch listing contract rejects empty token proofs');
+      }
+
+      const amount = await toTokenAmount(publicClient, params.currency, params.amount, 'amount');
       const tokenIdBig = toInteger(params.proofArtifact.tokenId, 'tokenId');
       const allowListProof = params.proofArtifact.allowListProof ?? [];
 
-      const value = await preparePayment({
+      const value = await prepareBatchListingPayment({
         publicClient,
         walletClient,
         account,
         accountAddress,
-        auctionAddress: addresses.batchListing,
+        marketplaceSettings: addresses.marketplaceSettings,
+        erc20ApprovalManager: addresses.erc20ApprovalManager,
         currency: params.currency,
         amount,
       });
@@ -186,7 +197,6 @@ export function createBatchListingNamespace(
 
       const hasListing =
         listingConfig.amount > 0n &&
-        !isAddressEqual(listingConfig.currency, ETH_ADDRESS) &&
         cancellationNonce === listingConfig.nonce;
       const allowList = await readAllowListConfig(publicClient, addresses.batchListing, params.creator, params.root);
       const tokenStatus = await readTokenStatus(publicClient, addresses.batchListing, params);
@@ -219,26 +229,79 @@ function uniqueAddresses(addresses: Address[]): Address[] {
   );
 }
 
+function prepareRootRegistrationConfig(
+  artifact: BatchListingRootArtifact,
+  accountAddress: Address,
+): { splitAddresses: Address[]; splitRatios: number[] } {
+  if (artifact.tokens.length < 2) {
+    throw new Error('Root artifact must contain at least two tokens; the batch listing contract rejects empty proofs');
+  }
+
+  if (artifact.allowList !== undefined && artifact.allowList.addresses.length < 2) {
+    throw new Error(
+      'Allowlist must contain at least two addresses; the batch listing contract rejects empty allowlist proofs',
+    );
+  }
+
+  const { splitAddresses, splitRatios } = artifact;
+  if (splitAddresses.length === 0 && splitRatios.length === 0) {
+    const splits = planSplits(undefined, undefined, accountAddress);
+    return { splitAddresses: splits.addresses, splitRatios: splits.ratios };
+  }
+
+  const splits = planSplits(splitAddresses, splitRatios, accountAddress);
+  return { splitAddresses: splits.addresses, splitRatios: splits.ratios };
+}
+
+async function prepareBatchListingPayment(opts: {
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  account: Address | WalletAccount;
+  accountAddress: Address;
+  marketplaceSettings: Address;
+  erc20ApprovalManager: Address;
+  currency: Address;
+  amount: bigint;
+}): Promise<bigint> {
+  const fee = await opts.publicClient.readContract({
+    address: opts.marketplaceSettings,
+    abi: marketplaceSettingsAbi,
+    functionName: 'calculateMarketplaceFee',
+    args: [opts.amount],
+  });
+  const requiredAmount = opts.amount + fee;
+
+  if (isAddressEqual(opts.currency, ETH_ADDRESS)) {
+    return requiredAmount;
+  }
+
+  await ensureTokenAllowance(
+    opts.publicClient,
+    opts.walletClient,
+    opts.account,
+    opts.accountAddress,
+    opts.currency,
+    opts.erc20ApprovalManager,
+    requiredAmount,
+  );
+  return 0n;
+}
+
 async function readAllowListConfig(
   publicClient: PublicClient,
   batchListingAddress: Address,
   creator: Address,
   root: `0x${string}`,
 ): Promise<{ root: `0x${string}`; endTimestamp: bigint } | undefined> {
-  try {
-    const allowList = await publicClient.readContract({
-      address: batchListingAddress,
-      abi: batchListingAbi,
-      functionName: 'getAllowListConfig',
-      args: [creator, root],
-    });
-    return allowList.root === ZERO_BYTES32
-      ? undefined
-      : { root: allowList.root, endTimestamp: allowList.endTimestamp };
-  } catch {
-    // Contract may revert if no allowlist is set.
-    return undefined;
-  }
+  const allowList = await publicClient.readContract({
+    address: batchListingAddress,
+    abi: batchListingAbi,
+    functionName: 'getAllowListConfig',
+    args: [creator, root],
+  });
+  return allowList.root === ZERO_BYTES32
+    ? undefined
+    : { root: allowList.root, endTimestamp: allowList.endTimestamp };
 }
 
 async function readTokenStatus(

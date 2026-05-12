@@ -9,11 +9,8 @@ import { output, log } from '../output.js';
 import { createRareClient } from '../sdk/client.js';
 import {
   buildProofArtifact,
-  buildRootArtifact,
-  loadAllowList,
   loadProofArtifact,
   loadRootArtifact,
-  loadTokenSet,
   writeArtifact,
 } from '../sdk/merkle.js';
 import { parseAddress } from '../sdk/validation.js';
@@ -22,16 +19,6 @@ import { formatBatchAmount, parseBatchAmount } from './batch-amounts.js';
 type ChainOptions = {
   chain?: string;
   chainId?: string;
-};
-
-type MerkleRootOptions = ChainOptions & {
-  tokens: string;
-  currency: string;
-  amount: string;
-  split?: string[];
-  allowlist?: string;
-  endTimestamp?: string;
-  output?: string;
 };
 
 type MerkleProofOptions = {
@@ -60,8 +47,8 @@ type BatchListingBuyOptions = ChainOptions & {
 
 type BatchListingSetAllowListOptions = ChainOptions & {
   root: string;
-  allowlistRoot: string;
-  endTimestamp: string;
+  allowlistRoot?: string;
+  endTimestamp?: string;
 };
 
 type BatchListingStatusOptions = ChainOptions & {
@@ -70,11 +57,6 @@ type BatchListingStatusOptions = ChainOptions & {
   contract?: string;
   tokenId?: string;
   proof?: string;
-};
-
-type ParsedSplits = {
-  splitAddresses: Address[];
-  splitRatios: number[];
 };
 
 async function resolveRootInput(input: string): Promise<`0x${string}`> {
@@ -88,74 +70,15 @@ async function resolveRootInput(input: string): Promise<`0x${string}`> {
 
 export function batchCommand(): Command {
   const cmd = new Command('batch');
-  cmd.description('Batch subcommands (merkle, listing)');
+  cmd.description('Batch listing subcommands (merkle, create, cancel, buy, status, set-allowlist)');
   cmd.addCommand(merkleCommand());
-  cmd.addCommand(batchListingCommand());
+  addBatchListingCommands(cmd);
   return cmd;
 }
 
 function merkleCommand(): Command {
   const cmd = new Command('merkle');
-  cmd.description('Merkle artifact generation (root, proof) for batch listings');
-
-  cmd
-    .command('root')
-    .description('Generate a root artifact JSON from a token-set file')
-    .requiredOption('--tokens <path>', 'JSON file with token set: [{contract, tokenId}] or {tokens: [...]}')
-    .requiredOption('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address')
-    .requiredOption('--amount <amount>', 'sale amount in ETH (or token units)')
-    .option('--split <addr=ratio>', 'payout split recipient and ratio; repeatable', collect)
-    .option('--allowlist <path>', 'optional allowlist file (string[] or {addresses, root?})')
-    .option('--end-timestamp <unix>', 'optional allowlist expiry (unix seconds)')
-    .option('--output <path>', 'write artifact to this path (otherwise stdout)')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111)')
-    .action(async (opts: MerkleRootOptions): Promise<void> => {
-      try {
-        const chain = getActiveChain(opts.chain, opts.chainId);
-        const publicClient = getPublicClient(chain);
-        const tokens = await loadTokenSet(opts.tokens);
-        const currency = resolveCurrency(opts.currency, chain);
-        const amount = await parseBatchAmount(publicClient, chain, currency, opts.amount);
-        const { splitAddresses, splitRatios } = parseSplitOptions(opts.split);
-        const allowList = opts.allowlist === undefined ? undefined : await loadAllowList(opts.allowlist);
-
-        const artifact = buildRootArtifact({
-          tokens,
-          currency,
-          amount,
-          splitAddresses,
-          splitRatios,
-          allowListAddresses: allowList?.addresses,
-          allowListEndTimestamp: opts.endTimestamp ?? allowList?.endTimestamp?.toString(),
-        });
-
-        if (opts.output !== undefined) {
-          await writeArtifact(opts.output, artifact);
-          log(`Root artifact written to ${opts.output}`);
-        }
-
-        const formattedAmount = await formatBatchAmount(publicClient, chain, artifact.currency, BigInt(artifact.amount));
-        output(artifact, () => {
-          console.log('\nRoot artifact:');
-          console.log(`  root:           ${artifact.root}`);
-          console.log(`  currency:       ${artifact.currency}`);
-          console.log(
-            `  amount:         ${formattedAmount} ${isAddressEqual(artifact.currency, ETH_ADDRESS) ? 'ETH' : artifact.currency}`,
-          );
-          console.log(`  tokens:         ${artifact.tokens.length}`);
-          if (artifact.allowList !== undefined) {
-            console.log(`  allowlist root: ${artifact.allowList.root}`);
-            console.log(`  allowlist size: ${artifact.allowList.addresses.length}`);
-          }
-          if (opts.output === undefined) {
-            console.log('\n(use --output <path> to save the artifact)');
-          }
-        });
-      } catch (error) {
-        printError(error);
-      }
-    });
+  cmd.description('Merkle proof artifact generation for batch listings');
 
   cmd
     .command('proof')
@@ -201,10 +124,7 @@ function merkleCommand(): Command {
   return cmd;
 }
 
-function batchListingCommand(): Command {
-  const cmd = new Command('listing');
-  cmd.description('Batch listing subcommands (create, cancel, buy, status, set-allowlist)');
-
+function addBatchListingCommands(cmd: Command): void {
   cmd
     .command('create')
     .description('Register a sale-price Merkle root from a root artifact')
@@ -342,8 +262,8 @@ function batchListingCommand(): Command {
     .command('set-allowlist')
     .description('Attach an allowlist config to an existing batch listing root')
     .requiredOption('--root <hexOrPath>', '0x-prefixed bytes32 root, or path to a root artifact JSON')
-    .requiredOption('--allowlist-root <hex>', '0x-prefixed bytes32 allowlist root')
-    .requiredOption('--end-timestamp <unix>', 'allowlist expiry (unix seconds)')
+    .option('--allowlist-root <hex>', '0x-prefixed bytes32 allowlist root (defaults to root artifact allowList.root)')
+    .option('--end-timestamp <unix>', 'allowlist expiry (defaults to root artifact allowList.endTimestamp)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: BatchListingSetAllowListOptions): Promise<void> => {
@@ -352,15 +272,25 @@ function batchListingCommand(): Command {
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
-        const root = await resolveRootInput(opts.root);
-        const allowListRoot = parseBytes32(opts.allowlistRoot, '--allowlist-root');
+        const rootArtifact = existsSync(opts.root) ? await loadRootArtifact(opts.root) : undefined;
+        const root = rootArtifact?.root ?? await resolveRootInput(opts.root);
+        const allowListRoot = opts.allowlistRoot === undefined
+          ? rootArtifact?.allowList?.root
+          : parseBytes32(opts.allowlistRoot, '--allowlist-root');
+        const endTimestamp = opts.endTimestamp ?? rootArtifact?.allowList?.endTimestamp;
+        if (allowListRoot === undefined) {
+          throw new Error('--allowlist-root is required when --root is not a root artifact with allowList.root');
+        }
+        if (endTimestamp === undefined) {
+          throw new Error('--end-timestamp is required when --root is not a root artifact with allowList.endTimestamp');
+        }
 
         log(`Setting allowlist for batch listing on ${chain}...`);
 
         const result = await rare.batchListing.setAllowList({
           root,
           allowListRoot,
-          endTimestamp: opts.endTimestamp,
+          endTimestamp,
         });
 
         output(
@@ -431,11 +361,6 @@ function batchListingCommand(): Command {
       }
     });
 
-  return cmd;
-}
-
-function collect(value: string, previous: string[] | undefined): string[] {
-  return [...(previous ?? []), value];
 }
 
 function parseOptionalAddress(value: string | undefined, field: string): Address | undefined {
@@ -447,32 +372,4 @@ function parseBytes32(value: string, field: string): `0x${string}` {
     throw new Error(`${field} must be a 0x-prefixed bytes32 hex string`);
   }
   return value;
-}
-
-function parseSplitOptions(values: string[] | undefined): ParsedSplits {
-  return (values ?? []).reduce<ParsedSplits>(
-    (splits, value) => {
-      const { address, ratio } = parseSplitOption(value);
-      return {
-        splitAddresses: [...splits.splitAddresses, address],
-        splitRatios: [...splits.splitRatios, ratio],
-      };
-    },
-    { splitAddresses: [], splitRatios: [] },
-  );
-}
-
-function parseSplitOption(value: string): { address: Address; ratio: number } {
-  const separatorIndex = value.indexOf('=');
-  if (separatorIndex <= 0 || separatorIndex === value.length - 1) {
-    throw new Error(`--split entries must use addr=ratio format, got: ${value}`);
-  }
-
-  const address = parseAddress(value.slice(0, separatorIndex), '--split');
-  const ratio = Number(value.slice(separatorIndex + 1));
-  if (!Number.isInteger(ratio)) {
-    throw new Error(`--split ratio entries must be integers, got: ${value}`);
-  }
-
-  return { address, ratio };
 }

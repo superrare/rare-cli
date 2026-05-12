@@ -209,34 +209,18 @@ rare listing status --contract 0x... --token-id 1
 ### Batch Listings
 
 Batch listings use Merkle artifacts: one root artifact describing the token set and listing config, and one proof artifact per token purchase.
+Root artifacts are produced outside the CLI. Token sets and allowlists must each contain at least two entries because the batch listing contract rejects empty Merkle proofs. If no split is provided, registration defaults to 100% to the connected seller wallet.
 
 ```bash
-# Build a root artifact from a token-set JSON file
-rare batch merkle root \
-  --tokens ./tokens.json \
-  --currency usdc \
-  --amount 25 \
-  --output ./root.json
-
-# Optionally include an allowlist file and explicit payout splits
-rare batch merkle root \
-  --tokens ./tokens.json \
-  --currency eth \
-  --amount 0.05 \
-  --split 0x...=100 \
-  --allowlist ./allowlist.json \
-  --end-timestamp 1735689600 \
-  --output ./root.json
-
 # Build a proof artifact for one token in the root
-rare batch merkle proof \
+rare listing batch merkle proof \
   --root ./root.json \
   --contract 0x... \
   --token-id 1 \
   --output ./proof.json
 
 # If the root has an allowlist, include the buyer when generating the proof
-rare batch merkle proof \
+rare listing batch merkle proof \
   --root ./root.json \
   --contract 0x... \
   --token-id 1 \
@@ -244,20 +228,20 @@ rare batch merkle proof \
   --output ./proof.json
 
 # Register the batch listing from the root artifact
-rare batch listing create --root ./root.json --yes
+rare listing batch create --root ./root.json --yes
 
 # Buy one token using a proof artifact
-rare batch listing buy \
+rare listing batch buy \
   --proof ./proof.json \
   --creator 0x...seller \
   --currency usdc \
   --amount 25
 
 # Inspect the listing config
-rare batch listing status --root ./root.json --creator 0x...seller
+rare listing batch status --root ./root.json --creator 0x...seller
 
 # Narrow status to a specific token with its proof
-rare batch listing status \
+rare listing batch status \
   --root ./root.json \
   --creator 0x...seller \
   --contract 0x... \
@@ -265,20 +249,20 @@ rare batch listing status \
   --proof ./proof.json
 
 # Attach an allowlist config to an existing root
-rare batch listing set-allowlist \
-  --root ./root.json \
+rare listing batch set-allowlist \
+  --root ./root.json
+
+# Or pass explicit values when using a hex root instead of an artifact path
+rare listing batch set-allowlist \
+  --root 0x... \
   --allowlist-root 0x... \
   --end-timestamp 1735689600
 
 # Cancel the listing root
-rare batch listing cancel --root ./root.json
+rare listing batch cancel --root ./root.json
 ```
 
-Token-set input files accept either `[{ "contract": "0x...", "tokenId": "1" }]` or `{ "tokens": [...] }`.
-
-Allowlist input files accept either `["0x..."]` or `{ "addresses": ["0x..."], "root"?: "0x...", "endTimestamp"?: "..." }`.
-
-Named currencies are parsed with chain-aware decimals. Arbitrary ERC20 addresses are supported and their `decimals()` values are resolved from chain RPC when building root artifacts or sending buys.
+Named currencies are parsed with chain-aware decimals. Arbitrary ERC20 addresses are supported and their `decimals()` values are resolved from chain RPC when sending buys.
 
 ### Currencies
 

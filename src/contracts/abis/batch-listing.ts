@@ -130,37 +130,27 @@ export const batchListingAbi = [
   },
   {
     "type": "function",
-    "name": "marketplaceSettings",
-    "inputs": [],
-    "outputs": [
-      { "name": "", "type": "address", "internalType": "contract IMarketplaceSettings" }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "isTokenInRoot",
     "inputs": [
-      { "name": "_merkleRoot", "type": "bytes32", "internalType": "bytes32" },
-      { "name": "_originContract", "type": "address", "internalType": "address" },
+      { "name": "_root", "type": "bytes32", "internalType": "bytes32" },
+      { "name": "_origin", "type": "address", "internalType": "address" },
       { "name": "_tokenId", "type": "uint256", "internalType": "uint256" },
       { "name": "_proof", "type": "bytes32[]", "internalType": "bytes32[]" }
     ],
     "outputs": [
       { "name": "", "type": "bool", "internalType": "bool" }
     ],
-    "stateMutability": "view"
+    "stateMutability": "pure"
   },
   {
     "type": "event",
     "name": "SalePriceMerkleRootRegistered",
     "inputs": [
-      { "name": "_creator", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "_merkleRoot", "type": "bytes32", "indexed": true, "internalType": "bytes32" },
-      { "name": "_currency", "type": "address", "indexed": false, "internalType": "address" },
-      { "name": "_amount", "type": "uint256", "indexed": false, "internalType": "uint256" },
-      { "name": "_splitRecipients", "type": "address[]", "indexed": false, "internalType": "address payable[]" },
-      { "name": "_splitRatios", "type": "uint8[]", "indexed": false, "internalType": "uint8[]" }
+      { "name": "creator", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "merkleRoot", "type": "bytes32", "indexed": true, "internalType": "bytes32" },
+      { "name": "currency", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "amount", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "nonce", "type": "uint256", "indexed": false, "internalType": "uint256" }
     ],
     "anonymous": false
   },
@@ -168,8 +158,8 @@ export const batchListingAbi = [
     "type": "event",
     "name": "SalePriceMerkleRootCancelled",
     "inputs": [
-      { "name": "_creator", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "_merkleRoot", "type": "bytes32", "indexed": true, "internalType": "bytes32" }
+      { "name": "creator", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "merkleRoot", "type": "bytes32", "indexed": true, "internalType": "bytes32" }
     ],
     "anonymous": false
   },
@@ -177,13 +167,14 @@ export const batchListingAbi = [
     "type": "event",
     "name": "MerkleSalePriceExecuted",
     "inputs": [
-      { "name": "_contractAddress", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "_tokenId", "type": "uint256", "indexed": true, "internalType": "uint256" },
-      { "name": "_buyer", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "_seller", "type": "address", "indexed": false, "internalType": "address" },
-      { "name": "_merkleRoot", "type": "bytes32", "indexed": false, "internalType": "bytes32" },
-      { "name": "_currency", "type": "address", "indexed": false, "internalType": "address" },
-      { "name": "_amount", "type": "uint256", "indexed": false, "internalType": "uint256" }
+      { "name": "contractAddress", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "tokenId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "buyer", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "seller", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "currency", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "amount", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "merkleRoot", "type": "bytes32", "indexed": false, "internalType": "bytes32" },
+      { "name": "nonce", "type": "uint256", "indexed": false, "internalType": "uint256" }
     ],
     "anonymous": false
   },
@@ -191,10 +182,10 @@ export const batchListingAbi = [
     "type": "event",
     "name": "AllowListConfigSet",
     "inputs": [
-      { "name": "_creator", "type": "address", "indexed": true, "internalType": "address" },
-      { "name": "_merkleRoot", "type": "bytes32", "indexed": true, "internalType": "bytes32" },
-      { "name": "_allowListRoot", "type": "bytes32", "indexed": true, "internalType": "bytes32" },
-      { "name": "_endTimestamp", "type": "uint256", "indexed": false, "internalType": "uint256" }
+      { "name": "creator", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "merkleRoot", "type": "bytes32", "indexed": true, "internalType": "bytes32" },
+      { "name": "allowListRoot", "type": "bytes32", "indexed": true, "internalType": "bytes32" },
+      { "name": "endTimestamp", "type": "uint256", "indexed": false, "internalType": "uint256" }
     ],
     "anonymous": false
   }

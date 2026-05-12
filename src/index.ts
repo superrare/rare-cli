@@ -10,7 +10,6 @@ import { listCollectionsCommand } from './commands/list-collections.js';
 import { importCommand } from './commands/import.js';
 import { offerCommand } from './commands/offer.js';
 import { listingCommand } from './commands/listing.js';
-import { batchCommand } from './commands/batch.js';
 import { currenciesCommand } from './commands/currencies.js';
 import { swapCommand } from './commands/swap.js';
 import { printError } from './errors.js';
@@ -34,7 +33,6 @@ program.addCommand(listCollectionsCommand());
 program.addCommand(importCommand());
 program.addCommand(offerCommand());
 program.addCommand(listingCommand());
-program.addCommand(batchCommand());
 program.addCommand(currenciesCommand());
 program.addCommand(swapCommand());
 

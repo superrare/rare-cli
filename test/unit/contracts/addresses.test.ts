@@ -24,6 +24,8 @@ describe('chain and currency helpers', () => {
       factory: getAddress('0x3c7526a0975156299ceef369b8ff3c01cc670523'),
       auction: getAddress('0xC8Edc7049b233641ad3723D6C60019D1c8771612'),
       batchListing: getAddress('0xF2bE72d4343beD375Cb6d0E799a3c003163860e0'),
+      marketplaceSettings: getAddress('0x972dEe8fa339ad2D9c6cbDA31b67f98Fac242d13'),
+      erc20ApprovalManager: getAddress('0x4619eB29e84392CE91C27FC936A5c94d1D14b93f'),
       erc721ApprovalManager: getAddress('0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E'),
       liquidFactory: getAddress('0xfD18C0D99e5b6F89F3538806241C2C0d6FD728Ac'),
       swapRouter: getAddress('0x429c3Ee66E7f6CDA12C5BadE4104aF3277aA2305'),
