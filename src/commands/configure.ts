@@ -32,10 +32,10 @@ export function configureCommand(): Command {
             Object.entries(config.chains).map(([chain, chainCfg]) => [
               chain,
               {
-                privateKey: chainCfg?.privateKey
-                  ? chainCfg.privateKey.slice(0, 6) + '...' + chainCfg.privateKey.slice(-4)
+                privateKey: chainCfg.privateKey !== undefined
+                  ? `${chainCfg.privateKey.slice(0, 6)}...${chainCfg.privateKey.slice(-4)}`
                   : undefined,
-                rpcUrl: chainCfg?.rpcUrl,
+                rpcUrl: chainCfg.rpcUrl,
               },
             ])
           ),
@@ -72,7 +72,7 @@ export function configureCommand(): Command {
         console.log(`Configuration updated for chain: ${opts.chain}`);
       }
 
-      if (!opts.show && !opts.defaultChain && !opts.chain) {
+      if (opts.defaultChain === undefined && opts.chain === undefined) {
         cmd.help();
       }
     });

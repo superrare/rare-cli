@@ -3,6 +3,7 @@ import {
   type PublicClient,
   type WalletClient,
   erc20Abi,
+  isAddressEqual,
   maxUint256,
   parseEther,
   parseUnits,
@@ -83,7 +84,7 @@ export function resolveChainFromPublicClient(publicClient: PublicClient): Suppor
   }
 
   const chain = supportedChains.find((supportedChain) => chainIds[supportedChain] === chainId);
-  if (chain) {
+  if (chain !== undefined) {
     return chain;
   }
 
@@ -101,8 +102,8 @@ export function requireWallet(config: RareClientConfig): {
 
   const walletAccount = config.walletClient.account;
 
-  if (config.account) {
-    if (walletAccount && walletAccount.address.toLowerCase() === config.account.toLowerCase()) {
+  if (config.account !== undefined) {
+    if (walletAccount != null && isAddressEqual(walletAccount.address, config.account)) {
       return {
         walletClient: config.walletClient,
         account: walletAccount,
@@ -394,10 +395,8 @@ async function readAllowance(
       functionName: 'allowance',
       args: [accountAddress, auctionAddress],
     });
-  } catch (err) {
+  } catch {
     // Allowance check failed (e.g. non-standard ERC20) — approve unconditionally
-    const message = err instanceof Error ? err.message : String(err);
-    console.warn('ERC20 allowance check failed, approving unconditionally:', message);
     return undefined;
   }
 }

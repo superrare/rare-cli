@@ -126,10 +126,10 @@ async function buildLocalTokenTradeQuote(
     const estimatedQuote = await quoteRoute(publicClient, quoterAddress, route, amountIn, 0n);
     const minAmountOut =
       params.direction === 'buy'
-        ? params.minTokensOut
+        ? params.minTokensOut !== undefined
           ? await toTokenAmount(publicClient, params.token, params.minTokensOut, 'minTokensOut')
           : computeMinAmountOut(estimatedQuote.amountOut, defaultSlippageBps)
-        : params.minEthOut
+        : params.minEthOut !== undefined
           ? toWei(params.minEthOut)
           : computeMinAmountOut(estimatedQuote.amountOut, defaultSlippageBps);
     const routeQuote = { ...estimatedQuote, minAmountOut };
@@ -176,10 +176,10 @@ async function buildUniswapFallbackTradeQuote(
       : await toTokenAmount(publicClient, token, params.tokenAmount, 'tokenAmount');
   const requestedMinAmountOut =
     params.direction === 'buy'
-      ? params.minTokensOut
+      ? params.minTokensOut !== undefined
         ? await toTokenAmount(publicClient, token, params.minTokensOut, 'minTokensOut')
         : undefined
-      : params.minEthOut
+      : params.minEthOut !== undefined
         ? toWei(params.minEthOut)
         : undefined;
   const defaultSlippageBps = resolveSlippageBps(params.slippageBps);

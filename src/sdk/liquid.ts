@@ -15,7 +15,7 @@ import type { DeployLiquidEditionResult, GeneratePresetCurvesResult, RareClient,
 const LIQUID_EDITION_ADDRESS_LOG_RETRY_ATTEMPTS = 3;
 const LIQUID_EDITION_ADDRESS_LOG_RETRY_DELAY_MS = 1_000;
 
-function sleep(ms: number): Promise<void> {
+async function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -63,7 +63,7 @@ async function waitForLiquidEditionAddress(
 ): Promise<{ receipt: TransactionReceipt; contract: Address }> {
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
   const contract = getLiquidEditionAddressFromReceipt(receipt);
-  if (contract) {
+  if (contract !== undefined) {
     return { receipt, contract };
   }
 
@@ -85,9 +85,9 @@ async function retryLiquidEditionAddress(
   try {
     const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
     const contract = getLiquidEditionAddressFromReceipt(receipt);
-    return contract
+    return contract !== undefined
       ? { receipt, contract }
-      : retryLiquidEditionAddress(publicClient, txHash, receipt, attempt + 1);
+      : await retryLiquidEditionAddress(publicClient, txHash, receipt, attempt + 1);
   } catch (error) {
     return retryLiquidEditionAddress(publicClient, txHash, previousReceipt, attempt + 1, error);
   }
@@ -143,9 +143,10 @@ export function createLiquidNamespace(
         throw new Error(validation.errorMessage ?? 'Invalid curve configuration');
       }
 
-      const initialRareLiquidity = params.initialRareLiquidity
-        ? await toTokenAmount(publicClient, factoryConfig.baseToken, params.initialRareLiquidity, 'initialRareLiquidity')
-        : 0n;
+      const initialRareLiquidity =
+        params.initialRareLiquidity !== undefined
+          ? await toTokenAmount(publicClient, factoryConfig.baseToken, params.initialRareLiquidity, 'initialRareLiquidity')
+          : 0n;
 
       await ensureTokenAllowance(
         publicClient,

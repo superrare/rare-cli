@@ -13,14 +13,14 @@ function isCurvePresetKey(value: string): value is CurvePresetKey {
   return PRESETS.some((preset) => preset === value);
 }
 
-export interface LiquidCurveWizardResult {
+export type LiquidCurveWizardResult = {
   preset: CurvePresetKey;
   rarePriceUsd: number;
   curves: LiquidCurveSegment[];
   preview: LiquidCurvePreview;
 }
 
-export interface LiquidCurveWizardOptions {
+export type LiquidCurveWizardOptions = {
   stdin?: Readable;
   stdout?: Writable;
   skipConfirmation?: boolean;
@@ -53,7 +53,7 @@ function printPreview(preview: LiquidCurvePreview): void {
 }
 
 async function promptForPreset(rl: ReturnType<typeof createInterface>): Promise<CurvePresetKey> {
-  while (true) {
+  for (;;) {
     console.log('\nSelect a curve preset:');
     PRESETS.forEach((preset, index) => {
       const info = getCurvePresetDefinition(preset);
@@ -64,7 +64,7 @@ async function promptForPreset(rl: ReturnType<typeof createInterface>): Promise<
     const numeric = Number(answer);
     if (Number.isInteger(numeric) && numeric >= 1 && numeric <= PRESETS.length) {
       const preset = PRESETS[numeric - 1];
-      if (preset) {
+      if (preset !== undefined) {
         return preset;
       }
     }
@@ -78,7 +78,7 @@ async function promptForPreset(rl: ReturnType<typeof createInterface>): Promise<
 }
 
 async function promptForConfirmation(rl: ReturnType<typeof createInterface>): Promise<boolean> {
-  while (true) {
+  for (;;) {
     const answer = (await rl.question('\nUse these curves? [y/n]: ')).trim().toLowerCase();
     if (answer === 'y' || answer === 'yes') return true;
     if (answer === 'n' || answer === 'no') return false;

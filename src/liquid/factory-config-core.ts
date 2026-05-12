@@ -1,6 +1,6 @@
 import { formatUnits, type Address } from 'viem';
 
-export interface LiquidFactoryConfig {
+export type LiquidFactoryConfig = {
   baseToken: Address;
   maxTotalSupplyWei: bigint;
   creatorLaunchRewardWei: bigint;

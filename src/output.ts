@@ -45,16 +45,12 @@ export function printNft(nft: Nft): void {
   console.log(`  Token ID: ${nft.tokenId}`);
   console.log(`  Type:     ${nft.type}`);
 
-  if (nft.creator) {
-    console.log(`  Creator:  ${nft.creator.username ?? nft.creator.address}`);
-  }
-  if (nft.owner) {
-    console.log(`  Owner:    ${nft.owner.username ?? nft.owner.address}`);
-  }
+  console.log(`  Creator:  ${nft.creator.username ?? nft.creator.address}`);
+  console.log(`  Owner:    ${nft.owner.username ?? nft.owner.address}`);
 
   if (nft.metadata.description) {
     const desc = nft.metadata.description.length > 120
-      ? nft.metadata.description.slice(0, 117) + '...'
+      ? `${nft.metadata.description.slice(0, 117)  }...`
       : nft.metadata.description;
     console.log(`  Desc:     ${desc}`);
   }
@@ -67,20 +63,19 @@ export function printNft(nft: Nft): void {
     console.log(`  Image:    ${nft.metadata.imageUri}`);
   }
 
-  // Market summary
-  if (nft.market.auctions.length > 0) {
-    const auction = nft.market.auctions[0];
-    const bid = auction.currentBid ? formatCryptoValue(auction.currentBid) : null;
-    const reserve = auction.reservePrice ? formatCryptoValue(auction.reservePrice) : null;
-    console.log(`  Auction:  ${auction.state}${bid ? ` | bid: ${bid}` : ''}${reserve ? ` | reserve: ${reserve}` : ''}`);
+  const auction = nft.market.auctions[0];
+  if (auction !== undefined) {
+    const bid = formatCryptoValue(auction.currentBid);
+    const reserve = formatCryptoValue(auction.reservePrice);
+    console.log(`  Auction:  ${auction.state} | bid: ${bid} | reserve: ${reserve}`);
   }
-  if (nft.market.listings.length > 0) {
-    const listing = nft.market.listings[0];
+  const listing = nft.market.listings[0];
+  if (listing !== undefined) {
     console.log(`  Listed:   ${formatCryptoValue(listing.price)}`);
   }
-  if (nft.market.offers.length > 0) {
-    const offer = nft.market.offers[0];
-    console.log(`  Offer:    ${formatCryptoValue(offer.price)} from ${offer.buyer?.username ?? offer.buyerAddress}`);
+  const offer = nft.market.offers[0];
+  if (offer !== undefined) {
+    console.log(`  Offer:    ${formatCryptoValue(offer.price)} from ${offer.buyer.username ?? offer.buyerAddress}`);
   }
 
   if (nft.lastSale) {
@@ -90,9 +85,9 @@ export function printNft(nft: Nft): void {
 
 export function printNftRow(nft: Nft): void {
   const name = nft.metadata.name ?? 'Untitled';
-  const owner = nft.owner?.username ?? nft.owner?.address?.slice(0, 10) ?? '';
+  const owner = nft.owner.username ?? nft.owner.address.slice(0, 10);
   const market = nftMarketSummary(nft);
-  console.log(`  ${nft.universalTokenId}  ${name}${owner ? `  (${owner})` : ''}${market ? `  ${market}` : ''}`);
+  console.log(`  ${nft.universalTokenId}  ${name}  (${owner})${market.length > 0 ? `  ${market}` : ''}`);
 }
 
 function nftMarketSummary(nft: Nft): string {
@@ -100,9 +95,9 @@ function nftMarketSummary(nft: Nft): string {
   const listing = nft.market.listings[0];
   const offer = nft.market.offers[0];
   const parts = [
-    auction ? `auction:${auction.state}` : undefined,
-    listing ? `listed:${formatCryptoValue(listing.price)}` : undefined,
-    offer ? `offer:${formatCryptoValue(offer.price)}` : undefined,
+    auction !== undefined ? `auction:${auction.state}` : undefined,
+    listing !== undefined ? `listed:${formatCryptoValue(listing.price)}` : undefined,
+    offer !== undefined ? `offer:${formatCryptoValue(offer.price)}` : undefined,
   ].filter((part): part is string => part !== undefined);
 
   return parts.length > 0 ? `[${parts.join(' | ')}]` : '';
@@ -117,13 +112,11 @@ export function printCollection(col: Collection): void {
   if (col.symbol) console.log(`  Symbol:     ${col.symbol}`);
   if (col.description) {
     const desc = col.description.length > 120
-      ? col.description.slice(0, 117) + '...'
+      ? `${col.description.slice(0, 117)  }...`
       : col.description;
     console.log(`  Desc:       ${desc}`);
   }
-  if (col.owner) {
-    console.log(`  Owner:      ${col.owner.username ?? col.owner.address}`);
-  }
+  console.log(`  Owner:      ${col.owner.username ?? col.owner.address}`);
   console.log(`  Tokens:     ${col.stats.tokenCount}`);
   console.log(`  Collectors: ${col.stats.collectorCount}`);
   if (col.stats.floorPriceUsd != null) {
@@ -139,7 +132,7 @@ export function printCollectionRow(col: Collection): void {
   const name = col.name ?? 'Unnamed';
   const tokens = `${col.stats.tokenCount} tokens`;
   const floor = col.stats.floorPriceUsd != null ? `floor: $${col.stats.floorPriceUsd}` : '';
-  console.log(`  ${col.collectionId}  ${name}  ${tokens}${floor ? `  ${floor}` : ''}`);
+  console.log(`  ${col.collectionId}  ${name}  ${tokens}${floor.length > 0 ? `  ${floor}` : ''}`);
 }
 
 // --- Pagination ---

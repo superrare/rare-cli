@@ -36,8 +36,17 @@ function getDetailLines(error: Error): string[] {
 
 function getReasonLines(error: Error): string[] {
   const reason = getReason(error);
-  const cleanReason = reason === undefined ? '' : sanitize(String(reason));
-  return cleanReason ? [`Revert reason: ${cleanReason}`] : [];
+  const cleanReason = isStringifiable(reason) ? sanitize(String(reason)) : '';
+  return cleanReason.length > 0 ? [`Revert reason: ${cleanReason}`] : [];
+}
+
+function isStringifiable(value: unknown): value is string | number | bigint | boolean {
+  return (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'bigint' ||
+    typeof value === 'boolean'
+  );
 }
 
 function getMetaMessageLines(error: Error): string[] {
@@ -59,7 +68,7 @@ function collectCauses(current: unknown): string[] {
 
   const causeMessage = sanitize(getErrorMessage(current));
   const currentLines = [
-    ...(causeMessage ? [causeMessage] : []),
+    ...(causeMessage.length > 0 ? [causeMessage] : []),
     ...getReasonLines(current),
     ...getMetaMessageLines(current),
   ];

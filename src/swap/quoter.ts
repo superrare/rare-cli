@@ -27,7 +27,7 @@ export async function quoteExactInputSingle(
   amountIn: bigint,
 ): Promise<{ amountOut: bigint; gasEstimate: bigint; step: ResolvedV4RouteStep }> {
   const [step] = buildExactInputSingleRoute(tokenIn, tokenOut, poolKey);
-  if (!step) {
+  if (step === undefined) {
     throw new Error('Failed to build swap route.');
   }
 
@@ -79,7 +79,7 @@ async function quoteRouteSteps(
   quotedSteps: readonly ResolvedRouteStep[] = [],
 ): Promise<{ amountOut: bigint; steps: ResolvedRouteStep[] }> {
   const [step, ...remainingSteps] = routeSteps;
-  if (!step) {
+  if (step === undefined) {
     return { amountOut: currentAmount, steps: [...quotedSteps] };
   }
 

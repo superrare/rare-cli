@@ -85,7 +85,7 @@ function encodeRouteParts(
   stepIndex: number,
 ): EncodedRouteParts {
   const step = quote.steps[stepIndex];
-  if (!step) {
+  if (step === undefined) {
     return { commandBytes: [], inputs: [] };
   }
 
@@ -112,7 +112,7 @@ function encodeRouteParts(
   const v4Block = collectV4RouteBlock(quote.steps, stepIndex);
   const firstStep = v4Block.steps[0];
   const lastStep = v4Block.steps[v4Block.steps.length - 1];
-  if (!firstStep || !lastStep) {
+  if (firstStep === undefined || lastStep === undefined) {
     throw new Error('Missing V4 route block.');
   }
 
@@ -147,7 +147,7 @@ function collectV4RouteBlock(
   startIndex: number,
 ): V4RouteBlock {
   const step = steps[startIndex];
-  if (!step || step.kind !== 'v4Swap') {
+  if (step?.kind !== 'v4Swap') {
     return { steps: [], nextIndex: startIndex };
   }
   const rest = collectV4RouteBlock(steps, startIndex + 1);
@@ -253,8 +253,8 @@ function encodeV4ExactIn({
         );
 
   if (executionMode.inputSource === 'router' && steps.length === 1) {
-    const [singleStep] = steps;
-    if (!singleStep) {
+    const singleStep = steps[0];
+    if (singleStep === undefined) {
       throw new Error('Missing V4 exact input single step.');
     }
 

@@ -1,4 +1,4 @@
-import type { Address } from 'viem';
+import { isAddressEqual, type Address } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
 import { buildCanonicalTokenBuyRoute, buildCanonicalTokenSellRoute } from './build-route.js';
 import type { PoolKey, ResolvedRoute, RouteQuote } from './route-types.js';
@@ -7,7 +7,7 @@ export type TokenTradeDirection = 'buy' | 'sell';
 export type TokenTradeRouteSource = 'liquid-edition' | 'known-pool' | 'uniswap-api';
 export type TokenTradeExecution = 'liquid-router' | 'uniswap-api';
 
-export interface TokenTradeQuoteCoreBase {
+export type TokenTradeQuoteCoreBase = {
   amountIn: bigint;
   estimatedAmountOut: bigint;
   minAmountOut: bigint;
@@ -19,21 +19,21 @@ export interface TokenTradeQuoteCoreBase {
   routeDescription: string;
 }
 
-export interface LiquidRouterTokenTradeQuoteCore extends TokenTradeQuoteCoreBase {
+export type LiquidRouterTokenTradeQuoteCore = {
   routeSource: Extract<TokenTradeRouteSource, 'liquid-edition' | 'known-pool'>;
   execution: 'liquid-router';
   commands: `0x${string}`;
   inputs: readonly `0x${string}`[];
-}
+} & TokenTradeQuoteCoreBase
 
-export interface UniswapApiTokenTradeQuoteCore extends TokenTradeQuoteCoreBase {
+export type UniswapApiTokenTradeQuoteCore = {
   routeSource: 'uniswap-api';
   execution: 'uniswap-api';
-}
+} & TokenTradeQuoteCoreBase
 
 export type TokenTradeQuoteCore = LiquidRouterTokenTradeQuoteCore | UniswapApiTokenTradeQuoteCore;
 
-interface UniswapQuoteLike {
+type UniswapQuoteLike = {
   output: {
     amount: string;
   };
@@ -131,9 +131,8 @@ export function getQuotedRecipientAmount(quote: UniswapQuoteLike, recipient: Add
   estimatedAmountOut: bigint;
   minAmountOut: bigint;
 } {
-  const normalizedRecipient = recipient.toLowerCase();
   const recipientOutput = quote.aggregatedOutputs?.find(
-    (output) => output.recipient.toLowerCase() === normalizedRecipient,
+    (output) => isAddressEqual(output.recipient, recipient),
   );
 
   if (recipientOutput) {
@@ -156,7 +155,7 @@ export function assertSupportedUniswapRouting(routing: string): void {
 }
 
 export function assertRecipientSupportedForUniswapFallback(recipient: Address | undefined, accountAddress: Address): void {
-  if (recipient && recipient.toLowerCase() !== accountAddress.toLowerCase()) {
+  if (recipient !== undefined && !isAddressEqual(recipient, accountAddress)) {
     throw new Error('recipient override is not supported for Uniswap API fallback routes.');
   }
 }

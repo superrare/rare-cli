@@ -4,7 +4,7 @@ export { getQuotedRecipientAmount } from './trade-core.js';
 
 const DEFAULT_UNISWAP_TRADE_API_BASE_URL = 'https://trade-api.gateway.uniswap.org/v1';
 
-export interface UniswapTransactionRequest {
+export type UniswapTransactionRequest = {
   to: Address;
   from: Address;
   data: `0x${string}`;
@@ -16,7 +16,7 @@ export interface UniswapTransactionRequest {
   gasPrice?: string;
 }
 
-export interface UniswapApprovalResponse {
+export type UniswapApprovalResponse = {
   requestId: string;
   approval: UniswapTransactionRequest | null;
   cancel: UniswapTransactionRequest | null;
@@ -24,14 +24,14 @@ export interface UniswapApprovalResponse {
   cancelGasFee?: string;
 }
 
-export interface UniswapQuoteRouteToken {
+export type UniswapQuoteRouteToken = {
   chainId: number;
   decimals: string;
   address: Address;
   symbol?: string;
 }
 
-export interface UniswapQuoteRouteHop {
+export type UniswapQuoteRouteHop = {
   type: string;
   address?: string;
   tokenIn: UniswapQuoteRouteToken;
@@ -43,7 +43,7 @@ export interface UniswapQuoteRouteHop {
   amountOut?: string;
 }
 
-export interface UniswapQuotePayload {
+export type UniswapQuotePayload = {
   chainId: number;
   input: {
     amount: string;
@@ -70,25 +70,25 @@ export interface UniswapQuotePayload {
   txFailureReasons?: string[];
 }
 
-export interface UniswapQuoteResponse {
+export type UniswapQuoteResponse = {
   requestId: string;
   routing: string;
   quote: UniswapQuotePayload;
   permitData: unknown;
 }
 
-interface UniswapSwapResponse {
+type UniswapSwapResponse = {
   requestId: string;
   swap: UniswapTransactionRequest;
   gasFee?: string;
 }
 
-interface UniswapApiRequestOptions {
+type UniswapApiRequestOptions = {
   apiKey?: string;
   baseUrl?: string;
 }
 
-interface QuoteRequestParams {
+type QuoteRequestParams = {
   apiKey?: string;
   baseUrl?: string;
   chainId: number;
@@ -359,7 +359,7 @@ async function parseJsonResponse<T>(response: Response, parse: (value: unknown) 
   const parsed = parseJsonOrNull(text);
 
   if (!response.ok) {
-    const message = getErrorMessage(parsed) ?? (text || response.statusText);
+    const message = getErrorMessage(parsed) ?? (text.length > 0 ? text : response.statusText);
     throw new Error(`Uniswap API ${response.status} ${response.statusText}: ${message}`);
   }
 
@@ -367,7 +367,7 @@ async function parseJsonResponse<T>(response: Response, parse: (value: unknown) 
 }
 
 function parseJsonOrNull(text: string): unknown {
-  if (!text) {
+  if (text.length === 0) {
     return null;
   }
   try {

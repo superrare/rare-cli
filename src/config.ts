@@ -4,12 +4,12 @@ import os from 'os';
 import { supportedChains, isSupportedChain, type SupportedChain } from './contracts/addresses.js';
 import { isHexString } from './sdk/validation.js';
 
-export interface ChainConfig {
+export type ChainConfig = {
   privateKey?: `0x${string}`;
   rpcUrl?: string;
 }
 
-export interface Config {
+export type Config = {
   defaultChain?: SupportedChain;
   chains: Partial<Record<SupportedChain, ChainConfig>>;
 }

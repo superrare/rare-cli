@@ -60,9 +60,11 @@ function parseAttributeJson(raw: string): NftAttribute {
     throw new Error(`Attribute JSON must include "value": ${raw}`);
   }
 
+  const trait_type = parseOptionalString(parsed.trait_type, 'trait_type', raw) ?? 'value';
+
   return {
     value: parseAttributeValue(parsed.value, raw),
-    trait_type: parseOptionalString(parsed.trait_type, 'trait_type', raw),
+    trait_type,
     display_type: parseDisplayType(parsed.display_type, raw),
     max_value: parseOptionalNumber(parsed.max_value, 'max_value', raw),
   };
@@ -83,7 +85,7 @@ export function parseAttribute(raw: string): NftAttribute {
 
   const eqIndex = raw.indexOf('=');
   if (eqIndex === -1) {
-    return { value: raw };
+    return { trait_type: 'value', value: raw };
   }
 
   const trait_type = raw.slice(0, eqIndex);

@@ -159,7 +159,8 @@ async function uploadFileMedia(
 
   log(`Uploading ${label}: ${filename} (${fileBuffer.byteLength} bytes)`);
   const media = await rare.media.upload(new Uint8Array(fileBuffer), filename);
-  log(`  ${label[0].toUpperCase()}${label.slice(1)} uploaded: ${media.url}`);
+  const labelCapitalized = `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
+  log(`  ${labelCapitalized} uploaded: ${media.url}`);
 
   return media;
 }

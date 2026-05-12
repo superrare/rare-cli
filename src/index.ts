@@ -36,6 +36,6 @@ program.addCommand(listingCommand());
 program.addCommand(currenciesCommand());
 program.addCommand(swapCommand());
 
-program.parseAsync(process.argv).catch((err) => {
+program.parseAsync(process.argv).catch((err: unknown) => {
   printError(err);
 });

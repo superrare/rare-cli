@@ -31,7 +31,7 @@ export const defaultRpcUrls: Partial<Record<SupportedChain, string>> = {
   'base-sepolia': 'https://sepolia.base.org',
 };
 
-export interface CanonicalV4Pool {
+export type CanonicalV4Pool = {
   currency0: Address;
   currency1: Address;
   fee: number;

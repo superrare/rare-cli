@@ -36,14 +36,15 @@ export function createDeployNamespace(
         eventName: 'SovereignBatchMintCreated',
       });
 
-      if (!logs[0]) {
+      const log = logs[0];
+      if (log === undefined) {
         throw new Error('Deploy transaction succeeded but SovereignBatchMintCreated event was not found in logs.');
       }
 
       return {
         txHash,
         receipt,
-        contract: logs[0].args.contractAddress,
+        contract: log.args.contractAddress,
       };
     },
   };

@@ -1,6 +1,6 @@
 import type { Address } from 'viem';
 
-export interface PoolKey {
+export type PoolKey = {
   currency0: Address;
   currency1: Address;
   fee: number;
@@ -8,7 +8,7 @@ export interface PoolKey {
   hooks: Address;
 }
 
-export interface ResolvedV4RouteStep {
+export type ResolvedV4RouteStep = {
   kind: 'v4Swap';
   tokenIn: Address;
   tokenOut: Address;
@@ -16,19 +16,19 @@ export interface ResolvedV4RouteStep {
   zeroForOne: boolean;
 }
 
-export interface WrapEthRouteStep {
+export type WrapEthRouteStep = {
   kind: 'wrapEth';
   token: Address;
 }
 
-export interface UnwrapWethRouteStep {
+export type UnwrapWethRouteStep = {
   kind: 'unwrapWeth';
   token: Address;
 }
 
 export type ResolvedRouteStep = ResolvedV4RouteStep | WrapEthRouteStep | UnwrapWethRouteStep;
 
-export interface ResolvedRoute {
+export type ResolvedRoute = {
   steps: ResolvedRouteStep[];
   tokenIn: Address;
   tokenOut: Address;
@@ -36,7 +36,7 @@ export interface ResolvedRoute {
   routeDescription: string;
 }
 
-export interface RouteQuote {
+export type RouteQuote = {
   amountOut: bigint;
   minAmountOut: bigint;
   steps: ResolvedRouteStep[];

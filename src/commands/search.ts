@@ -31,7 +31,7 @@ const auctionStates = ['PENDING', 'RUNNING', 'UNSETTLED'] as const;
 
 function parseAuctionState(value: string): NftSearchParams['auctionState'] {
   const state = auctionStates.find((candidate) => candidate === value);
-  if (!state) {
+  if (state === undefined) {
     throw new Error(`--state must be one of: ${auctionStates.join(', ')}`);
   }
   return state;

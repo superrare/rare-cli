@@ -3,21 +3,21 @@ import type { LiquidFactoryConfig } from './factory-config.js';
 
 export type CurvePresetKey = 'low-demand' | 'medium-demand' | 'high-demand';
 
-export interface LiquidCurveSegment {
+export type LiquidCurveSegment = {
   tickLower: number;
   tickUpper: number;
   numPositions: number;
   shares: string;
 }
 
-export interface LiquidCurvesValidationResult {
+export type LiquidCurvesValidationResult = {
   isValid: boolean;
   curves?: LiquidCurveSegment[];
   error?: string;
   errorMessage?: string;
 }
 
-export interface LiquidCurveSegmentSummary {
+export type LiquidCurveSegmentSummary = {
   tickLower: number;
   tickUpper: number;
   numPositions: number;
@@ -26,7 +26,7 @@ export interface LiquidCurveSegmentSummary {
   endTokenPriceUsd?: number;
 }
 
-export interface LiquidCurvePreview {
+export type LiquidCurvePreview = {
   totalPositions: number;
   totalShare: number;
   curvePoolSupplyTokens: string;
@@ -342,8 +342,10 @@ function validateAndNormalizeSegments(
   }
 
   const normalizedResults = rawSegments.map((segment) => normalizeSegment(segment, tickSpacing));
-  const invalidResult = normalizedResults.find((result) => !result.isValid);
-  if (invalidResult && !invalidResult.isValid) {
+  const invalidResult = normalizedResults.find(
+    (result): result is Extract<NormalizedSegmentResult, { isValid: false }> => !result.isValid,
+  );
+  if (invalidResult !== undefined) {
     return invalidResult.result;
   }
 
@@ -509,10 +511,11 @@ function tokenPriceCurveToSegments(
     if (tickUpper <= tickLower) {
       throw new Error('Start token price must be lower than end token price');
     }
-    const previousSegment = segments[index - 1];
-    const previousTickUpper = previousSegment
-      ? tokenPriceToTick(previousSegment.endTokenPrice, tickSpacing)
-      : null;
+    const previousSegment = index === 0 ? undefined : segments[index - 1];
+    const previousTickUpper =
+      previousSegment === undefined
+        ? null
+        : tokenPriceToTick(previousSegment.endTokenPrice, tickSpacing);
     if (previousTickUpper !== null && tickLower !== previousTickUpper) {
       throw new Error('Curve ranges must touch each other (no overlap and no gaps)');
     }
@@ -578,8 +581,8 @@ export function buildCurvePreview(
     rarePriceUsd,
     segments: curves.map((curve) => ({
       ...curve,
-      startTokenPriceUsd: rarePriceUsd ? tickToTokenPriceUsd(curve.tickLower, rarePriceUsd) : undefined,
-      endTokenPriceUsd: rarePriceUsd ? tickToTokenPriceUsd(curve.tickUpper, rarePriceUsd) : undefined,
+      startTokenPriceUsd: rarePriceUsd !== undefined ? tickToTokenPriceUsd(curve.tickLower, rarePriceUsd) : undefined,
+      endTokenPriceUsd: rarePriceUsd !== undefined ? tickToTokenPriceUsd(curve.tickUpper, rarePriceUsd) : undefined,
     })),
   };
 }
