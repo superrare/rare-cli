@@ -7,7 +7,6 @@ import { auctionAbi } from '../contracts/abis/auction.js';
 import { tokenAbi } from '../contracts/abis/token.js';
 import type { RareClientConfig, RareClient, WalletAccount } from './types.js';
 import {
-  ETH_ADDRESS,
   approvalAbi,
   preparePayment,
   requireWallet,
@@ -68,7 +67,7 @@ export function createOfferNamespace(
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'offer',
-        args: [params.contract, plan.tokenId, plan.currency, plan.amount, plan.convertible],
+        args: [params.contract, plan.tokenId, plan.currency, plan.amount, false],
         account,
         chain: undefined,
         value,
@@ -152,15 +151,19 @@ export function createOfferNamespace(
       if (offerResult.status !== 'success') {
         throw offerResult.error;
       }
+      if (ownerResult.status !== 'success') {
+        throw ownerResult.error;
+      }
+      if (delayResult.status !== 'success') {
+        throw delayResult.error;
+      }
 
-      const tokenOwner = ownerResult.status === 'success' ? ownerResult.result : null;
-      const cancellationDelay = delayResult.status === 'success' ? delayResult.result : null;
       const wallet = config.account ?? config.walletClient?.account?.address ?? null;
 
       return shapeOfferStatus(offerResult.result, {
         currency: plan.currency,
-        tokenOwner,
-        cancellationDelay,
+        tokenOwner: ownerResult.result,
+        cancellationDelay: delayResult.result,
         wallet,
         nowSeconds: BigInt(Math.floor(Date.now() / 1000)),
       });

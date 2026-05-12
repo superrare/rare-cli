@@ -84,7 +84,6 @@ describe('marketplace transaction planning', () => {
       tokenId: 5n,
       currency: erc20Currency,
       amount: parseEther('2'),
-      convertible: false,
     });
     expect(planOfferCancel({ contract: nftContract, tokenId: '11' })).toEqual({
       tokenId: 11n,
@@ -96,6 +95,21 @@ describe('marketplace transaction planning', () => {
       amount: parseEther('1'),
       splitAddresses: [accountAddress],
       splitRatios: [100],
+    });
+    expect(
+      planOfferAccept(
+        {
+          contract: nftContract,
+          tokenId: '12',
+          amount: '1',
+          splitAddresses: [accountAddress, buyerAddress],
+          splitRatios: [70, 30],
+        },
+        accountAddress,
+      ),
+    ).toMatchObject({
+      splitAddresses: [accountAddress, buyerAddress],
+      splitRatios: [70, 30],
     });
   });
 
@@ -112,6 +126,39 @@ describe('marketplace transaction planning', () => {
     expect(() => planOfferCreate({ contract: nftContract, tokenId: '-1', amount: '1' })).toThrow(
       'tokenId must be greater than or equal to 0.',
     );
+  });
+
+  it('validates offer accept splits before contract writes', () => {
+    expect(() =>
+      planOfferAccept(
+        { contract: nftContract, tokenId: '1', amount: '1', splitAddresses: [], splitRatios: [] },
+        accountAddress,
+      ),
+    ).toThrow('splitAddresses must include at least 1 address.');
+    expect(() =>
+      planOfferAccept(
+        {
+          contract: nftContract,
+          tokenId: '1',
+          amount: '1',
+          splitAddresses: [accountAddress, buyerAddress],
+          splitRatios: [100],
+        },
+        accountAddress,
+      ),
+    ).toThrow('splitAddresses and splitRatios must have the same length.');
+    expect(() =>
+      planOfferAccept(
+        {
+          contract: nftContract,
+          tokenId: '1',
+          amount: '1',
+          splitAddresses: [accountAddress, buyerAddress],
+          splitRatios: [60, 20],
+        },
+        accountAddress,
+      ),
+    ).toThrow('splitRatios must sum to 100 (got 80).');
   });
 });
 
@@ -131,18 +178,41 @@ describe('marketplace result shaping', () => {
   });
 
   it('shapes offer status', () => {
-    expect(shapeOfferStatus([buyerAddress, parseEther('1'), 123n, 3, true])).toEqual({
+    expect(shapeOfferStatus([buyerAddress, parseEther('1'), 123n, 3, true], { nowSeconds: 200n })).toEqual({
       buyer: buyerAddress,
       amount: parseEther('1'),
       timestamp: 123n,
       marketplaceFee: 3,
-      convertible: true,
       hasOffer: true,
       currency: ETH_ADDRESS,
       tokenOwner: null,
       cancellableAfter: null,
       canAccept: null,
       canCancel: null,
+    });
+  });
+
+  it('uses Bazaar strict offer cancellation delay semantics', () => {
+    expect(
+      shapeOfferStatus([buyerAddress, parseEther('1'), 100n, 3, false], {
+        cancellationDelay: 5n,
+        wallet: buyerAddress,
+        nowSeconds: 105n,
+      }),
+    ).toMatchObject({
+      cancellableAfter: 106n,
+      canCancel: false,
+    });
+
+    expect(
+      shapeOfferStatus([buyerAddress, parseEther('1'), 100n, 3, false], {
+        cancellationDelay: 5n,
+        wallet: buyerAddress,
+        nowSeconds: 106n,
+      }),
+    ).toMatchObject({
+      cancellableAfter: 106n,
+      canCancel: true,
     });
   });
 

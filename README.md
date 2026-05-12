@@ -174,7 +174,7 @@ rare offer status --contract 0x... --token-id 1
 
 `--amount` on `accept` is a slippage assertion: the on-chain offer must still match the value you pass, otherwise the tx reverts. Re-run `offer status` if you suspect drift.
 
-`--split <ADDR=RATIO>` is repeatable. Ratios must sum to exactly 100. If you omit `--split`, the SDK defaults to `[caller, 100]` (100% to your wallet). If you pass any `--split`, you must specify the complete list — the caller is **not** auto-appended.
+`--split <ADDR=RATIO>` is repeatable for up to 5 recipients. Ratios must sum to exactly 100. If you omit `--split`, the SDK defaults to `[caller, 100]` (100% to your wallet). If you pass any `--split`, you must specify the complete list — the caller is **not** auto-appended.
 
 NFT approval (`setApprovalForAll`) is auto-handled by `offer accept` when needed, just like `auction create` and `listing create`.
 

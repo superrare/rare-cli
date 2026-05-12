@@ -350,24 +350,25 @@ export async function preparePayment(opts: {
 }): Promise<bigint> {
   const { publicClient, walletClient, account, accountAddress, auctionAddress, currency, amount } = opts;
   const isEth = currency === ETH_ADDRESS;
+  const settingsAddress = await publicClient.readContract({
+    address: auctionAddress,
+    abi: auctionAbi,
+    functionName: 'marketplaceSettings',
+  });
+  const fee = await publicClient.readContract({
+    address: settingsAddress,
+    abi: marketplaceSettingsAbi,
+    functionName: 'calculateMarketplaceFee',
+    args: [amount],
+  });
+  const requiredAmount = amount + fee;
 
   if (isEth) {
-    const settingsAddress = await publicClient.readContract({
-      address: auctionAddress,
-      abi: auctionAbi,
-      functionName: 'marketplaceSettings',
-    });
-    const fee = await publicClient.readContract({
-      address: settingsAddress,
-      abi: marketplaceSettingsAbi,
-      functionName: 'calculateMarketplaceFee',
-      args: [amount],
-    });
-    return amount + fee;
+    return requiredAmount;
   }
 
   const allowance = await readAllowance(publicClient, currency, accountAddress, auctionAddress);
-  if (allowance === undefined || allowance < amount) {
+  if (allowance === undefined || allowance < requiredAmount) {
     const approveTx = await walletClient.writeContract({
       address: currency,
       abi: erc20Abi,

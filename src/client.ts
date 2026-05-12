@@ -28,12 +28,14 @@ export function getWalletClient(chain: SupportedChain): { client: WalletClient; 
   };
 }
 
-export function tryGetWalletClient(chain: SupportedChain) {
+export function tryGetWalletClient(
+  chain: SupportedChain,
+): { client: WalletClient; account: PrivateKeyAccount } | null {
   const chainConfig = getChainConfig(chain);
   if (!chainConfig.privateKey) return null;
   const rpcUrl = chainConfig.rpcUrl ?? defaultRpcUrls[chain];
   if (!rpcUrl) return null;
-  const account = privateKeyToAccount(chainConfig.privateKey as `0x${string}`);
+  const account = privateKeyToAccount(chainConfig.privateKey);
   return {
     client: createWalletClient({
       chain: viemChains[chain],

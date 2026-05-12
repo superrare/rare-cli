@@ -13,7 +13,6 @@ type OfferCreateOptions = {
   tokenId: string;
   amount: string;
   currency?: string;
-  convertible?: boolean;
   chain?: string;
 };
 
@@ -29,10 +28,10 @@ type OfferAcceptOptions = OfferTokenOptions & {
   split?: SplitAccumulator;
 };
 
-interface SplitAccumulator {
+type SplitAccumulator = {
   addresses: Address[];
   ratios: number[];
-}
+};
 
 function collectSplit(value: string, prev: SplitAccumulator | undefined): SplitAccumulator {
   const acc: SplitAccumulator = prev ?? { addresses: [], ratios: [] };
@@ -40,31 +39,18 @@ function collectSplit(value: string, prev: SplitAccumulator | undefined): SplitA
   if (idx <= 0 || idx === value.length - 1) {
     throw new Error(`Invalid --split format: "${value}". Expected ADDRESS=RATIO (e.g. 0xabc...=70).`);
   }
-  const addr = value.slice(0, idx).trim();
+  const address = parseAddress(value.slice(0, idx).trim(), '--split');
   const ratioStr = value.slice(idx + 1).trim();
-  if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
-    throw new Error(`Invalid address in --split: "${addr}".`);
-  }
-  if (acc.addresses.some((a) => a.toLowerCase() === addr.toLowerCase())) {
-    throw new Error(`Duplicate address in --split: "${addr}".`);
-  }
-  const ratio = Number(ratioStr);
-  if (!Number.isInteger(ratio) || ratio < 1 || ratio > 100) {
-    throw new Error(`Invalid ratio in --split: "${ratioStr}". Must be an integer between 1 and 100.`);
-  }
-  acc.addresses.push(addr as Address);
-  acc.ratios.push(ratio);
-  return acc;
+  return {
+    addresses: [...acc.addresses, address],
+    ratios: [...acc.ratios, Number(ratioStr)],
+  };
 }
 
 function finalizeSplits(acc: SplitAccumulator | undefined):
   | { addresses: Address[]; ratios: number[] }
   | undefined {
   if (!acc || acc.addresses.length === 0) return undefined;
-  const sum = acc.ratios.reduce((a, b) => a + b, 0);
-  if (sum !== 100) {
-    throw new Error(`--split ratios must sum to 100 (got ${sum}).`);
-  }
   return { addresses: acc.addresses, ratios: acc.ratios };
 }
 
@@ -80,7 +66,6 @@ export function offerCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID')
     .requiredOption('--amount <amount>', 'offer amount in ETH (or token units)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
-    .option('--convertible', 'mark offer as convertible')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts: OfferCreateOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
@@ -96,7 +81,6 @@ export function offerCommand(): Command {
       log(`  NFT contract: ${contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
-      log(`  Convertible: ${opts.convertible ? 'yes' : 'no'}`);
 
       try {
         const result = await rare.offer.create({
@@ -104,7 +88,6 @@ export function offerCommand(): Command {
           tokenId: opts.tokenId,
           amount: opts.amount,
           currency,
-          convertible: opts.convertible,
         });
 
         output(
@@ -171,14 +154,7 @@ export function offerCommand(): Command {
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts: OfferAcceptOptions): Promise<void> => {
-      let splits: { addresses: Address[]; ratios: number[] } | undefined;
-      try {
-        splits = finalizeSplits(opts.split);
-      } catch (error) {
-        printError(error);
-        return;
-      }
-
+      const splits = finalizeSplits(opts.split);
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
@@ -193,7 +169,9 @@ export function offerCommand(): Command {
       log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
       if (splits) {
         log(`  Splits:`);
-        splits.addresses.forEach((a, i) => log(`    ${a} = ${splits!.ratios[i]}%`));
+        splits.addresses.forEach((address, index) => {
+          log(`    ${address} = ${splits.ratios[index]}%`);
+        });
       }
 
       try {

@@ -23,6 +23,7 @@ import {
   toPositiveInteger,
   toPositiveWei,
 } from './helpers.js';
+import { parseAddress } from './validation.js';
 
 export type ListingCreatePlan = {
   nftAddress: Address;
@@ -44,7 +45,6 @@ export type OfferCreatePlan = {
   tokenId: bigint;
   currency: Address;
   amount: bigint;
-  convertible: boolean;
 };
 
 export type OfferAcceptPlan = {
@@ -124,7 +124,6 @@ export function planOfferCreate(params: OfferCreateParams): OfferCreatePlan {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
     amount: toPositiveWei(params.amount, 'amount'),
-    convertible: params.convertible ?? false,
   };
 }
 
@@ -136,12 +135,14 @@ export function planOfferCancel(params: OfferCancelParams): { tokenId: bigint; c
 }
 
 export function planOfferAccept(params: OfferAcceptParams, accountAddress: Address): OfferAcceptPlan {
+  const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
+
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
     amount: toPositiveWei(params.amount, 'amount'),
-    splitAddresses: params.splitAddresses ?? [accountAddress],
-    splitRatios: params.splitRatios ?? [100],
+    splitAddresses: splits.addresses,
+    splitRatios: splits.ratios,
   };
 }
 
@@ -153,7 +154,7 @@ export function planOfferStatus(params: OfferStatusParams): { tokenId: bigint; c
 }
 
 export function shapeOfferStatus(
-  [buyer, amount, timestamp, marketplaceFee, convertible]: readonly [
+  [buyer, amount, timestamp, marketplaceFee]: readonly [
     Address,
     bigint,
     bigint,
@@ -165,13 +166,13 @@ export function shapeOfferStatus(
     tokenOwner?: Address | null;
     cancellationDelay?: bigint | null;
     wallet?: Address | null;
-    nowSeconds?: bigint;
-  } = {},
+    nowSeconds: bigint;
+  },
 ): OfferStatus {
   const hasOffer = amount > 0n;
   const tokenOwner = opts.tokenOwner ?? null;
   const cancellableAfter =
-    hasOffer && opts.cancellationDelay != null ? timestamp + opts.cancellationDelay : null;
+    hasOffer && opts.cancellationDelay != null ? timestamp + opts.cancellationDelay + 1n : null;
   const wallet = opts.wallet ?? null;
   const canAccept =
     wallet == null ? null : hasOffer && tokenOwner !== null && isAddressEqual(wallet, tokenOwner);
@@ -180,14 +181,13 @@ export function shapeOfferStatus(
       ? null
       : hasOffer &&
         isAddressEqual(wallet, buyer) &&
-        (cancellableAfter === null || (opts.nowSeconds ?? BigInt(Math.floor(Date.now() / 1000))) >= cancellableAfter);
+        (cancellableAfter === null || opts.nowSeconds >= cancellableAfter);
 
   return {
     buyer,
     amount,
     timestamp,
     marketplaceFee,
-    convertible,
     hasOffer,
     currency: opts.currency ?? ETH_ADDRESS,
     tokenOwner,
@@ -195,6 +195,56 @@ export function shapeOfferStatus(
     canAccept,
     canCancel,
   };
+}
+
+function planSplits(
+  splitAddresses: Address[] | undefined,
+  splitRatios: number[] | undefined,
+  accountAddress: Address,
+): { addresses: Address[]; ratios: number[] } {
+  if (splitAddresses === undefined && splitRatios === undefined) {
+    return { addresses: [accountAddress], ratios: [100] };
+  }
+
+  if (splitAddresses === undefined || splitRatios === undefined) {
+    throw new Error('splitAddresses and splitRatios must both be provided.');
+  }
+
+  if (splitAddresses.length === 0) {
+    throw new Error('splitAddresses must include at least 1 address.');
+  }
+
+  if (splitAddresses.length > 5) {
+    throw new Error('splitAddresses cannot include more than 5 addresses.');
+  }
+
+  if (splitAddresses.length !== splitRatios.length) {
+    throw new Error('splitAddresses and splitRatios must have the same length.');
+  }
+
+  const normalizedAddresses = splitAddresses.map((address) => parseAddress(address, 'splitAddress'));
+
+  const duplicateAddress = normalizedAddresses.find((address, index) =>
+    normalizedAddresses.some((otherAddress, otherIndex) =>
+      otherIndex < index && isAddressEqual(address, otherAddress),
+    ),
+  );
+  if (duplicateAddress !== undefined) {
+    throw new Error(`Duplicate split address: "${duplicateAddress}".`);
+  }
+
+  const totalRatio = splitRatios.reduce((total, ratio) => {
+    if (!Number.isInteger(ratio) || ratio < 1 || ratio > 100) {
+      throw new Error(`Invalid split ratio: "${String(ratio)}". Must be an integer between 1 and 100.`);
+    }
+    return total + ratio;
+  }, 0);
+
+  if (totalRatio !== 100) {
+    throw new Error(`splitRatios must sum to 100 (got ${totalRatio}).`);
+  }
+
+  return { addresses: normalizedAddresses, ratios: [...splitRatios] };
 }
 
 export function planAuctionCreate(params: AuctionCreateParams, accountAddress: Address): AuctionCreatePlan {
