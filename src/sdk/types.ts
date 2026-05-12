@@ -198,7 +198,7 @@ export interface ReleaseConfigureResult extends TransactionResult {
 
 export interface ReleaseStatusParams {
   contract: Address;
-  wallet?: Address;
+  account?: Address;
 }
 
 export interface ReleaseStatus {
@@ -219,9 +219,9 @@ export interface ReleaseStatus {
   requiresAllowlist: boolean;
   mintLimit: bigint;
   txLimit: bigint;
-  wallet: Address | null;
-  walletMints: bigint | null;
-  walletTxs: bigint | null;
+  account: Address | null;
+  accountMints: bigint | null;
+  accountTxs: bigint | null;
   stakingMinimumAmount: bigint;
   stakingMinimumEndTimestamp: bigint;
   stakingMinimumActive: boolean;

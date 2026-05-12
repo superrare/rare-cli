@@ -68,7 +68,7 @@ Private keys are masked in the output.
 
 ## Usage
 
-All commands accept `--chain` to select a network. Defaults to `sepolia`.
+All commands accept `--chain` to select a network. Commands that support explicit chain selection also accept `--chain-id`. Defaults to `sepolia`.
 
 Supported chains (including deploy, mint, import, and auction flows): `mainnet`, `sepolia`, `base`, `base-sepolia`
 
@@ -149,8 +149,8 @@ rare release configure \
 # Check release status (read-only)
 rare release status --contract 0x...
 
-# Include wallet-specific mint and transaction usage
-rare release status --contract 0x... --wallet 0x...
+# Include account-specific mint and transaction usage
+rare release status --contract 0x... --account 0x...
 ```
 
 Release configuration uses `RareMinter.prepareMintDirectSale`. It does not mint, generate allowlist proofs, or modify allowlist, mint-limit, transaction-limit, staking, or protocol-admin settings.

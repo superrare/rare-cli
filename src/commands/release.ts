@@ -46,6 +46,7 @@ export function releaseCommand(): Command {
       collectReleaseSplit,
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts) => {
       let splits: { addresses: Address[]; ratios: number[] } | undefined;
       try {
@@ -60,7 +61,7 @@ export function releaseCommand(): Command {
         return;
       }
 
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const { client, account } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
@@ -118,26 +119,27 @@ export function releaseCommand(): Command {
     .command('status')
     .description('Get RareMinter direct sale release details (read-only)')
     .requiredOption('--contract <address>', 'collection contract address')
-    .option('--wallet <address>', 'wallet address to include mint and transaction usage')
+    .option('--account <address>', 'account address to include mint and transaction usage')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts) => {
       if (!isAddress(opts.contract)) {
         printError(new Error(`Invalid contract address: "${opts.contract}".`));
         return;
       }
-      if (opts.wallet && !isAddress(opts.wallet)) {
-        printError(new Error(`Invalid wallet address: "${opts.wallet}".`));
+      if (opts.account && !isAddress(opts.account)) {
+        printError(new Error(`Invalid account address: "${opts.account}".`));
         return;
       }
 
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient });
 
       try {
         const result = await rare.release.getStatus({
           contract: opts.contract as Address,
-          wallet: opts.wallet as Address | undefined,
+          account: opts.account as Address | undefined,
         });
         const currencyLabel = result.isEth ? 'ETH' : result.currencyAddress;
         const price = `${formatTokenAmount(result.price, result.currencyDecimals)} ${currencyLabel}`;
@@ -176,11 +178,11 @@ export function releaseCommand(): Command {
             console.log(`  Minted supply:      ${total} / ${max}`);
             console.log(`  Remaining supply:   ${result.remainingSupply?.toString() ?? 'unknown'}`);
           }
-          if (result.wallet) {
-            console.log('  Wallet usage:');
-            console.log(`    Wallet:           ${result.wallet}`);
-            console.log(`    Mints:            ${result.walletMints?.toString() ?? 'unknown'}`);
-            console.log(`    Transactions:     ${result.walletTxs?.toString() ?? 'unknown'}`);
+          if (result.account) {
+            console.log('  Account usage:');
+            console.log(`    Account:          ${result.account}`);
+            console.log(`    Mints:            ${result.accountMints?.toString() ?? 'unknown'}`);
+            console.log(`    Transactions:     ${result.accountTxs?.toString() ?? 'unknown'}`);
           }
           console.log(`  Currently mintable: ${result.currentlyMintable ? 'yes' : 'no'}`);
         });

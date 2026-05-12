@@ -97,6 +97,16 @@ describe('built CLI deterministic behavior', () => {
       expect(help.stdout).toContain('configure');
       expect(help.stdout).toContain('status');
 
+      const configureHelp = await runCli(['release', 'configure', '--help'], { home });
+      expect(configureHelp.code).toBe(0);
+      expect(configureHelp.stdout).toContain('--chain-id <id>');
+
+      const statusHelp = await runCli(['release', 'status', '--help'], { home });
+      expect(statusHelp.code).toBe(0);
+      expect(statusHelp.stdout).toContain('--account <address>');
+      expect(statusHelp.stdout).toContain('--chain-id <id>');
+      expect(statusHelp.stdout).not.toContain('--wallet');
+
       const result = await runCli(['release', 'status', '--contract', 'not-an-address'], { home });
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
