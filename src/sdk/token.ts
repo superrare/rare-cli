@@ -10,7 +10,7 @@ export function createTokenNamespace(
   chain: SupportedChain,
 ): RareClient['token'] {
   return {
-    async getContractInfo(params) {
+    async getContractInfo(params): ReturnType<RareClient['token']['getContractInfo']> {
       const [name, symbol, totalSupply] = await Promise.all([
         publicClient.readContract({
           address: params.contract,
@@ -38,7 +38,7 @@ export function createTokenNamespace(
       };
     },
 
-    async getTokenInfo(params) {
+    async getTokenInfo(params): ReturnType<RareClient['token']['getTokenInfo']> {
       const tokenId = toInteger(params.tokenId, 'tokenId');
       const [owner, tokenUri] = await Promise.all([
         publicClient.readContract({
@@ -63,7 +63,7 @@ export function createTokenNamespace(
       };
     },
 
-    async getPrice(symbol) {
+    async getPrice(symbol): ReturnType<RareClient['token']['getPrice']> {
       return getTokenPriceApi(symbol);
     },
   };

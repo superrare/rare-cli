@@ -1,8 +1,16 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
-import { searchCollections, type Collection } from '../sdk/api.js';
+import { getPublicClient } from '../client.js';
+import { createRareClient } from '../sdk/client.js';
+import type { RareClient } from '../sdk/types.js';
+import type { Collection } from '../sdk/api.js';
 import { printError } from '../errors.js';
-import { output, log, printCollectionRow, printCollection } from '../output.js';
+import { output, log, printCollection } from '../output.js';
+
+type ListCollectionsOptions = {
+  chain?: string;
+  query: string;
+};
 
 export function listCollectionsCommand(): Command {
   const cmd = new Command('list-collections');
@@ -10,27 +18,14 @@ export function listCollectionsCommand(): Command {
     .description('List all collections')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--query <text>', 'text search filter', '')
-    .action(async (opts) => {
+    .action(async (opts: ListCollectionsOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
+      const rare = createRareClient({ publicClient: getPublicClient(chain) });
 
       log(`Fetching collections on ${chain}...`);
 
       try {
-        const allItems: Collection[] = [];
-        let page = 1;
-        let hasMore = true;
-
-        while (hasMore) {
-          const result = await searchCollections({
-            query: opts.query,
-            perPage: 100,
-            page,
-          });
-
-          allItems.push(...result.data);
-          hasMore = page < result.pagination.totalPages;
-          page++;
-        }
+        const allItems = await fetchCollections(rare, opts.query);
 
         output(allItems, () => {
           if (allItems.length === 0) {
@@ -49,4 +44,22 @@ export function listCollectionsCommand(): Command {
     });
 
   return cmd;
+}
+
+async function fetchCollections(
+  rare: RareClient,
+  query: string,
+  page = 1,
+  collected: Collection[] = [],
+): Promise<Collection[]> {
+  const result = await rare.search.collections({
+    query,
+    perPage: 100,
+    page,
+  });
+  const nextItems = [...collected, ...result.data];
+
+  return page >= result.pagination.totalPages
+    ? nextItems
+    : fetchCollections(rare, query, page + 1, nextItems);
 }

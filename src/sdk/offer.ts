@@ -11,10 +11,15 @@ import {
   approvalAbi,
   preparePayment,
   requireWallet,
-  toInteger,
-  toWei,
   waitForApproval,
 } from './helpers.js';
+import {
+  planOfferAccept,
+  planOfferCancel,
+  planOfferCreate,
+  planOfferStatus,
+  shapeOfferStatus,
+} from './marketplace-core.js';
 
 async function ensureNftApproved(
   publicClient: PublicClient,
@@ -50,22 +55,20 @@ export function createOfferNamespace(
   addresses: { auction: Address },
 ): RareClient['offer'] {
   return {
-    async create(params) {
+    async create(params): ReturnType<RareClient['offer']['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-
-      const currency = params.currency ?? ETH_ADDRESS;
-      const amount = toWei(params.amount);
+      const plan = planOfferCreate(params);
 
       const value = await preparePayment({
         publicClient, walletClient, account, accountAddress,
-        auctionAddress: addresses.auction, currency, amount,
+        auctionAddress: addresses.auction, currency: plan.currency, amount: plan.amount,
       });
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'offer',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount, false],
+        args: [params.contract, plan.tokenId, plan.currency, plan.amount, plan.convertible],
         account,
         chain: undefined,
         value,
@@ -75,16 +78,15 @@ export function createOfferNamespace(
       return { txHash, receipt };
     },
 
-    async cancel(params) {
+    async cancel(params): ReturnType<RareClient['offer']['cancel']> {
       const { walletClient, account } = requireWallet(config);
-
-      const currency = params.currency ?? ETH_ADDRESS;
+      const plan = planOfferCancel(params);
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'cancelOffer',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency],
+        args: [params.contract, plan.tokenId, plan.currency],
         account,
         chain: undefined,
       });
@@ -93,13 +95,9 @@ export function createOfferNamespace(
       return { txHash, receipt };
     },
 
-    async accept(params) {
+    async accept(params): ReturnType<RareClient['offer']['accept']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-
-      const currency = params.currency ?? ETH_ADDRESS;
-      const amount = toWei(params.amount);
-      const splitAddresses = params.splitAddresses ?? [accountAddress];
-      const splitRatios = params.splitRatios ?? [100];
+      const plan = planOfferAccept(params, accountAddress);
 
       await ensureNftApproved(
         publicClient, walletClient, account, accountAddress,
@@ -110,7 +108,14 @@ export function createOfferNamespace(
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'acceptOffer',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount, splitAddresses, splitRatios],
+        args: [
+          params.contract,
+          plan.tokenId,
+          plan.currency,
+          plan.amount,
+          plan.splitAddresses,
+          plan.splitRatios,
+        ],
         account,
         chain: undefined,
       });
@@ -119,9 +124,8 @@ export function createOfferNamespace(
       return { txHash, receipt };
     },
 
-    async getStatus(params) {
-      const currency = params.currency ?? ETH_ADDRESS;
-      const tokenId = toInteger(params.tokenId, 'tokenId');
+    async getStatus(params): ReturnType<RareClient['offer']['getStatus']> {
+      const plan = planOfferStatus(params);
 
       const [offerResult, ownerResult, delayResult] = await publicClient.multicall({
         contracts: [
@@ -129,13 +133,13 @@ export function createOfferNamespace(
             address: addresses.auction,
             abi: auctionAbi,
             functionName: 'tokenCurrentOffers',
-            args: [params.contract, tokenId, currency],
+            args: [params.contract, plan.tokenId, plan.currency],
           },
           {
             address: params.contract,
             abi: tokenAbi,
             functionName: 'ownerOf',
-            args: [tokenId],
+            args: [plan.tokenId],
           },
           {
             address: addresses.auction,
@@ -148,39 +152,18 @@ export function createOfferNamespace(
       if (offerResult.status !== 'success') {
         throw offerResult.error;
       }
-      const [buyer, amount, timestamp, marketplaceFee] = offerResult.result;
-      const hasOffer = amount > 0n;
 
       const tokenOwner = ownerResult.status === 'success' ? ownerResult.result : null;
       const cancellationDelay = delayResult.status === 'success' ? delayResult.result : null;
-      const cancellableAfter =
-        hasOffer && cancellationDelay !== null ? timestamp + cancellationDelay : null;
-
       const wallet = config.account ?? config.walletClient?.account?.address ?? null;
-      let canAccept: boolean | null = null;
-      let canCancel: boolean | null = null;
-      if (wallet) {
-        const w = wallet.toLowerCase();
-        const owner = tokenOwner?.toLowerCase() ?? null;
-        const buyerLower = buyer.toLowerCase();
-        const now = BigInt(Math.floor(Date.now() / 1000));
-        canAccept = hasOffer && owner !== null && w === owner;
-        canCancel =
-          hasOffer && w === buyerLower && (cancellableAfter === null || now >= cancellableAfter);
-      }
 
-      return {
-        buyer,
-        amount,
-        timestamp,
-        marketplaceFee,
-        hasOffer,
-        currency,
+      return shapeOfferStatus(offerResult.result, {
+        currency: plan.currency,
         tokenOwner,
-        cancellableAfter,
-        canAccept,
-        canCancel,
-      };
+        cancellationDelay,
+        wallet,
+        nowSeconds: BigInt(Math.floor(Date.now() / 1000)),
+      });
     },
   };
 }

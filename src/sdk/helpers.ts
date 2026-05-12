@@ -3,14 +3,18 @@ import {
   type PublicClient,
   type WalletClient,
   erc20Abi,
+  isAddressEqual,
   maxUint256,
   parseEther,
+  parseUnits,
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
-import { chainIds, type SupportedChain } from '../contracts/addresses.js';
-import type { RareClientConfig, IntegerInput, AmountInput, WalletAccount } from './types.js';
+import { chainIds, ETH_ADDRESS, supportedChains, type SupportedChain } from '../contracts/addresses.js';
+import type { UniswapTransactionRequest } from '../swap/uniswap-api.js';
+import type { RareClientConfig, IntegerInput, AmountInput, WalletAccount, TransactionResult } from './types.js';
 
-export const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
 
 export const approvalAbi = [
   {
@@ -79,10 +83,9 @@ export function resolveChainFromPublicClient(publicClient: PublicClient): Suppor
     throw new Error('Unable to resolve chain from publicClient.chain.id. Create your public client with an explicit chain.');
   }
 
-  for (const [chain, id] of Object.entries(chainIds)) {
-    if (id === chainId) {
-      return chain as SupportedChain;
-    }
+  const chain = supportedChains.find((supportedChain) => chainIds[supportedChain] === chainId);
+  if (chain !== undefined) {
+    return chain;
   }
 
   throw new Error(`Unsupported chain id: ${chainId}. Supported chain ids: ${Object.values(chainIds).join(', ')}`);
@@ -99,8 +102,8 @@ export function requireWallet(config: RareClientConfig): {
 
   const walletAccount = config.walletClient.account;
 
-  if (config.account) {
-    if (walletAccount && walletAccount.address.toLowerCase() === config.account.toLowerCase()) {
+  if (config.account !== undefined) {
+    if (walletAccount != null && isAddressEqual(walletAccount.address, config.account)) {
       return {
         walletClient: config.walletClient,
         account: walletAccount,
@@ -133,6 +136,9 @@ export function toInteger(value: IntegerInput, field: string): bigint {
     if (!Number.isFinite(value) || !Number.isInteger(value)) {
       throw new Error(`${field} must be an integer.`);
     }
+    if (!Number.isSafeInteger(value)) {
+      throw new Error(`${field} is too large to pass as a number. Pass it as a string or bigint to avoid precision loss.`);
+    }
     return BigInt(value);
   }
 
@@ -143,12 +149,190 @@ export function toInteger(value: IntegerInput, field: string): bigint {
   }
 }
 
+export function toSafeIntegerNumber(value: IntegerInput, field: string): number {
+  const integer = toInteger(value, field);
+  if (integer < MIN_SAFE_INTEGER_BIGINT || integer > MAX_SAFE_INTEGER_BIGINT) {
+    throw new Error(`${field} must fit in a safe JavaScript integer.`);
+  }
+  return Number(integer);
+}
+
+function stringifyAmountInput(value: Exclude<AmountInput, bigint>, field: string): string {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) {
+      throw new Error(`${field} must be a valid finite decimal amount.`);
+    }
+    if (Number.isInteger(value) && !Number.isSafeInteger(value)) {
+      throw new Error(`${field} is too large to pass as a number. Pass it as a string or bigint to avoid precision loss.`);
+    }
+  }
+  return String(value);
+}
+
+export function toNonNegativeInteger(value: IntegerInput, field: string): bigint {
+  const normalized = toInteger(value, field);
+  if (normalized < 0n) {
+    throw new Error(`${field} must be greater than or equal to 0.`);
+  }
+  return normalized;
+}
+
+export function toPositiveInteger(value: IntegerInput, field: string): bigint {
+  const normalized = toInteger(value, field);
+  if (normalized <= 0n) {
+    throw new Error(`${field} must be greater than 0.`);
+  }
+  return normalized;
+}
+
 export function toWei(value: AmountInput): bigint {
   if (typeof value === 'bigint') {
     return value;
   }
 
-  return parseEther(String(value));
+  return parseEther(stringifyAmountInput(value, 'amount'));
+}
+
+export function requireConfiguredAddress(address: Address | undefined, label: string, chain: SupportedChain): Address {
+  if (!address) {
+    throw new Error(`${label} is not configured for "${chain}". Supported chains: mainnet, sepolia`);
+  }
+  return address;
+}
+
+export async function getTokenDecimals(publicClient: PublicClient, token: Address): Promise<number> {
+  if (token === ETH_ADDRESS) {
+    return 18;
+  }
+
+  const decimals = await publicClient.readContract({
+    address: token,
+    abi: erc20Abi,
+    functionName: 'decimals',
+  });
+
+  return Number(decimals);
+}
+
+export async function toTokenAmount(
+  publicClient: PublicClient,
+  token: Address,
+  value: AmountInput,
+  field: string,
+): Promise<bigint> {
+  if (typeof value === 'bigint') {
+    return value;
+  }
+
+  const rawValue = stringifyAmountInput(value, field);
+  if (!/^\d+(\.\d+)?$/.test(rawValue)) {
+    throw new Error(`${field} must be a valid positive decimal amount.`);
+  }
+
+  const decimals = await getTokenDecimals(publicClient, token);
+  return parseUnits(rawValue, decimals);
+}
+
+export async function ensureTokenAllowance(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  account: Address | WalletAccount,
+  owner: Address,
+  token: Address,
+  spender: Address,
+  amount: bigint,
+): Promise<void> {
+  if (token === ETH_ADDRESS || amount === 0n) {
+    return;
+  }
+
+  try {
+    const allowance = await publicClient.readContract({
+      address: token,
+      abi: erc20Abi,
+      functionName: 'allowance',
+      args: [owner, spender],
+    });
+
+    if (allowance >= amount) {
+      return;
+    }
+  } catch {
+    // Fall through to approval write.
+  }
+
+  const approveTx = await walletClient.writeContract({
+    address: token,
+    abi: erc20Abi,
+    functionName: 'approve',
+    args: [spender, maxUint256],
+    account,
+    chain: undefined,
+  });
+
+  await publicClient.waitForTransactionReceipt({ hash: approveTx });
+}
+
+export function resolveDeadline(value?: IntegerInput): bigint {
+  if (value === undefined) {
+    return BigInt(Math.floor(Date.now() / 1000) + 20 * 60);
+  }
+  return toInteger(value, 'deadline');
+}
+
+export function validateRouterPayload(commands: `0x${string}`, inputs: readonly `0x${string}`[]): void {
+  const byteLength = (commands.length - 2) / 2;
+  if (byteLength <= 0) {
+    throw new Error('Router commands must not be empty.');
+  }
+  if (byteLength !== inputs.length) {
+    throw new Error(`Router commands/input mismatch: commands has ${byteLength} byte(s) but ${inputs.length} input(s) were provided.`);
+  }
+}
+
+export function getConfiguredAccountAddress(config: RareClientConfig): Address | undefined {
+  return config.account ?? config.walletClient?.account?.address;
+}
+
+export function parsePreparedBigInt(value?: string): bigint | undefined {
+  if (!value) {
+    return undefined;
+  }
+  return value.startsWith('0x') ? BigInt(value) : BigInt(value);
+}
+
+export async function sendPreparedTransaction(
+  publicClient: PublicClient,
+  walletClient: WalletClient,
+  account: Address | WalletAccount,
+  tx: UniswapTransactionRequest,
+): Promise<TransactionResult> {
+  const txHash = await walletClient.sendTransaction({
+    account,
+    to: tx.to,
+    data: tx.data,
+    value: parsePreparedBigInt(tx.value),
+    chain: undefined,
+  });
+
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+  return { txHash, receipt };
+}
+
+export function toNonNegativeWei(value: AmountInput, field: string): bigint {
+  const normalized = toWei(value);
+  if (normalized < 0n) {
+    throw new Error(`${field} must be greater than or equal to 0.`);
+  }
+  return normalized;
+}
+
+export function toPositiveWei(value: AmountInput, field: string): bigint {
+  const normalized = toWei(value);
+  if (normalized <= 0n) {
+    throw new Error(`${field} must be greater than 0.`);
+  }
+  return normalized;
 }
 
 /**
@@ -182,28 +366,8 @@ export async function preparePayment(opts: {
     return amount + fee;
   }
 
-  // ERC20: ensure sufficient allowance
-  try {
-    const allowance = await publicClient.readContract({
-      address: currency,
-      abi: erc20Abi,
-      functionName: 'allowance',
-      args: [accountAddress, auctionAddress],
-    });
-    if (allowance < amount) {
-      const approveTx = await walletClient.writeContract({
-        address: currency,
-        abi: erc20Abi,
-        functionName: 'approve',
-        args: [auctionAddress, maxUint256],
-        account,
-        chain: undefined,
-      });
-      await publicClient.waitForTransactionReceipt({ hash: approveTx });
-    }
-  } catch (err) {
-    // Allowance check failed (e.g. non-standard ERC20) — approve unconditionally
-    console.warn('ERC20 allowance check failed, approving unconditionally:', (err as Error).message);
+  const allowance = await readAllowance(publicClient, currency, accountAddress, auctionAddress);
+  if (allowance === undefined || allowance < amount) {
     const approveTx = await walletClient.writeContract({
       address: currency,
       abi: erc20Abi,
@@ -216,4 +380,23 @@ export async function preparePayment(opts: {
   }
 
   return 0n;
+}
+
+async function readAllowance(
+  publicClient: PublicClient,
+  currency: Address,
+  accountAddress: Address,
+  auctionAddress: Address,
+): Promise<bigint | undefined> {
+  try {
+    return await publicClient.readContract({
+      address: currency,
+      abi: erc20Abi,
+      functionName: 'allowance',
+      args: [accountAddress, auctionAddress],
+    });
+  } catch {
+    // Allowance check failed (e.g. non-standard ERC20) — approve unconditionally
+    return undefined;
+  }
 }

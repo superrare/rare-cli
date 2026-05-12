@@ -3,12 +3,16 @@ import { getActiveChain } from '../config.js';
 import { resolveCurrency, currencyNames } from '../contracts/addresses.js';
 import { output } from '../output.js';
 
+type CurrenciesOptions = {
+  chain?: string;
+};
+
 export function currenciesCommand(): Command {
   const cmd = new Command('currencies');
   cmd
     .description('List supported currencies and their addresses')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action((opts) => {
+    .action((opts: CurrenciesOptions): void => {
       const chain = getActiveChain(opts.chain);
 
       const currencies = currencyNames.map((name) => ({
