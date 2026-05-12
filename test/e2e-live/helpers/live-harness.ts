@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  createWalletClient,
   createPublicClient,
   erc20Abi,
   formatUnits,
@@ -53,6 +54,11 @@ export type LiveFixture = {
   buyerAddress?: Address;
   rareAddress: Address;
   usdcAddress: Address;
+};
+
+export type BuyerLiveFixture = LiveFixture & {
+  buyerHome: string;
+  buyerAddress: Address;
 };
 
 export class LiveFixtureRef<TFixture> {
@@ -116,6 +122,17 @@ export async function cleanupLiveFixture(live: Pick<LiveFixture, 'sellerHome' | 
   await cleanupTempPath(live?.tempDir);
 }
 
+export function requireBuyerFixture(fixture: LiveFixture): BuyerLiveFixture {
+  if (fixture.buyerHome === undefined || fixture.buyerAddress === undefined) {
+    throw new Error('Live buyer fixture requires E2E_BUYER_PRIVATE_KEY and buyer setup.');
+  }
+  return {
+    ...fixture,
+    buyerHome: fixture.buyerHome,
+    buyerAddress: fixture.buyerAddress,
+  };
+}
+
 export async function detectLiveChain(): Promise<SupportedChain> {
   const publicClient = createPublicClient({ transport: http(liveRpcUrl()) });
   const chainId = await publicClient.getChainId();
@@ -155,6 +172,41 @@ export async function readTokenBalance(live: LiveFixture, owner: Address, token:
     functionName: 'balanceOf',
     args: [owner],
   });
+}
+
+export async function readTokenAllowance(
+  live: LiveFixture,
+  token: Address,
+  owner: Address,
+  spender: Address,
+): Promise<bigint> {
+  return live.publicClient.readContract({
+    address: token,
+    abi: erc20Abi,
+    functionName: 'allowance',
+    args: [owner, spender],
+  });
+}
+
+export async function approveToken(
+  live: LiveFixture,
+  token: Address,
+  spender: Address,
+  amount: bigint,
+  ownerPrivateKeyName: 'E2E_SELLER_PRIVATE_KEY' | 'E2E_BUYER_PRIVATE_KEY',
+): Promise<void> {
+  const walletClient = createWalletClient({
+    account: privateKeyToAccount(livePrivateKey(ownerPrivateKeyName)),
+    chain: viemChains[live.chain],
+    transport: http(liveRpcUrl()),
+  });
+  const txHash = await walletClient.writeContract({
+    address: token,
+    abi: erc20Abi,
+    functionName: 'approve',
+    args: [spender, amount],
+  });
+  await live.publicClient.waitForTransactionReceipt({ hash: txHash });
 }
 
 export async function parseTokenAmount(live: LiveFixture, token: Address, amount: string): Promise<bigint> {

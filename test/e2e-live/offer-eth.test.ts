@@ -7,7 +7,9 @@ import {
   jsonCommand,
   LiveFixtureRef,
   missingEnv,
+  requireBuyerFixture,
   step,
+  type BuyerLiveFixture,
   type LiveFixture,
   type TxResult,
 } from './helpers/live-harness.js';
@@ -125,29 +127,13 @@ describeLive('live offer CLI write commands', () => {
   });
 });
 
-type OfferFixture = LiveFixture & {
-  buyerHome: string;
-  buyerAddress: NonNullable<LiveFixture['buyerAddress']>;
+type OfferFixture = BuyerLiveFixture & {
   collection: DeployErc721Result;
   offerCancelToken: MintResult;
   offerCancelCreate: TxResult;
   offerCancelReady: Promise<void>;
   offerAcceptToken: MintResult;
 };
-
-function requireBuyerFixture(fixture: LiveFixture): LiveFixture & {
-  buyerHome: string;
-  buyerAddress: NonNullable<LiveFixture['buyerAddress']>;
-} {
-  if (fixture.buyerHome === undefined || fixture.buyerAddress === undefined) {
-    throw new Error(`Live environment is not configured: ${missingEnv.join(', ')}`);
-  }
-  return {
-    ...fixture,
-    buyerHome: fixture.buyerHome,
-    buyerAddress: fixture.buyerAddress,
-  };
-}
 
 async function expectOfferStatus(
   liveFixture: LiveFixture,

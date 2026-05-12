@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { formatEther, isAddressEqual, type Address } from 'viem';
+import { formatEther, isAddressEqual } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
 import { printError } from '../errors.js';
@@ -7,6 +7,7 @@ import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '../contracts/addresses.js';
 import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
+import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 
 type ListingCreateOptions = {
   contract: string;
@@ -32,44 +33,6 @@ type ListingBuyOptions = {
   currency?: string;
   chain?: string;
 };
-
-type SplitAccumulator = {
-  addresses: Address[];
-  ratios: number[];
-}
-
-function collectSplit(value: string, prev: SplitAccumulator | undefined): SplitAccumulator {
-  const acc: SplitAccumulator = prev ?? { addresses: [], ratios: [] };
-  const idx = value.indexOf('=');
-  if (idx <= 0 || idx === value.length - 1) {
-    throw new Error(`Invalid --split format: "${value}". Expected ADDRESS=RATIO (e.g. 0xabc...=70).`);
-  }
-  const addr = value.slice(0, idx).trim();
-  const ratioStr = value.slice(idx + 1).trim();
-  const address = parseAddress(addr, '--split address');
-  if (acc.addresses.some((existingAddress) => isAddressEqual(existingAddress, address))) {
-    throw new Error(`Duplicate address in --split: "${addr}".`);
-  }
-  const ratio = Number(ratioStr);
-  if (!Number.isInteger(ratio) || ratio < 1 || ratio > 100) {
-    throw new Error(`Invalid ratio in --split: "${ratioStr}". Must be an integer between 1 and 100.`);
-  }
-  return {
-    addresses: [...acc.addresses, address],
-    ratios: [...acc.ratios, ratio],
-  };
-}
-
-function finalizeSplits(acc: SplitAccumulator | undefined):
-  | { addresses: Address[]; ratios: number[] }
-  | undefined {
-  if (!acc || acc.addresses.length === 0) return undefined;
-  const sum = acc.ratios.reduce((a, b) => a + b, 0);
-  if (sum !== 100) {
-    throw new Error(`--split ratios must sum to 100 (got ${sum}).`);
-  }
-  return { addresses: acc.addresses, ratios: acc.ratios };
-}
 
 export function listingCommand(): Command {
   const cmd = new Command('listing');
@@ -109,11 +72,8 @@ export function listingCommand(): Command {
       log(`  Target: ${isAddressEqual(target, PUBLIC_LISTING_TARGET) ? 'public' : target}`);
       if (splits) {
         log(`  Splits:`);
-        splits.addresses.forEach((address, index) => {
-          const ratio = splits.ratios[index];
-          if (ratio !== undefined) {
-            log(`    ${address} = ${ratio}%`);
-          }
+        formatSplitLines(splits).forEach((line) => {
+          log(line);
         });
       }
 
@@ -264,11 +224,8 @@ export function listingCommand(): Command {
           console.log(`  Target:   ${isAddressEqual(result.target, PUBLIC_LISTING_TARGET) ? 'public' : result.target}`);
           if (result.splitAddresses.length > 0) {
             console.log('  Splits:');
-            result.splitAddresses.forEach((address, index) => {
-              const ratio = result.splitRatios[index];
-              if (ratio !== undefined) {
-                console.log(`    ${address} = ${ratio}%`);
-              }
+            formatSplitLines({ addresses: result.splitAddresses, ratios: result.splitRatios }).forEach((line) => {
+              console.log(line);
             });
           }
           if (result.canBuy !== null) {

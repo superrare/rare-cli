@@ -39,6 +39,55 @@ describe('marketplace transaction planning', () => {
     expect(planListingCreate({ contract: nftContract, tokenId: '1', price: '0' }, accountAddress).price).toBe(0n);
   });
 
+  it('plans listing create with custom splits and validates them before contract writes', () => {
+    expect(
+      planListingCreate(
+        {
+          contract: nftContract,
+          tokenId: '1',
+          price: '0.5',
+          splitAddresses: [accountAddress, buyerAddress],
+          splitRatios: [70, 30],
+        },
+        accountAddress,
+      ),
+    ).toMatchObject({
+      splitAddresses: [accountAddress, buyerAddress],
+      splitRatios: [70, 30],
+    });
+
+    expect(() =>
+      planListingCreate(
+        { contract: nftContract, tokenId: '1', price: '1', splitAddresses: [], splitRatios: [] },
+        accountAddress,
+      ),
+    ).toThrow('splitAddresses must include at least 1 address.');
+    expect(() =>
+      planListingCreate(
+        {
+          contract: nftContract,
+          tokenId: '1',
+          price: '1',
+          splitAddresses: [accountAddress, buyerAddress],
+          splitRatios: [100],
+        },
+        accountAddress,
+      ),
+    ).toThrow('splitAddresses and splitRatios must have the same length.');
+    expect(() =>
+      planListingCreate(
+        {
+          contract: nftContract,
+          tokenId: '1',
+          price: '1',
+          splitAddresses: [accountAddress, buyerAddress],
+          splitRatios: [60, 20],
+        },
+        accountAddress,
+      ),
+    ).toThrow('splitRatios must sum to 100 (got 80).');
+  });
+
   it('plans listing cancel and buy inputs', () => {
     expect(planListingCancel({ contract: nftContract, tokenId: '3' })).toEqual({
       tokenId: 3n,
@@ -190,6 +239,16 @@ describe('marketplace result shaping', () => {
       hasListing: false,
       canBuy: false,
     });
+  });
+
+  it('shapes listing buyer eligibility from wallet and target', () => {
+    const activeListing = [accountAddress, ETH_ADDRESS, parseEther('1'), [accountAddress], [100]] as const;
+
+    expect(shapeListingStatus(activeListing, { target: PUBLIC_LISTING_TARGET, wallet: accountAddress }).canBuy).toBe(false);
+    expect(shapeListingStatus(activeListing, { target: PUBLIC_LISTING_TARGET, wallet: buyerAddress }).canBuy).toBe(true);
+    expect(shapeListingStatus(activeListing, { target: buyerAddress, wallet: buyerAddress }).canBuy).toBe(true);
+    expect(shapeListingStatus(activeListing, { target: accountAddress, wallet: buyerAddress }).canBuy).toBe(false);
+    expect(shapeListingStatus(activeListing, { target: PUBLIC_LISTING_TARGET }).canBuy).toBeNull();
   });
 
   it('shapes offer status', () => {
