@@ -1,6 +1,15 @@
 import { Command } from 'commander';
-import { readConfig, writeConfig } from '../config.js';
-import { isSupportedChain, supportedChains, type SupportedChain } from '../contracts/addresses.js';
+import { readConfig, setChainConfig, setDefaultChain, writeConfig } from '../config.js';
+import { isSupportedChain, supportedChains } from '../contracts/addresses.js';
+import { parseHexString } from '../sdk/validation.js';
+
+type ConfigureOptions = {
+  chain?: string;
+  privateKey?: string;
+  rpcUrl?: string;
+  defaultChain?: string;
+  show?: boolean;
+};
 
 export function configureCommand(): Command {
   const cmd = new Command('configure');
@@ -13,7 +22,7 @@ export function configureCommand(): Command {
     .option('--rpc-url <url>', 'custom RPC URL for the specified chain')
     .option('--default-chain <chain>', 'set the default chain')
     .option('--show', 'display current configuration')
-    .action((opts) => {
+    .action((opts: ConfigureOptions): void => {
       const config = readConfig();
 
       if (opts.show) {
@@ -23,10 +32,10 @@ export function configureCommand(): Command {
             Object.entries(config.chains).map(([chain, chainCfg]) => [
               chain,
               {
-                privateKey: chainCfg?.privateKey
-                  ? chainCfg.privateKey.slice(0, 6) + '...' + chainCfg.privateKey.slice(-4)
+                privateKey: chainCfg.privateKey !== undefined
+                  ? `${chainCfg.privateKey.slice(0, 6)}...${chainCfg.privateKey.slice(-4)}`
                   : undefined,
-                rpcUrl: chainCfg?.rpcUrl,
+                rpcUrl: chainCfg.rpcUrl,
               },
             ])
           ),
@@ -35,36 +44,33 @@ export function configureCommand(): Command {
         return;
       }
 
+      const configWithDefaultChain = opts.defaultChain && isSupportedChain(opts.defaultChain)
+        ? setDefaultChain(config, opts.defaultChain)
+        : config;
+
       if (opts.defaultChain) {
         if (!isSupportedChain(opts.defaultChain)) {
-          console.error(`Error: --default-chain must be one of: ${supportedChainsText}`);
-          process.exit(1);
+          throw new Error(`--default-chain must be one of: ${supportedChainsText}`);
         }
-        config.defaultChain = opts.defaultChain as SupportedChain;
-        writeConfig(config);
+        writeConfig(configWithDefaultChain);
         console.log(`Default chain set to: ${opts.defaultChain}`);
       }
 
       if (opts.chain) {
         if (!isSupportedChain(opts.chain)) {
-          console.error(`Error: --chain must be one of: ${supportedChainsText}`);
-          process.exit(1);
+          throw new Error(`--chain must be one of: ${supportedChainsText}`);
         }
-        const chain = opts.chain as SupportedChain;
-        if (!config.chains[chain]) {
-          config.chains[chain] = {};
-        }
-        if (opts.privateKey) {
-          config.chains[chain]!.privateKey = opts.privateKey;
-        }
-        if (opts.rpcUrl) {
-          config.chains[chain]!.rpcUrl = opts.rpcUrl;
-        }
-        writeConfig(config);
-        console.log(`Configuration updated for chain: ${chain}`);
+        const privateKey = opts.privateKey ? parseHexString(opts.privateKey, '--private-key') : undefined;
+        const nextConfig = setChainConfig(configWithDefaultChain, opts.chain, {
+          ...(privateKey === undefined ? {} : { privateKey }),
+          ...(opts.rpcUrl === undefined ? {} : { rpcUrl: opts.rpcUrl }),
+        });
+
+        writeConfig(nextConfig);
+        console.log(`Configuration updated for chain: ${opts.chain}`);
       }
 
-      if (!opts.show && !opts.defaultChain && !opts.chain) {
+      if (opts.defaultChain === undefined && opts.chain === undefined) {
         cmd.help();
       }
     });

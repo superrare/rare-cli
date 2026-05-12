@@ -1,15 +1,39 @@
 import { Command } from 'commander';
-import { formatEther, type Address } from 'viem';
+import { formatEther, isAddressEqual, type Address } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
 import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
-import { resolveCurrency } from '../contracts/addresses.js';
+import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '../contracts/addresses.js';
+import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
 
-const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+type ListingCreateOptions = {
+  contract: string;
+  tokenId: string;
+  price: string;
+  currency?: string;
+  target?: string;
+  split?: SplitAccumulator;
+  chain?: string;
+};
 
-interface SplitAccumulator {
+type ListingCancelOptions = {
+  contract: string;
+  tokenId: string;
+  target?: string;
+  chain?: string;
+};
+
+type ListingBuyOptions = {
+  contract: string;
+  tokenId: string;
+  amount: string;
+  currency?: string;
+  chain?: string;
+};
+
+type SplitAccumulator = {
   addresses: Address[];
   ratios: number[];
 }
@@ -22,19 +46,18 @@ function collectSplit(value: string, prev: SplitAccumulator | undefined): SplitA
   }
   const addr = value.slice(0, idx).trim();
   const ratioStr = value.slice(idx + 1).trim();
-  if (!/^0x[a-fA-F0-9]{40}$/.test(addr)) {
-    throw new Error(`Invalid address in --split: "${addr}".`);
-  }
-  if (acc.addresses.some((a) => a.toLowerCase() === addr.toLowerCase())) {
+  const address = parseAddress(addr, '--split address');
+  if (acc.addresses.some((existingAddress) => isAddressEqual(existingAddress, address))) {
     throw new Error(`Duplicate address in --split: "${addr}".`);
   }
   const ratio = Number(ratioStr);
   if (!Number.isInteger(ratio) || ratio < 1 || ratio > 100) {
     throw new Error(`Invalid ratio in --split: "${ratioStr}". Must be an integer between 1 and 100.`);
   }
-  acc.addresses.push(addr as Address);
-  acc.ratios.push(ratio);
-  return acc;
+  return {
+    addresses: [...acc.addresses, address],
+    ratios: [...acc.ratios, ratio],
+  };
 }
 
 function finalizeSplits(acc: SplitAccumulator | undefined):
@@ -67,37 +90,36 @@ export function listingCommand(): Command {
       collectSplit,
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
-      let splits: { addresses: Address[]; ratios: number[] } | undefined;
-      try {
-        splits = finalizeSplits(opts.split as SplitAccumulator);
-      } catch (error) {
-        printError(error);
-        return;
-      }
-
+    .action(async (opts: ListingCreateOptions): Promise<void> => {
+      const splits = finalizeSplits(opts.split);
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
-      const target = (opts.target ?? ETH_ADDRESS) as `0x${string}`;
+      const contract = parseAddress(opts.contract, '--contract');
+      const target = opts.target ? parseAddress(opts.target, '--target') : PUBLIC_LISTING_TARGET;
 
       log(`Creating listing on ${chain}...`);
       log(`  Marketplace contract: ${rare.contracts.auction}`);
-      log(`  NFT contract: ${opts.contract}`);
+      log(`  NFT contract: ${contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Price: ${opts.price} ${isEth ? 'ETH' : currency}`);
-      log(`  Target: ${target === ETH_ADDRESS ? 'public' : target}`);
+      log(`  Target: ${isAddressEqual(target, PUBLIC_LISTING_TARGET) ? 'public' : target}`);
       if (splits) {
         log(`  Splits:`);
-        splits.addresses.forEach((a, i) => log(`    ${a} = ${splits!.ratios[i]}%`));
+        splits.addresses.forEach((address, index) => {
+          const ratio = splits.ratios[index];
+          if (ratio !== undefined) {
+            log(`    ${address} = ${ratio}%`);
+          }
+        });
       }
 
       try {
         const result = await rare.listing.create({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
           price: opts.price,
           currency,
@@ -133,18 +155,19 @@ export function listingCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID')
     .option('--target <address>', 'target buyer address (defaults to public listing)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: ListingCancelOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
-      const target = (opts.target ?? ETH_ADDRESS) as `0x${string}`;
+      const contract = parseAddress(opts.contract, '--contract');
+      const target = opts.target ? parseAddress(opts.target, '--target') : PUBLIC_LISTING_TARGET;
 
       log(`Cancelling listing on ${chain}...`);
 
       try {
         const result = await rare.listing.cancel({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
           target,
         });
@@ -170,23 +193,24 @@ export function listingCommand(): Command {
     .requiredOption('--amount <amount>', 'purchase amount in ETH (or token units)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: ListingBuyOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
+      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Buying token on ${chain}...`);
       log(`  Marketplace contract: ${rare.contracts.auction}`);
-      log(`  NFT contract: ${opts.contract}`);
+      log(`  NFT contract: ${contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
 
       try {
         const result = await rare.listing.buy({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
           amount: opts.amount,
           currency,
@@ -212,7 +236,7 @@ export function listingCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID')
     .option('--target <address>', 'target buyer address (defaults to public listing)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: ListingCancelOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const publicClient = getPublicClient(chain);
       const wallet = tryGetWalletClient(chain);
@@ -220,10 +244,11 @@ export function listingCommand(): Command {
         publicClient,
         walletClient: wallet?.client,
       });
-      const target = (opts.target ?? ETH_ADDRESS) as `0x${string}`;
+      const contract = parseAddress(opts.contract, '--contract');
+      const target = opts.target ? parseAddress(opts.target, '--target') : PUBLIC_LISTING_TARGET;
 
       const result = await rare.listing.getStatus({
-        contract: opts.contract as `0x${string}`,
+        contract,
         tokenId: opts.tokenId,
         target,
       });
@@ -236,11 +261,14 @@ export function listingCommand(): Command {
           console.log(`  Seller:   ${result.seller}`);
           console.log(`  Amount:   ${formatEther(result.amount)} ${result.isEth ? 'ETH' : result.currencyAddress}`);
           console.log(`  Currency: ${result.isEth ? 'ETH' : result.currencyAddress}`);
-          console.log(`  Target:   ${result.target === ETH_ADDRESS ? 'public' : result.target}`);
+          console.log(`  Target:   ${isAddressEqual(result.target, PUBLIC_LISTING_TARGET) ? 'public' : result.target}`);
           if (result.splitAddresses.length > 0) {
             console.log('  Splits:');
-            result.splitAddresses.forEach((a, i) => {
-              console.log(`    ${a} = ${result.splitRatios[i]}%`);
+            result.splitAddresses.forEach((address, index) => {
+              const ratio = result.splitRatios[index];
+              if (ratio !== undefined) {
+                console.log(`    ${address} = ${ratio}%`);
+              }
             });
           }
           if (result.canBuy !== null) {
