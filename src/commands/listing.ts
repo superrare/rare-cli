@@ -380,7 +380,7 @@ export function listingCommand(): Command {
     .option('--token-id <id>', 'token ID for a token-specific listing or collection-wide buyability checks')
     .option('--collection <address>', 'origin collection contract address for a collection-wide listing')
     .option('--seller <address>', 'seller address that set the collection-wide listing')
-    .option('--account <address>', 'wallet address for collection-wide can-buy/can-cancel checks')
+    .option('--account <address>', 'account address for collection-wide can-buy/can-cancel checks')
     .option('--target <address>', 'target buyer address for token-specific listings (defaults to public listing)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts: ListingStatusOptions): Promise<void> => {

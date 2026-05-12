@@ -343,7 +343,7 @@ export function offerCommand(): Command {
     .option('--token-id <id>', 'token ID for a token-specific offer or collection-wide acceptability checks')
     .option('--collection <address>', 'origin collection contract address for a collection-wide offer')
     .option('--buyer <address>', 'buyer address that placed the collection-wide offer')
-    .option('--account <address>', 'wallet address for collection-wide can-accept/can-cancel checks')
+    .option('--account <address>', 'account address for collection-wide can-accept/can-cancel checks')
     .option('--currency <currency>', 'currency for a token-specific offer: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts: OfferStatusOptions) => {
