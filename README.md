@@ -199,25 +199,24 @@ rare batch merkle root \
   --tokens ./tokens.json \
   --currency usdc \
   --amount 25 \
-  --out ./root.json
+  --output ./root.json
 
 # Optionally include an allowlist file and explicit payout splits
 rare batch merkle root \
   --tokens ./tokens.json \
   --currency eth \
   --amount 0.05 \
-  --split-address 0x... \
-  --split-ratio 100 \
+  --split 0x...=100 \
   --allowlist ./allowlist.json \
   --end-timestamp 1735689600 \
-  --out ./root.json
+  --output ./root.json
 
 # Build a proof artifact for one token in the root
 rare batch merkle proof \
   --root ./root.json \
   --contract 0x... \
   --token-id 1 \
-  --out ./proof.json
+  --output ./proof.json
 
 # If the root has an allowlist, include the buyer when generating the proof
 rare batch merkle proof \
@@ -225,10 +224,10 @@ rare batch merkle proof \
   --contract 0x... \
   --token-id 1 \
   --buyer 0x... \
-  --out ./proof.json
+  --output ./proof.json
 
 # Register the batch listing from the root artifact
-rare batch listing create --root ./root.json
+rare batch listing create --root ./root.json --yes
 
 # Buy one token using a proof artifact
 rare batch listing buy \

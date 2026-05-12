@@ -88,4 +88,23 @@ describe('built CLI deterministic behavior', () => {
       expect(result.stderr).toContain('Error: --default-chain must be one of: mainnet, sepolia, base, base-sepolia');
     });
   });
+
+  it('exposes aligned batch listing flags', async () => {
+    await withTempHome(async (home) => {
+      const rootHelp = await runCli(['batch', 'merkle', 'root', '--help'], { home });
+      expect(rootHelp.code).toBe(0);
+      expect(rootHelp.stdout).toContain('--output <path>');
+      expect(rootHelp.stdout).toContain('--split <addr=ratio>');
+      expect(rootHelp.stdout).toContain('--chain-id <id>');
+      expect(rootHelp.stdout).not.toContain('--out <path>');
+      expect(rootHelp.stdout).not.toContain('--split-address');
+      expect(rootHelp.stdout).not.toContain('--split-ratio');
+
+      const createHelp = await runCli(['batch', 'listing', 'create', '--help'], { home });
+      expect(createHelp.code).toBe(0);
+      expect(createHelp.stdout).toContain('--yes');
+      expect(createHelp.stdout).toContain('--chain-id <id>');
+      expect(createHelp.stdout).not.toContain('--no-approve');
+    });
+  });
 });
