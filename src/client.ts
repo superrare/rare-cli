@@ -50,19 +50,21 @@ function getWalletConfig(chain: SupportedChain): ChainConfig & { privateKey: `0x
 }
 
 function getRequiredRpcUrl(chain: SupportedChain, chainConfig: ChainConfig): string {
-  if (!chainConfig.rpcUrl) {
-    const fallback = defaultRpcUrls[chain];
-    if (fallback) {
-      console.warn(
-        `Warning: no RPC URL configured for "${chain}", using public endpoint (may be unreliable).\n` +
-          `  Run: rare configure --chain ${chain} --rpc-url <your-node-url>\n`
-      );
-    } else {
-      console.error(`Error: no RPC URL configured for "${chain}" and no public default is available.`);
-      console.error(`  Run: rare configure --chain ${chain} --rpc-url <your-node-url>`);
-      process.exit(1);
-    }
+  if (chainConfig.rpcUrl !== undefined) {
+    return chainConfig.rpcUrl;
   }
 
-  return chainConfig.rpcUrl ?? defaultRpcUrls[chain] ?? '';
+  const fallback = defaultRpcUrls[chain];
+  if (fallback === undefined) {
+    throw new Error(
+      `no RPC URL configured for "${chain}" and no public default is available. ` +
+        `Run: rare configure --chain ${chain} --rpc-url <your-node-url>`,
+    );
+  }
+
+  console.warn(
+    `Warning: no RPC URL configured for "${chain}", using public endpoint (may be unreliable).\n` +
+      `  Run: rare configure --chain ${chain} --rpc-url <your-node-url>\n`,
+  );
+  return fallback;
 }

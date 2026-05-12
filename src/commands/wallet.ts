@@ -39,8 +39,7 @@ export function walletCommand(): Command {
       if (opts.save) {
         const selectedChain = opts.chain ?? 'sepolia';
         if (!isSupportedChain(selectedChain)) {
-          console.error(`Error: --chain must be one of: ${supportedChainsText}`);
-          process.exit(1);
+          throw new Error(`--chain must be one of: ${supportedChainsText}`);
         }
         writeConfig(setChainConfig(readConfig(), selectedChain, { privateKey }));
         console.log(`\nPrivate key saved to config for chain: ${selectedChain}`);
