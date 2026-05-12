@@ -14,14 +14,15 @@ function lazyBatchMintCmd(): Command {
     .argument('<name>', 'name of the collection')
     .argument('<symbol>', 'symbol of the collection')
     .option('--max-tokens <number>', 'optional supply cap (immutable). If omitted, the collection is uncapped.')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia — only chains where the lazy factory is deployed)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(
       async (
         name: string,
         symbol: string,
-        opts: { maxTokens?: string; chain?: string },
+        opts: { maxTokens?: string; chain?: string; chainId?: string },
       ) => {
-        const chain = getActiveChain(opts.chain);
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
