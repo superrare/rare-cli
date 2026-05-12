@@ -105,9 +105,18 @@ describe('built CLI deterministic behavior', () => {
       const collection = await runCli(['collection', '--help'], { home });
       expect(collection.code).toBe(0);
       expect(collection.stdout).toContain('create');
+      expect(collection.stdout).toContain('mint');
       expect(collection.stderr).toBe('');
 
       const create = await runCli(['collection', 'create', '--help'], { home });
+      const mint = await runCli(['collection', 'mint', '--help'], { home });
+      expect(mint.code).toBe(0);
+      expect(mint.stdout).toContain('Usage: rare collection mint [options]');
+      expect(mint.stdout).toContain('--contract <address>');
+      expect(mint.stdout).toContain('--token-uri <uri>');
+      expect(mint.stdout).toContain('--royalty-receiver <address>');
+      expect(mint.stderr).toBe('');
+
       expect(create.code).toBe(0);
       expect(create.stdout).toContain('lazy-batch-mint');
       expect(create.stderr).toBe('');
@@ -607,6 +616,7 @@ describe('built CLI deterministic behavior', () => {
   it('rejects generated mint metadata options before wallet setup', async () => {
     await withTempHome(async (home) => {
       const result = await runCli([
+        'collection',
         'mint',
         '--contract',
         '0x1111111111111111111111111111111111111111',

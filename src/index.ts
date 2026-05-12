@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import { configureCommand } from './commands/configure.js';
 import { deployCommand } from './commands/deploy.js';
-import { mintCommand } from './commands/mint.js';
 import { auctionCommand } from './commands/auction.js';
 import { statusCommand } from './commands/status.js';
 import { walletCommand } from './commands/wallet.js';
@@ -26,7 +25,6 @@ program
 
 program.addCommand(configureCommand());
 program.addCommand(deployCommand());
-program.addCommand(mintCommand());
 program.addCommand(auctionCommand());
 program.addCommand(statusCommand());
 program.addCommand(walletCommand());

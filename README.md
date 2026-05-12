@@ -188,7 +188,7 @@ rare import erc721 --contract 0x... --chain sepolia
 Upload local media to IPFS and mint in one step:
 
 ```bash
-rare mint \
+rare collection mint \
   --contract 0x... \
   --name "My NFT" \
   --description "A description" \
@@ -198,13 +198,13 @@ rare mint \
 Or mint with a pre-built metadata URI:
 
 ```bash
-rare mint --contract 0x... --token-uri ipfs://Qm...
+rare collection mint --contract 0x... --token-uri ipfs://Qm...
 ```
 
 Additional options:
 
 ```bash
-rare mint \
+rare collection mint \
   --contract 0x... \
   --name "My NFT" \
   --description "A cool piece" \

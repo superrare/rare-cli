@@ -13,6 +13,7 @@ import {
 } from '../sdk/collection-core.js';
 import { printError } from '../errors.js';
 import { output, log } from '../output.js';
+import { mintCommand } from './mint.js';
 
 type LazyBatchMintOptions = {
   maxTokens?: string;
@@ -843,6 +844,7 @@ export function collectionCommand(): Command {
   const cmd = new Command('collection');
   cmd.description('Create and manage NFT collections');
   cmd.addCommand(createCollectionCreateCommand());
+  cmd.addCommand(mintCommand());
   cmd.addCommand(createMintBatchCommand());
   cmd.addCommand(createPrepareLazyMintCommand());
   cmd.addCommand(createTokenCreatorCommand());
