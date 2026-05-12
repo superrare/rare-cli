@@ -2,8 +2,18 @@ import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
+import { parseAddress } from '../sdk/validation.js';
 import { printError } from '../errors.js';
-import { output, log } from '../output.js';
+import { output } from '../output.js';
+import type { RareClient } from '../sdk/types.js';
+
+type StatusOptions = {
+  contract: string;
+  tokenId?: string;
+  chain?: string;
+};
+
+type TokenInfo = Awaited<ReturnType<RareClient['token']['getTokenInfo']>>;
 
 export function statusCommand(): Command {
   const cmd = new Command('status');
@@ -13,26 +23,17 @@ export function statusCommand(): Command {
     .requiredOption('--contract <address>', 'token contract address')
     .option('--token-id <id>', 'token ID to query (optional)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: StatusOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient });
-      const contractAddress = opts.contract as `0x${string}`;
+      const contractAddress = parseAddress(opts.contract, '--contract');
 
       try {
         const contractInfo = await rare.token.getContractInfo({ contract: contractAddress });
-
-        let tokenInfo;
-        if (opts.tokenId !== undefined) {
-          try {
-            tokenInfo = await rare.token.getTokenInfo({
-              contract: contractAddress,
-              tokenId: opts.tokenId,
-            });
-          } catch {
-            tokenInfo = null;
-          }
-        }
+        const tokenInfo = opts.tokenId === undefined
+          ? undefined
+          : await readTokenInfo(rare, contractAddress, opts.tokenId);
 
         output(
           {
@@ -64,4 +65,16 @@ export function statusCommand(): Command {
     });
 
   return cmd;
+}
+
+async function readTokenInfo(
+  rare: RareClient,
+  contract: `0x${string}`,
+  tokenId: string,
+): Promise<TokenInfo | null> {
+  try {
+    return await rare.token.getTokenInfo({ contract, tokenId });
+  } catch {
+    return null;
+  }
 }

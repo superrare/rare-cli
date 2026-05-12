@@ -11,7 +11,6 @@ import { importCommand } from './commands/import.js';
 import { offerCommand } from './commands/offer.js';
 import { listingCommand } from './commands/listing.js';
 import { currenciesCommand } from './commands/currencies.js';
-import { setJsonMode } from './output.js';
 import { printError } from './errors.js';
 
 const program = new Command();
@@ -20,13 +19,7 @@ program
   .name('rare')
   .description('CLI tool for interacting with the RARE protocol smart contracts')
   .version('1.0.0')
-  .option('--json', 'output results as JSON')
-  .hook('preAction', (thisCommand) => {
-    const opts = thisCommand.optsWithGlobals();
-    if (opts.json) {
-      setJsonMode(true);
-    }
-  });
+  .option('--json', 'output results as JSON');
 
 program.addCommand(configureCommand());
 program.addCommand(deployCommand());
@@ -41,6 +34,6 @@ program.addCommand(offerCommand());
 program.addCommand(listingCommand());
 program.addCommand(currenciesCommand());
 
-program.parseAsync(process.argv).catch((err) => {
+program.parseAsync(process.argv).catch((err: unknown) => {
   printError(err);
 });

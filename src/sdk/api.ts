@@ -1,5 +1,5 @@
-import { createApiClient, type ApiClient } from '../data-access/index.js';
-import type { components } from '../data-access/schema.js';
+import { createApiClient } from '../data-access/index.js';
+import type { components, paths } from '../data-access/schema.js';
 import {
   buildCollectionSearchQuery,
   buildGeneratedMediaEntry,
@@ -17,12 +17,7 @@ import {
   type PinMetadataParams,
 } from './api-core.js';
 
-let _client: ApiClient | undefined;
-
-function getClient(): ApiClient {
-  _client ??= createApiClient();
-  return _client;
-}
+const client = createApiClient();
 
 // --- Re-exported types from OpenAPI schema ---
 
@@ -45,6 +40,12 @@ export type SearchPageResponse<T> = {
   pagination: Pagination;
 };
 
+type NftEventQuery = NonNullable<paths['/v1/nfts/{universalTokenId}/events']['get']['parameters']['query']>;
+type CollectionEventQuery = NonNullable<paths['/v1/collections/{id}/events']['get']['parameters']['query']>;
+type EventType = NonNullable<NftEventQuery['eventType']>;
+export type NftEventOptions = { page?: number; perPage?: number; eventType?: EventType; sortBy?: NftEventQuery['sortBy'] };
+export type CollectionEventOptions = { page?: number; perPage?: number; eventType?: CollectionEventQuery['eventType']; sortBy?: CollectionEventQuery['sortBy'] };
+
 // --- Multipart upload (uses presigned URLs directly, not via openapi-fetch) ---
 
 async function uploadParts(
@@ -52,37 +53,32 @@ async function uploadParts(
   partSize: number,
   presignedUrls: string[],
 ): Promise<MultipartUploadPart[]> {
-  const parts: MultipartUploadPart[] = [];
-
-  for (let i = 0; i < presignedUrls.length; i++) {
-    const start = i * partSize;
+  return Promise.all(presignedUrls.map(async (presignedUrl, index): Promise<MultipartUploadPart> => {
+    const start = index * partSize;
     const end = start + partSize;
     const partBuffer = fileBuffer.subarray(start, end);
 
-    const response = await fetch(presignedUrls[i], {
+    const response = await fetch(presignedUrl, {
       method: 'PUT',
       body: new Uint8Array(partBuffer),
     });
 
     if (response.status !== 200 && response.status !== 204) {
-      throw new Error(`Part ${i + 1} upload failed with status ${response.status}`);
+      throw new Error(`Part ${index + 1} upload failed with status ${response.status}`);
     }
 
     const etag = response.headers.get('etag');
     if (!etag) {
-      throw new Error(`Missing etag header for part ${i + 1}`);
+      throw new Error(`Missing etag header for part ${index + 1}`);
     }
 
-    parts.push({ ETag: etag, PartNumber: i + 1 });
-  }
-
-  return parts;
+    return { ETag: etag, PartNumber: index + 1 };
+  }));
 }
 
 // --- Public API functions ---
 
 export async function uploadMedia(buffer: Uint8Array, filename: string): Promise<NftMediaEntry> {
-  const client = getClient();
   const upload = buildMediaUploadPlan(buffer, filename);
 
   const { data: init } = await client.POST('/v1/nfts/metadata/media/uploads', {
@@ -111,10 +107,8 @@ export async function uploadMedia(buffer: Uint8Array, filename: string): Promise
 }
 
 export async function pinMetadata(opts: PinMetadataParams): Promise<string> {
-  const client = getClient();
-
   const { data: result } = await client.POST('/v1/nfts/metadata', {
-    body: buildPinMetadataBody(opts) as any,
+    body: buildPinMetadataBody(opts),
   });
   if (!result) throw new Error('Failed to pin metadata');
 
@@ -122,18 +116,15 @@ export async function pinMetadata(opts: PinMetadataParams): Promise<string> {
 }
 
 export async function importErc721(opts: ImportErc721RequestParams): Promise<void> {
-  const client = getClient();
   await client.POST('/v1/collections/import', {
     body: buildImportErc721Body(opts),
   });
 }
 
 export async function searchNfts(params: NftSearchParams = {}): Promise<SearchPageResponse<Nft>> {
-  const client = getClient();
-
   const { data } = await client.GET('/v1/nfts', {
     params: {
-      query: buildNftSearchQuery(params) as any,
+      query: buildNftSearchQuery(params),
     },
   });
   if (!data) throw new Error('Failed to search NFTs');
@@ -142,8 +133,6 @@ export async function searchNfts(params: NftSearchParams = {}): Promise<SearchPa
 }
 
 export async function searchCollections(params: CollectionSearchParams = {}): Promise<SearchPageResponse<Collection>> {
-  const client = getClient();
-
   const { data } = await client.GET('/v1/collections', {
     params: {
       query: buildCollectionSearchQuery(params),
@@ -155,8 +144,6 @@ export async function searchCollections(params: CollectionSearchParams = {}): Pr
 }
 
 export async function getNft(universalTokenId: string): Promise<Nft> {
-  const client = getClient();
-
   const { data } = await client.GET('/v1/nfts/{universalTokenId}', {
     params: { path: { universalTokenId } },
   });
@@ -167,17 +154,15 @@ export async function getNft(universalTokenId: string): Promise<Nft> {
 
 export async function getNftEvents(
   universalTokenId: string,
-  opts?: { page?: number; perPage?: number; eventType?: string | string[]; sortBy?: 'newest' | 'oldest' },
+  opts?: NftEventOptions,
 ): Promise<SearchPageResponse<NftEvent>> {
-  const client = getClient();
-
   const { data } = await client.GET('/v1/nfts/{universalTokenId}/events', {
     params: {
       path: { universalTokenId },
       query: {
         page: opts?.page,
         perPage: opts?.perPage,
-        eventType: opts?.eventType as any,
+        eventType: opts?.eventType,
         sortBy: opts?.sortBy,
       },
     },
@@ -188,8 +173,6 @@ export async function getNftEvents(
 }
 
 export async function getCollection(id: string): Promise<Collection> {
-  const client = getClient();
-
   const { data } = await client.GET('/v1/collections/{id}', {
     params: { path: { id } },
   });
@@ -200,17 +183,15 @@ export async function getCollection(id: string): Promise<Collection> {
 
 export async function getCollectionEvents(
   id: string,
-  opts?: { page?: number; perPage?: number; eventType?: string | string[]; sortBy?: 'newest' | 'oldest' },
+  opts?: CollectionEventOptions,
 ): Promise<SearchPageResponse<NftEvent>> {
-  const client = getClient();
-
   const { data } = await client.GET('/v1/collections/{id}/events', {
     params: {
       path: { id },
       query: {
         page: opts?.page,
         perPage: opts?.perPage,
-        eventType: opts?.eventType as any,
+        eventType: opts?.eventType,
         sortBy: opts?.sortBy,
       },
     },
@@ -221,8 +202,6 @@ export async function getCollectionEvents(
 }
 
 export async function getUser(address: string): Promise<UserProfile> {
-  const client = getClient();
-
   const { data } = await client.GET('/v1/users/{address}', {
     params: { path: { address } },
   });
@@ -232,8 +211,6 @@ export async function getUser(address: string): Promise<UserProfile> {
 }
 
 export async function getTokenPrice(symbol: string): Promise<{ symbol: string; priceUsd: number; decimals: number; chainId: number; address: string }> {
-  const client = getClient();
-
   const { data } = await client.GET('/v1/tokens/price/{symbol}', {
     params: { path: { symbol } },
   });

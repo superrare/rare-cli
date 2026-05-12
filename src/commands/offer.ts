@@ -4,10 +4,29 @@ import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
-import { resolveCurrency } from '../contracts/addresses.js';
+import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
+import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
 
-const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+type OfferCreateOptions = {
+  contract: string;
+  tokenId: string;
+  amount: string;
+  currency?: string;
+  convertible?: boolean;
+  chain?: string;
+};
+
+type OfferTokenOptions = {
+  contract: string;
+  tokenId: string;
+  currency?: string;
+  chain?: string;
+};
+
+type OfferAcceptOptions = OfferTokenOptions & {
+  amount: string;
+};
 
 export function offerCommand(): Command {
   const cmd = new Command('offer');
@@ -23,24 +42,25 @@ export function offerCommand(): Command {
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--convertible', 'mark offer as convertible')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: OfferCreateOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
+      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Creating offer on ${chain}...`);
       log(`  Marketplace contract: ${rare.contracts.auction}`);
-      log(`  NFT contract: ${opts.contract}`);
+      log(`  NFT contract: ${contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
       log(`  Convertible: ${opts.convertible ? 'yes' : 'no'}`);
 
       try {
         const result = await rare.offer.create({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
           amount: opts.amount,
           currency,
@@ -67,18 +87,19 @@ export function offerCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: OfferTokenOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
+      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Cancelling offer on ${chain}...`);
 
       try {
         const result = await rare.offer.cancel({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
           currency,
         });
@@ -104,22 +125,23 @@ export function offerCommand(): Command {
     .requiredOption('--amount <amount>', 'offer amount to accept in ETH (or token units)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: OfferAcceptOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
+      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Accepting offer on ${chain}...`);
-      log(`  NFT contract: ${opts.contract}`);
+      log(`  NFT contract: ${contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
 
       try {
         const result = await rare.offer.accept({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
           amount: opts.amount,
           currency,
@@ -145,15 +167,16 @@ export function offerCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: OfferTokenOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient });
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
+      const contract = parseAddress(opts.contract, '--contract');
 
       const result = await rare.offer.getStatus({
-        contract: opts.contract as `0x${string}`,
+        contract,
         tokenId: opts.tokenId,
         currency,
       });

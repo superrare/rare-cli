@@ -1,9 +1,10 @@
-import { createPublicClient, createWalletClient, http } from 'viem';
+import { createPublicClient, createWalletClient, http, type PublicClient, type WalletClient } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import type { PrivateKeyAccount } from 'viem/accounts';
 import { viemChains, defaultRpcUrls, type SupportedChain } from './contracts/addresses.js';
-import { getChainConfig, readConfig, writeConfig } from './config.js';
+import { getChainConfig, readConfig, setChainConfig, writeConfig, type ChainConfig } from './config.js';
 
-export function getPublicClient(chain: SupportedChain) {
+export function getPublicClient(chain: SupportedChain): PublicClient {
   const chainConfig = getChainConfig(chain);
   const rpcUrl = chainConfig.rpcUrl ?? defaultRpcUrls[chain];
   return createPublicClient({
@@ -12,9 +13,27 @@ export function getPublicClient(chain: SupportedChain) {
   });
 }
 
-export function getWalletClient(chain: SupportedChain) {
+export function getWalletClient(chain: SupportedChain): { client: WalletClient; account: PrivateKeyAccount } {
+  const chainConfig = getWalletConfig(chain);
+  const rpcUrl = getRequiredRpcUrl(chain, chainConfig);
+  const account = privateKeyToAccount(chainConfig.privateKey);
+
+  return {
+    client: createWalletClient({
+      chain: viemChains[chain],
+      transport: http(rpcUrl),
+      account,
+    }),
+    account,
+  };
+}
+
+function getWalletConfig(chain: SupportedChain): ChainConfig & { privateKey: `0x${string}` } {
   const chainConfig = getChainConfig(chain);
-  if (!chainConfig.privateKey) {
+  if (chainConfig.privateKey) {
+    return { ...chainConfig, privateKey: chainConfig.privateKey };
+  }
+
     console.log(`No private key configured for chain "${chain}". Generating a new wallet...`);
     const privateKey = generatePrivateKey();
     const newAccount = privateKeyToAccount(privateKey);
@@ -24,15 +43,13 @@ export function getWalletClient(chain: SupportedChain) {
     console.log('⚠ Store your private key securely. It will not be shown again.');
     console.log('');
 
-    const config = readConfig();
-    if (!config.chains[chain]) {
-      config.chains[chain] = {};
-    }
-    config.chains[chain]!.privateKey = privateKey;
-    writeConfig(config);
+    writeConfig(setChainConfig(readConfig(), chain, { privateKey }));
     console.log(`Private key saved to config for chain: ${chain}\n`);
-    chainConfig.privateKey = privateKey;
-  }
+
+  return { ...chainConfig, privateKey };
+}
+
+function getRequiredRpcUrl(chain: SupportedChain, chainConfig: ChainConfig): string {
   if (!chainConfig.rpcUrl) {
     const fallback = defaultRpcUrls[chain];
     if (fallback) {
@@ -46,14 +63,6 @@ export function getWalletClient(chain: SupportedChain) {
       process.exit(1);
     }
   }
-  const rpcUrl = chainConfig.rpcUrl ?? defaultRpcUrls[chain];
-  const account = privateKeyToAccount(chainConfig.privateKey as `0x${string}`);
-  return {
-    client: createWalletClient({
-      chain: viemChains[chain],
-      transport: http(rpcUrl),
-      account,
-    }),
-    account,
-  };
+
+  return chainConfig.rpcUrl ?? defaultRpcUrls[chain] ?? '';
 }

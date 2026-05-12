@@ -1,14 +1,8 @@
 import { formatEther } from 'viem';
-import type { Nft, Collection, NftEvent, Pagination } from './sdk/api.js';
-
-let _jsonMode = false;
-
-export function setJsonMode(enabled: boolean): void {
-  _jsonMode = enabled;
-}
+import type { Nft, Collection, Pagination } from './sdk/api.js';
 
 export function isJsonMode(): boolean {
-  return _jsonMode;
+  return process.argv.includes('--json');
 }
 
 /**
@@ -17,7 +11,7 @@ export function isJsonMode(): boolean {
  * output() call matters.
  */
 export function output(data: unknown, prettyPrint: () => void): void {
-  if (_jsonMode) {
+  if (isJsonMode()) {
     const serialized = JSON.stringify(data, bigintReplacer, 2);
     console.log(serialized);
   } else {
@@ -29,7 +23,7 @@ export function output(data: unknown, prettyPrint: () => void): void {
  * Print a status/progress message (suppressed in JSON mode).
  */
 export function log(message: string): void {
-  if (!_jsonMode) {
+  if (!isJsonMode()) {
     console.log(message);
   }
 }
@@ -102,17 +96,15 @@ export function printNftRow(nft: Nft): void {
 }
 
 function nftMarketSummary(nft: Nft): string {
-  const parts: string[] = [];
-  if (nft.market.auctions.length > 0) {
-    const a = nft.market.auctions[0];
-    parts.push(`auction:${a.state}`);
-  }
-  if (nft.market.listings.length > 0) {
-    parts.push(`listed:${formatCryptoValue(nft.market.listings[0].price)}`);
-  }
-  if (nft.market.offers.length > 0) {
-    parts.push(`offer:${formatCryptoValue(nft.market.offers[0].price)}`);
-  }
+  const auction = nft.market.auctions[0];
+  const listing = nft.market.listings[0];
+  const offer = nft.market.offers[0];
+  const parts = [
+    auction ? `auction:${auction.state}` : undefined,
+    listing ? `listed:${formatCryptoValue(listing.price)}` : undefined,
+    offer ? `offer:${formatCryptoValue(offer.price)}` : undefined,
+  ].filter((part): part is string => part !== undefined);
+
   return parts.length > 0 ? `[${parts.join(' | ')}]` : '';
 }
 
