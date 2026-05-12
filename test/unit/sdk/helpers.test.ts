@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { PublicClient, WalletClient } from 'viem';
+import { createPublicClient, createWalletClient, http, type PublicClient, type WalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { mainnet } from 'viem/chains';
 import {
@@ -142,9 +142,15 @@ describe('chain resolution', () => {
 });
 
 function publicClient(chain?: PublicClient['chain']): PublicClient {
-  return (chain ? { chain } : {}) as PublicClient;
+  return createPublicClient({
+    chain,
+    transport: http('http://127.0.0.1'),
+  });
 }
 
 function walletClient(account: WalletClient['account']): WalletClient {
-  return { account } as WalletClient;
+  return createWalletClient({
+    account,
+    transport: http('http://127.0.0.1'),
+  });
 }

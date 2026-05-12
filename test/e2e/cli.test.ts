@@ -37,7 +37,7 @@ describe('built CLI deterministic behavior', () => {
       expect(configure.stdout).toContain('Default chain set to: base-sepolia');
       expect(configure.stdout).toContain('Configuration updated for chain: sepolia');
 
-      const config = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
+      const config: unknown = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
       expect(config).toEqual({
         defaultChain: 'base-sepolia',
         chains: {
@@ -50,7 +50,8 @@ describe('built CLI deterministic behavior', () => {
 
       const show = await runCli(['configure', '--show'], { home });
       expect(show.code).toBe(0);
-      expect(JSON.parse(show.stdout)).toEqual({
+      const shownConfig: unknown = JSON.parse(show.stdout);
+      expect(shownConfig).toEqual({
         defaultChain: 'base-sepolia',
         chains: {
           sepolia: {
@@ -74,7 +75,10 @@ describe('built CLI deterministic behavior', () => {
       expect(saved.code).toBe(0);
       expect(saved.stdout).toContain('Private key saved to config for chain: sepolia');
 
-      const config = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
+      const config: unknown = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
+      if (!isConfigWithSepoliaPrivateKey(config)) {
+        throw new Error('Expected saved config to include a Sepolia private key.');
+      }
       expect(config.chains.sepolia.privateKey).toMatch(/^0x[0-9a-f]{64}$/);
     });
   });
@@ -106,3 +110,20 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 });
+
+function isConfigWithSepoliaPrivateKey(value: unknown): value is {
+  chains: { sepolia: { privateKey: string } };
+} {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'chains' in value &&
+    typeof value.chains === 'object' &&
+    value.chains !== null &&
+    'sepolia' in value.chains &&
+    typeof value.chains.sepolia === 'object' &&
+    value.chains.sepolia !== null &&
+    'privateKey' in value.chains.sepolia &&
+    typeof value.chains.sepolia.privateKey === 'string'
+  );
+}

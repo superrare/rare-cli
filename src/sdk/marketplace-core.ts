@@ -16,8 +16,8 @@ import type {
   OfferStatusParams,
   AuctionStatus,
 } from './types.js';
+import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '../contracts/addresses.js';
 import {
-  ETH_ADDRESS,
   toNonNegativeInteger,
   toNonNegativeWei,
   toPositiveInteger,
@@ -77,7 +77,7 @@ export function planListingCreate(params: ListingCreateParams, accountAddress: A
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
     price: toNonNegativeWei(params.price, 'price'),
-    target: params.target ?? ETH_ADDRESS,
+    target: params.target ?? PUBLIC_LISTING_TARGET,
     splitAddresses: params.splitAddresses ?? [accountAddress],
     splitRatios: params.splitRatios ?? [100],
   };
@@ -86,7 +86,7 @@ export function planListingCreate(params: ListingCreateParams, accountAddress: A
 export function planListingCancel(params: ListingCancelParams): { tokenId: bigint; target: Address } {
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
-    target: params.target ?? ETH_ADDRESS,
+    target: params.target ?? PUBLIC_LISTING_TARGET,
   };
 }
 
@@ -101,7 +101,7 @@ export function planListingBuy(params: ListingBuyParams): ListingBuyPlan {
 export function planListingStatus(params: ListingStatusParams): { tokenId: bigint; target: Address } {
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
-    target: params.target ?? ETH_ADDRESS,
+    target: params.target ?? PUBLIC_LISTING_TARGET,
   };
 }
 
@@ -221,10 +221,11 @@ export function shapeAuctionStatus(
 ): AuctionStatus {
   const started = startingTime > 0n;
   const endTime = started ? startingTime + lengthOfAuction : null;
-  let status: AuctionStatus['status'] = 'PENDING';
-  if (started) {
-    status = endTime !== null && nowSeconds >= endTime ? 'ENDED' : 'RUNNING';
-  }
+  const status: AuctionStatus['status'] = !started
+    ? 'PENDING'
+    : endTime !== null && nowSeconds >= endTime
+      ? 'ENDED'
+      : 'RUNNING';
 
   return {
     seller,

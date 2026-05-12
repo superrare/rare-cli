@@ -22,7 +22,7 @@ export function createOfferNamespace(
   addresses: { auction: Address },
 ): RareClient['offer'] {
   return {
-    async create(params) {
+    async create(params): ReturnType<RareClient['offer']['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const plan = planOfferCreate(params);
 
@@ -45,7 +45,7 @@ export function createOfferNamespace(
       return { txHash, receipt };
     },
 
-    async cancel(params) {
+    async cancel(params): ReturnType<RareClient['offer']['cancel']> {
       const { walletClient, account } = requireWallet(config);
       const plan = planOfferCancel(params);
 
@@ -62,7 +62,7 @@ export function createOfferNamespace(
       return { txHash, receipt };
     },
 
-    async accept(params) {
+    async accept(params): ReturnType<RareClient['offer']['accept']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const plan = planOfferAccept(params, accountAddress);
 
@@ -86,7 +86,7 @@ export function createOfferNamespace(
       return { txHash, receipt };
     },
 
-    async getStatus(params) {
+    async getStatus(params): ReturnType<RareClient['offer']['getStatus']> {
       const plan = planOfferStatus(params);
 
       const result = await publicClient.readContract({

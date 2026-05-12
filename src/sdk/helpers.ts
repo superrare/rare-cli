@@ -6,14 +6,12 @@ import {
   maxUint256,
   parseEther,
   parseUnits,
-  zeroAddress,
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
-import { chainIds, supportedChains, type SupportedChain } from '../contracts/addresses.js';
+import { chainIds, ETH_ADDRESS, supportedChains, type SupportedChain } from '../contracts/addresses.js';
 import type { UniswapTransactionRequest } from '../swap/uniswap-api.js';
 import type { RareClientConfig, IntegerInput, AmountInput, WalletAccount, TransactionResult } from './types.js';
 
-export const ETH_ADDRESS = zeroAddress;
 const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
 
@@ -84,10 +82,9 @@ export function resolveChainFromPublicClient(publicClient: PublicClient): Suppor
     throw new Error('Unable to resolve chain from publicClient.chain.id. Create your public client with an explicit chain.');
   }
 
-  for (const chain of supportedChains) {
-    if (chainIds[chain] === chainId) {
-      return chain;
-    }
+  const chain = supportedChains.find((supportedChain) => chainIds[supportedChain] === chainId);
+  if (chain) {
+    return chain;
   }
 
   throw new Error(`Unsupported chain id: ${chainId}. Supported chain ids: ${Object.values(chainIds).join(', ')}`);
@@ -368,20 +365,7 @@ export async function preparePayment(opts: {
     return amount + fee;
   }
 
-  // ERC20: ensure sufficient allowance
-  let allowance: bigint | undefined;
-  try {
-    allowance = await publicClient.readContract({
-      address: currency,
-      abi: erc20Abi,
-      functionName: 'allowance',
-      args: [accountAddress, auctionAddress],
-    });
-  } catch (err) {
-    // Allowance check failed (e.g. non-standard ERC20) — approve unconditionally
-    console.warn('ERC20 allowance check failed, approving unconditionally:', err instanceof Error ? err.message : String(err));
-  }
-
+  const allowance = await readAllowance(publicClient, currency, accountAddress, auctionAddress);
   if (allowance === undefined || allowance < amount) {
     const approveTx = await walletClient.writeContract({
       address: currency,
@@ -395,4 +379,25 @@ export async function preparePayment(opts: {
   }
 
   return 0n;
+}
+
+async function readAllowance(
+  publicClient: PublicClient,
+  currency: Address,
+  accountAddress: Address,
+  auctionAddress: Address,
+): Promise<bigint | undefined> {
+  try {
+    return await publicClient.readContract({
+      address: currency,
+      abi: erc20Abi,
+      functionName: 'allowance',
+      args: [accountAddress, auctionAddress],
+    });
+  } catch (err) {
+    // Allowance check failed (e.g. non-standard ERC20) — approve unconditionally
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn('ERC20 allowance check failed, approving unconditionally:', message);
+    return undefined;
+  }
 }

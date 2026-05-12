@@ -1,4 +1,4 @@
-import { getAddress, zeroAddress, type Address, type Chain } from 'viem';
+import { getAddress, isAddress, zeroAddress, type Address, type Chain } from 'viem';
 import { sepolia, mainnet, base, baseSepolia } from 'viem/chains';
 
 export const supportedChains = [
@@ -117,10 +117,12 @@ export const canonicalV4Pools: Partial<Record<SupportedChain, CanonicalV4Pools>>
   },
 };
 
-export type CurrencyName = 'eth' | 'usdc' | 'rare';
+export const currencyNames = ['eth', 'rare', 'usdc'] as const;
 
-export const ETH_ADDRESS = zeroAddress;
-export const currencyNames: readonly CurrencyName[] = ['eth', 'rare', 'usdc'];
+export type CurrencyName = (typeof currencyNames)[number];
+
+export const ETH_ADDRESS: Address = zeroAddress;
+export const PUBLIC_LISTING_TARGET: Address = zeroAddress;
 
 const currencyAddresses: Record<CurrencyName, Partial<Record<SupportedChain, Address>>> = {
   eth: {
@@ -156,12 +158,8 @@ export function resolveCurrency(input: string, chain: SupportedChain): Address {
     }
     return addr;
   }
-  if (input.startsWith('0x')) {
-    try {
-      return getAddress(input);
-    } catch {
-      throw new Error(`Currency address must be a valid EVM address: ${input}`);
-    }
+  if (isAddress(input)) {
+    return getAddress(input);
   }
   throw new Error(`Unknown currency "${input}". Supported: ${currencyNames.join(', ')} or a 0x address.`);
 }

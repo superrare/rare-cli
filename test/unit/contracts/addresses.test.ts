@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getAddress } from 'viem';
 import {
   chainIds,
+  ETH_ADDRESS,
   getCanonicalRareEthPool,
   getCanonicalUsdcEthPool,
   getContractAddresses,
@@ -44,7 +45,7 @@ describe('chain and currency helpers', () => {
   });
 
   it('resolves named currencies and custom ERC20 addresses', () => {
-    expect(resolveCurrency('eth', 'sepolia')).toBe('0x0000000000000000000000000000000000000000');
+    expect(resolveCurrency('eth', 'sepolia')).toBe(ETH_ADDRESS);
     expect(resolveCurrency('USDC', 'sepolia')).toBe('0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238');
     expect(resolveCurrency('0x1230000000000000000000000000000000000000', 'sepolia')).toBe(
       '0x1230000000000000000000000000000000000000',

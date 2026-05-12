@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseEther } from 'viem';
+import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '../../../src/contracts/addresses.js';
 import {
   planAuctionBid,
   planAuctionCreate,
@@ -15,7 +16,6 @@ import {
   shapeOfferStatus,
 } from '../../../src/sdk/marketplace-core.js';
 
-const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
 const accountAddress = '0x0000000000000000000000000000000000000001' as const;
 const buyerAddress = '0x0000000000000000000000000000000000000002' as const;
 const nftContract = '0x1000000000000000000000000000000000000000' as const;
@@ -29,7 +29,7 @@ describe('marketplace transaction planning', () => {
       tokenId: 1n,
       currency: ETH_ADDRESS,
       price: parseEther('0.5'),
-      target: ETH_ADDRESS,
+      target: PUBLIC_LISTING_TARGET,
       splitAddresses: [accountAddress],
       splitRatios: [100],
     });
@@ -42,7 +42,7 @@ describe('marketplace transaction planning', () => {
   it('plans listing cancel and buy inputs', () => {
     expect(planListingCancel({ contract: nftContract, tokenId: '3' })).toEqual({
       tokenId: 3n,
-      target: ETH_ADDRESS,
+      target: PUBLIC_LISTING_TARGET,
     });
     expect(planListingBuy({ contract: nftContract, tokenId: '4', amount: '1', currency: erc20Currency })).toEqual({
       tokenId: 4n,
