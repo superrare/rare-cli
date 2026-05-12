@@ -6,6 +6,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: false,
+    fileParallelism: !runLiveE2E,
     include: runLiveE2E ? ['test/e2e-live/**/*.test.ts'] : ['test/**/*.test.ts'],
     exclude: [
       'node_modules/**',

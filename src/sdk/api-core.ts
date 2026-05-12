@@ -100,7 +100,7 @@ export function normalizeFilename(filename: string): string {
 export function parseDimensions(dimensions: string | undefined): { width: number; height: number } | undefined {
   if (!dimensions) return undefined;
   const [w, h] = dimensions.split('x');
-  if (!w || !h) return undefined;
+  if (w === undefined || h === undefined || w.length === 0 || h.length === 0) return undefined;
   const width = Number.parseInt(w, 10);
   const height = Number.parseInt(h, 10);
   if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
@@ -161,8 +161,8 @@ export function buildImportErc721Body(opts: ImportErc721RequestParams): {
 
   return {
     chainId: opts.chainId,
-    contractAddress: opts.contract.toLowerCase(),
-    ownerAddress: opts.owner.toLowerCase(),
+    contractAddress: String(opts.contract).toLowerCase(),
+    ownerAddress: String(opts.owner).toLowerCase(),
   };
 }
 

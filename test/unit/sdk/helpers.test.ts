@@ -10,6 +10,7 @@ import {
   toNonNegativeWei,
   toPositiveInteger,
   toPositiveWei,
+  toSafeIntegerNumber,
   toWei,
 } from '../../../src/sdk/helpers.js';
 
@@ -34,6 +35,17 @@ describe('SDK helper normalization', () => {
     expect(() => toInteger('abc', 'tokenId')).toThrow('tokenId must be an integer.');
   });
 
+  it('rejects unsafe numeric integers', () => {
+    expect(toInteger(Number.MAX_SAFE_INTEGER, 'tokenId')).toBe(9_007_199_254_740_991n);
+    expect(toInteger('9007199254740993', 'tokenId')).toBe(9_007_199_254_740_993n);
+    expect(() => toInteger(Number.MAX_SAFE_INTEGER + 1, 'tokenId')).toThrow('string or bigint');
+  });
+
+  it('rejects integer strings that cannot round-trip through number', () => {
+    expect(toSafeIntegerNumber('1714500000', 'deadline')).toBe(1_714_500_000);
+    expect(() => toSafeIntegerNumber('9007199254740993', 'deadline')).toThrow('safe JavaScript integer');
+  });
+
   it('rejects negative uint inputs before contract writes', () => {
     expect(toNonNegativeInteger(0, 'tokenId')).toBe(0n);
     expect(() => toNonNegativeInteger('-1', 'tokenId')).toThrow(
@@ -51,6 +63,12 @@ describe('SDK helper normalization', () => {
     expect(toWei(5n)).toBe(5n);
     expect(toWei('1')).toBe(1_000_000_000_000_000_000n);
     expect(toWei(0.5)).toBe(500_000_000_000_000_000n);
+  });
+
+  it('rejects unsafe numeric amounts', () => {
+    expect(toWei('1.000000000000000001')).toBe(1_000_000_000_000_000_001n);
+    expect(toWei(0.1)).toBe(100_000_000_000_000_000n);
+    expect(() => toWei(Number.MAX_SAFE_INTEGER + 1)).toThrow('string or bigint');
   });
 
   it('allows zero money amounts when zero is a meaningful contract value', () => {

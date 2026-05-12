@@ -1,6 +1,9 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
-import { searchCollections, type Collection } from '../sdk/api.js';
+import { getPublicClient } from '../client.js';
+import { createRareClient } from '../sdk/client.js';
+import type { RareClient } from '../sdk/types.js';
+import type { Collection } from '../sdk/api.js';
 import { printError } from '../errors.js';
 import { output, log, printCollection } from '../output.js';
 
@@ -17,11 +20,12 @@ export function listCollectionsCommand(): Command {
     .option('--query <text>', 'text search filter', '')
     .action(async (opts: ListCollectionsOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
+      const rare = createRareClient({ publicClient: getPublicClient(chain) });
 
       log(`Fetching collections on ${chain}...`);
 
       try {
-        const allItems = await fetchCollections(opts.query);
+        const allItems = await fetchCollections(rare, opts.query);
 
         output(allItems, () => {
           if (allItems.length === 0) {
@@ -42,8 +46,13 @@ export function listCollectionsCommand(): Command {
   return cmd;
 }
 
-async function fetchCollections(query: string, page = 1, collected: Collection[] = []): Promise<Collection[]> {
-  const result = await searchCollections({
+async function fetchCollections(
+  rare: RareClient,
+  query: string,
+  page = 1,
+  collected: Collection[] = [],
+): Promise<Collection[]> {
+  const result = await rare.search.collections({
     query,
     perPage: 100,
     page,
@@ -52,5 +61,5 @@ async function fetchCollections(query: string, page = 1, collected: Collection[]
 
   return page >= result.pagination.totalPages
     ? nextItems
-    : fetchCollections(query, page + 1, nextItems);
+    : fetchCollections(rare, query, page + 1, nextItems);
 }

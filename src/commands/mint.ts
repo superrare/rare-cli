@@ -3,8 +3,9 @@ import { basename } from 'node:path';
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { uploadMedia, pinMetadata, type NftAttribute, type NftMediaEntry } from '../sdk/api.js';
+import type { NftAttribute, NftMediaEntry } from '../sdk/api.js';
 import { createRareClient } from '../sdk/client.js';
+import type { RareClient } from '../sdk/types.js';
 import { parseAddress, parseOptionalAddress } from '../sdk/validation.js';
 import { printError } from '../errors.js';
 import { output, log } from '../output.js';
@@ -64,10 +65,11 @@ export function mintCommand(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts: MintOptions): Promise<void> => {
       try {
-        const tokenUri = await resolveTokenUri(opts);
         const chain = getActiveChain(opts.chain);
-        const { client, account } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
+        const mediaClient = createRareClient({ publicClient });
+        const tokenUri = await resolveTokenUri(mediaClient, opts);
+        const { client, account } = getWalletClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
         const contractAddress = parseAddress(opts.contract, '--contract');
         const to = parseOptionalAddress(opts.to, '--to');
@@ -112,18 +114,18 @@ export function mintCommand(): Command {
   return cmd;
 }
 
-async function resolveTokenUri(opts: MintOptions): Promise<string> {
+async function resolveTokenUri(rare: RareClient, opts: MintOptions): Promise<string> {
   if (opts.tokenUri) {
     return opts.tokenUri;
   }
 
   const { name, description, image } = requireMetadataOptions(opts);
-  const imageMedia = await uploadFileMedia(image, 'image');
-  const videoMedia = opts.video ? await uploadFileMedia(opts.video, 'video') : undefined;
+  const imageMedia = await uploadFileMedia(rare, image, 'image');
+  const videoMedia = opts.video ? await uploadFileMedia(rare, opts.video, 'video') : undefined;
   const tags = opts.tag.length > 0 ? opts.tag : undefined;
   const attributes = opts.attribute.length > 0 ? opts.attribute.map(parseAttribute) : undefined;
 
-  return pinMetadata({
+  return rare.media.pinMetadata({
     name,
     description,
     image: imageMedia,
@@ -147,13 +149,18 @@ function requireMetadataOptions(opts: MintOptions): { name: string; description:
   return { name: opts.name, description: opts.description, image: opts.image };
 }
 
-async function uploadFileMedia(filePath: string, label: 'image' | 'video'): Promise<NftMediaEntry> {
+async function uploadFileMedia(
+  rare: RareClient,
+  filePath: string,
+  label: 'image' | 'video',
+): Promise<NftMediaEntry> {
   const fileBuffer = await readFileOrThrow(filePath, label);
   const filename = basename(filePath);
 
   log(`Uploading ${label}: ${filename} (${fileBuffer.byteLength} bytes)`);
-  const media = await uploadMedia(new Uint8Array(fileBuffer), filename);
-  log(`  ${label[0].toUpperCase()}${label.slice(1)} uploaded: ${media.url}`);
+  const media = await rare.media.upload(new Uint8Array(fileBuffer), filename);
+  const labelCapitalized = `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
+  log(`  ${labelCapitalized} uploaded: ${media.url}`);
 
   return media;
 }

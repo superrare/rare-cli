@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { getContractAddresses } from '../../../src/contracts/addresses.js';
 import { createRareClient } from '../../../src/sdk/client.js';
-import { createTestSepoliaPublicClient } from '../../helpers/liveViem.js';
+import { createTestSepoliaPublicClient, hasTestRpcUrl } from '../../helpers/liveViem.js';
 
-describe('Rare SDK client live integration', () => {
+const describeLive = hasTestRpcUrl() ? describe : describe.skip;
+
+describeLive('Rare SDK client live integration', () => {
   it('uses a real viem Sepolia public client for chain and contract resolution', async () => {
     const publicClient = createTestSepoliaPublicClient();
     const rare = createRareClient({ publicClient });

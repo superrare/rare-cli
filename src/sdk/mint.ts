@@ -10,7 +10,7 @@ export function createMintNamespace(
   return {
     async mintTo(params): ReturnType<RareClient['mint']['mintTo']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const useMintTo = Boolean(params.to || params.royaltyReceiver);
+      const useMintTo = params.to !== undefined || params.royaltyReceiver !== undefined;
 
       const receiver = params.to ?? accountAddress;
       const royaltyReceiver = params.royaltyReceiver ?? accountAddress;
@@ -39,14 +39,15 @@ export function createMintNamespace(
         eventName: 'Transfer',
       });
 
-      if (!logs[0]) {
+      const log = logs[0];
+      if (log === undefined) {
         throw new Error('Mint transaction succeeded but Transfer event was not found in logs.');
       }
 
       return {
         txHash,
         receipt,
-        tokenId: logs[0].args.tokenId,
+        tokenId: log.args.tokenId,
       };
     },
   };

@@ -32,10 +32,10 @@ export function configureCommand(): Command {
             Object.entries(config.chains).map(([chain, chainCfg]) => [
               chain,
               {
-                privateKey: chainCfg?.privateKey
-                  ? chainCfg.privateKey.slice(0, 6) + '...' + chainCfg.privateKey.slice(-4)
+                privateKey: chainCfg.privateKey !== undefined
+                  ? `${chainCfg.privateKey.slice(0, 6)}...${chainCfg.privateKey.slice(-4)}`
                   : undefined,
-                rpcUrl: chainCfg?.rpcUrl,
+                rpcUrl: chainCfg.rpcUrl,
               },
             ])
           ),
@@ -50,8 +50,7 @@ export function configureCommand(): Command {
 
       if (opts.defaultChain) {
         if (!isSupportedChain(opts.defaultChain)) {
-          console.error(`Error: --default-chain must be one of: ${supportedChainsText}`);
-          process.exit(1);
+          throw new Error(`--default-chain must be one of: ${supportedChainsText}`);
         }
         writeConfig(configWithDefaultChain);
         console.log(`Default chain set to: ${opts.defaultChain}`);
@@ -59,8 +58,7 @@ export function configureCommand(): Command {
 
       if (opts.chain) {
         if (!isSupportedChain(opts.chain)) {
-          console.error(`Error: --chain must be one of: ${supportedChainsText}`);
-          process.exit(1);
+          throw new Error(`--chain must be one of: ${supportedChainsText}`);
         }
         const privateKey = opts.privateKey ? parseHexString(opts.privateKey, '--private-key') : undefined;
         const nextConfig = setChainConfig(configWithDefaultChain, opts.chain, {
@@ -72,7 +70,7 @@ export function configureCommand(): Command {
         console.log(`Configuration updated for chain: ${opts.chain}`);
       }
 
-      if (!opts.show && !opts.defaultChain && !opts.chain) {
+      if (opts.defaultChain === undefined && opts.chain === undefined) {
         cmd.help();
       }
     });

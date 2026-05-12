@@ -4,12 +4,12 @@ import os from 'os';
 import { supportedChains, isSupportedChain, type SupportedChain } from './contracts/addresses.js';
 import { isHexString } from './sdk/validation.js';
 
-export interface ChainConfig {
+export type ChainConfig = {
   privateKey?: `0x${string}`;
   rpcUrl?: string;
 }
 
-export interface Config {
+export type Config = {
   defaultChain?: SupportedChain;
   chains: Partial<Record<SupportedChain, ChainConfig>>;
 }
@@ -52,9 +52,9 @@ export function setChainConfig(config: Config, chain: SupportedChain, updates: C
 export function getActiveChain(chainFlag?: string): SupportedChain {
   if (chainFlag) {
     if (!isSupportedChain(chainFlag)) {
-      console.error(`Error: unsupported chain "${chainFlag}".`);
-      console.error(`Supported chains: ${supportedChains.join(', ')}`);
-      process.exit(1);
+      throw new Error(
+        `unsupported chain "${chainFlag}". Supported chains: ${supportedChains.join(', ')}`,
+      );
     }
     return chainFlag;
   }

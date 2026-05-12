@@ -11,9 +11,10 @@ const errorMiddleware: Middleware = {
     const url = new URL(request.url);
     const path = url.pathname;
     const errorMessage = await readErrorMessage(response);
+    const fallback = response.statusText.length > 0 ? response.statusText : 'Request failed';
 
     throw new RareApiError(
-      errorMessage ?? response.statusText ?? 'Request failed',
+      errorMessage ?? fallback,
       response.status,
       path,
     );
