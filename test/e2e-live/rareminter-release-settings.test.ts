@@ -122,9 +122,9 @@ describeLive('live Sepolia RareMinter release settings', () => {
         'set',
         '--contract',
         contract,
-        '--artifact',
+        '--input',
         allowlistArtifact,
-        '--end',
+        '--end-timestamp',
         endTimestamp.toString(),
         '--chain',
         'sepolia',
@@ -160,7 +160,8 @@ describeLive('live Sepolia RareMinter release settings', () => {
     const mintLimit = await step('set release mint limit', () =>
       jsonCommand<ReleaseLimitSetResult>(live.sellerHome, [
         'release',
-        'mint-limit',
+        'limits',
+        'set-mint',
         '--contract',
         contract,
         '--limit',
@@ -194,7 +195,8 @@ describeLive('live Sepolia RareMinter release settings', () => {
     const txLimit = await step('set release transaction limit', () =>
       jsonCommand<ReleaseLimitSetResult>(live.sellerHome, [
         'release',
-        'tx-limit',
+        'limits',
+        'set-tx',
         '--contract',
         contract,
         '--limit',

@@ -96,10 +96,23 @@ describe('built CLI deterministic behavior', () => {
       expect(help.stdout).toContain('RareMinter release subcommands');
       expect(help.stdout).toContain('configure');
       expect(help.stdout).toContain('allowlist');
-      expect(help.stdout).toContain('mint-limit');
-      expect(help.stdout).toContain('tx-limit');
-      expect(help.stdout).toContain('staking-minimum');
+      expect(help.stdout).toContain('limits');
+      expect(help.stdout).toContain('staking');
       expect(help.stdout).toContain('status');
+
+      const statusHelp = await runCli(['release', 'status', '--help'], { home });
+      expect(statusHelp.code).toBe(0);
+      expect(statusHelp.stdout).toContain('--account <address>');
+      expect(statusHelp.stdout).toContain('--chain-id <id>');
+      expect(statusHelp.stdout).not.toContain('--wallet');
+
+      const allowlistProofHelp = await runCli(['release', 'allowlist', 'proof', '--help'], { home });
+      expect(allowlistProofHelp.code).toBe(0);
+      expect(allowlistProofHelp.stdout).toContain('--input <file>');
+      expect(allowlistProofHelp.stdout).toContain('--address <address>');
+      expect(allowlistProofHelp.stdout).toContain('--output <file>');
+      expect(allowlistProofHelp.stdout).not.toContain('--artifact');
+      expect(allowlistProofHelp.stdout).not.toContain('--wallet');
 
       const result = await runCli(['release', 'status', '--contract', 'not-an-address'], { home });
       expect(result.code).toBe(1);
@@ -139,9 +152,9 @@ describe('built CLI deterministic behavior', () => {
           'release',
           'allowlist',
           'proof',
-          '--artifact',
+          '--input',
           artifactPath,
-          '--wallet',
+          '--address',
           wallet,
         ], { home }),
       );

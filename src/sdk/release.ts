@@ -537,8 +537,8 @@ export function createReleaseNamespace(
         totalSupply,
         maxSupply,
         currencyDecimals,
-        walletMints,
-        walletTxs,
+        accountMints,
+        accountTxs,
       ] = await Promise.all([
         optionalRead(() => publicClient.readContract({
           address: params.contract,
@@ -551,20 +551,20 @@ export function createReleaseNamespace(
           functionName: 'maxTokens',
         })),
         readCurrencyDecimals(publicClient, directSale.currencyAddress, { required: false }),
-        params.wallet
+        params.account
           ? publicClient.readContract({
               address: rareMinter,
               abi: rareMinterAbi,
               functionName: 'getContractMintsPerAddress',
-              args: [params.contract, params.wallet],
+              args: [params.contract, params.account],
             })
           : Promise.resolve(null),
-        params.wallet
+        params.account
           ? publicClient.readContract({
               address: rareMinter,
               abi: rareMinterAbi,
               functionName: 'getContractTxsPerAddress',
-              args: [params.contract, params.wallet],
+              args: [params.contract, params.account],
             })
           : Promise.resolve(null),
       ]);
@@ -576,9 +576,9 @@ export function createReleaseNamespace(
         allowlist,
         mintLimit,
         txLimit,
-        wallet: params.wallet ?? null,
-        walletMints,
-        walletTxs,
+        account: params.account ?? null,
+        accountMints,
+        accountTxs,
         stakingMinimum,
         totalSupply,
         maxSupply,

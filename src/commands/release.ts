@@ -107,6 +107,7 @@ export function releaseCommand(): Command {
       collectReleaseSplit,
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts) => {
       let splits: { addresses: Address[]; ratios: number[] } | undefined;
       try {
@@ -121,7 +122,7 @@ export function releaseCommand(): Command {
         return;
       }
 
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const { client, account } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
@@ -211,24 +212,32 @@ export function releaseCommand(): Command {
 
   allowlist
     .command('proof')
-    .description('Read a wallet proof from a RareMinter allowlist artifact')
-    .requiredOption('--artifact <file>', 'allowlist proof artifact JSON')
-    .requiredOption('--wallet <address>', 'wallet address to prove')
+    .description('Read an address proof from a RareMinter allowlist artifact')
+    .requiredOption('--input <file>', 'allowlist proof artifact JSON')
+    .requiredOption('--address <address>', 'address to prove')
+    .option('--output <file>', 'write the proof JSON to a file')
     .action((opts) => {
       try {
-        assertAddressOption(opts.wallet, 'wallet');
-        const artifact = loadAllowlistArtifact(opts.artifact);
-        const proof = getReleaseAllowlistProof({ artifact, wallet: opts.wallet });
+        assertAddressOption(opts.address, 'address');
+        const artifact = loadAllowlistArtifact(opts.input);
+        const proof = getReleaseAllowlistProof({ artifact, address: opts.address });
         if (!proof) {
-          throw new Error(`Wallet ${opts.wallet} is not present in allowlist artifact ${opts.artifact}.`);
+          throw new Error(`Address ${opts.address} is not present in allowlist artifact ${opts.input}.`);
         }
 
-        output({ root: artifact.root, ...proof }, () => {
+        if (opts.output) {
+          writeJsonFile(opts.output, proof);
+        }
+
+        output({ root: artifact.root, ...proof, outputPath: opts.output ?? null }, () => {
           console.log('\nAllowlist proof:');
           console.log(`  Root:   ${artifact.root}`);
-          console.log(`  Wallet: ${proof.address}`);
+          console.log(`  Address: ${proof.address}`);
           console.log(`  Leaf:   ${proof.leaf}`);
           console.log(`  Proof:  ${proof.proof.length === 0 ? '[]' : proof.proof.join(', ')}`);
+          if (opts.output) {
+            console.log(`  File:   ${opts.output}`);
+          }
         });
       } catch (error) {
         printError(error);
@@ -239,36 +248,37 @@ export function releaseCommand(): Command {
     .command('set')
     .description('Set the RareMinter allowlist root and end time for a release')
     .requiredOption('--contract <address>', 'collection contract address')
-    .requiredOption('--end <time>', 'allowlist end time as unix seconds or an ISO date')
-    .option('--artifact <file>', 'allowlist proof artifact JSON; uses its root')
-    .option('--root <bytes32>', 'allowlist Merkle root to set when no artifact is provided')
+    .requiredOption('--end-timestamp <time>', 'allowlist end time as unix seconds or an ISO date')
+    .option('--input <file>', 'allowlist proof artifact JSON; uses its root')
+    .option('--root <bytes32>', 'allowlist Merkle root to set when no input is provided')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts) => {
       try {
         assertAddressOption(opts.contract, 'contract');
-        if (!opts.artifact && !opts.root) {
-          throw new Error('Pass --artifact or --root to set a release allowlist.');
+        if (!opts.input && !opts.root) {
+          throw new Error('Pass --input or --root to set a release allowlist.');
         }
-        if (opts.artifact && opts.root) {
-          throw new Error('Pass either --artifact or --root, not both.');
+        if (opts.input && opts.root) {
+          throw new Error('Pass either --input or --root, not both.');
         }
 
-        const chain = getActiveChain(opts.chain);
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const rare = releaseWriteClient(chain);
-        const artifact = opts.artifact ? loadAllowlistArtifact(opts.artifact) : undefined;
+        const artifact = opts.input ? loadAllowlistArtifact(opts.input) : undefined;
         const root = opts.root as Hex | undefined;
 
         log(`Configuring release allowlist on ${chain}...`);
         log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
         log(`  Collection: ${opts.contract}`);
         log(`  Root:       ${artifact?.root ?? root}`);
-        log(`  Ends:       ${opts.end}`);
+        log(`  Ends:       ${opts.endTimestamp}`);
 
         const result = await rare.release.setAllowlistConfig({
           contract: opts.contract,
           root,
           artifact,
-          endTimestamp: opts.end,
+          endTimestamp: opts.endTimestamp,
         });
 
         output(
@@ -295,10 +305,11 @@ export function releaseCommand(): Command {
     .description('Clear the RareMinter allowlist config for a release')
     .requiredOption('--contract <address>', 'collection contract address')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts) => {
       try {
         assertAddressOption(opts.contract, 'contract');
-        const chain = getActiveChain(opts.chain);
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const rare = releaseWriteClient(chain);
 
         log(`Clearing release allowlist on ${chain}...`);
@@ -330,16 +341,20 @@ export function releaseCommand(): Command {
 
   cmd.addCommand(allowlist);
 
-  cmd
-    .command('mint-limit')
+  const limits = new Command('limits');
+  limits.description('Configure RareMinter mint and transaction limits');
+
+  limits
+    .command('set-mint')
     .description('Set the RareMinter per-wallet mint limit for a release')
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--limit <number>', 'per-wallet mint limit; 0 disables the limit')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts) => {
       try {
         assertAddressOption(opts.contract, 'contract');
-        const chain = getActiveChain(opts.chain);
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const rare = releaseWriteClient(chain);
 
         log(`Configuring release mint limit on ${chain}...`);
@@ -370,16 +385,17 @@ export function releaseCommand(): Command {
       }
     });
 
-  cmd
-    .command('tx-limit')
+  limits
+    .command('set-tx')
     .description('Set the RareMinter per-wallet transaction limit for a release')
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--limit <number>', 'per-wallet mint transaction limit; 0 disables the limit')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts) => {
       try {
         assertAddressOption(opts.contract, 'contract');
-        const chain = getActiveChain(opts.chain);
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const rare = releaseWriteClient(chain);
 
         log(`Configuring release transaction limit on ${chain}...`);
@@ -410,29 +426,35 @@ export function releaseCommand(): Command {
       }
     });
 
-  cmd
-    .command('staking-minimum')
+  cmd.addCommand(limits);
+
+  const staking = new Command('staking');
+  staking.description('Configure RareMinter seller staking requirements');
+
+  staking
+    .command('set-minimum')
     .description('Set the RareMinter seller staking minimum for a release')
     .requiredOption('--contract <address>', 'collection contract address')
-    .requiredOption('--amount <rare>', 'minimum staked RARE amount; 0 disables the requirement')
-    .option('--end <time>', 'staking minimum end time as unix seconds or an ISO date; required unless amount is 0')
+    .requiredOption('--minimum <rare>', 'minimum staked RARE amount; 0 disables the requirement')
+    .option('--end-timestamp <time>', 'staking minimum end time as unix seconds or an ISO date; required unless minimum is 0')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts) => {
       try {
         assertAddressOption(opts.contract, 'contract');
-        const chain = getActiveChain(opts.chain);
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const rare = releaseWriteClient(chain);
 
         log(`Configuring release seller staking minimum on ${chain}...`);
         log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
         log(`  Collection: ${opts.contract}`);
-        log(`  Amount:     ${opts.amount} RARE`);
-        log(`  Ends:       ${opts.end ?? '(not set)'}`);
+        log(`  Minimum:    ${opts.minimum} RARE`);
+        log(`  Ends:       ${opts.endTimestamp ?? '(not set)'}`);
 
         const result = await rare.release.setSellerStakingMinimum({
           contract: opts.contract,
-          amount: opts.amount,
-          endTimestamp: opts.end,
+          amount: opts.minimum,
+          endTimestamp: opts.endTimestamp,
         });
 
         output(
@@ -454,30 +476,33 @@ export function releaseCommand(): Command {
       }
     });
 
+  cmd.addCommand(staking);
+
   cmd
     .command('status')
     .description('Get RareMinter direct sale release details (read-only)')
     .requiredOption('--contract <address>', 'collection contract address')
-    .option('--wallet <address>', 'wallet address to include mint and transaction usage')
+    .option('--account <address>', 'account address to include mint and transaction usage')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts) => {
       if (!isAddress(opts.contract)) {
         printError(new Error(`Invalid contract address: "${opts.contract}".`));
         return;
       }
-      if (opts.wallet && !isAddress(opts.wallet)) {
-        printError(new Error(`Invalid wallet address: "${opts.wallet}".`));
+      if (opts.account && !isAddress(opts.account)) {
+        printError(new Error(`Invalid account address: "${opts.account}".`));
         return;
       }
 
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient });
 
       try {
         const result = await rare.release.getStatus({
           contract: opts.contract as Address,
-          wallet: opts.wallet as Address | undefined,
+          account: opts.account as Address | undefined,
         });
         const currencyLabel = result.isEth ? 'ETH' : result.currencyAddress;
         const price = `${formatTokenAmount(result.price, result.currencyDecimals)} ${currencyLabel}`;
@@ -516,11 +541,11 @@ export function releaseCommand(): Command {
             console.log(`  Minted supply:      ${total} / ${max}`);
             console.log(`  Remaining supply:   ${result.remainingSupply?.toString() ?? 'unknown'}`);
           }
-          if (result.wallet) {
-            console.log('  Wallet usage:');
-            console.log(`    Wallet:           ${result.wallet}`);
-            console.log(`    Mints:            ${result.walletMints?.toString() ?? 'unknown'}`);
-            console.log(`    Transactions:     ${result.walletTxs?.toString() ?? 'unknown'}`);
+          if (result.account) {
+            console.log('  Account usage:');
+            console.log(`    Account:          ${result.account}`);
+            console.log(`    Mints:            ${result.accountMints?.toString() ?? 'unknown'}`);
+            console.log(`    Transactions:     ${result.accountTxs?.toString() ?? 'unknown'}`);
           }
           console.log(`  Currently mintable: ${result.currentlyMintable ? 'yes' : 'no'}`);
         });

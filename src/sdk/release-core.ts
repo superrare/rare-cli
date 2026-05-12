@@ -534,19 +534,19 @@ export function buildReleaseAllowlistArtifact(wallets: readonly Address[]): Rele
 
 export function getReleaseAllowlistProof(opts: {
   artifact: ReleaseAllowlistArtifact;
-  wallet: Address;
+  address: Address;
 }): ReleaseAllowlistWalletProof | null {
-  const wallet = getAddress(opts.wallet);
-  return opts.artifact.wallets.find((entry) => addressesEqual(entry.address, wallet)) ?? null;
+  const address = getAddress(opts.address);
+  return opts.artifact.wallets.find((entry) => addressesEqual(entry.address, address)) ?? null;
 }
 
 export function verifyReleaseAllowlistProof(opts: {
   root: Hex;
-  wallet: Address;
+  address: Address;
   proof: readonly Hex[];
 }): boolean {
   const root = normalizeBytes32(opts.root, 'allowlist root');
-  let hash = hashAllowlistAddress(getAddress(opts.wallet));
+  let hash = hashAllowlistAddress(getAddress(opts.address));
   for (const sibling of opts.proof) {
     hash = hashMerklePair(hash, normalizeBytes32(sibling, 'allowlist proof item'));
   }
@@ -638,9 +638,9 @@ export function shapeReleaseStatus(opts: {
   allowlist: RawAllowlistConfig;
   mintLimit: bigint;
   txLimit: bigint;
-  wallet: Address | null;
-  walletMints: bigint | null;
-  walletTxs: bigint | null;
+  account: Address | null;
+  accountMints: bigint | null;
+  accountTxs: bigint | null;
   stakingMinimum: RawStakingMinimum;
   totalSupply: bigint | null;
   maxSupply: bigint | null;
@@ -661,23 +661,23 @@ export function shapeReleaseStatus(opts: {
       ? opts.maxSupply > 0n && opts.totalSupply >= opts.maxSupply
       : null;
 
-  const walletMintLimitReached =
-    opts.wallet !== null &&
-    opts.walletMints !== null &&
+  const accountMintLimitReached =
+    opts.account !== null &&
+    opts.accountMints !== null &&
     opts.mintLimit > 0n &&
-    opts.walletMints >= opts.mintLimit;
-  const walletTxLimitReached =
-    opts.wallet !== null &&
-    opts.walletTxs !== null &&
+    opts.accountMints >= opts.mintLimit;
+  const accountTxLimitReached =
+    opts.account !== null &&
+    opts.accountTxs !== null &&
     opts.txLimit > 0n &&
-    opts.walletTxs >= opts.txLimit;
+    opts.accountTxs >= opts.txLimit;
 
   const currentlyMintable =
     configured &&
     started &&
     soldOut !== true &&
-    !walletMintLimitReached &&
-    !walletTxLimitReached;
+    !accountMintLimitReached &&
+    !accountTxLimitReached;
 
   return {
     rareMinter: opts.rareMinter,
@@ -697,9 +697,9 @@ export function shapeReleaseStatus(opts: {
     requiresAllowlist: allowlistActive,
     mintLimit: opts.mintLimit,
     txLimit: opts.txLimit,
-    wallet: opts.wallet,
-    walletMints: opts.walletMints,
-    walletTxs: opts.walletTxs,
+    account: opts.account,
+    accountMints: opts.accountMints,
+    accountTxs: opts.accountTxs,
     stakingMinimumAmount: opts.stakingMinimum.amount,
     stakingMinimumEndTimestamp: opts.stakingMinimum.endTimestamp,
     stakingMinimumActive,

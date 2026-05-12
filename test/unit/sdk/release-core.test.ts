@@ -177,7 +177,7 @@ describe('release allowlist artifacts', () => {
     for (const wallet of artifact.wallets) {
       expect(verifyReleaseAllowlistProof({
         root: artifact.root,
-        wallet: wallet.address,
+        address: wallet.address,
         proof: wallet.proof,
       })).toBe(true);
     }
@@ -193,7 +193,7 @@ describe('release allowlist artifacts', () => {
       }),
       'json',
     );
-    const proof = getReleaseAllowlistProof({ artifact, wallet: walletB });
+    const proof = getReleaseAllowlistProof({ artifact, address: walletB });
 
     expect(artifact.wallets).toHaveLength(2);
     expect(proof?.address).toBe(walletB);
@@ -361,9 +361,9 @@ describe('release status shaping', () => {
         allowlist: { root: ZERO_BYTES32, endTimestamp: 0n },
         mintLimit: 0n,
         txLimit: 0n,
-        wallet: null,
-        walletMints: null,
-        walletTxs: null,
+        account: null,
+        accountMints: null,
+        accountTxs: null,
         stakingMinimum: { amount: 0n, endTimestamp: 0n },
         totalSupply: 5n,
         maxSupply: 10n,
@@ -398,9 +398,9 @@ describe('release status shaping', () => {
       allowlist: { root: `0x${'11'.repeat(32)}`, endTimestamp: 1_500n },
       mintLimit: 2n,
       txLimit: 0n,
-      wallet: recipientAddress,
-      walletMints: 2n,
-      walletTxs: 0n,
+      account: recipientAddress,
+      accountMints: 2n,
+      accountTxs: 0n,
       stakingMinimum: { amount: 10n, endTimestamp: 1_500n },
       totalSupply: 10n,
       maxSupply: 10n,
@@ -432,9 +432,9 @@ describe('release status shaping', () => {
       allowlist: { root: ZERO_BYTES32, endTimestamp: 0n },
       mintLimit: 0n,
       txLimit: 0n,
-      wallet: null,
-      walletMints: null,
-      walletTxs: null,
+      account: null,
+      accountMints: null,
+      accountTxs: null,
       stakingMinimum: { amount: 0n, endTimestamp: 0n },
       totalSupply: null,
       maxSupply: null,
