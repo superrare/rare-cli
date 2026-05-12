@@ -31,7 +31,7 @@ type TxResult = {
   blockNumber: string;
 };
 
-type DeployLiquidResult = TxResult & {
+type DeployLiquidEditionResult = TxResult & {
   contract: string;
   chainId: number;
   liquidEditionUrl: string;
@@ -79,51 +79,24 @@ type LiveState = {
   accountAddress: Address;
 };
 
-let live: LiveState;
+const liveState = missingEnv.length === 0 ? createLiveState() : undefined;
 
 describeLive('live Sepolia Liquid Editions and swap CLI write commands', () => {
   beforeAll(async () => {
-    const home = await createTempHome();
-    const tempDir = await mkdtemp(join(tmpdir(), 'rare-cli-live-liquid-swap-'));
-    const curvesFile = join(tempDir, 'liquid-curves.json');
-
-    try {
-      await writeFile(
-        curvesFile,
-        JSON.stringify([
-          {
-            tickLower: -60_000,
-            tickUpper: 60_000,
-            numPositions: 1,
-            shares: '1',
-          },
-        ], null, 2),
-        'utf8',
-      );
-      await step('configure liquid/swap wallet', () => configureLiveHome(home, livePrivateKey('E2E_SELLER_PRIVATE_KEY')));
-
-      live = {
-        home,
-        tempDir,
-        curvesFile,
-        accountAddress: privateKeyToAccount(livePrivateKey('E2E_SELLER_PRIVATE_KEY')).address,
-      };
-    } catch (error) {
-      await cleanupTempHome(home);
-      await cleanupTempHome(tempDir);
-      throw error;
-    }
+    await requireLiveState();
   });
 
   afterAll(async () => {
+    const live = await liveState;
     await cleanupTempHome(live?.home);
     await cleanupTempHome(live?.tempDir);
   });
 
   it('deploys a Liquid Edition from an explicit curves file', async () => {
+    const live = await requireLiveState();
     const suffix = Date.now().toString(36).slice(-6).toUpperCase();
     const deployed = await step('deploy liquid edition', () =>
-      jsonCommand<DeployLiquidResult>([
+      jsonCommand<DeployLiquidEditionResult>([
         'deploy',
         'liquid-edition',
         `Rare CLI Liquid E2E ${suffix}`,
@@ -305,6 +278,46 @@ describeLive('live Sepolia Liquid Editions and swap CLI write commands', () => {
   });
 });
 
+async function createLiveState(): Promise<LiveState> {
+  const home = await createTempHome();
+  const tempDir = await mkdtemp(join(tmpdir(), 'rare-cli-live-liquid-swap-'));
+  const curvesFile = join(tempDir, 'liquid-curves.json');
+
+  try {
+    await writeFile(
+      curvesFile,
+      JSON.stringify([
+        {
+          tickLower: -60_000,
+          tickUpper: 60_000,
+          numPositions: 1,
+          shares: '1',
+        },
+      ], null, 2),
+      'utf8',
+    );
+    await step('configure liquid/swap wallet', () => configureLiveHome(home, livePrivateKey('E2E_SELLER_PRIVATE_KEY')));
+
+    return {
+      home,
+      tempDir,
+      curvesFile,
+      accountAddress: privateKeyToAccount(livePrivateKey('E2E_SELLER_PRIVATE_KEY')).address,
+    };
+  } catch (error) {
+    await cleanupTempHome(home);
+    await cleanupTempHome(tempDir);
+    throw error;
+  }
+}
+
+async function requireLiveState(): Promise<LiveState> {
+  if (!liveState) {
+    throw new Error(`Live environment is not configured: ${missingEnv.join(', ')}`);
+  }
+  return liveState;
+}
+
 async function quoteBuyRareToken(): Promise<TokenTradeQuoteJson> {
   const quote = await step('quote RARE buy route', () =>
     jsonCommand<TokenTradeQuoteJson>([
@@ -344,6 +357,7 @@ async function writeInputsFile(name: string, inputs: `0x${string}`[] | null): Pr
     throw new Error('Expected quote to include router inputs.');
   }
 
+  const live = await requireLiveState();
   const path = join(live.tempDir, name);
   await writeFile(path, JSON.stringify(inputs, null, 2), 'utf8');
   return path;
@@ -367,6 +381,7 @@ async function configureLiveHome(home: string, privateKey: string): Promise<void
 }
 
 async function expectRareBalanceAtLeast(amount: string): Promise<void> {
+  const live = await requireLiveState();
   const balance = await createLivePublicClient().readContract({
     address: rareAddress,
     abi: erc20Abi,
@@ -380,6 +395,7 @@ async function expectRareBalanceAtLeast(amount: string): Promise<void> {
 }
 
 async function jsonCommand<T>(args: string[], timeoutMs = 180_000): Promise<T> {
+  const live = await requireLiveState();
   return parseJsonStdout<T>(await runCli(['--json', ...args], { home: live.home, timeoutMs }));
 }
 
@@ -388,7 +404,7 @@ function expectTx(result: TxResult): void {
   expect(result.blockNumber).toMatch(/^\d+$/);
 }
 
-function createLivePublicClient() {
+function createLivePublicClient(): ReturnType<typeof createPublicClient> {
   return createPublicClient({
     chain: sepolia,
     transport: http(liveRpcUrl()),

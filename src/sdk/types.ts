@@ -208,7 +208,7 @@ export interface ValidateLiquidCurvesParams {
   curves: LiquidCurveSegment[];
 }
 
-export interface DeployLiquidMultiCurveParams {
+export interface DeployLiquidEditionParams {
   name: string;
   symbol: string;
   tokenUri: string;
@@ -216,7 +216,7 @@ export interface DeployLiquidMultiCurveParams {
   curves: LiquidCurveSegment[];
 }
 
-export interface DeployLiquidMultiCurveResult extends TransactionResult {
+export interface DeployLiquidEditionResult extends TransactionResult {
   contract: Address;
   tokenUri: string;
   curves: LiquidCurveSegment[];
@@ -353,7 +353,7 @@ export interface RareClient {
     getFactoryConfig(): Promise<LiquidFactoryConfig>;
     generatePresetCurves(params: GeneratePresetCurvesParams): Promise<GeneratePresetCurvesResult>;
     validateCurves(params: ValidateLiquidCurvesParams): Promise<LiquidCurvePreview>;
-    deployMultiCurve(params: DeployLiquidMultiCurveParams): Promise<DeployLiquidMultiCurveResult>;
+    deployMultiCurve(params: DeployLiquidEditionParams): Promise<DeployLiquidEditionResult>;
   };
   mint: {
     mintTo(params: MintToParams): Promise<MintToResult>;

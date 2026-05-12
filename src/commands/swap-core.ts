@@ -2,25 +2,25 @@ import { formatEther, formatUnits, getAddress, isHex, type Address } from 'viem'
 import type { BuyRareQuote, TokenTradeQuote } from '../sdk/types.js';
 
 export function parseInputsJson(raw: string, label: string): readonly `0x${string}`[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error(`Invalid JSON in inputs file: ${label}`);
-  }
-
+  const parsed = parseJson(raw, label);
   if (!Array.isArray(parsed)) {
     throw new Error(`Inputs file must be a JSON array of hex strings: ${label}`);
   }
 
-  const inputs: `0x${string}`[] = [];
-  for (const value of parsed) {
+  return parsed.map((value) => {
     if (typeof value !== 'string' || !isHex(value)) {
       throw new Error(`Inputs file must be a JSON array of hex strings: ${label}`);
     }
-    inputs.push(value);
+    return value;
+  });
+}
+
+function parseJson(raw: string, label: string): unknown {
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error(`Invalid JSON in inputs file: ${label}`);
   }
-  return inputs;
 }
 
 export function ensureHex(value: string, label: string): `0x${string}` {

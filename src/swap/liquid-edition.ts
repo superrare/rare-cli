@@ -1,11 +1,9 @@
 import { zeroAddress, type Address, type PublicClient } from 'viem';
 import { liquidEditionAbi } from '../contracts/abis/liquid-edition.js';
-import { inferBaseCurrencyAddress, normalizeAddress } from './pool-core.js';
+import { normalizeAddress } from './pool-core.js';
 import type { PoolKey } from './route-types.js';
 
-export { inferBaseCurrencyAddress } from './pool-core.js';
-
-export async function getLiquidTokenPoolKey(
+export async function getLiquidEditionPoolKey(
   publicClient: PublicClient,
   token: Address,
 ): Promise<PoolKey | null> {

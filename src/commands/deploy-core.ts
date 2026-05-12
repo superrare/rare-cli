@@ -54,12 +54,7 @@ function parseDisplayType(value: unknown, raw: string): NftAttribute['display_ty
 }
 
 function parseAttributeJson(raw: string): NftAttribute {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error(`Invalid attribute JSON: ${raw}`);
-  }
+  const parsed = parseJson(raw);
 
   if (!isRecord(parsed) || parsed.value === undefined) {
     throw new Error(`Attribute JSON must include "value": ${raw}`);
@@ -71,6 +66,14 @@ function parseAttributeJson(raw: string): NftAttribute {
     display_type: parseDisplayType(parsed.display_type, raw),
     max_value: parseOptionalNumber(parsed.max_value, 'max_value', raw),
   };
+}
+
+function parseJson(raw: string): unknown {
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    throw new Error(`Invalid attribute JSON: ${raw}`);
+  }
 }
 
 export function parseAttribute(raw: string): NftAttribute {
@@ -109,7 +112,7 @@ export function formatLiquidEditionUrl(chainId: number, contractAddress: string)
 }
 
 export function formatCurvePreview(preview: LiquidCurvePreview, source: string): string[] {
-  const lines = [
+  const baseLines = [
     `Curve source: ${source}`,
     `Curve pool supply: ${preview.curvePoolSupplyTokens}`,
     `Max total supply: ${preview.maxTotalSupplyTokens}`,
@@ -117,21 +120,14 @@ export function formatCurvePreview(preview: LiquidCurvePreview, source: string):
     `Total positions: ${preview.totalPositions}`,
     `Share sum: ${preview.totalShare}`,
   ];
-  if (preview.rarePriceUsd !== undefined) {
-    lines.push(`RARE/USD: ${preview.rarePriceUsd}`);
-  }
-
-  lines.push('');
-  lines.push('Curves:');
-  for (const [index, segment] of preview.segments.entries()) {
+  const rarePriceLine = preview.rarePriceUsd === undefined ? [] : [`RARE/USD: ${preview.rarePriceUsd}`];
+  const curveLines = preview.segments.map((segment, index) => {
     const usdRange =
       segment.startTokenPriceUsd !== undefined && segment.endTokenPriceUsd !== undefined
         ? ` | approx USD ${segment.startTokenPriceUsd.toFixed(4)} -> ${segment.endTokenPriceUsd.toFixed(4)}`
         : '';
-    lines.push(
-      `  ${index + 1}. ticks ${segment.tickLower} -> ${segment.tickUpper} | positions ${segment.numPositions} | share ${segment.shares}${usdRange}`,
-    );
-  }
+    return `  ${index + 1}. ticks ${segment.tickLower} -> ${segment.tickUpper} | positions ${segment.numPositions} | share ${segment.shares}${usdRange}`;
+  });
 
-  return lines;
+  return [...baseLines, ...rarePriceLine, '', 'Curves:', ...curveLines];
 }

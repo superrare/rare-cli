@@ -4,14 +4,18 @@ import type { PoolKey, ResolvedRoute, ResolvedRouteStep, ResolvedV4RouteStep, Ro
 import { buildExactInputSingleRoute } from './build-route.js';
 
 function parseQuoteExactInputSingleResult(value: unknown): { amountOut: bigint; gasEstimate: bigint } {
-  if (!Array.isArray(value) || value.length !== 2) {
+  if (!isQuoteExactInputSingleResult(value)) {
     throw new Error('Unexpected V4 quoter result.');
   }
   const [amountOut, gasEstimate] = value;
-  if (typeof amountOut !== 'bigint' || typeof gasEstimate !== 'bigint') {
-    throw new Error('Unexpected V4 quoter result.');
-  }
   return { amountOut, gasEstimate };
+}
+
+function isQuoteExactInputSingleResult(value: unknown): value is readonly [bigint, bigint] {
+  return Array.isArray(value) &&
+    value.length === 2 &&
+    typeof value[0] === 'bigint' &&
+    typeof value[1] === 'bigint';
 }
 
 export async function quoteExactInputSingle(
@@ -58,31 +62,39 @@ export async function quoteRoute(
   amountIn: bigint,
   minAmountOut: bigint,
 ): Promise<RouteQuote> {
-  let currentAmount = amountIn;
-  const quotedSteps: ResolvedRouteStep[] = [];
-
-  for (const step of route.steps) {
-    if (step.kind !== 'v4Swap') {
-      quotedSteps.push(step);
-      continue;
-    }
-
-    const quote = await quoteExactInputSingle(
-      publicClient,
-      quoterAddress,
-      step.tokenIn,
-      step.tokenOut,
-      step.poolKey,
-      currentAmount,
-    );
-
-    currentAmount = quote.amountOut;
-    quotedSteps.push(quote.step);
-  }
+  const { amountOut, steps } = await quoteRouteSteps(publicClient, quoterAddress, route.steps, amountIn);
 
   return {
-    amountOut: currentAmount,
+    amountOut,
     minAmountOut,
-    steps: quotedSteps,
+    steps,
   };
+}
+
+async function quoteRouteSteps(
+  publicClient: PublicClient,
+  quoterAddress: Address,
+  routeSteps: readonly ResolvedRouteStep[],
+  currentAmount: bigint,
+  quotedSteps: readonly ResolvedRouteStep[] = [],
+): Promise<{ amountOut: bigint; steps: ResolvedRouteStep[] }> {
+  const [step, ...remainingSteps] = routeSteps;
+  if (!step) {
+    return { amountOut: currentAmount, steps: [...quotedSteps] };
+  }
+
+  if (step.kind !== 'v4Swap') {
+    return quoteRouteSteps(publicClient, quoterAddress, remainingSteps, currentAmount, [...quotedSteps, step]);
+  }
+
+  const quote = await quoteExactInputSingle(
+    publicClient,
+    quoterAddress,
+    step.tokenIn,
+    step.tokenOut,
+    step.poolKey,
+    currentAmount,
+  );
+
+  return quoteRouteSteps(publicClient, quoterAddress, remainingSteps, quote.amountOut, [...quotedSteps, quote.step]);
 }

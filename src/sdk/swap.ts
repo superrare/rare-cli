@@ -1,8 +1,8 @@
-import { type Address, type Hash } from 'viem';
+import { type Address } from 'viem';
 import { ETH_ADDRESS, type SupportedChain } from '../contracts/addresses.js';
 import { liquidRouterAbi } from '../contracts/abis/liquid-router.js';
 import { getKnownCanonicalEthPoolKey, getRareAddress } from '../swap/known-pools.js';
-import { getLiquidTokenPoolKey } from '../swap/liquid-token.js';
+import { getLiquidEditionPoolKey } from '../swap/liquid-edition.js';
 import { quoteRoute } from '../swap/quoter.js';
 import { encodeRoute } from '../swap/route-encoding.js';
 import {
@@ -42,11 +42,14 @@ import {
 import type {
   BuyRareParams,
   BuyRareQuote,
+  BuyRareResult,
   BuyTokenParams,
   RareClient,
   SellTokenParams,
+  TokenTradeResult,
   TokenTradeQuote,
   RareClientConfig,
+  TransactionResult,
 } from './types.js';
 
 type TokenTradeDirection = 'buy' | 'sell';
@@ -67,6 +70,7 @@ type UniswapTokenTradeQuoteDetails = {
 };
 
 type TokenTradeQuoteDetails = LocalTokenTradeQuoteDetails | UniswapTokenTradeQuoteDetails;
+type UniswapQuoteResponse = Awaited<ReturnType<typeof requestUniswapQuote>>;
 
 async function resolveCanonicalEthTradeRoute(
   publicClient: RareClientConfig['publicClient'],
@@ -85,7 +89,7 @@ async function resolveCanonicalEthTradeRoute(
     });
   }
 
-  const liquidPoolKey = await getLiquidTokenPoolKey(publicClient, token);
+  const liquidPoolKey = await getLiquidEditionPoolKey(publicClient, token);
   if (!liquidPoolKey) {
     return null;
   }
@@ -180,7 +184,7 @@ async function buildUniswapFallbackTradeQuote(
         : undefined;
   const defaultSlippageBps = resolveSlippageBps(params.slippageBps);
 
-  let quoteResponse = await requestUniswapQuote({
+  const initialQuoteResponse = await requestUniswapQuote({
     chainId,
     tokenIn,
     tokenOut,
@@ -189,25 +193,19 @@ async function buildUniswapFallbackTradeQuote(
     slippageBps: defaultSlippageBps,
   });
 
-  assertSupportedUniswapRouting(quoteResponse.routing);
+  assertSupportedUniswapRouting(initialQuoteResponse.routing);
 
-  if (requestedMinAmountOut !== undefined) {
-    const quotedAmounts = getQuotedRecipientAmount(quoteResponse.quote, accountAddress);
-    assertRequestedMinAmountOut(quotedAmounts.estimatedAmountOut, requestedMinAmountOut);
-
-    const derivedSlippageBps = computeSlippageBpsFromAmounts(quotedAmounts.estimatedAmountOut, requestedMinAmountOut);
-    quoteResponse = await requestUniswapQuote({
-      chainId,
-      tokenIn,
-      tokenOut,
-      amount: amountIn,
-      swapper: accountAddress,
-      slippageBps: derivedSlippageBps,
-    });
-
-    const requotedAmounts = getQuotedRecipientAmount(quoteResponse.quote, accountAddress);
-    assertRequotedMinAmountOut(requotedAmounts.minAmountOut, requestedMinAmountOut);
-  }
+  const quoteResponse = requestedMinAmountOut === undefined
+    ? initialQuoteResponse
+    : await requoteForRequestedMinAmountOut({
+        initialQuoteResponse,
+        requestedMinAmountOut,
+        chainId,
+        tokenIn,
+        tokenOut,
+        amountIn,
+        accountAddress,
+      });
 
   return {
     kind: 'uniswap',
@@ -225,6 +223,33 @@ async function buildUniswapFallbackTradeQuote(
       routing: quoteResponse.routing,
     }),
   };
+}
+
+async function requoteForRequestedMinAmountOut(params: {
+  initialQuoteResponse: UniswapQuoteResponse;
+  requestedMinAmountOut: bigint;
+  chainId: number;
+  tokenIn: Address;
+  tokenOut: Address;
+  amountIn: bigint;
+  accountAddress: Address;
+}): Promise<UniswapQuoteResponse> {
+  const quotedAmounts = getQuotedRecipientAmount(params.initialQuoteResponse.quote, params.accountAddress);
+  assertRequestedMinAmountOut(quotedAmounts.estimatedAmountOut, params.requestedMinAmountOut);
+
+  const derivedSlippageBps = computeSlippageBpsFromAmounts(quotedAmounts.estimatedAmountOut, params.requestedMinAmountOut);
+  const quoteResponse = await requestUniswapQuote({
+    chainId: params.chainId,
+    tokenIn: params.tokenIn,
+    tokenOut: params.tokenOut,
+    amount: params.amountIn,
+    swapper: params.accountAddress,
+    slippageBps: derivedSlippageBps,
+  });
+
+  const requotedAmounts = getQuotedRecipientAmount(quoteResponse.quote, params.accountAddress);
+  assertRequotedMinAmountOut(requotedAmounts.minAmountOut, params.requestedMinAmountOut);
+  return quoteResponse;
 }
 
 async function buildTokenTradeQuote(
@@ -280,7 +305,7 @@ export function createSwapNamespace(
   const { publicClient } = config;
 
   return {
-    async buy(params) {
+    async buy(params): Promise<TransactionResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const router = requireConfiguredAddress(addresses.swapRouter, 'Liquid router', chain);
       validateRouterPayload(params.commands, params.inputs);
@@ -302,7 +327,7 @@ export function createSwapNamespace(
       return { txHash, receipt };
     },
 
-    async sell(params) {
+    async sell(params): Promise<TransactionResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const router = requireConfiguredAddress(addresses.swapRouter, 'Liquid router', chain);
       validateRouterPayload(params.commands, params.inputs);
@@ -333,7 +358,7 @@ export function createSwapNamespace(
       return { txHash, receipt };
     },
 
-    async swap(params) {
+    async swap(params): Promise<TransactionResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const router = requireConfiguredAddress(addresses.swapRouter, 'Liquid router', chain);
       validateRouterPayload(params.commands, params.inputs);
@@ -368,7 +393,7 @@ export function createSwapNamespace(
       return { txHash, receipt };
     },
 
-    async quoteBuyToken(params) {
+    async quoteBuyToken(params): Promise<TokenTradeQuote> {
       const quote = await buildTokenTradeQuote(
         publicClient,
         chain,
@@ -387,7 +412,7 @@ export function createSwapNamespace(
       return quote.quote;
     },
 
-    async buyToken(params) {
+    async buyToken(params): Promise<TokenTradeResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const quoteDetails = await buildTokenTradeQuote(publicClient, chain, chainId, addresses, accountAddress, {
         direction: 'buy',
@@ -445,7 +470,7 @@ export function createSwapNamespace(
       };
     },
 
-    async quoteSellToken(params) {
+    async quoteSellToken(params): Promise<TokenTradeQuote> {
       const quote = await buildTokenTradeQuote(
         publicClient,
         chain,
@@ -464,7 +489,7 @@ export function createSwapNamespace(
       return quote.quote;
     },
 
-    async sellToken(params) {
+    async sellToken(params): Promise<TokenTradeResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const quoteDetails = await buildTokenTradeQuote(publicClient, chain, chainId, addresses, accountAddress, {
         direction: 'sell',
@@ -518,17 +543,13 @@ export function createSwapNamespace(
         amount: quoteDetails.quote.amountIn,
         tokenOut: ETH_ADDRESS,
       });
-      let approvalResetTxHash: Hash | undefined;
-      if (approval.cancel) {
-        const resetTx = await sendPreparedTransaction(publicClient, walletClient, account, approval.cancel);
-        approvalResetTxHash = resetTx.txHash;
-      }
+      const approvalResetTxHash = approval.cancel
+        ? (await sendPreparedTransaction(publicClient, walletClient, account, approval.cancel)).txHash
+        : undefined;
 
-      let approvalTxHash: Hash | undefined;
-      if (approval.approval) {
-        const approvalTx = await sendPreparedTransaction(publicClient, walletClient, account, approval.approval);
-        approvalTxHash = approvalTx.txHash;
-      }
+      const approvalTxHash = approval.approval
+        ? (await sendPreparedTransaction(publicClient, walletClient, account, approval.approval)).txHash
+        : undefined;
 
       const swapResponse = await requestUniswapSwap({
         quote: quoteDetails.rawQuote,
@@ -546,11 +567,11 @@ export function createSwapNamespace(
       };
     },
 
-    async quoteBuyRare(params) {
+    async quoteBuyRare(params): Promise<BuyRareQuote> {
       return buildBuyRareQuote(publicClient, chain, addresses, params);
     },
 
-    async buyRare(params) {
+    async buyRare(params): Promise<BuyRareResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const router = requireConfiguredAddress(addresses.swapRouter, 'Liquid router', chain);
       const quote = await buildBuyRareQuote(publicClient, chain, addresses, params);

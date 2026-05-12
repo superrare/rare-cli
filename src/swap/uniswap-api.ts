@@ -74,7 +74,7 @@ export interface UniswapQuoteResponse {
   requestId: string;
   routing: string;
   quote: UniswapQuotePayload;
-  permitData: unknown | null;
+  permitData: unknown;
 }
 
 interface UniswapSwapResponse {
@@ -356,15 +356,7 @@ function getErrorMessage(parsed: unknown): string | undefined {
 
 async function parseJsonResponse<T>(response: Response, parse: (value: unknown) => T): Promise<T> {
   const text = await response.text();
-  let parsed: unknown = null;
-
-  if (text) {
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      // Ignore and surface raw text below.
-    }
-  }
+  const parsed = parseJsonOrNull(text);
 
   if (!response.ok) {
     const message = getErrorMessage(parsed) ?? (text || response.statusText);
@@ -372,6 +364,17 @@ async function parseJsonResponse<T>(response: Response, parse: (value: unknown) 
   }
 
   return parse(parsed);
+}
+
+function parseJsonOrNull(text: string): unknown {
+  if (!text) {
+    return null;
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
 }
 
 function buildHeaders(options?: UniswapApiRequestOptions): HeadersInit {

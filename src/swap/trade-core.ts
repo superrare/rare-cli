@@ -200,7 +200,18 @@ export function buildUniswapTradeQuote(params: {
   };
 }
 
-export function buildBuyRareQuoteFromTokenQuote(rareAddress: Address, quote: TokenTradeQuoteCore) {
+export function buildBuyRareQuoteFromTokenQuote(
+  rareAddress: Address,
+  quote: TokenTradeQuoteCore,
+): {
+  ethAmount: bigint;
+  rareAddress: Address;
+  estimatedRareOut: bigint;
+  minRareOut: bigint;
+  slippageBps: number;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+} {
   if (quote.execution !== 'liquid-router') {
     throw new Error('Failed to build the canonical RARE route.');
   }

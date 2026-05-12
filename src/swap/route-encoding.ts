@@ -5,7 +5,7 @@ import {
   parseAbiParameters,
   type Address,
 } from 'viem';
-import type { ResolvedRouteStep, ResolvedV4RouteStep, RouteQuote } from './route-types.js';
+import type { ResolvedV4RouteStep, RouteQuote } from './route-types.js';
 
 const ROUTER_COMMANDS: Record<'WRAP_ETH' | 'UNWRAP_WETH' | 'V4_SWAP', number> = {
   WRAP_ETH: 0x0b,
@@ -51,6 +51,16 @@ type V4BlockExecutionMode = {
   outputTarget: 'user' | 'router';
 };
 
+type EncodedRouteParts = {
+  commandBytes: readonly number[];
+  inputs: readonly `0x${string}`[];
+};
+
+type V4RouteBlock = {
+  steps: readonly ResolvedV4RouteStep[];
+  nextIndex: number;
+};
+
 export function encodeRoute(quote: RouteQuote, amountIn: bigint, currencyIn: Address, currencyOut: Address): {
   commands: `0x${string}`;
   inputs: readonly `0x${string}`[];
@@ -59,89 +69,108 @@ export function encodeRoute(quote: RouteQuote, amountIn: bigint, currencyIn: Add
     throw new Error('Missing route steps.');
   }
 
-  const commandBytes: number[] = [];
-  const inputs: `0x${string}`[] = [];
-  let stepIndex = 0;
+  const { commandBytes, inputs } = encodeRouteParts(quote, amountIn, currencyIn, currencyOut, 0);
 
-  while (stepIndex < quote.steps.length) {
-    const step = quote.steps[stepIndex];
-    if (!step) {
-      throw new Error('Missing route step.');
-    }
+  return {
+    commands: encodePacked(commandBytes.map(() => 'uint8'), [...commandBytes]),
+    inputs,
+  };
+}
 
-    if (step.kind === 'wrapEth') {
-      commandBytes.push(ROUTER_COMMANDS.WRAP_ETH);
-      inputs.push(encodeWrapEth(ROUTER_RECIPIENTS.addressThis, ROUTER_AMOUNT_CONSTANTS.contractBalance));
-      stepIndex += 1;
-      continue;
-    }
+function encodeRouteParts(
+  quote: RouteQuote,
+  amountIn: bigint,
+  currencyIn: Address,
+  currencyOut: Address,
+  stepIndex: number,
+): EncodedRouteParts {
+  const step = quote.steps[stepIndex];
+  if (!step) {
+    return { commandBytes: [], inputs: [] };
+  }
 
-    if (step.kind === 'unwrapWeth') {
-      const isFinalCommand = stepIndex === quote.steps.length - 1;
-      commandBytes.push(ROUTER_COMMANDS.UNWRAP_WETH);
-      inputs.push(
-        encodeUnwrapWeth(
-          isFinalCommand ? ROUTER_RECIPIENTS.msgSender : ROUTER_RECIPIENTS.addressThis,
-          isFinalCommand ? quote.minAmountOut : 0n,
-        ),
-      );
-      stepIndex += 1;
-      continue;
-    }
-
-    const v4BlockStartIndex = stepIndex;
-    const v4Steps: ResolvedV4RouteStep[] = [];
-    while (stepIndex < quote.steps.length) {
-      const currentStep = quote.steps[stepIndex];
-      if (!currentStep || currentStep.kind !== 'v4Swap') {
-        break;
-      }
-      v4Steps.push(currentStep);
-      stepIndex += 1;
-    }
-
-    const firstStep = v4Steps[0];
-    const lastStep = v4Steps[v4Steps.length - 1];
-    if (!firstStep || !lastStep) {
-      throw new Error('Missing V4 route block.');
-    }
-
-    const executionMode: V4BlockExecutionMode =
-      v4BlockStartIndex === 0
-        ? {
-            inputSource: 'user',
-            outputTarget: stepIndex === quote.steps.length ? 'user' : 'router',
-          }
-        : {
-            inputSource: 'router',
-            outputTarget: stepIndex === quote.steps.length ? 'user' : 'router',
-          };
-
-    commandBytes.push(ROUTER_COMMANDS.V4_SWAP);
-    inputs.push(
-      encodeV4ExactIn({
-        steps: v4Steps,
-        amountIn:
-          executionMode.inputSource === 'user'
-            ? amountIn
-            : ROUTER_AMOUNT_CONSTANTS.openDelta,
-        minAmountOut:
-          executionMode.outputTarget === 'user' ? quote.minAmountOut : 0n,
-        currencyIn:
-          executionMode.inputSource === 'user' ? currencyIn : firstStep.tokenIn,
-        currencyOut:
-          executionMode.outputTarget === 'user'
-            ? currencyOut
-            : lastStep.tokenOut,
-        executionMode,
-      }),
+  if (step.kind === 'wrapEth') {
+    return prependRoutePart(
+      ROUTER_COMMANDS.WRAP_ETH,
+      encodeWrapEth(ROUTER_RECIPIENTS.addressThis, ROUTER_AMOUNT_CONSTANTS.contractBalance),
+      encodeRouteParts(quote, amountIn, currencyIn, currencyOut, stepIndex + 1),
     );
   }
 
+  if (step.kind === 'unwrapWeth') {
+    const isFinalCommand = stepIndex === quote.steps.length - 1;
+    return prependRoutePart(
+      ROUTER_COMMANDS.UNWRAP_WETH,
+      encodeUnwrapWeth(
+        isFinalCommand ? ROUTER_RECIPIENTS.msgSender : ROUTER_RECIPIENTS.addressThis,
+        isFinalCommand ? quote.minAmountOut : 0n,
+      ),
+      encodeRouteParts(quote, amountIn, currencyIn, currencyOut, stepIndex + 1),
+    );
+  }
+
+  const v4Block = collectV4RouteBlock(quote.steps, stepIndex);
+  const firstStep = v4Block.steps[0];
+  const lastStep = v4Block.steps[v4Block.steps.length - 1];
+  if (!firstStep || !lastStep) {
+    throw new Error('Missing V4 route block.');
+  }
+
+  const executionMode = getV4ExecutionMode(stepIndex, v4Block.nextIndex, quote.steps.length);
+  return prependRoutePart(
+    ROUTER_COMMANDS.V4_SWAP,
+    encodeV4ExactIn({
+      steps: v4Block.steps,
+      amountIn: executionMode.inputSource === 'user' ? amountIn : ROUTER_AMOUNT_CONSTANTS.openDelta,
+      minAmountOut: executionMode.outputTarget === 'user' ? quote.minAmountOut : 0n,
+      currencyIn: executionMode.inputSource === 'user' ? currencyIn : firstStep.tokenIn,
+      currencyOut: executionMode.outputTarget === 'user' ? currencyOut : lastStep.tokenOut,
+      executionMode,
+    }),
+    encodeRouteParts(quote, amountIn, currencyIn, currencyOut, v4Block.nextIndex),
+  );
+}
+
+function prependRoutePart(
+  commandByte: number,
+  input: `0x${string}`,
+  rest: EncodedRouteParts,
+): EncodedRouteParts {
   return {
-    commands: encodePacked(commandBytes.map(() => 'uint8'), commandBytes),
-    inputs,
+    commandBytes: [commandByte, ...rest.commandBytes],
+    inputs: [input, ...rest.inputs],
   };
+}
+
+function collectV4RouteBlock(
+  steps: readonly RouteQuote['steps'][number][],
+  startIndex: number,
+): V4RouteBlock {
+  const step = steps[startIndex];
+  if (!step || step.kind !== 'v4Swap') {
+    return { steps: [], nextIndex: startIndex };
+  }
+  const rest = collectV4RouteBlock(steps, startIndex + 1);
+  return {
+    steps: [step, ...rest.steps],
+    nextIndex: rest.nextIndex,
+  };
+}
+
+function getV4ExecutionMode(
+  v4BlockStartIndex: number,
+  nextIndex: number,
+  routeLength: number,
+): V4BlockExecutionMode {
+  return v4BlockStartIndex === 0
+    ? {
+        inputSource: 'user',
+        outputTarget: nextIndex === routeLength ? 'user' : 'router',
+      }
+    : {
+        inputSource: 'router',
+        outputTarget: nextIndex === routeLength ? 'user' : 'router',
+      };
 }
 
 export function encodeBuyRareRoute(quote: RouteQuote, amountIn: bigint, currencyIn: Address, currencyOut: Address): {
@@ -173,7 +202,7 @@ function encodeV4ExactIn({
   currencyOut,
   executionMode,
 }: {
-  steps: ResolvedV4RouteStep[];
+  steps: readonly ResolvedV4RouteStep[];
   amountIn: bigint;
   minAmountOut: bigint;
   currencyIn: Address;

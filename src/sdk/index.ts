@@ -10,8 +10,8 @@ export type {
   GeneratePresetCurvesParams,
   GeneratePresetCurvesResult,
   ValidateLiquidCurvesParams,
-  DeployLiquidMultiCurveParams,
-  DeployLiquidMultiCurveResult,
+  DeployLiquidEditionParams,
+  DeployLiquidEditionResult,
 } from './types.js';
 export type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
 export type { LiquidFactoryConfig } from '../liquid/factory-config.js';

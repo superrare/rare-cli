@@ -49,13 +49,7 @@ async function resolveTokenUri(
   const imageMedia = await rare.media.upload(new Uint8Array(imageBuffer), basename(opts.image));
   log(`  Image uploaded: ${imageMedia.url}`);
 
-  let videoMedia;
-  if (opts.video) {
-    const videoBuffer = await readFile(opts.video);
-    log(`Uploading video: ${basename(opts.video)} (${videoBuffer.byteLength} bytes)`);
-    videoMedia = await rare.media.upload(new Uint8Array(videoBuffer), basename(opts.video));
-    log(`  Video uploaded: ${videoMedia.url}`);
-  }
+  const videoMedia = opts.video ? await uploadVideoMedia(rare, opts.video) : undefined;
 
   const attributes = opts.attribute.length > 0 ? opts.attribute.map(parseAttribute) : undefined;
   const tags = opts.tag.length > 0 ? opts.tag : undefined;
@@ -68,6 +62,17 @@ async function resolveTokenUri(
     tags,
     attributes,
   });
+}
+
+async function uploadVideoMedia(
+  rare: ReturnType<typeof createRareClient>,
+  videoPath: string,
+): Promise<Awaited<ReturnType<ReturnType<typeof createRareClient>['media']['upload']>>> {
+  const videoBuffer = await readFile(videoPath);
+  log(`Uploading video: ${basename(videoPath)} (${videoBuffer.byteLength} bytes)`);
+  const videoMedia = await rare.media.upload(new Uint8Array(videoBuffer), basename(videoPath));
+  log(`  Video uploaded: ${videoMedia.url}`);
+  return videoMedia;
 }
 
 async function writeGeneratedCurves(path: string | undefined, curves: LiquidCurveSegment[]): Promise<void> {
@@ -236,12 +241,11 @@ function deployLiquidEditionCommand(): Command {
         },
       ) => {
         const chain = getActiveChain(opts.chain);
-        const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
-        const rare = createRareClient({ publicClient, walletClient: client });
+        const readOnlyRare = createRareClient({ publicClient });
 
         try {
-          const curves = await resolveCurves(opts, rare);
+          const curves = await resolveCurves(opts, readOnlyRare);
           if (opts.preview) {
             output(
               {
@@ -257,6 +261,8 @@ function deployLiquidEditionCommand(): Command {
             return;
           }
 
+          const { client } = getWalletClient(chain);
+          const rare = createRareClient({ publicClient, walletClient: client });
           const tokenUri = await resolveTokenUri(rare, name, opts);
           log(`Deploying liquid edition on ${chain}...`);
           log(`  Factory: ${rare.contracts.liquidFactory}`);

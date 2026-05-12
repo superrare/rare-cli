@@ -11,16 +11,16 @@ type ReadableNftFixture = {
 };
 
 const describeLive = hasTestRpcUrl() ? describe : describe.skip;
-
-describeLive('SDK contract read integration', () => {
-  let setup: Promise<{ rare: RareClient; fixture: ReadableNftFixture }> | undefined;
-
-  beforeAll(async () => {
-    setup = Promise.resolve().then(async (): Promise<{ rare: RareClient; fixture: ReadableNftFixture }> => {
+const setup = hasTestRpcUrl()
+  ? Promise.resolve().then(async (): Promise<{ rare: RareClient; fixture: ReadableNftFixture }> => {
       const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
       return { rare, fixture: await findReadableSepoliaNft(rare) };
-    });
-    await setup;
+    })
+  : undefined;
+
+describeLive('SDK contract read integration', () => {
+  beforeAll(async () => {
+    await requireSetup(setup);
   }, 30_000);
 
   it('reads token contract and token info through real RPC', async () => {

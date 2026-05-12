@@ -30,11 +30,11 @@ describe('chain and currency helpers', () => {
 
   it('resolves canonical V4 pools separately from contract addresses', () => {
     expect(getCanonicalRareEthPool('sepolia')).toEqual({
-      currency0: '0x0000000000000000000000000000000000000000',
+      currency0: ETH_ADDRESS,
       currency1: '0x197FaeF3f59eC80113e773Bb6206a17d183F97CB',
       fee: 3000,
       tickSpacing: 60,
-      hooks: '0x0000000000000000000000000000000000000000',
+      hooks: ETH_ADDRESS,
       poolId: '0x781d2707a6eb9cd3bdbea356a0ba90f9c5ef274927f5e72b0060bba5abd94f03',
     });
     expect(getCanonicalUsdcEthPool('sepolia')).toMatchObject({

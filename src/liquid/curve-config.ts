@@ -70,6 +70,14 @@ type UsdTokenPriceCurveInput = {
 };
 
 type TokenSupplyAmount = string | number;
+type NormalizedSegmentResult =
+  | { isValid: true; segment: LiquidCurveSegment }
+  | { isValid: false; result: LiquidCurvesValidationResult };
+type GrossLiquidityTickEntry = {
+  tick: number;
+  grossLiquidity: number;
+  curveIndexes: readonly number[];
+};
 
 const TICK_BASE = 1.0001;
 const TICK_LOG_BASE = Math.log(TICK_BASE);
@@ -212,16 +220,14 @@ function appendReserveTailSegment({
 
 function getUsdTokenPriceCurveInputsForPresetWithReserveTail(curvePresetKey: CurvePresetKey): UsdTokenPriceCurveInput[] {
   const preset = CURVE_PRESET_DEFINITIONS[curvePresetKey];
-  let currentStart = preset.coreCurvePresetUsd.startTokenPriceUsd;
-  const segments = preset.coreCurvePresetUsd.segments.map((segment) => {
-    const next = {
-      startTokenPriceUsd: currentStart,
+  const segments = preset.coreCurvePresetUsd.segments.map((segment, index) => {
+    const previousSegment = preset.coreCurvePresetUsd.segments[index - 1];
+    return {
+      startTokenPriceUsd: previousSegment?.endTokenPriceUsd ?? preset.coreCurvePresetUsd.startTokenPriceUsd,
       endTokenPriceUsd: segment.endTokenPriceUsd,
       numPositions: segment.numPositions,
       sharesPercent: segment.sharesPercent,
     };
-    currentStart = segment.endTokenPriceUsd;
-    return next;
   });
 
   return appendReserveTailSegment({
@@ -240,23 +246,19 @@ function computeGrossLiquidityAtFarTick(
   const totalAmount = totalCurveSupplyTokens * 1e18 * sharesFraction;
   const amountPerPosition = totalAmount / numPositions;
 
-  let grossLiquidity = 0;
-  for (let i = 0; i < numPositions; i += 1) {
-    const posUpper = tickLower + ((i + 1) * totalSpan) / numPositions;
+  return Array.from({ length: numPositions }, (_value, index) => {
+    const posUpper = tickLower + ((index + 1) * totalSpan) / numPositions;
     const sqrtLower = Math.pow(TICK_BASE, tickLower / 2);
     const sqrtUpper = Math.pow(TICK_BASE, posUpper / 2);
-    const positionLiquidity =
-      tickLower <= 0
-        ? amountPerPosition / (sqrtUpper - sqrtLower)
-        : amountPerPosition / (1 / sqrtLower - 1 / sqrtUpper);
-
-    if (!Number.isFinite(positionLiquidity) || positionLiquidity < 0) {
+    return tickLower <= 0
+      ? amountPerPosition / (sqrtUpper - sqrtLower)
+      : amountPerPosition / (1 / sqrtLower - 1 / sqrtUpper);
+  }).reduce((grossLiquidity, positionLiquidity) => {
+    if (!Number.isFinite(positionLiquidity) || positionLiquidity < 0 || grossLiquidity === Infinity) {
       return Infinity;
     }
-    grossLiquidity += positionLiquidity;
-  }
-
-  return grossLiquidity;
+    return grossLiquidity + positionLiquidity;
+  }, 0);
 }
 
 function getGrossLiquidityOverflow(
@@ -264,56 +266,67 @@ function getGrossLiquidityOverflow(
   totalCurveSupplyTokens: number,
   tickSpacing: number,
 ): { tick: number; curveIndexes: number[] } | null {
-  const positions: Array<{ curveIndex: number; tickLower: number; tickUpper: number; liquidity: number }> = [];
-
-  for (let curveIndex = 0; curveIndex < segments.length; curveIndex += 1) {
-    const segment = segments[curveIndex];
-    if (!segment) continue;
-
+  const positions = segments.flatMap((segment, curveIndex) => {
     const shareFraction = Number(segment.shares);
     const curveSupplyTokens = totalCurveSupplyTokens * shareFraction;
     const amountPerPosition = curveSupplyTokens / segment.numPositions;
     const tickSpan = segment.tickUpper - segment.tickLower;
 
-    for (let positionIndex = 0; positionIndex < segment.numPositions; positionIndex += 1) {
+    return Array.from({ length: segment.numPositions }, (_value, positionIndex) => {
       const rawStartingTick = segment.tickLower + Math.floor((positionIndex * tickSpan) / segment.numPositions);
       const startingTick = Math.floor(rawStartingTick / tickSpacing) * tickSpacing;
 
-      if (startingTick >= segment.tickUpper) continue;
+      if (startingTick >= segment.tickUpper) return null;
 
       const sqrtLower = Math.pow(TICK_BASE, startingTick / 2);
       const sqrtUpper = Math.pow(TICK_BASE, segment.tickUpper / 2);
       const liquidityDenominator = 1 / sqrtLower - 1 / sqrtUpper;
       if (!isPositiveFiniteNumber(liquidityDenominator)) {
-        return { tick: startingTick, curveIndexes: [curveIndex] };
+        return { type: 'overflow' as const, tick: startingTick, curveIndexes: [curveIndex] };
       }
 
       const liquidity = amountPerPosition / liquidityDenominator;
       if (!isPositiveFiniteNumber(liquidity)) {
-        return { tick: startingTick, curveIndexes: [curveIndex] };
+        return { type: 'overflow' as const, tick: startingTick, curveIndexes: [curveIndex] };
       }
 
-      positions.push({ curveIndex, tickLower: startingTick, tickUpper: segment.tickUpper, liquidity });
-    }
+      return { type: 'position' as const, curveIndex, tickLower: startingTick, tickUpper: segment.tickUpper, liquidity };
+    });
+  });
+
+  const invalidPosition = positions.find((position) => position?.type === 'overflow');
+  if (invalidPosition?.type === 'overflow') {
+    return { tick: invalidPosition.tick, curveIndexes: invalidPosition.curveIndexes };
   }
 
-  const grossLiquidityByTick = new Map<number, { grossLiquidity: number; curveIndexes: Set<number> }>();
-  for (const position of positions) {
-    for (const tick of [position.tickLower, position.tickUpper]) {
-      const existing = grossLiquidityByTick.get(tick);
-      if (existing) {
-        existing.grossLiquidity += position.liquidity;
-        existing.curveIndexes.add(position.curveIndex);
-      } else {
-        grossLiquidityByTick.set(tick, { grossLiquidity: position.liquidity, curveIndexes: new Set([position.curveIndex]) });
+  const validPositions = positions.filter((position) => position?.type === 'position');
+  const grossLiquidityByTick = validPositions
+    .flatMap((position) => [
+      { tick: position.tickLower, curveIndex: position.curveIndex, liquidity: position.liquidity },
+      { tick: position.tickUpper, curveIndex: position.curveIndex, liquidity: position.liquidity },
+    ])
+    .reduce<readonly GrossLiquidityTickEntry[]>((entries, entry) => {
+      const existing = entries.find((candidate) => candidate.tick === entry.tick);
+      if (!existing) {
+        return [
+          ...entries,
+          { tick: entry.tick, grossLiquidity: entry.liquidity, curveIndexes: [entry.curveIndex] },
+        ];
       }
-    }
-  }
+      return entries.map((candidate) => candidate.tick === entry.tick
+        ? {
+            tick: candidate.tick,
+            grossLiquidity: candidate.grossLiquidity + entry.liquidity,
+            curveIndexes: candidate.curveIndexes.includes(entry.curveIndex)
+              ? candidate.curveIndexes
+              : [...candidate.curveIndexes, entry.curveIndex],
+          }
+        : candidate);
+    }, []);
 
-  for (const [tick, entry] of grossLiquidityByTick.entries()) {
-    if (entry.grossLiquidity > MAX_LIQUIDITY_PER_TICK) {
-      return { tick, curveIndexes: [...entry.curveIndexes].sort((a, b) => a - b) };
-    }
+  const overflow = grossLiquidityByTick.find((entry) => entry.grossLiquidity > MAX_LIQUIDITY_PER_TICK);
+  if (overflow) {
+    return { tick: overflow.tick, curveIndexes: [...overflow.curveIndexes].sort((a, b) => a - b) };
   }
 
   return null;
@@ -328,39 +341,15 @@ function validateAndNormalizeSegments(
     return { isValid: false, error: 'empty', errorMessage: 'Please add at least one curve segment' };
   }
 
-  const parsedSegments: LiquidCurveSegment[] = [];
-  for (const segment of rawSegments) {
-    if (!isRecord(segment)) {
-      return { isValid: false, error: 'invalid-segment', errorMessage: 'Invalid curve segment values' };
-    }
-
-    const tickLower = toValidNumber(segment.tickLower);
-    const tickUpper = toValidNumber(segment.tickUpper);
-    const numPositions = toValidNumber(segment.numPositions);
-    const shares = toValidShareNumber(segment.shares);
-    if (tickLower === null || tickUpper === null || numPositions === null || shares === null) {
-      return { isValid: false, error: 'invalid-segment', errorMessage: 'Invalid curve segment values' };
-    }
-    if (!Number.isInteger(tickLower) || !Number.isInteger(tickUpper) || !Number.isInteger(numPositions) || numPositions <= 0) {
-      return { isValid: false, error: 'invalid-segment', errorMessage: 'Invalid curve segment values' };
-    }
-    if (tickLower % tickSpacing !== 0 || tickUpper % tickSpacing !== 0) {
-      return { isValid: false, error: 'tick-spacing-invalid', errorMessage: `Ticks must align to spacing ${tickSpacing}` };
-    }
-    if (tickLower < MIN_TICK || tickUpper > MAX_TICK) {
-      return { isValid: false, error: 'tick-out-of-bounds', errorMessage: `Ticks must be within Uniswap V4 bounds (${MIN_TICK} to ${MAX_TICK})` };
-    }
-    if (tickLower >= tickUpper) {
-      return { isValid: false, error: 'invalid-segment', errorMessage: 'Invalid curve segment values' };
-    }
-
-    parsedSegments.push({
-      tickLower,
-      tickUpper,
-      numPositions,
-      shares: `${shares}`,
-    });
+  const normalizedResults = rawSegments.map((segment) => normalizeSegment(segment, tickSpacing));
+  const invalidResult = normalizedResults.find((result) => !result.isValid);
+  if (invalidResult && !invalidResult.isValid) {
+    return invalidResult.result;
   }
+
+  const parsedSegments = normalizedResults
+    .filter((result): result is Extract<NormalizedSegmentResult, { isValid: true }> => result.isValid)
+    .map((result) => result.segment);
 
   const totalPositions = parsedSegments.reduce((sum, segment) => sum + segment.numPositions, 0);
   if (totalPositions > MAX_TOTAL_POSITIONS) {
@@ -372,16 +361,15 @@ function validateAndNormalizeSegments(
   }
 
   const sortedSegments = [...parsedSegments].sort((a, b) => a.tickLower - b.tickLower);
-  for (let index = 1; index < sortedSegments.length; index += 1) {
-    const previous = sortedSegments[index - 1];
-    const current = sortedSegments[index];
-    if (!previous || !current || current.tickLower !== previous.tickUpper) {
-      return {
-        isValid: false,
-        error: 'segment-overlap',
-        errorMessage: 'Curve segments must be contiguous (no overlap or gaps)',
-      };
-    }
+  const hasGapOrOverlap = sortedSegments
+    .slice(1)
+    .some((current, index) => current.tickLower !== sortedSegments[index]?.tickUpper);
+  if (hasGapOrOverlap) {
+    return {
+      isValid: false,
+      error: 'segment-overlap',
+      errorMessage: 'Curve segments must be contiguous (no overlap or gaps)',
+    };
   }
 
   const shareSum = sortedSegments.reduce((sum, segment) => sum + Number(segment.shares), 0);
@@ -389,22 +377,17 @@ function validateAndNormalizeSegments(
     return { isValid: false, error: 'share-sum-invalid', errorMessage: 'Curve share values must add up to 1' };
   }
 
-  for (const segment of sortedSegments) {
+  const narrowSegment = sortedSegments.find((segment) => {
     const minSpan = segment.numPositions * tickSpacing;
-    if (segment.tickUpper - segment.tickLower < minSpan) {
-      return {
-        isValid: false,
-        error: 'tick-span-too-narrow',
-        errorMessage: 'One or more curve segments have too narrow a tick range for their positions and share allocation.',
-      };
-    }
-    if (computeGrossLiquidityAtFarTick(segment.tickLower, segment.tickUpper - segment.tickLower, segment.numPositions, Number(segment.shares), totalCurveSupplyTokens) > MAX_LIQUIDITY_PER_TICK) {
-      return {
-        isValid: false,
-        error: 'tick-span-too-narrow',
-        errorMessage: 'One or more curve segments have too narrow a tick range for their positions and share allocation.',
-      };
-    }
+    return segment.tickUpper - segment.tickLower < minSpan ||
+      computeGrossLiquidityAtFarTick(segment.tickLower, segment.tickUpper - segment.tickLower, segment.numPositions, Number(segment.shares), totalCurveSupplyTokens) > MAX_LIQUIDITY_PER_TICK;
+  });
+  if (narrowSegment) {
+    return {
+      isValid: false,
+      error: 'tick-span-too-narrow',
+      errorMessage: 'One or more curve segments have too narrow a tick range for their positions and share allocation.',
+    };
   }
 
   const overflow = getGrossLiquidityOverflow(sortedSegments, totalCurveSupplyTokens, tickSpacing);
@@ -419,17 +402,52 @@ function validateAndNormalizeSegments(
   return { isValid: true, curves: sortedSegments };
 }
 
+function normalizeSegment(segment: unknown, tickSpacing: number): NormalizedSegmentResult {
+  if (!isRecord(segment)) {
+    return invalidSegmentResult();
+  }
+
+  const tickLower = toValidNumber(segment.tickLower);
+  const tickUpper = toValidNumber(segment.tickUpper);
+  const numPositions = toValidNumber(segment.numPositions);
+  const shares = toValidShareNumber(segment.shares);
+  if (tickLower === null || tickUpper === null || numPositions === null || shares === null) {
+    return invalidSegmentResult();
+  }
+  if (!Number.isInteger(tickLower) || !Number.isInteger(tickUpper) || !Number.isInteger(numPositions) || numPositions <= 0) {
+    return invalidSegmentResult();
+  }
+  if (tickLower % tickSpacing !== 0 || tickUpper % tickSpacing !== 0) {
+    return { isValid: false, result: { isValid: false, error: 'tick-spacing-invalid', errorMessage: `Ticks must align to spacing ${tickSpacing}` } };
+  }
+  if (tickLower < MIN_TICK || tickUpper > MAX_TICK) {
+    return { isValid: false, result: { isValid: false, error: 'tick-out-of-bounds', errorMessage: `Ticks must be within Uniswap V4 bounds (${MIN_TICK} to ${MAX_TICK})` } };
+  }
+  if (tickLower >= tickUpper) {
+    return invalidSegmentResult();
+  }
+
+  return {
+    isValid: true,
+    segment: {
+      tickLower,
+      tickUpper,
+      numPositions,
+      shares: `${shares}`,
+    },
+  };
+}
+
+function invalidSegmentResult(): NormalizedSegmentResult {
+  return { isValid: false, result: { isValid: false, error: 'invalid-segment', errorMessage: 'Invalid curve segment values' } };
+}
+
 export function parseCurveConfig(
   value: string,
   totalCurveSupplyTokens: TokenSupplyAmount,
   tickSpacing: number,
 ): LiquidCurveSegment[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(value);
-  } catch {
-    throw new Error('Invalid curve JSON');
-  }
+  const parsed = parseCurveConfigJson(value);
   if (!Array.isArray(parsed)) {
     throw new Error('Invalid curve JSON');
   }
@@ -440,6 +458,14 @@ export function parseCurveConfig(
     throw new Error(validation.errorMessage ?? 'Invalid curve configuration');
   }
   return validation.curves;
+}
+
+function parseCurveConfigJson(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    throw new Error('Invalid curve JSON');
+  }
 }
 
 export function validateCurves(
@@ -464,8 +490,7 @@ function tokenPriceCurveToSegments(
     throw new Error('Curve share values must add up to 100');
   }
 
-  let previousTickUpper: number | null = null;
-  const customCurve = segments.map((segment) => {
+  const customCurve = segments.map((segment, index) => {
     if (!Number.isInteger(segment.numPositions) || segment.numPositions <= 0) {
       throw new Error('Curve positions must be positive integers');
     }
@@ -484,10 +509,13 @@ function tokenPriceCurveToSegments(
     if (tickUpper <= tickLower) {
       throw new Error('Start token price must be lower than end token price');
     }
+    const previousSegment = segments[index - 1];
+    const previousTickUpper = previousSegment
+      ? tokenPriceToTick(previousSegment.endTokenPrice, tickSpacing)
+      : null;
     if (previousTickUpper !== null && tickLower !== previousTickUpper) {
       throw new Error('Curve ranges must touch each other (no overlap and no gaps)');
     }
-    previousTickUpper = tickUpper;
 
     return {
       tickLower,

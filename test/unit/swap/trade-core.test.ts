@@ -63,12 +63,14 @@ test('buildLiquidRouterTradeQuote shapes local route quote details', () => {
     poolKey,
     routeSource: 'known-pool',
   });
-  assert.ok(route);
+  if (!route) {
+    throw new Error('Expected canonical ETH trade route.');
+  }
 
   const quote = buildLiquidRouterTradeQuote({
     amountIn: 1_000n,
-    route: route!,
-    routeQuote: { amountOut: 2_000n, minAmountOut: 1_900n, steps: route!.steps },
+    route,
+    routeQuote: { amountOut: 2_000n, minAmountOut: 1_900n, steps: route.steps },
     minAmountOut: 1_900n,
     inputDecimals: 18,
     outputDecimals: 18,

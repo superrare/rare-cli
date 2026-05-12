@@ -1,5 +1,6 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
+import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import {
   ensureHex,
   formatBuyRareQuoteLines,
@@ -60,7 +61,7 @@ test('formatTokenTradeQuoteLines prints execution and route source details', () 
       amountIn: 10_000_000_000_000_000n,
       estimatedAmountOut: 125_000_000_000_000_000_000n,
       minAmountOut: 124_375_000_000_000_000_000n,
-      tokenIn: '0x0000000000000000000000000000000000000000',
+      tokenIn: ETH_ADDRESS,
       tokenOut: '0xf100000000000000000000000000000000000001',
       inputDecimals: 18,
       outputDecimals: 18,
