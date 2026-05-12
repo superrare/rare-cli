@@ -103,7 +103,7 @@ describe('batch merkle utilities', () => {
         tokenId: '1',
         proof: ['0x1234'],
       }),
-    ).toThrow(/proof entries must be 0x-prefixed bytes32 hex strings/);
+    ).toThrow(/proof entry must be a 0x-prefixed bytes32 hex string/);
 
     const contract = '0x1111111111111111111111111111111111111111' satisfies Address;
     const artifact = buildRootArtifact({

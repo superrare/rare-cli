@@ -91,6 +91,8 @@ describe('batch listing namespace', () => {
     const namespace = createBatchListingNamespace(
       {
         async readContract(params: { functionName: string }) {
+          if (params.functionName === 'marketplaceSettings') return batchListingAddress;
+          if (params.functionName === 'calculateMarketplaceFee') return 0n;
           if (params.functionName === 'allowance') return 10n ** 18n;
           throw new Error(`Unexpected readContract: ${params.functionName}`);
         },
