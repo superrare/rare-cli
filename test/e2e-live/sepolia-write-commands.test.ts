@@ -2,6 +2,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import {
   createPublicClient,
   createWalletClient,
@@ -19,6 +22,8 @@ import { loadDotEnv } from './env.mjs';
 
 loadDotEnv();
 
+const cliPath = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
+const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const requiredEnv = [
   'TEST_RPC_URL',
   'E2E_SELLER_PRIVATE_KEY',
@@ -32,6 +37,7 @@ const E2E_BATCH_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehy
 const E2E_LAZY_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy';
 const E2E_LAZY_UPDATED_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy-updated';
 const E2E_LAZY_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy-token-1.json';
+const E2E_MCP_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/mcp-token.json';
 const E2E_ALLOWLIST_ROOT = '0xcbf843e9efe7be41ca4d3a03347d27e7bb96d83ae75b3b36983ad907d2109c65';
 const E2E_ETH_ADDRESS = '0x0000000000000000000000000000000000000000';
 
@@ -335,7 +341,7 @@ describeLive('live Sepolia CLI write commands', () => {
           `Rare CLI E2E ${suffix}`,
           `RCE${suffix.slice(-4).toUpperCase()}`,
           '--max-tokens',
-          '15',
+          '16',
           '--chain',
           'sepolia',
         ]),
@@ -801,6 +807,26 @@ describeLive('live Sepolia CLI write commands', () => {
 
   it('mints directly to another recipient', async () => {
     await expectTokenOwner(live.sellerHome, live.collection.contract, live.buyerMintToken.tokenId, live.buyerAddress);
+  });
+
+  it('mints through the MCP stdio server with write tools enabled', async () => {
+    const result = await step('mint token through MCP write tool', () =>
+      withLiveMcpClient(live.sellerHome, async (client) => client.callTool({
+        name: 'mint',
+        arguments: {
+          chain: 'sepolia',
+          contract: live.collection.contract,
+          tokenUri: E2E_MCP_TOKEN_URI,
+        },
+      })),
+    );
+    expect(result.isError).not.toBe(true);
+
+    const minted = parseMcpJsonContent<MintResult>(result);
+    expectTx(minted);
+    expect(minted.contract.toLowerCase()).toBe(live.collection.contract.toLowerCase());
+    expect(minted.tokenUri).toBe(E2E_MCP_TOKEN_URI);
+    await expectTokenOwner(live.sellerHome, live.collection.contract, minted.tokenId, live.sellerAddress, E2E_MCP_TOKEN_URI);
   });
 
   it('creates and cancels a listing', async () => {
@@ -1721,8 +1747,13 @@ async function expectOfferStatus(
     args.push('--currency', currency);
   }
 
-  const status = await jsonCommand<{ hasOffer: boolean }>(home, args);
-  expect(status.hasOffer).toBe(hasOffer);
+  let status: { hasOffer: boolean } | undefined;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    status = await jsonCommand<{ hasOffer: boolean }>(home, args);
+    if (status.hasOffer === hasOffer) break;
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+  expect(status!.hasOffer).toBe(hasOffer);
 }
 
 async function expectCollectionMarketOfferStatus(opts: {
@@ -1901,6 +1932,35 @@ async function jsonCommand<T>(home: string, args: string[], timeoutMs = 180_000)
   return parseJsonStdout<T>(await runCli(['--json', ...args], { home, timeoutMs }));
 }
 
+async function withLiveMcpClient<T>(home: string, fn: (client: Client) => Promise<T>): Promise<T> {
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [cliPath, 'mcp', 'serve', '--allow-writes'],
+    cwd: repoRoot,
+    env: {
+      ...process.env,
+      HOME: home,
+      USERPROFILE: home,
+    },
+    stderr: 'pipe',
+  });
+  const client = new Client({ name: 'rare-cli-live-e2e', version: '1.0.0' });
+  await client.connect(transport);
+  try {
+    return await fn(client);
+  } finally {
+    await client.close();
+  }
+}
+
+function parseMcpJsonContent<T>(result: Awaited<ReturnType<Client['callTool']>>): T {
+  const content = result.content[0] as { type?: string; text?: string } | undefined;
+  if (content?.type !== 'text' || !content.text) {
+    throw new Error('MCP tool result did not include JSON text content.');
+  }
+  return JSON.parse(content.text) as T;
+}
+
 function expectTx(result: TxResult): void {
   expect(result.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
   expect(result.blockNumber).toMatch(/^\d+$/);
@@ -1913,21 +1973,28 @@ async function expectTokenOwner(
   owner: Address,
   expectedTokenUri = E2E_TOKEN_URI,
 ): Promise<void> {
-  const status = await jsonCommand<{
+  let status: {
     token: { owner: Address; tokenUri: string; tokenId: string } | null;
-  }>(home, [
-    'status',
-    '--contract',
-    contract,
-    '--token-id',
-    tokenId,
-    '--chain',
-    'sepolia',
-  ]);
+  } | undefined;
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    status = await jsonCommand<{
+      token: { owner: Address; tokenUri: string; tokenId: string } | null;
+    }>(home, [
+      'status',
+      '--contract',
+      contract,
+      '--token-id',
+      tokenId,
+      '--chain',
+      'sepolia',
+    ]);
+    if (status.token) break;
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
 
-  expect(status.token).not.toBeNull();
-  expect(status.token!.owner.toLowerCase()).toBe(owner.toLowerCase());
-  expect(status.token!.tokenUri).toBe(expectedTokenUri);
+  expect(status?.token).not.toBeNull();
+  expect(status!.token!.owner.toLowerCase()).toBe(owner.toLowerCase());
+  expect(status!.token!.tokenUri).toBe(expectedTokenUri);
 }
 
 async function readErc20Balance(currency: Address, owner: Address): Promise<bigint> {

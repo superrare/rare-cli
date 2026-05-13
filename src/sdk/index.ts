@@ -87,6 +87,15 @@ export {
   parseMintAttribute,
   planMintTokenUri,
 } from './mint-core.js';
+export {
+  maskSecret,
+  mcpReadToolNames,
+  mcpWriteToolNames,
+  resolveMcpChain,
+  selectMcpToolNames,
+  serializeForMcp,
+  shapeMcpConfigSummary,
+} from './mcp-core.js';
 export type {
   BatchToken,
   BatchTokenListArtifact,
@@ -131,6 +140,12 @@ export type {
   MintTokenUriPlan,
   MintTokenUriPlanParams,
 } from './mint-core.js';
+export type {
+  McpConfigSummary,
+  McpReadToolName,
+  McpToolName,
+  McpWriteToolName,
+} from './mcp-core.js';
 export type {
   CollectionSearchParams,
   ImportErc721Params,
