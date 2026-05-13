@@ -37,12 +37,15 @@ describeLive('live batch auction CLI write commands', () => {
         return;
       }
 
-      const collection = await deployErc721Collection(fixture, '1');
+      const collection = await deployErc721Collection(fixture, '2');
       live.set({
         ...fixture,
         batchAuctionHouse,
         collection,
         batchAuctionToken: await step('mint batch auction token', () =>
+          mintToken(fixture, collection.contract),
+        ),
+        batchAuctionProofToken: await step('mint batch auction proof token', () =>
           mintToken(fixture, collection.contract),
         ),
       });
@@ -58,7 +61,12 @@ describeLive('live batch auction CLI write commands', () => {
 
   it('creates, bids, and settles a batch auction', async () => {
     const fixture = live.value;
-    if (fixture.batchAuctionHouse === undefined || fixture.collection === undefined || fixture.batchAuctionToken === undefined) {
+    if (
+      fixture.batchAuctionHouse === undefined ||
+      fixture.collection === undefined ||
+      fixture.batchAuctionToken === undefined ||
+      fixture.batchAuctionProofToken === undefined
+    ) {
       return;
     }
 
@@ -68,6 +76,7 @@ describeLive('live batch auction CLI write commands', () => {
     await writeFile(tokenCsv, [
       'contract_address,token_id,chain_id',
       `${fixture.collection.contract},${fixture.batchAuctionToken.tokenId},${fixture.chainId}`,
+      `${fixture.collection.contract},${fixture.batchAuctionProofToken.tokenId},${fixture.chainId}`,
     ].join('\n'), 'utf8');
 
     const artifact = await step('build batch auction token tree artifact', () =>
@@ -81,7 +90,7 @@ describeLive('live batch auction CLI write commands', () => {
         artifactPath,
       ]),
     );
-    expect(artifact.count).toBe(1);
+    expect(artifact.count).toBe(2);
     expect(artifact.chainId).toBe(fixture.chainId);
     expect(artifact.output).toBe(artifactPath);
 
@@ -193,6 +202,7 @@ type BatchAuctionFixture = BuyerLiveFixture & {
   batchAuctionHouse?: Address;
   collection?: DeployErc721Result;
   batchAuctionToken?: MintResult;
+  batchAuctionProofToken?: MintResult;
 };
 
 type BatchTreeBuildResult = {

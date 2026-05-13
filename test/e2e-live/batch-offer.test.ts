@@ -37,12 +37,15 @@ describeLive('live batch offer CLI write commands', () => {
         return;
       }
 
-      const collection = await deployErc721Collection(fixture, '1');
+      const collection = await deployErc721Collection(fixture, '2');
       live.set({
         ...fixture,
         batchOfferCreator,
         collection,
         batchOfferToken: await step('mint batch offer token', () =>
+          mintToken(fixture, collection.contract),
+        ),
+        batchOfferProofToken: await step('mint batch offer proof token', () =>
           mintToken(fixture, collection.contract),
         ),
       });
@@ -58,7 +61,12 @@ describeLive('live batch offer CLI write commands', () => {
 
   it('creates, revokes, recreates, and accepts a batch offer', async () => {
     const fixture = live.value;
-    if (fixture.batchOfferCreator === undefined || fixture.collection === undefined || fixture.batchOfferToken === undefined) {
+    if (
+      fixture.batchOfferCreator === undefined ||
+      fixture.collection === undefined ||
+      fixture.batchOfferToken === undefined ||
+      fixture.batchOfferProofToken === undefined
+    ) {
       return;
     }
 
@@ -68,6 +76,7 @@ describeLive('live batch offer CLI write commands', () => {
     await writeFile(tokenCsv, [
       'contract_address,token_id,chain_id',
       `${fixture.collection.contract},${fixture.batchOfferToken.tokenId},${fixture.chainId}`,
+      `${fixture.collection.contract},${fixture.batchOfferProofToken.tokenId},${fixture.chainId}`,
     ].join('\n'), 'utf8');
 
     const artifact = await step('build batch offer token tree artifact', () =>
@@ -81,7 +90,7 @@ describeLive('live batch offer CLI write commands', () => {
         artifactPath,
       ]),
     );
-    expect(artifact.count).toBe(1);
+    expect(artifact.count).toBe(2);
     expect(artifact.chainId).toBe(fixture.chainId);
     expect(artifact.output).toBe(artifactPath);
 
@@ -190,6 +199,7 @@ type BatchOfferFixture = BuyerLiveFixture & {
   batchOfferCreator?: Address;
   collection?: DeployErc721Result;
   batchOfferToken?: MintResult;
+  batchOfferProofToken?: MintResult;
 };
 
 type BatchTreeBuildResult = {
