@@ -16,6 +16,10 @@ export type {
   CreateSovereignCollectionResult,
   CreateLazySovereignCollectionParams,
   CreateLazySovereignCollectionResult,
+  CollectionMintBatchParams,
+  CollectionMintBatchResult,
+  CollectionPrepareLazyMintParams,
+  CollectionPrepareLazyMintResult,
   ReleaseAllowlistArtifact,
   ReleaseAllowlistConfig,
   ReleaseAllowlistWalletProof,
@@ -36,9 +40,13 @@ export type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../
 export type { LiquidFactoryConfig } from '../liquid/factory-config.js';
 
 export {
+  buildCollectionMintBatchWrite,
+  buildCollectionPrepareLazyMintWrite,
   lazySovereignCollectionContractTypes,
   normalizeLazySovereignCollectionContractType,
   normalizeSovereignCollectionContractType,
+  planCollectionMintBatch,
+  planCollectionPrepareLazyMint,
   sovereignCollectionContractTypes,
 } from './collection-core.js';
 export type {
@@ -100,6 +108,7 @@ export { liquidRouterAbi } from '../contracts/abis/liquid-router.js';
 export { liquidEditionAbi } from '../contracts/abis/liquid-edition.js';
 export { tokenAbi } from '../contracts/abis/token.js';
 export { batchListingAbi } from '../contracts/abis/batch-listing.js';
+export { collectionMintAbi } from '../contracts/abis/collection-mint.js';
 export { uniswapV4QuoterAbi } from '../contracts/abis/uniswap-v4-quoter.js';
 export { rareMinterAbi } from '../contracts/abis/rare-minter.js';
 

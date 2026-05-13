@@ -257,6 +257,52 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('exposes collection batch mint command help', async () => {
+    await withTempHome(async (home) => {
+      const result = await runCli(['collection', 'mint-batch', '--help'], { home });
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('Usage: rare collection mint-batch [options]');
+      expect(result.stdout).toContain('--contract <address>');
+      expect(result.stdout).toContain('--base-uri <uri>');
+      expect(result.stdout).toContain('--token-count <number>');
+      expect(result.stderr).toBe('');
+    });
+  });
+
+  it('exposes collection lazy prepare command help', async () => {
+    await withTempHome(async (home) => {
+      const result = await runCli(['collection', 'prepare-lazy-mint', '--help'], { home });
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('Usage: rare collection prepare-lazy-mint [options]');
+      expect(result.stdout).toContain('--contract <address>');
+      expect(result.stdout).toContain('--base-uri <uri>');
+      expect(result.stdout).toContain('--token-count <number>');
+      expect(result.stdout).toContain('--minter <address>');
+      expect(result.stderr).toBe('');
+    });
+  });
+
+  it('rejects invalid collection mint addresses before wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const result = await runCli([
+        'collection',
+        'mint-batch',
+        '--contract',
+        'not-an-address',
+        '--base-uri',
+        'ipfs://batch',
+        '--token-count',
+        '2',
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('Error: --contract must be a valid 0x address.');
+    });
+  });
+
   it('rejects Sovereign collection creation on chains without a configured factory before wallet setup', async () => {
     await withTempHome(async (home) => {
       const result = await runCli([

@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { getAddress, isAddress, type Address } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
@@ -27,6 +28,21 @@ type CreateSovereignOptions = {
 type CreateLazySovereignOptions = {
   maxTokens: string;
   contractType?: string;
+  chain?: string;
+};
+
+type CollectionMintBatchOptions = {
+  contract: string;
+  baseUri: string;
+  tokenCount: string;
+  chain?: string;
+};
+
+type CollectionPrepareLazyMintOptions = {
+  contract: string;
+  baseUri: string;
+  tokenCount: string;
+  minter?: string;
   chain?: string;
 };
 
@@ -196,6 +212,119 @@ function createLazySovereignCollectionCommand(): Command {
   return cmd;
 }
 
+function createMintBatchCommand(): Command {
+  const cmd = new Command('mint-batch');
+  cmd.description('Batch mint tokens on a Sovereign collection');
+
+  cmd
+    .requiredOption('--contract <address>', 'collection contract address')
+    .requiredOption('--base-uri <uri>', 'base URI for token metadata')
+    .requiredOption('--token-count <number>', 'number of tokens to mint')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: CollectionMintBatchOptions) => {
+      try {
+        const contract = parseAddressOption(opts.contract, '--contract');
+        const chain = getActiveChain(opts.chain);
+        const { client } = getWalletClient(chain);
+        const publicClient = getPublicClient(chain);
+        const rare = createRareClient({ publicClient, walletClient: client });
+
+        log(`Batch minting collection tokens on ${chain}...`);
+        log(`  Contract: ${contract}`);
+        log(`  Base URI: ${opts.baseUri}`);
+        log(`  Token count: ${opts.tokenCount}`);
+        log('Waiting for confirmation...');
+
+        const result = await rare.collection.mintBatch({
+          contract,
+          baseUri: opts.baseUri,
+          tokenCount: opts.tokenCount,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            contract: result.contract,
+            baseUri: result.baseUri,
+            tokenCount: result.tokenCount,
+            fromTokenId: result.fromTokenId,
+            toTokenId: result.toTokenId,
+            owner: result.owner,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`\nMinted token range: ${result.fromTokenId.toString()}-${result.toTokenId.toString()}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createPrepareLazyMintCommand(): Command {
+  const cmd = new Command('prepare-lazy-mint');
+  cmd.description('Prepare a Lazy Sovereign collection mint batch');
+
+  cmd
+    .requiredOption('--contract <address>', 'collection contract address')
+    .requiredOption('--base-uri <uri>', 'base URI for token metadata')
+    .requiredOption('--token-count <number>', 'number of tokens to prepare')
+    .option('--minter <address>', 'optional approved minter address')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: CollectionPrepareLazyMintOptions) => {
+      try {
+        const contract = parseAddressOption(opts.contract, '--contract');
+        const minter = opts.minter === undefined
+          ? undefined
+          : parseAddressOption(opts.minter, '--minter');
+        const chain = getActiveChain(opts.chain);
+        const { client } = getWalletClient(chain);
+        const publicClient = getPublicClient(chain);
+        const rare = createRareClient({ publicClient, walletClient: client });
+
+        log(`Preparing Lazy Sovereign mint on ${chain}...`);
+        log(`  Contract: ${contract}`);
+        log(`  Base URI: ${opts.baseUri}`);
+        log(`  Token count: ${opts.tokenCount}`);
+        if (minter !== undefined) log(`  Minter: ${minter}`);
+        log('Waiting for confirmation...');
+
+        const result = await rare.collection.prepareLazyMint({
+          contract,
+          baseUri: opts.baseUri,
+          tokenCount: opts.tokenCount,
+          minter,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            contract: result.contract,
+            baseUri: result.baseUri,
+            tokenCount: result.tokenCount,
+            minter: result.minter,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`\nPrepared ${result.tokenCount.toString()} lazy mint tokens.`);
+            if (result.minter !== undefined) {
+              console.log(`Approved minter: ${result.minter}`);
+            }
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
 function createCollectionCreateCommand(): Command {
   const cmd = new Command('create');
   cmd.description('Create NFT collections through RARE factories');
@@ -209,5 +338,15 @@ export function collectionCommand(): Command {
   const cmd = new Command('collection');
   cmd.description('Create and manage NFT collections');
   cmd.addCommand(createCollectionCreateCommand());
+  cmd.addCommand(createMintBatchCommand());
+  cmd.addCommand(createPrepareLazyMintCommand());
   return cmd;
+}
+
+function parseAddressOption(value: string, optionName: string): Address {
+  if (!isAddress(value)) {
+    throw new Error(`${optionName} must be a valid 0x address.`);
+  }
+
+  return getAddress(value);
 }

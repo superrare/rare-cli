@@ -116,6 +116,19 @@ rare collection create lazy-sovereign "My Release" "MR" --max-tokens 1000
 rare collection create lazy-sovereign "Guarded Release" "GR" --max-tokens 1000 --contract-type lazy-royalty-guard
 ```
 
+Batch mint an owned Sovereign collection by passing the metadata base URI. Token metadata resolves as `baseUri/tokenId.json` on supported contracts.
+
+```bash
+rare collection mint-batch --contract 0x... --base-uri ipfs://... --token-count 100
+```
+
+Prepare a Lazy Sovereign collection for collector minting. Pass `--minter` when a separate release or minting contract should be approved to mint from the prepared batch.
+
+```bash
+rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token-count 100
+rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token-count 100 --minter 0x...
+```
+
 ### Import an Existing Collection
 
 Import an existing ERC-721 contract into the RARE Protocol registry:
@@ -524,6 +537,31 @@ console.log(release.contract);
 console.log(release.nextStep);
 ```
 
+### Batch mint a Sovereign collection
+
+```ts
+const batch = await rare.collection.mintBatch({
+  contract: '0xYourContractAddress',
+  baseUri: 'ipfs://your-metadata-directory',
+  tokenCount: 100,
+});
+
+console.log(batch.fromTokenId, batch.toTokenId);
+```
+
+### Prepare a Lazy Sovereign mint
+
+```ts
+const prepared = await rare.collection.prepareLazyMint({
+  contract: '0xYourContractAddress',
+  baseUri: 'ipfs://your-metadata-directory',
+  tokenCount: 100,
+  minter: '0xOptionalMinterAddress',
+});
+
+console.log(prepared.tokenCount);
+```
+
 ### Import an ERC-721 collection
 
 `import.erc721` derives `chainId` from the client. If `owner` is omitted, it defaults to the configured account.
@@ -576,7 +614,9 @@ If you want to inspect the on-chain contracts used by this CLI:
 
 - Token contract used when minting NFTs: [`SovereignBatchMint.sol`](https://github.com/superrare/core/blob/main/src/v2/token/ERC721/sovereign/SovereignBatchMint.sol)
 - Factory used for collection deployments: [`SovereignBatchMintFactory.sol`](https://github.com/superrare/core/blob/main/src/v2/token/ERC721/sovereign/SovereignBatchMintFactory.sol)
+- Token contract used for newer Sovereign batch minting: [`SovereignNFT.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/SovereignNFT.sol)
 - Factory used for Sovereign collection creation: [`SovereignNFTContractFactory.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/SovereignNFTContractFactory.sol)
+- Token contract used for Lazy Sovereign mint preparation: [`LazySovereignNFT.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/lazy/LazySovereignNFT.sol)
 - Factory used for Lazy Sovereign release collection creation: [`LazySovereignNFTFactory.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/lazy/LazySovereignNFTFactory.sol)
 - Auction/market contract used for auction operations: [`SuperRareBazaar.sol`](https://github.com/superrare/core/blob/main/src/bazaar/SuperRareBazaar.sol)
 
