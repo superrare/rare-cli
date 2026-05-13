@@ -19,6 +19,7 @@ import type {
 
 export type IntegerInput = bigint | number | string;
 export type AmountInput = bigint | number | string;
+export type TimestampInput = IntegerInput | Date;
 export type WalletAccount = NonNullable<WalletClient['account']>;
 
 export type RareClientConfig = {
@@ -268,6 +269,66 @@ export type BatchListingStatus = {
   tokenNonce?: bigint;
 }
 
+export type ReleaseConfigureParams = {
+  contract: Address;
+  currency?: Address;
+  price: AmountInput;
+  startTime?: TimestampInput;
+  maxMints: IntegerInput;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+}
+
+export type ReleaseConfigureResult = {
+  rareMinter: Address;
+  contract: Address;
+  currencyAddress: Address;
+  price: bigint;
+  startTime: bigint;
+  maxMints: bigint;
+  splitRecipients: Address[];
+  splitRatios: number[];
+} & TransactionResult
+
+export type ReleaseStatusParams = {
+  contract: Address;
+  account?: Address;
+}
+
+export type ReleaseStatus = {
+  rareMinter: Address;
+  contract: Address;
+  configured: boolean;
+  seller: Address;
+  currencyAddress: Address;
+  currencyDecimals: number | null;
+  price: bigint;
+  startTime: bigint;
+  maxMints: bigint;
+  splitRecipients: Address[];
+  splitRatios: number[];
+  allowlistRoot: `0x${string}`;
+  allowlistEndTimestamp: bigint;
+  allowlistActive: boolean;
+  requiresAllowlist: boolean;
+  mintLimit: bigint;
+  txLimit: bigint;
+  account: Address | null;
+  accountMints: bigint | null;
+  accountTxs: bigint | null;
+  stakingMinimumAmount: bigint;
+  stakingMinimumEndTimestamp: bigint;
+  stakingMinimumActive: boolean;
+  totalSupply: bigint | null;
+  maxSupply: bigint | null;
+  remainingSupply: bigint | null;
+  soldOut: boolean | null;
+  started: boolean;
+  currentlyMintable: boolean;
+  isEth: boolean;
+  now: bigint;
+}
+
 export type TokenContractInfo = {
   contract: Address;
   chain: SupportedChain;
@@ -432,6 +493,7 @@ export type RareClient = {
   contracts: {
     factory: Address;
     auction: Address;
+    rareMinter?: Address;
     lazyBatchMintFactory?: Address;
     batchListing?: Address;
     marketplaceSettings?: Address;
@@ -490,6 +552,10 @@ export type RareClient = {
     buy: (params: BatchListingBuyParams) => Promise<TransactionResult>;
     setAllowList: (params: BatchListingSetAllowListParams) => Promise<TransactionResult>;
     getStatus: (params: BatchListingStatusParams) => Promise<BatchListingStatus>;
+  };
+  release: {
+    configure(params: ReleaseConfigureParams): Promise<ReleaseConfigureResult>;
+    getStatus(params: ReleaseStatusParams): Promise<ReleaseStatus>;
   };
   search: {
     nfts: (params?: NftSearchParams) => Promise<SearchPageResponse<Nft>>;

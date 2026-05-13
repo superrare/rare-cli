@@ -150,6 +150,31 @@ describe('built CLI deterministic behavior', () => {
       expect(setAllowListHelp.stdout).toContain('--end-timestamp <unix>');
     });
   });
+
+  it('wires listing release commands and validates user-visible inputs before RPC setup', async () => {
+    await withTempHome(async (home) => {
+      const help = await runCli(['listing', 'release', '--help'], { home });
+      expect(help.code).toBe(0);
+      expect(help.stdout).toContain('Direct sale release subcommands');
+      expect(help.stdout).toContain('configure');
+      expect(help.stdout).toContain('status');
+
+      const configureHelp = await runCli(['listing', 'release', 'configure', '--help'], { home });
+      expect(configureHelp.code).toBe(0);
+      expect(configureHelp.stdout).toContain('--chain-id <id>');
+
+      const statusHelp = await runCli(['listing', 'release', 'status', '--help'], { home });
+      expect(statusHelp.code).toBe(0);
+      expect(statusHelp.stdout).toContain('--account <address>');
+      expect(statusHelp.stdout).toContain('--chain-id <id>');
+      expect(statusHelp.stdout).not.toContain('--wallet');
+
+      const result = await runCli(['listing', 'release', 'status', '--contract', 'not-an-address'], { home });
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('Error: Invalid contract address: "not-an-address".');
+    });
+  });
 });
 
 function isConfigWithSepoliaPrivateKey(value: unknown): value is {

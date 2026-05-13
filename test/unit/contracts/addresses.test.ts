@@ -7,6 +7,7 @@ import {
   getCanonicalUsdcEthPool,
   getContractAddresses,
   getErc721ApprovalManagerAddress,
+  getRareMinterAddress,
   isSupportedChain,
   resolveCurrency,
 } from '../../../src/contracts/addresses.js';
@@ -23,6 +24,7 @@ describe('chain and currency helpers', () => {
     expect(getContractAddresses('sepolia')).toEqual({
       factory: getAddress('0x3c7526a0975156299ceef369b8ff3c01cc670523'),
       auction: getAddress('0xC8Edc7049b233641ad3723D6C60019D1c8771612'),
+      rareMinter: getAddress('0xd28Dc0B89104d7BBd902F338a0193fF063617ccE'),
       lazyBatchMintFactory: getAddress('0xE5efBA88D556aDA98124654fE505465b8d494858'),
       batchListing: getAddress('0xF2bE72d4343beD375Cb6d0E799a3c003163860e0'),
       marketplaceSettings: getAddress('0x972dEe8fa339ad2D9c6cbDA31b67f98Fac242d13'),
@@ -32,6 +34,7 @@ describe('chain and currency helpers', () => {
       swapRouter: getAddress('0x429c3Ee66E7f6CDA12C5BadE4104aF3277aA2305'),
       v4Quoter: getAddress('0x61B3f2011A92d183C7dbaDBdA940a7555Ccf9227'),
     });
+    expect(getRareMinterAddress('sepolia')).toBe('0xd28Dc0B89104d7BBd902F338a0193fF063617ccE');
   });
 
   it('resolves canonical V4 pools separately from contract addresses', () => {

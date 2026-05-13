@@ -22,6 +22,7 @@ import { createBatchListingNamespace } from './batch-listing.js';
 import { createTokenNamespace } from './token.js';
 import { createLiquidNamespace } from './liquid.js';
 import { createSwapNamespace } from './swap.js';
+import { createReleaseNamespace } from './release.js';
 
 export type { RareClientConfig, RareClient } from './types.js';
 
@@ -37,6 +38,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
     contracts: {
       factory: addresses.factory,
       auction: addresses.auction,
+      rareMinter: addresses.rareMinter,
       lazyBatchMintFactory: addresses.lazyBatchMintFactory,
       batchListing: addresses.batchListing,
       marketplaceSettings: addresses.marketplaceSettings,
@@ -87,6 +89,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
         return addresses.erc721ApprovalManager;
       },
     }),
+    release: createReleaseNamespace(publicClient, config, addresses),
     token: createTokenNamespace(publicClient, chain),
     search: {
       async nfts(params = {}): ReturnType<RareClient['search']['nfts']> {

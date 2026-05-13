@@ -9,6 +9,7 @@ import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 import { batchCommand } from './batch.js';
+import { releaseCommand } from './release.js';
 
 type ListingCreateOptions = {
   contract: string;
@@ -37,8 +38,9 @@ type ListingBuyOptions = {
 
 export function listingCommand(): Command {
   const cmd = new Command('listing');
-  cmd.description('Listing subcommands (create, cancel, buy, status, batch)');
+  cmd.description('Listing subcommands (create, cancel, buy, status, batch, release)');
   cmd.addCommand(batchCommand());
+  cmd.addCommand(releaseCommand());
 
   // listing create
   cmd

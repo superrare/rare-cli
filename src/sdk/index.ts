@@ -12,6 +12,10 @@ export type {
   ValidateLiquidCurvesParams,
   DeployLiquidEditionParams,
   DeployLiquidEditionResult,
+  ReleaseConfigureParams,
+  ReleaseConfigureResult,
+  ReleaseStatus,
+  ReleaseStatusParams,
 } from './types.js';
 export type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
 export type { LiquidFactoryConfig } from '../liquid/factory-config.js';
@@ -39,6 +43,7 @@ export {
   getContractAddresses,
   getBatchListingAddress,
   getErc721ApprovalManagerAddress,
+  getRareMinterAddress,
   isSupportedChain,
 } from '../contracts/addresses.js';
 export type { CanonicalV4Pool, CanonicalV4Pools, ContractAddresses, SupportedChain } from '../contracts/addresses.js';
@@ -50,6 +55,7 @@ export { liquidEditionAbi } from '../contracts/abis/liquid-edition.js';
 export { tokenAbi } from '../contracts/abis/token.js';
 export { batchListingAbi } from '../contracts/abis/batch-listing.js';
 export { uniswapV4QuoterAbi } from '../contracts/abis/uniswap-v4-quoter.js';
+export { rareMinterAbi } from '../contracts/abis/rare-minter.js';
 
 export {
   buildProofArtifact,
