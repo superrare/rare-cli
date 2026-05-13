@@ -18,6 +18,7 @@ import { createMintNamespace } from './mint.js';
 import { createAuctionNamespace } from './auction.js';
 import { createOfferNamespace } from './offer.js';
 import { createListingNamespace } from './listing.js';
+import { createCollectionMarketNamespace } from './collection-market.js';
 import { createTokenNamespace } from './token.js';
 import { createCollectionNamespace } from './collection.js';
 import { createReleaseNamespace } from './release.js';
@@ -38,12 +39,20 @@ export function createRareClient(config: RareClientConfig): RareClient {
         lazySovereignFactory: addresses.lazySovereignFactory,
         spaceFactory: addresses.spaceFactory,
         rareMinter: addresses.rareMinter,
+        collectionMarket: addresses.collectionMarket,
         batchOfferCreator: addresses.batchOfferCreator,
+        batchAuctionHouse: addresses.batchAuctionHouse,
+        erc20ApprovalManager: addresses.erc20ApprovalManager,
+        erc721ApprovalManager: addresses.erc721ApprovalManager,
       }
     : {
         factory: addresses.factory,
         auction: addresses.auction,
+        collectionMarket: addresses.collectionMarket,
         batchOfferCreator: addresses.batchOfferCreator,
+        batchAuctionHouse: addresses.batchAuctionHouse,
+        erc20ApprovalManager: addresses.erc20ApprovalManager,
+        erc721ApprovalManager: addresses.erc721ApprovalManager,
       };
 
   return {
@@ -54,6 +63,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
     mint: createMintNamespace(publicClient, config),
     auction: createAuctionNamespace(publicClient, config, addresses),
     offer: createOfferNamespace(publicClient, config, addresses),
+    collectionMarket: createCollectionMarketNamespace(publicClient, config, chain),
     listing: createListingNamespace(publicClient, config, addresses),
     token: createTokenNamespace(publicClient, chain),
     search: {

@@ -14,6 +14,7 @@ import { currenciesCommand } from './commands/currencies.js';
 import { collectionCommand } from './commands/collection.js';
 import { releaseCommand } from './commands/release.js';
 import { batchCommand } from './commands/batch.js';
+import { mcpCommand } from './commands/mcp.js';
 import { setJsonMode } from './output.js';
 import { printError } from './errors.js';
 
@@ -46,6 +47,7 @@ program.addCommand(currenciesCommand());
 program.addCommand(collectionCommand());
 program.addCommand(releaseCommand());
 program.addCommand(batchCommand());
+program.addCommand(mcpCommand());
 
 program.parseAsync(process.argv).catch((err) => {
   printError(err);

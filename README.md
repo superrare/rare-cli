@@ -150,6 +150,16 @@ rare batch offer accept --creator 0x... --proof proof.json --contract 0x... --to
 rare batch offer revoke --input batch-token-artifact.json
 ```
 
+Batch auctions use the same token-list and proof artifacts. Creating a batch auction registers a reserve price for the Merkle root and, when `--input` includes token context, auto-approves the configured ERC721 approval manager for those token contracts unless `--no-auto-approve` is passed. Bidding validates the proof and sends the bid amount plus marketplace fee.
+
+```bash
+rare batch auction create --input batch-token-artifact.json --reserve 1.0 --duration 86400
+rare batch auction status --creator 0x... --input batch-token-artifact.json --contract 0x... --token-id 1
+rare batch auction bid --creator 0x... --proof proof.json --contract 0x... --token-id 1 --amount 1.0
+rare batch auction settle --contract 0x... --token-id 1
+rare batch auction cancel --input batch-token-artifact.json
+```
+
 Inspect creator and royalty data on Sovereign-style collections:
 
 ```bash
@@ -274,6 +284,46 @@ rare offer cancel --contract 0x... --token-id 1
 # Check offer status (read-only)
 rare offer status --contract 0x... --token-id 1
 ```
+
+### Collection-Wide Offers
+
+Collection-wide offers are made against an origin collection and can be accepted by any current owner of a token in that collection. They are different from token-specific Bazaar offers, which target one contract/token ID pair.
+
+```bash
+# Create a collection-wide offer
+rare offer create --collection 0x... --amount 0.5
+
+# Cancel your collection-wide offer
+rare offer cancel --collection 0x...
+
+# Accept a collection-wide offer for a token you own
+rare offer accept --collection 0x... --buyer 0x...buyer --token-id 1 --amount 0.5
+
+# Check collection offer status and wallet affordances
+rare offer status --collection 0x... --buyer 0x...buyer --token-id 1
+```
+
+The current `RareCollectionMarket` contract stores buyer, origin collection, currency, amount, and marketplace fee. It does not store offer expiry or timing fields, so status reports expiry as unsupported.
+
+### Collection-Wide Listings
+
+Collection-wide listings set one sale price for any token currently owned by a seller in an origin collection. They are different from token-specific Bazaar listings, which target one contract/token ID pair.
+
+```bash
+# Set a collection-wide sale price
+rare listing create --collection 0x... --amount 1.0
+
+# Cancel your collection-wide sale price
+rare listing cancel --collection 0x...
+
+# Buy a token from a seller's collection-wide sale price
+rare listing buy --collection 0x... --seller 0x...seller --token-id 1 --amount 1.0
+
+# Check collection listing status and wallet affordances
+rare listing status --collection 0x... --seller 0x...seller --token-id 1
+```
+
+The current `RareCollectionMarket` sale price stores seller, origin collection, currency, amount, and seller split data. It does not store token-specific targets or expiry fields.
 
 ### Listings
 
@@ -522,6 +572,54 @@ const minted = await rare.release.mintDirectSale({
 console.log(proof.valid, status.mintLimit, minted.tokenIds);
 ```
 
+### Create and accept collection-wide offers
+
+```ts
+const collectionOffer = await rare.collectionMarket.offer.create({
+  originCollection: '0xCollectionAddress',
+  amount: '1.0',
+});
+
+const collectionOfferStatus = await rare.collectionMarket.offer.getStatus({
+  originCollection: '0xCollectionAddress',
+  buyer: collectionOffer.buyer,
+  tokenId: 1,
+});
+
+const acceptedCollectionOffer = await rare.collectionMarket.offer.accept({
+  originCollection: '0xCollectionAddress',
+  buyer: collectionOffer.buyer,
+  tokenId: 1,
+  amount: '1.0',
+});
+
+console.log(collectionOfferStatus.state, acceptedCollectionOffer.txHash);
+```
+
+### Set and buy collection-wide listings
+
+```ts
+const collectionListing = await rare.collectionMarket.listing.set({
+  originCollection: '0xCollectionAddress',
+  amount: '1.0',
+});
+
+const collectionListingStatus = await rare.collectionMarket.listing.getStatus({
+  originCollection: '0xCollectionAddress',
+  seller: collectionListing.seller,
+  tokenId: 1,
+});
+
+const boughtFromCollectionListing = await rare.collectionMarket.listing.buy({
+  originCollection: '0xCollectionAddress',
+  seller: collectionListing.seller,
+  tokenId: 1,
+  amount: '1.0',
+});
+
+console.log(collectionListingStatus.state, boughtFromCollectionListing.txHash);
+```
+
 ### Build batch marketplace token trees
 
 ```ts
@@ -568,6 +666,38 @@ const acceptedOffer = await rare.batch.offer.accept({
 });
 
 console.log(offerStatus.state, acceptedOffer.txHash);
+```
+
+### Create and settle batch auctions
+
+```ts
+const createdAuction = await rare.batch.auction.create({
+  artifact: tree,
+  reserveAmount: '1.0',
+  duration: 86400,
+});
+
+const auctionStatus = await rare.batch.auction.getStatus({
+  creator: createdAuction.creator,
+  root: tree.root,
+  contract: tokenProof.contractAddress,
+  tokenId: tokenProof.tokenId,
+});
+
+const bid = await rare.batch.auction.bid({
+  creator: createdAuction.creator,
+  proofArtifact: tokenProof,
+  contract: tokenProof.contractAddress,
+  tokenId: tokenProof.tokenId,
+  amount: '1.0',
+});
+
+const settled = await rare.batch.auction.settle({
+  contract: tokenProof.contractAddress,
+  tokenId: tokenProof.tokenId,
+});
+
+console.log(auctionStatus.state, bid.requiredPayment, settled.txHash);
 ```
 
 ### Inspect and maintain collection owner settings
@@ -635,12 +765,12 @@ rare configure --show
 
 ## Contract Addresses
 
-| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Space Factory | RareMinter | Auction | BatchOfferCreator |
-|---|---|---|---|---|---|---|---|
-| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | not configured | `0xd28Dc0B89104d7BBd902F338a0193fF063617ccE` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` | `0x371cca54ef859bb0c7b910581a528ee47773fd56` |
-| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x3b2d699110aa1788b2b1cae336e0ba8ff942a390` | `0x5fa112EFeD8297bec0010b312208d223E0cE891E` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` | `0xe15cf80b25272ade261532efdb7912f9104851d4` |
-| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | not configured | not configured | not configured | not configured | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` | not configured |
-| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | not configured | not configured | not configured | not configured | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` | not configured |
+| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Space Factory | RareMinter | Auction | CollectionMarket | BatchOfferCreator | BatchAuctionHouse |
+|---|---|---|---|---|---|---|---|---|---|
+| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | not configured | `0xd28Dc0B89104d7BBd902F338a0193fF063617ccE` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` | not configured | `0x371cca54ef859bb0c7b910581a528ee47773fd56` | `0x293AE7701A7830B1d38A7608EdF86A106d9E2645` |
+| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x3b2d699110aa1788b2b1cae336e0ba8ff942a390` | `0x5fa112EFeD8297bec0010b312208d223E0cE891E` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` | not configured | `0xe15cf80b25272ade261532efdb7912f9104851d4` | `0x71742c7196f1c334C4c038ce6dcDcEE98097F9Da` |
+| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | not configured | not configured | not configured | not configured | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` | not configured | not configured | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` |
+| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | not configured | not configured | not configured | not configured | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` | not configured | not configured | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` |
 
 ## Underlying Solidity Contracts
 
@@ -656,7 +786,9 @@ If you want to inspect the on-chain contracts used by this CLI:
 - RareSpace collection contract: [`RareSpaceNFT.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/spaces/RareSpaceNFT.sol)
 - Factory used for RareSpace collection creation: [`RareSpaceNFTContractFactory.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/spaces/RareSpaceNFTContractFactory.sol)
 - Auction/market contract used for auction operations: [`SuperRareBazaar.sol`](https://github.com/superrare/core/blob/main/src/bazaar/SuperRareBazaar.sol)
+- Collection-wide offer contract interface: [`RareCollectionMarket.sol`](https://github.com/rareprotocol/core/blob/main/src/collection/RareCollectionMarket.sol)
 - Batch offer contract used by batch token Merkle roots and proofs: [`BatchOffer.sol`](https://github.com/rareprotocol/core/blob/main/src/batchoffer/BatchOffer.sol)
+- Batch auctionhouse ABI follows the SuperRare client contract surface: `registerAuctionMerkleRoot`, `bidWithAuctionMerkleProof`, `settleAuction`, and Merkle auction status reads.
 
 ## Development (Optional)
 
