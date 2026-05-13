@@ -511,6 +511,86 @@ export interface CollectionMarketOfferStatus {
   canAccept: boolean;
 }
 
+export interface CollectionMarketListingSetParams {
+  originCollection: Address;
+  currency?: Address;
+  amount: AmountInput;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+  autoApprove?: boolean;
+}
+
+export interface CollectionMarketListingSetResult extends TransactionResult {
+  collectionMarket: Address;
+  seller: Address;
+  originCollection: Address;
+  currency: Address;
+  amount: bigint;
+  splitRecipients: Address[];
+  splitRatios: number[];
+  approvalTxHash?: Hash;
+}
+
+export interface CollectionMarketListingCancelParams {
+  originCollection: Address;
+}
+
+export interface CollectionMarketListingCancelResult extends TransactionResult {
+  collectionMarket: Address;
+  seller: Address;
+  originCollection: Address;
+  hadListing: boolean;
+  currency: Address;
+  amount: bigint;
+}
+
+export interface CollectionMarketListingBuyParams {
+  originCollection: Address;
+  seller: Address;
+  tokenId: IntegerInput;
+  currency?: Address;
+  amount: AmountInput;
+  autoApprove?: boolean;
+}
+
+export interface CollectionMarketListingBuyResult extends TransactionResult {
+  collectionMarket: Address;
+  seller: Address;
+  buyer: Address;
+  originCollection: Address;
+  tokenId: bigint;
+  currency: Address;
+  amount: bigint;
+  requiredPayment: bigint;
+  approvalTxHash?: Hash;
+}
+
+export interface CollectionMarketListingStatusParams {
+  originCollection: Address;
+  seller: Address;
+  tokenId?: IntegerInput;
+  account?: Address;
+}
+
+export interface CollectionMarketListingStatus {
+  seller: Address;
+  originCollection: Address;
+  amount: bigint;
+  currency: Address;
+  splitRecipients: Address[];
+  splitRatios: number[];
+  marketplaceFee: bigint;
+  requiredPayment: bigint;
+  hasListing: boolean;
+  state: 'NONE' | 'ACTIVE';
+  isEth: boolean;
+  currentWallet?: Address;
+  tokenId?: bigint;
+  tokenOwner?: Address;
+  canCancel: boolean;
+  canBuy: boolean;
+}
+
 export interface ListingCreateParams {
   contract: Address;
   tokenId: IntegerInput;
@@ -796,6 +876,12 @@ export interface RareClient {
       cancel(params: CollectionMarketOfferCancelParams): Promise<CollectionMarketOfferCancelResult>;
       accept(params: CollectionMarketOfferAcceptParams): Promise<CollectionMarketOfferAcceptResult>;
       getStatus(params: CollectionMarketOfferStatusParams): Promise<CollectionMarketOfferStatus>;
+    };
+    listing: {
+      set(params: CollectionMarketListingSetParams): Promise<CollectionMarketListingSetResult>;
+      cancel(params: CollectionMarketListingCancelParams): Promise<CollectionMarketListingCancelResult>;
+      buy(params: CollectionMarketListingBuyParams): Promise<CollectionMarketListingBuyResult>;
+      getStatus(params: CollectionMarketListingStatusParams): Promise<CollectionMarketListingStatus>;
     };
   };
   listing: {

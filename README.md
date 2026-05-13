@@ -291,19 +291,39 @@ Collection-wide offers are made against an origin collection and can be accepted
 
 ```bash
 # Create a collection-wide offer
-rare collection-market offer create --collection 0x... --amount 0.5
+rare offer create --collection 0x... --amount 0.5
 
 # Cancel your collection-wide offer
-rare collection-market offer cancel --collection 0x...
+rare offer cancel --collection 0x...
 
 # Accept a collection-wide offer for a token you own
-rare collection-market offer accept --collection 0x... --buyer 0x...buyer --token-id 1 --amount 0.5
+rare offer accept --collection 0x... --buyer 0x...buyer --token-id 1 --amount 0.5
 
 # Check collection offer status and wallet affordances
-rare collection-market offer status --collection 0x... --buyer 0x...buyer --token-id 1
+rare offer status --collection 0x... --buyer 0x...buyer --token-id 1
 ```
 
 The current `RareCollectionMarket` contract stores buyer, origin collection, currency, amount, and marketplace fee. It does not store offer expiry or timing fields, so status reports expiry as unsupported.
+
+### Collection-Wide Listings
+
+Collection-wide listings set one sale price for any token currently owned by a seller in an origin collection. They are different from token-specific Bazaar listings, which target one contract/token ID pair.
+
+```bash
+# Set a collection-wide sale price
+rare listing create --collection 0x... --amount 1.0
+
+# Cancel your collection-wide sale price
+rare listing cancel --collection 0x...
+
+# Buy a token from a seller's collection-wide sale price
+rare listing buy --collection 0x... --seller 0x...seller --token-id 1 --amount 1.0
+
+# Check collection listing status and wallet affordances
+rare listing status --collection 0x... --seller 0x...seller --token-id 1
+```
+
+The current `RareCollectionMarket` sale price stores seller, origin collection, currency, amount, and seller split data. It does not store token-specific targets or expiry fields.
 
 ### Listings
 
@@ -326,7 +346,7 @@ rare listing status --contract 0x... --token-id 1
 
 ### Currencies
 
-All marketplace commands (`auction`, `offer`, `listing`, `collection-market offer`) accept `--currency` to specify a payment token. Named currencies (`eth`, `usdc`, `rare`) are resolved per-chain automatically. You can also pass any ERC20 address directly.
+All marketplace commands (`auction`, `offer`, `listing`) accept `--currency` to specify a payment token. Named currencies (`eth`, `usdc`, `rare`) are resolved per-chain automatically. You can also pass any ERC20 address directly.
 
 ERC20 allowances are auto-approved when needed for bids, offers, and purchases.
 
@@ -574,6 +594,30 @@ const acceptedCollectionOffer = await rare.collectionMarket.offer.accept({
 });
 
 console.log(collectionOfferStatus.state, acceptedCollectionOffer.txHash);
+```
+
+### Set and buy collection-wide listings
+
+```ts
+const collectionListing = await rare.collectionMarket.listing.set({
+  originCollection: '0xCollectionAddress',
+  amount: '1.0',
+});
+
+const collectionListingStatus = await rare.collectionMarket.listing.getStatus({
+  originCollection: '0xCollectionAddress',
+  seller: collectionListing.seller,
+  tokenId: 1,
+});
+
+const boughtFromCollectionListing = await rare.collectionMarket.listing.buy({
+  originCollection: '0xCollectionAddress',
+  seller: collectionListing.seller,
+  tokenId: 1,
+  amount: '1.0',
+});
+
+console.log(collectionListingStatus.state, boughtFromCollectionListing.txHash);
 ```
 
 ### Build batch marketplace token trees

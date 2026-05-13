@@ -17,13 +17,20 @@ import {
 import type { RareClient, RareClientConfig } from './types.js';
 import {
   calculateCollectionOfferTopUp,
+  type CollectionMarketSalePriceRead,
   type CollectionMarketOfferRead,
+  planCollectionMarketListingBuy,
+  planCollectionMarketListingCancel,
+  planCollectionMarketListingSet,
+  planCollectionMarketListingStatus,
   planCollectionMarketOfferAccept,
   planCollectionMarketOfferCancel,
   planCollectionMarketOfferCreate,
   planCollectionMarketOfferStatus,
+  shapeCollectionMarketListingStatus,
   shapeCollectionMarketOfferRead,
   shapeCollectionMarketOfferStatus,
+  shapeCollectionMarketSalePriceRead,
 } from './collection-market-core.js';
 
 export function createCollectionMarketNamespace(
@@ -247,6 +254,242 @@ export function createCollectionMarketNamespace(
         });
       },
     },
+    listing: {
+      async set(params) {
+        const collectionMarket = requireContractAddress(chain, 'collectionMarket');
+        const { walletClient, account, accountAddress } = requireWallet(config);
+        const plan = planCollectionMarketListingSet(params, accountAddress);
+
+        let approvalTxHash: `0x${string}` | undefined;
+        if (plan.autoApprove) {
+          const isApproved = await publicClient.readContract({
+            address: plan.originCollection,
+            abi: approvalAbi,
+            functionName: 'isApprovedForAll',
+            args: [accountAddress, collectionMarket],
+          });
+
+          if (!isApproved) {
+            approvalTxHash = await walletClient.writeContract({
+              address: plan.originCollection,
+              abi: approvalAbi,
+              functionName: 'setApprovalForAll',
+              args: [collectionMarket, true],
+              account,
+              chain: undefined,
+            });
+            await publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
+            await waitForApproval(publicClient, plan.originCollection, accountAddress, collectionMarket);
+          }
+        }
+
+        const txHash = await walletClient.writeContract({
+          address: collectionMarket,
+          abi: collectionMarketAbi,
+          functionName: 'setCollectionSalePrice',
+          args: [
+            plan.originCollection,
+            plan.currency,
+            plan.amount,
+            plan.splitAddresses,
+            plan.splitRatios,
+          ],
+          account,
+          chain: undefined,
+        });
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        const logs = parseEventLogs({
+          abi: collectionMarketAbi,
+          logs: receipt.logs,
+          eventName: 'CollectionSalePriceSet',
+        });
+        const [set] = logs;
+
+        if (!set) {
+          throw new Error('Collection market listing set transaction succeeded but CollectionSalePriceSet was not found in logs.');
+        }
+
+        return {
+          txHash,
+          receipt,
+          collectionMarket,
+          seller: set.args._seller,
+          originCollection: set.args._originContract,
+          currency: set.args._currencyAddress,
+          amount: set.args._amount,
+          splitRecipients: plan.splitAddresses,
+          splitRatios: plan.splitRatios,
+          approvalTxHash,
+        };
+      },
+
+      async cancel(params) {
+        const collectionMarket = requireContractAddress(chain, 'collectionMarket');
+        const { walletClient, account, accountAddress } = requireWallet(config);
+        const plan = planCollectionMarketListingCancel(params);
+        const existingSalePrice = await readCollectionSalePrice(
+          publicClient,
+          collectionMarket,
+          plan.originCollection,
+          accountAddress,
+        );
+
+        const txHash = await walletClient.writeContract({
+          address: collectionMarket,
+          abi: collectionMarketAbi,
+          functionName: 'cancelCollectionSalePrice',
+          args: [plan.originCollection],
+          account,
+          chain: undefined,
+        });
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        const logs = parseEventLogs({
+          abi: collectionMarketAbi,
+          logs: receipt.logs,
+          eventName: 'CollectionSalePriceCancelled',
+        });
+        const [cancelled] = logs;
+
+        return {
+          txHash,
+          receipt,
+          collectionMarket,
+          seller: cancelled?.args._seller ?? accountAddress,
+          originCollection: cancelled?.args._originContract ?? plan.originCollection,
+          hadListing: existingSalePrice.amount > 0n,
+          currency: existingSalePrice.currencyAddress,
+          amount: existingSalePrice.amount,
+        };
+      },
+
+      async buy(params) {
+        const collectionMarket = requireContractAddress(chain, 'collectionMarket');
+        const { walletClient, account, accountAddress } = requireWallet(config);
+        const plan = planCollectionMarketListingBuy(params);
+        const [tokenOwner, salePrice, marketplaceSettings] = await Promise.all([
+          publicClient.readContract({
+            address: plan.originCollection,
+            abi: tokenAbi,
+            functionName: 'ownerOf',
+            args: [plan.tokenId],
+          }),
+          readCollectionSalePrice(publicClient, collectionMarket, plan.originCollection, plan.seller),
+          readMarketplaceSettings(publicClient, collectionMarket),
+        ]);
+
+        if (tokenOwner.toLowerCase() !== plan.seller.toLowerCase()) {
+          throw new Error(
+            `Seller ${plan.seller} does not own token ${plan.originCollection} #${plan.tokenId.toString()}.`,
+          );
+        }
+        if (salePrice.amount === 0n) {
+          throw new Error(`No collection sale price exists for seller ${plan.seller} on ${plan.originCollection}.`);
+        }
+        if (salePrice.amount !== plan.amount) {
+          throw new Error(`Collection sale price amount is ${salePrice.amount.toString()}, but ${plan.amount.toString()} was supplied.`);
+        }
+        if (salePrice.currencyAddress.toLowerCase() !== plan.currency.toLowerCase()) {
+          throw new Error(
+            `Collection sale price currency is ${salePrice.currencyAddress}, but ${plan.currency} was supplied.`,
+          );
+        }
+
+        const sellerApproved = await publicClient.readContract({
+          address: plan.originCollection,
+          abi: approvalAbi,
+          functionName: 'isApprovedForAll',
+          args: [plan.seller, collectionMarket],
+        });
+        if (!sellerApproved) {
+          throw new Error(`Seller ${plan.seller} has not approved the collection market for ${plan.originCollection}.`);
+        }
+
+        const requiredPayment = await calculateMarketplacePaymentAmountFromSettings(
+          publicClient,
+          marketplaceSettings,
+          plan.amount,
+        );
+        const payment = await preparePaymentAmountForSpender({
+          publicClient,
+          walletClient,
+          account,
+          accountAddress,
+          spenderAddress: collectionMarket,
+          currency: plan.currency,
+          requiredAmount: requiredPayment,
+          autoApprove: plan.autoApprove,
+        });
+
+        const txHash = await walletClient.writeContract({
+          address: collectionMarket,
+          abi: collectionMarketAbi,
+          functionName: 'buyFromCollection',
+          args: [plan.originCollection, plan.tokenId, plan.currency, plan.amount],
+          account,
+          chain: undefined,
+          value: payment.value,
+        });
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        const logs = parseEventLogs({
+          abi: collectionMarketAbi,
+          logs: receipt.logs,
+          eventName: 'Sold',
+        });
+        const [sold] = logs;
+
+        if (!sold) {
+          throw new Error('Collection market listing buy transaction succeeded but Sold was not found in logs.');
+        }
+
+        return {
+          txHash,
+          receipt,
+          collectionMarket,
+          seller: sold.args._seller,
+          buyer: sold.args._buyer,
+          originCollection: sold.args._originContract,
+          tokenId: sold.args._tokenId,
+          currency: sold.args._currencyAddress,
+          amount: sold.args._amount,
+          requiredPayment: payment.requiredAmount,
+          approvalTxHash: payment.approvalTxHash,
+        };
+      },
+
+      async getStatus(params) {
+        const collectionMarket = requireContractAddress(chain, 'collectionMarket');
+        const account = params.account ?? config.account ?? config.walletClient?.account?.address;
+        const plan = planCollectionMarketListingStatus({ ...params, account });
+        const [salePrice, tokenOwner, marketplaceSettings] = await Promise.all([
+          readCollectionSalePrice(publicClient, collectionMarket, plan.originCollection, plan.seller),
+          plan.tokenId === undefined
+            ? Promise.resolve(undefined)
+            : publicClient.readContract({
+                address: plan.originCollection,
+                abi: tokenAbi,
+                functionName: 'ownerOf',
+                args: [plan.tokenId],
+              }),
+          readMarketplaceSettings(publicClient, collectionMarket),
+        ]);
+        const [requiredPayment, marketplaceFee] = salePrice.amount === 0n
+          ? [0n, 0n] as const
+          : await Promise.all([
+              calculateMarketplacePaymentAmountFromSettings(publicClient, marketplaceSettings, salePrice.amount),
+              readMarketplaceFeePercentage(publicClient, marketplaceSettings),
+            ]);
+
+        return shapeCollectionMarketListingStatus(salePrice, {
+          seller: plan.seller,
+          originCollection: plan.originCollection,
+          marketplaceFee,
+          requiredPayment,
+          tokenId: plan.tokenId,
+          account: plan.account,
+          tokenOwner,
+        });
+      },
+    },
   };
 }
 
@@ -281,4 +524,33 @@ async function readCollectionOffer(
   });
 
   return shapeCollectionMarketOfferRead(offer);
+}
+
+async function readMarketplaceFeePercentage(
+  publicClient: PublicClient,
+  marketplaceSettings: Address,
+): Promise<bigint> {
+  const fee = await publicClient.readContract({
+    address: marketplaceSettings,
+    abi: marketplaceSettingsAbi,
+    functionName: 'getMarketplaceFeePercentage',
+  });
+
+  return BigInt(fee);
+}
+
+async function readCollectionSalePrice(
+  publicClient: PublicClient,
+  collectionMarket: Address,
+  originCollection: Address,
+  seller: Address,
+): Promise<CollectionMarketSalePriceRead> {
+  const salePrice = await publicClient.readContract({
+    address: collectionMarket,
+    abi: collectionMarketAbi,
+    functionName: 'getCollectionSalePrice',
+    args: [originCollection, seller],
+  });
+
+  return shapeCollectionMarketSalePriceRead(salePrice);
 }
