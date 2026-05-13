@@ -1,515 +1,692 @@
-import { parseEventLogs, type Address, type Hash, type PublicClient } from 'viem';
-import { collectionOwnerAbi } from '../contracts/abis/collection-owner.js';
+import {
+  erc20Abi,
+  isAddressEqual,
+  parseEventLogs,
+  type Address,
+  type PublicClient,
+  type TransactionReceipt,
+} from 'viem';
 import { rareMinterAbi } from '../contracts/abis/rare-minter.js';
 import { tokenAbi } from '../contracts/abis/token.js';
-import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
+import type {
+  ReleaseNamespace,
+  RareClientConfig,
+} from './types.js';
+import { ETH_ADDRESS } from '../contracts/addresses.js';
 import { preparePaymentForSpender, requireWallet } from './helpers.js';
-import type { RareClient, RareClientConfig, ReleaseConfig } from './types.js';
 import {
-  assertReleaseAllowlistConfigWriteMatches,
-  assertReleaseLimitWriteMatches,
-  assertReleaseSellerStakingMinimumWriteMatches,
-  buildReleaseAllowlistArtifact,
-  buildReleaseTokenIdRange,
+  assertReleaseContractOwner,
+  assertReleaseAllowlistConfigMatches,
+  assertReleaseLimitMatches,
+  assertReleaseSellerStakingMinimumMatches,
+  buildReleaseAllowlistArtifactFromInput,
   getReleaseAllowlistProof,
+  planReleaseConfigure,
   planReleaseAllowlistConfig,
+  planReleaseClearAllowlistConfig,
+  planReleaseLimitConfig,
   planReleaseDirectSaleMint,
-  planReleaseMintLimit,
   planReleaseSellerStakingMinimum,
-  planReleaseTxLimit,
   preflightReleaseDirectSaleMint,
-  shapeReleaseCollectionSupply,
-  shapeReleaseDirectSaleConfig,
-  verifyReleaseAllowlistProof,
+  parseReleaseAllowlistArtifactJson,
+  requireRareMinterAddress,
+  shapeReleaseAllowlistConfig,
+  shapeReleaseLimitConfig,
+  shapeReleaseMintTokenRange,
+  shapeReleaseSellerStakingMinimum,
+  shapeReleaseStatus,
+  type RawAllowlistConfig,
+  type RawDirectSaleConfig,
+  type RawStakingMinimum,
+  type ReleaseMintTokenRange,
 } from './release-core.js';
+
+const releaseCollectionAbi = [
+  {
+    inputs: [
+      { name: '_receiver', type: 'address' },
+    ],
+    name: 'mintTo',
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'owner',
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+] as const;
+
+async function readCurrencyDecimals(
+  publicClient: PublicClient,
+  currency: Address,
+  opts: { required: boolean },
+): Promise<number | null> {
+  if (currency === ETH_ADDRESS) {
+    return 18;
+  }
+
+  try {
+    return await publicClient.readContract({
+      address: currency,
+      abi: erc20Abi,
+      functionName: 'decimals',
+    });
+  } catch (error) {
+    if (!opts.required) {
+      return null;
+    }
+    throw new Error(`Unable to read decimals for ERC20 currency ${currency}: ${errorMessage(error)}`);
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function readReleaseCollectionOwner(
+  publicClient: PublicClient,
+  contract: Address,
+): Promise<Address> {
+  try {
+    return await publicClient.readContract({
+      address: contract,
+      abi: releaseCollectionAbi,
+      functionName: 'owner',
+    });
+  } catch (error) {
+    throw new Error(`Unable to read owner() from collection ${contract}: ${errorMessage(error)}`);
+  }
+}
+
+async function assertConfigurableReleaseContract(opts: {
+  publicClient: PublicClient;
+  contract: Address;
+  accountAddress: Address;
+  rareMinter: Address;
+}): Promise<void> {
+  const { publicClient, contract, accountAddress, rareMinter } = opts;
+
+  const owner = await readReleaseCollectionOwner(publicClient, contract);
+  assertReleaseContractOwner({ contract, accountAddress, owner });
+
+  try {
+    await publicClient.simulateContract({
+      address: contract,
+      abi: releaseCollectionAbi,
+      functionName: 'mintTo',
+      args: [accountAddress],
+      account: rareMinter,
+    });
+  } catch (error) {
+    throw new Error(
+      `Collection ${contract} must expose mintTo(address) callable by RareMinter ${rareMinter}. ` +
+        `Simulation failed: ${errorMessage(error)}`,
+    );
+  }
+}
+
+async function optionalRead<T>(read: () => Promise<T>): Promise<T | null> {
+  try {
+    return await read();
+  } catch {
+    return null;
+  }
+}
+
+async function assertCollectionOwnerForReleaseWrite(opts: {
+  publicClient: PublicClient;
+  contract: Address;
+  accountAddress: Address;
+}): Promise<void> {
+  const { publicClient, contract, accountAddress } = opts;
+
+  const owner = await readReleaseCollectionOwner(publicClient, contract);
+  assertReleaseContractOwner({ contract, accountAddress, owner });
+}
+
+async function readDirectSaleConfig(opts: {
+  publicClient: PublicClient;
+  rareMinter: Address;
+  contract: Address;
+}): Promise<RawDirectSaleConfig> {
+  return opts.publicClient.readContract({
+    address: opts.rareMinter,
+    abi: rareMinterAbi,
+    functionName: 'getDirectSaleConfig',
+    args: [opts.contract],
+  });
+}
+
+async function readAllowlistConfig(opts: {
+  publicClient: PublicClient;
+  rareMinter: Address;
+  contract: Address;
+}): Promise<RawAllowlistConfig> {
+  return opts.publicClient.readContract({
+    address: opts.rareMinter,
+    abi: rareMinterAbi,
+    functionName: 'getContractAllowListConfig',
+    args: [opts.contract],
+  });
+}
+
+async function readMintLimit(opts: {
+  publicClient: PublicClient;
+  rareMinter: Address;
+  contract: Address;
+}): Promise<bigint> {
+  return opts.publicClient.readContract({
+    address: opts.rareMinter,
+    abi: rareMinterAbi,
+    functionName: 'getContractMintLimit',
+    args: [opts.contract],
+  });
+}
+
+async function readTxLimit(opts: {
+  publicClient: PublicClient;
+  rareMinter: Address;
+  contract: Address;
+}): Promise<bigint> {
+  return opts.publicClient.readContract({
+    address: opts.rareMinter,
+    abi: rareMinterAbi,
+    functionName: 'getContractTxLimit',
+    args: [opts.contract],
+  });
+}
+
+async function readSellerStakingMinimum(opts: {
+  publicClient: PublicClient;
+  rareMinter: Address;
+  contract: Address;
+}): Promise<RawStakingMinimum> {
+  return opts.publicClient.readContract({
+    address: opts.rareMinter,
+    abi: rareMinterAbi,
+    functionName: 'getContractSellerStakingMinimum',
+    args: [opts.contract],
+  });
+}
+
+async function readReleaseStatus(opts: {
+  publicClient: PublicClient;
+  rareMinter: Address;
+  contract: Address;
+  account?: Address;
+}): ReturnType<ReleaseNamespace['getStatus']> {
+  const [
+    directSale,
+    allowlist,
+    mintLimit,
+    txLimit,
+    stakingMinimum,
+  ] = await Promise.all([
+    readDirectSaleConfig(opts),
+    readAllowlistConfig(opts),
+    readMintLimit(opts),
+    readTxLimit(opts),
+    readSellerStakingMinimum(opts),
+  ]);
+
+  const [
+    totalSupply,
+    maxSupply,
+    currencyDecimals,
+    accountMints,
+    accountTxs,
+  ] = await Promise.all([
+    optionalRead(async () => opts.publicClient.readContract({
+      address: opts.contract,
+      abi: tokenAbi,
+      functionName: 'totalSupply',
+    })),
+    optionalRead(async () => opts.publicClient.readContract({
+      address: opts.contract,
+      abi: tokenAbi,
+      functionName: 'maxTokens',
+    })),
+    readCurrencyDecimals(opts.publicClient, directSale.currencyAddress, { required: false }),
+    opts.account === undefined
+      ? Promise.resolve(null)
+      : opts.publicClient.readContract({
+          address: opts.rareMinter,
+          abi: rareMinterAbi,
+          functionName: 'getContractMintsPerAddress',
+          args: [opts.contract, opts.account],
+        }),
+    opts.account === undefined
+      ? Promise.resolve(null)
+      : opts.publicClient.readContract({
+          address: opts.rareMinter,
+          abi: rareMinterAbi,
+          functionName: 'getContractTxsPerAddress',
+          args: [opts.contract, opts.account],
+        }),
+  ]);
+
+  return shapeReleaseStatus({
+    rareMinter: opts.rareMinter,
+    contract: opts.contract,
+    directSale,
+    allowlist,
+    mintLimit,
+    txLimit,
+    account: opts.account ?? null,
+    accountMints,
+    accountTxs,
+    stakingMinimum,
+    totalSupply,
+    maxSupply,
+    currencyDecimals,
+    nowSeconds: currentUnixTimestamp(),
+  });
+}
+
+function readMintDirectSaleTokenRange(opts: {
+  receipt: TransactionReceipt;
+  contract: Address;
+  buyer: Address;
+}): ReleaseMintTokenRange {
+  const [event] = parseEventLogs({
+    abi: rareMinterAbi,
+    eventName: 'MintDirectSale',
+    logs: opts.receipt.logs,
+  }).filter((log) =>
+    isAddressEqual(log.args._contractAddress, opts.contract) &&
+    isAddressEqual(log.args._buyer, opts.buyer),
+  );
+
+  if (event === undefined) {
+    throw new Error(`MintDirectSale event was not found for ${opts.contract} and buyer ${opts.buyer}.`);
+  }
+
+  return shapeReleaseMintTokenRange(event.args._tokenIdStart, event.args._tokenIdEnd);
+}
 
 export function createReleaseNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
-  chain: SupportedChain,
-): RareClient['release'] {
+  addresses: { rareMinter?: Address; auction: Address },
+): ReleaseNamespace {
   return {
-    buildAllowlist(params) {
-      return buildReleaseAllowlistArtifact(params);
+    buildAllowlistArtifact(params): ReturnType<ReleaseNamespace['buildAllowlistArtifact']> {
+      return buildReleaseAllowlistArtifactFromInput(params.input, params.format);
     },
 
-    getAllowlistProof(params) {
-      return getReleaseAllowlistProof(params.artifact, params.address);
+    parseAllowlistArtifact(params): ReturnType<ReleaseNamespace['parseAllowlistArtifact']> {
+      return parseReleaseAllowlistArtifactJson(params.input);
     },
 
-    verifyAllowlistProof(params) {
-      return verifyReleaseAllowlistProof(params);
+    getAllowlistProof(params): ReturnType<ReleaseNamespace['getAllowlistProof']> {
+      return getReleaseAllowlistProof(params);
     },
 
-    async getConfig(params) {
-      const minterAddress = requireContractAddress(chain, 'rareMinter');
-      return readReleaseConfig(publicClient, minterAddress, params.contract, params.account);
-    },
-
-    async mintDirectSale(params) {
-      const plan = planReleaseDirectSaleMint(params);
-      const minterAddress = requireContractAddress(chain, 'rareMinter');
-      const auctionAddress = requireContractAddress(chain, 'auction');
+    async configure(params): ReturnType<ReleaseNamespace['configure']> {
+      const rareMinter = requireRareMinterAddress(addresses.rareMinter);
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const status = await readReleaseConfig(publicClient, minterAddress, plan.contract, accountAddress);
+      const currencyAddress = params.currency ?? ETH_ADDRESS;
+      const currencyDecimals = currencyAddress === ETH_ADDRESS || typeof params.price === 'bigint'
+        ? null
+        : await readCurrencyDecimals(publicClient, currencyAddress, { required: true });
+      const plan = planReleaseConfigure(params, {
+        accountAddress,
+        currencyDecimals,
+        nowSeconds: currentUnixTimestamp(),
+      });
+
+      await assertConfigurableReleaseContract({
+        publicClient,
+        contract: plan.contract,
+        accountAddress,
+        rareMinter,
+      });
+
+      const txHash = await walletClient.writeContract({
+        address: rareMinter,
+        abi: rareMinterAbi,
+        functionName: 'prepareMintDirectSale',
+        args: [
+          plan.contract,
+          plan.currencyAddress,
+          plan.price,
+          plan.startTime,
+          plan.maxMints,
+          plan.splitRecipients,
+          plan.splitRatios,
+        ],
+        account,
+        chain: undefined,
+      });
+
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+      return {
+        txHash,
+        receipt,
+        rareMinter,
+        contract: plan.contract,
+        currencyAddress: plan.currencyAddress,
+        price: plan.price,
+        startTime: plan.startTime,
+        maxMints: plan.maxMints,
+        splitRecipients: plan.splitRecipients,
+        splitRatios: plan.splitRatios,
+      };
+    },
+
+    async getAllowlistConfig(params): ReturnType<ReleaseNamespace['getAllowlistConfig']> {
+      const rareMinter = requireRareMinterAddress(addresses.rareMinter);
+      const allowlist = await readAllowlistConfig({
+        publicClient,
+        rareMinter,
+        contract: params.contract,
+      });
+      return shapeReleaseAllowlistConfig({
+        rareMinter,
+        contract: params.contract,
+        allowlist,
+        nowSeconds: currentUnixTimestamp(),
+      });
+    },
+
+    async setAllowlistConfig(params): ReturnType<ReleaseNamespace['setAllowlistConfig']> {
+      const rareMinter = requireRareMinterAddress(addresses.rareMinter);
+      const { walletClient, account, accountAddress } = requireWallet(config);
+      const plan = planReleaseAllowlistConfig(params);
+
+      await assertCollectionOwnerForReleaseWrite({
+        publicClient,
+        contract: plan.contract,
+        accountAddress,
+      });
+
+      const txHash = await walletClient.writeContract({
+        address: rareMinter,
+        abi: rareMinterAbi,
+        functionName: 'setContractAllowListConfig',
+        args: [plan.root, plan.endTimestamp, plan.contract],
+        account,
+        chain: undefined,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const allowlist = await readAllowlistConfig({
+        publicClient,
+        rareMinter,
+        contract: plan.contract,
+      });
+      assertReleaseAllowlistConfigMatches(plan, allowlist);
+
+      return {
+        txHash,
+        receipt,
+        config: shapeReleaseAllowlistConfig({
+          rareMinter,
+          contract: plan.contract,
+          allowlist,
+          nowSeconds: currentUnixTimestamp(),
+        }),
+      };
+    },
+
+    async clearAllowlistConfig(params): ReturnType<ReleaseNamespace['clearAllowlistConfig']> {
+      const rareMinter = requireRareMinterAddress(addresses.rareMinter);
+      const { walletClient, account, accountAddress } = requireWallet(config);
+      const plan = planReleaseClearAllowlistConfig(params);
+
+      await assertCollectionOwnerForReleaseWrite({
+        publicClient,
+        contract: plan.contract,
+        accountAddress,
+      });
+
+      const txHash = await walletClient.writeContract({
+        address: rareMinter,
+        abi: rareMinterAbi,
+        functionName: 'setContractAllowListConfig',
+        args: [plan.root, plan.endTimestamp, plan.contract],
+        account,
+        chain: undefined,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const allowlist = await readAllowlistConfig({
+        publicClient,
+        rareMinter,
+        contract: plan.contract,
+      });
+      assertReleaseAllowlistConfigMatches(plan, allowlist);
+
+      return {
+        txHash,
+        receipt,
+        config: shapeReleaseAllowlistConfig({
+          rareMinter,
+          contract: plan.contract,
+          allowlist,
+          nowSeconds: currentUnixTimestamp(),
+        }),
+      };
+    },
+
+    async getMintLimit(params): ReturnType<ReleaseNamespace['getMintLimit']> {
+      const rareMinter = requireRareMinterAddress(addresses.rareMinter);
+      const limit = await readMintLimit({
+        publicClient,
+        rareMinter,
+        contract: params.contract,
+      });
+      return shapeReleaseLimitConfig({ rareMinter, contract: params.contract, limit });
+    },
+
+    async setMintLimit(params): ReturnType<ReleaseNamespace['setMintLimit']> {
+      const rareMinter = requireRareMinterAddress(addresses.rareMinter);
+      const { walletClient, account, accountAddress } = requireWallet(config);
+      const plan = planReleaseLimitConfig(params);
+
+      await assertCollectionOwnerForReleaseWrite({
+        publicClient,
+        contract: plan.contract,
+        accountAddress,
+      });
+
+      const txHash = await walletClient.writeContract({
+        address: rareMinter,
+        abi: rareMinterAbi,
+        functionName: 'setContractMintLimit',
+        args: [plan.contract, plan.limit],
+        account,
+        chain: undefined,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const limit = await readMintLimit({ publicClient, rareMinter, contract: plan.contract });
+      assertReleaseLimitMatches('mint limit', plan.limit, limit);
+
+      return {
+        txHash,
+        receipt,
+        config: shapeReleaseLimitConfig({ rareMinter, contract: plan.contract, limit }),
+      };
+    },
+
+    async getTxLimit(params): ReturnType<ReleaseNamespace['getTxLimit']> {
+      const rareMinter = requireRareMinterAddress(addresses.rareMinter);
+      const limit = await readTxLimit({
+        publicClient,
+        rareMinter,
+        contract: params.contract,
+      });
+      return shapeReleaseLimitConfig({ rareMinter, contract: params.contract, limit });
+    },
+
+    async setTxLimit(params): ReturnType<ReleaseNamespace['setTxLimit']> {
+      const rareMinter = requireRareMinterAddress(addresses.rareMinter);
+      const { walletClient, account, accountAddress } = requireWallet(config);
+      const plan = planReleaseLimitConfig(params);
+
+      await assertCollectionOwnerForReleaseWrite({
+        publicClient,
+        contract: plan.contract,
+        accountAddress,
+      });
+
+      const txHash = await walletClient.writeContract({
+        address: rareMinter,
+        abi: rareMinterAbi,
+        functionName: 'setContractTxLimit',
+        args: [plan.contract, plan.limit],
+        account,
+        chain: undefined,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const limit = await readTxLimit({ publicClient, rareMinter, contract: plan.contract });
+      assertReleaseLimitMatches('transaction limit', plan.limit, limit);
+
+      return {
+        txHash,
+        receipt,
+        config: shapeReleaseLimitConfig({ rareMinter, contract: plan.contract, limit }),
+      };
+    },
+
+    async getSellerStakingMinimum(params): ReturnType<ReleaseNamespace['getSellerStakingMinimum']> {
+      const rareMinter = requireRareMinterAddress(addresses.rareMinter);
+      const stakingMinimum = await readSellerStakingMinimum({
+        publicClient,
+        rareMinter,
+        contract: params.contract,
+      });
+      return shapeReleaseSellerStakingMinimum({
+        rareMinter,
+        contract: params.contract,
+        stakingMinimum,
+        nowSeconds: currentUnixTimestamp(),
+      });
+    },
+
+    async setSellerStakingMinimum(params): ReturnType<ReleaseNamespace['setSellerStakingMinimum']> {
+      const rareMinter = requireRareMinterAddress(addresses.rareMinter);
+      const { walletClient, account, accountAddress } = requireWallet(config);
+      const plan = planReleaseSellerStakingMinimum(params);
+
+      await assertCollectionOwnerForReleaseWrite({
+        publicClient,
+        contract: plan.contract,
+        accountAddress,
+      });
+
+      const txHash = await walletClient.writeContract({
+        address: rareMinter,
+        abi: rareMinterAbi,
+        functionName: 'setContractSellerStakingMinimum',
+        args: [plan.contract, plan.amount, plan.endTimestamp],
+        account,
+        chain: undefined,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const stakingMinimum = await readSellerStakingMinimum({
+        publicClient,
+        rareMinter,
+        contract: plan.contract,
+      });
+      assertReleaseSellerStakingMinimumMatches(plan, stakingMinimum);
+
+      return {
+        txHash,
+        receipt,
+        config: shapeReleaseSellerStakingMinimum({
+          rareMinter,
+          contract: plan.contract,
+          stakingMinimum,
+          nowSeconds: currentUnixTimestamp(),
+        }),
+      };
+    },
+
+    async mintDirectSale(params): ReturnType<ReleaseNamespace['mintDirectSale']> {
+      const rareMinter = requireRareMinterAddress(addresses.rareMinter);
+      const { walletClient, account, accountAddress } = requireWallet(config);
+      const plan = planReleaseDirectSaleMint(params);
+      const status = await readReleaseStatus({
+        publicClient,
+        rareMinter,
+        contract: plan.contract,
+        account: accountAddress,
+      });
       const block = await publicClient.getBlock();
       const mint = preflightReleaseDirectSaleMint({
         status,
         plan,
         buyer: accountAddress,
-        nowSeconds: block.timestamp,
+        nowSeconds: BigInt(block.timestamp),
       });
       const payment = await preparePaymentForSpender({
         publicClient,
         walletClient,
         account,
         accountAddress,
-        marketplaceSettingsSource: auctionAddress,
-        spenderAddress: minterAddress,
+        marketplaceSettingsSource: addresses.auction,
+        spenderAddress: rareMinter,
         currency: mint.currency,
         amount: mint.totalPrice,
         autoApprove: plan.autoApprove,
       });
-      const txHash = await writeMintDirectSale({
-        publicClient,
-        walletClient,
+
+      const txHash = await walletClient.writeContract({
+        address: rareMinter,
+        abi: rareMinterAbi,
+        functionName: 'mintDirectSale',
+        args: [
+          mint.contract,
+          mint.currency,
+          mint.price,
+          mint.quantity,
+          mint.proof,
+        ],
         account,
-        minterAddress,
-        mint,
+        chain: undefined,
         value: payment.value,
       });
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const logs = parseEventLogs({
-        abi: rareMinterAbi,
-        logs: receipt.logs,
-        eventName: 'MintDirectSale',
+      const tokenRange = readMintDirectSaleTokenRange({
+        receipt,
+        contract: mint.contract,
+        buyer: accountAddress,
       });
-      const [mintLog] = logs;
-
-      if (!mintLog) {
-        throw new Error('RareMinter direct sale mint transaction succeeded but MintDirectSale was not found in logs.');
-      }
 
       return {
         txHash,
         receipt,
-        contract: mintLog.args._contractAddress,
-        minter: minterAddress,
-        buyer: mintLog.args._buyer,
+        approvalTxHash: payment.approvalTxHash,
+        rareMinter,
+        contract: mint.contract,
+        buyer: accountAddress,
         recipient: mint.recipient,
         quantity: mint.quantity,
-        currency: mintLog.args._currency,
-        price: mintLog.args._price,
+        currencyAddress: mint.currency,
+        price: mint.price,
         totalPrice: mint.totalPrice,
         requiredPayment: payment.requiredAmount,
-        approvalTxHash: payment.approvalTxHash,
         allowlistRequired: mint.allowlistRequired,
-        tokenIdStart: mintLog.args._tokenIdStart,
-        tokenIdEnd: mintLog.args._tokenIdEnd,
-        tokenIds: buildReleaseTokenIdRange(mintLog.args._tokenIdStart, mintLog.args._tokenIdEnd),
+        ...tokenRange,
       };
     },
 
-    async setAllowlistConfig(params) {
-      const plan = planReleaseAllowlistConfig(params);
-      const minterAddress = requireContractAddress(chain, 'rareMinter');
-      const { walletClient, account } = requireWallet(config);
-      const txHash = await writeSetAllowlistConfig({
+    async getStatus(params): ReturnType<ReleaseNamespace['getStatus']> {
+      const rareMinter = requireRareMinterAddress(addresses.rareMinter);
+      return readReleaseStatus({
         publicClient,
-        walletClient,
-        account,
-        minterAddress,
-        plan,
+        rareMinter,
+        contract: params.contract,
+        account: params.account,
       });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const updated = await readReleaseConfig(publicClient, minterAddress, plan.contract);
-
-      assertReleaseAllowlistConfigWriteMatches(plan, updated);
-
-      return {
-        txHash,
-        receipt,
-        contract: plan.contract,
-        minter: minterAddress,
-        root: updated.allowlistRoot,
-        endTimestamp: updated.allowlistEndTimestamp,
-      };
-    },
-
-    async setMintLimit(params) {
-      const plan = planReleaseMintLimit(params);
-      const minterAddress = requireContractAddress(chain, 'rareMinter');
-      const { walletClient, account } = requireWallet(config);
-      const txHash = await writeSetMintLimit({
-        publicClient,
-        walletClient,
-        account,
-        minterAddress,
-        contract: plan.contract,
-        limit: plan.limit,
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const updated = await readReleaseConfig(publicClient, minterAddress, plan.contract);
-
-      assertReleaseLimitWriteMatches('mint limit', plan.limit, updated.mintLimit);
-
-      return {
-        txHash,
-        receipt,
-        contract: plan.contract,
-        minter: minterAddress,
-        limit: updated.mintLimit,
-      };
-    },
-
-    async setTxLimit(params) {
-      const plan = planReleaseTxLimit(params);
-      const minterAddress = requireContractAddress(chain, 'rareMinter');
-      const { walletClient, account } = requireWallet(config);
-      const txHash = await writeSetTxLimit({
-        publicClient,
-        walletClient,
-        account,
-        minterAddress,
-        contract: plan.contract,
-        limit: plan.limit,
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const updated = await readReleaseConfig(publicClient, minterAddress, plan.contract);
-
-      assertReleaseLimitWriteMatches('transaction limit', plan.limit, updated.txLimit);
-
-      return {
-        txHash,
-        receipt,
-        contract: plan.contract,
-        minter: minterAddress,
-        limit: updated.txLimit,
-      };
-    },
-
-    async setSellerStakingMinimum(params) {
-      const plan = planReleaseSellerStakingMinimum(params);
-      const minterAddress = requireContractAddress(chain, 'rareMinter');
-      const { walletClient, account } = requireWallet(config);
-      const txHash = await writeSetSellerStakingMinimum({
-        publicClient,
-        walletClient,
-        account,
-        minterAddress,
-        plan,
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const updated = await readReleaseConfig(publicClient, minterAddress, plan.contract);
-
-      assertReleaseSellerStakingMinimumWriteMatches(plan, updated);
-
-      return {
-        txHash,
-        receipt,
-        contract: plan.contract,
-        minter: minterAddress,
-        minimum: updated.sellerStakingMinimum,
-        endTimestamp: updated.sellerStakingMinimumEndTimestamp,
-      };
     },
   };
 }
 
-async function readReleaseConfig(
-  publicClient: PublicClient,
-  minterAddress: Address,
-  contract: Address,
-  account?: Address,
-): Promise<ReleaseConfig> {
-  const [
-    directSale,
-    allowlist,
-    mintLimit,
-    txLimit,
-    sellerStakingMinimum,
-    supply,
-  ] = await Promise.all([
-    publicClient.readContract({
-      address: minterAddress,
-      abi: rareMinterAbi,
-      functionName: 'getDirectSaleConfig',
-      args: [contract],
-    }),
-    publicClient.readContract({
-      address: minterAddress,
-      abi: rareMinterAbi,
-      functionName: 'getContractAllowListConfig',
-      args: [contract],
-    }),
-    publicClient.readContract({
-      address: minterAddress,
-      abi: rareMinterAbi,
-      functionName: 'getContractMintLimit',
-      args: [contract],
-    }),
-    publicClient.readContract({
-      address: minterAddress,
-      abi: rareMinterAbi,
-      functionName: 'getContractTxLimit',
-      args: [contract],
-    }),
-    publicClient.readContract({
-      address: minterAddress,
-      abi: rareMinterAbi,
-      functionName: 'getContractSellerStakingMinimum',
-      args: [contract],
-    }),
-    readReleaseCollectionSupply(publicClient, contract),
-  ]);
-
-  const directSaleConfig = shapeReleaseDirectSaleConfig(directSale);
-  const baseConfig = {
-    contract,
-    minter: minterAddress,
-    allowlistRoot: allowlist.root,
-    allowlistEndTimestamp: allowlist.endTimestamp,
-    mintLimit,
-    txLimit,
-    sellerStakingMinimum: sellerStakingMinimum.amount,
-    sellerStakingMinimumEndTimestamp: sellerStakingMinimum.endTimestamp,
-    directSale: directSaleConfig,
-    supply,
-  };
-
-  if (account === undefined) {
-    return baseConfig;
-  }
-
-  const [accountMints, accountTxs] = await Promise.all([
-    publicClient.readContract({
-      address: minterAddress,
-      abi: rareMinterAbi,
-      functionName: 'getContractMintsPerAddress',
-      args: [contract, account],
-    }),
-    publicClient.readContract({
-      address: minterAddress,
-      abi: rareMinterAbi,
-      functionName: 'getContractTxsPerAddress',
-      args: [contract, account],
-    }),
-  ]);
-
-  return {
-    ...baseConfig,
-    account,
-    accountMints,
-    accountTxs,
-  };
-}
-
-async function readReleaseCollectionSupply(
-  publicClient: PublicClient,
-  contract: Address,
-): Promise<ReleaseConfig['supply']> {
-  const [totalSupply, maxTokens, mintConfig] = await Promise.all([
-    readOptionalContract(publicClient, {
-      address: contract,
-      abi: tokenAbi,
-      functionName: 'totalSupply',
-      args: [],
-    }),
-    readOptionalContract(publicClient, {
-      address: contract,
-      abi: tokenAbi,
-      functionName: 'maxTokens',
-      args: [],
-    }),
-    readOptionalContract(publicClient, {
-      address: contract,
-      abi: collectionOwnerAbi,
-      functionName: 'getMintConfig',
-      args: [],
-    }),
-  ]);
-
-  if (totalSupply === undefined && maxTokens === undefined && mintConfig === undefined) {
-    return undefined;
-  }
-
-  return shapeReleaseCollectionSupply({
-    totalSupply,
-    maxTokens,
-    preparedTokenCount: mintConfig?.numberOfTokens,
-  });
-}
-
-async function readOptionalContract<T>(
-  _publicClient: PublicClient,
-  read: () => Promise<T>,
-): Promise<T | undefined>;
-async function readOptionalContract<T>(
-  publicClient: PublicClient,
-  params: Parameters<PublicClient['readContract']>[0],
-): Promise<T | undefined>;
-async function readOptionalContract<T>(
-  publicClient: PublicClient,
-  input: Parameters<PublicClient['readContract']>[0] | (() => Promise<T>),
-): Promise<T | undefined> {
-  try {
-    if (typeof input === 'function') {
-      return await input();
-    }
-    return await publicClient.readContract(input) as T;
-  } catch {
-    return undefined;
-  }
-}
-
-async function writeMintDirectSale(
-  opts: {
-    publicClient: PublicClient;
-    walletClient: NonNullable<RareClientConfig['walletClient']>;
-    account: ReturnType<typeof requireWallet>['account'];
-    minterAddress: Address;
-    mint: ReturnType<typeof preflightReleaseDirectSaleMint>;
-    value: bigint;
-  },
-): Promise<Hash> {
-  await opts.publicClient.simulateContract({
-    address: opts.minterAddress,
-    abi: rareMinterAbi,
-    functionName: 'mintDirectSale',
-    args: [
-      opts.mint.contract,
-      opts.mint.currency,
-      opts.mint.price,
-      opts.mint.quantity,
-      opts.mint.proof,
-    ],
-    account: opts.account,
-    value: opts.value,
-  });
-
-  return opts.walletClient.writeContract({
-    address: opts.minterAddress,
-    abi: rareMinterAbi,
-    functionName: 'mintDirectSale',
-    args: [
-      opts.mint.contract,
-      opts.mint.currency,
-      opts.mint.price,
-      opts.mint.quantity,
-      opts.mint.proof,
-    ],
-    account: opts.account,
-    chain: undefined,
-    value: opts.value,
-  });
-}
-
-async function writeSetAllowlistConfig(
-  opts: {
-    publicClient: PublicClient;
-    walletClient: NonNullable<RareClientConfig['walletClient']>;
-    account: ReturnType<typeof requireWallet>['account'];
-    minterAddress: Address;
-    plan: ReturnType<typeof planReleaseAllowlistConfig>;
-  },
-): Promise<Hash> {
-  await opts.publicClient.simulateContract({
-    address: opts.minterAddress,
-    abi: rareMinterAbi,
-    functionName: 'setContractAllowListConfig',
-    args: [opts.plan.root, opts.plan.endTimestamp, opts.plan.contract],
-    account: opts.account,
-  });
-
-  return opts.walletClient.writeContract({
-    address: opts.minterAddress,
-    abi: rareMinterAbi,
-    functionName: 'setContractAllowListConfig',
-    args: [opts.plan.root, opts.plan.endTimestamp, opts.plan.contract],
-    account: opts.account,
-    chain: undefined,
-  });
-}
-
-async function writeSetMintLimit(
-  opts: {
-    publicClient: PublicClient;
-    walletClient: NonNullable<RareClientConfig['walletClient']>;
-    account: ReturnType<typeof requireWallet>['account'];
-    minterAddress: Address;
-    contract: Address;
-    limit: bigint;
-  },
-): Promise<Hash> {
-  await opts.publicClient.simulateContract({
-    address: opts.minterAddress,
-    abi: rareMinterAbi,
-    functionName: 'setContractMintLimit',
-    args: [opts.contract, opts.limit],
-    account: opts.account,
-  });
-
-  return opts.walletClient.writeContract({
-    address: opts.minterAddress,
-    abi: rareMinterAbi,
-    functionName: 'setContractMintLimit',
-    args: [opts.contract, opts.limit],
-    account: opts.account,
-    chain: undefined,
-  });
-}
-
-async function writeSetTxLimit(
-  opts: {
-    publicClient: PublicClient;
-    walletClient: NonNullable<RareClientConfig['walletClient']>;
-    account: ReturnType<typeof requireWallet>['account'];
-    minterAddress: Address;
-    contract: Address;
-    limit: bigint;
-  },
-): Promise<Hash> {
-  await opts.publicClient.simulateContract({
-    address: opts.minterAddress,
-    abi: rareMinterAbi,
-    functionName: 'setContractTxLimit',
-    args: [opts.contract, opts.limit],
-    account: opts.account,
-  });
-
-  return opts.walletClient.writeContract({
-    address: opts.minterAddress,
-    abi: rareMinterAbi,
-    functionName: 'setContractTxLimit',
-    args: [opts.contract, opts.limit],
-    account: opts.account,
-    chain: undefined,
-  });
-}
-
-async function writeSetSellerStakingMinimum(
-  opts: {
-    publicClient: PublicClient;
-    walletClient: NonNullable<RareClientConfig['walletClient']>;
-    account: ReturnType<typeof requireWallet>['account'];
-    minterAddress: Address;
-    plan: ReturnType<typeof planReleaseSellerStakingMinimum>;
-  },
-): Promise<Hash> {
-  await opts.publicClient.simulateContract({
-    address: opts.minterAddress,
-    abi: rareMinterAbi,
-    functionName: 'setContractSellerStakingMinimum',
-    args: [opts.plan.contract, opts.plan.minimum, opts.plan.endTimestamp],
-    account: opts.account,
-  });
-
-  return opts.walletClient.writeContract({
-    address: opts.minterAddress,
-    abi: rareMinterAbi,
-    functionName: 'setContractSellerStakingMinimum',
-    args: [opts.plan.contract, opts.plan.minimum, opts.plan.endTimestamp],
-    account: opts.account,
-    chain: undefined,
-  });
+function currentUnixTimestamp(): bigint {
+  return BigInt(Math.floor(Date.now() / 1000));
 }

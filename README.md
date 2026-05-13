@@ -68,9 +68,11 @@ Private keys are masked in the output.
 
 ## Usage
 
-All commands accept `--chain` to select a network. Defaults to `sepolia`.
+All commands accept `--chain` to select a network. Batch listing and lazy batch mint commands also accept `--chain-id`. Defaults to `sepolia`.
 
-Supported chains (including deploy, mint, import, and auction flows): `mainnet`, `sepolia`, `base`, `base-sepolia`
+Supported chains: `mainnet`, `sepolia`, `base`, `base-sepolia`
+
+Batch listing marketplace support is currently deployed on `mainnet` and `sepolia` only.
 
 ### Deploy an NFT Collection
 
@@ -78,6 +80,25 @@ Supported chains (including deploy, mint, import, and auction flows): `mainnet`,
 rare deploy erc721 "My Collection" "MC"
 rare deploy erc721 "My Collection" "MC" --max-tokens 1000
 ```
+
+### Create a Lazy Batch Mint Collection
+
+For lazy minting flows, use the lazy batch mint factory instead. Tokens in a lazy collection aren't pre-minted — they're prepared and claimed/redeemed by buyers later.
+
+```bash
+# Uncapped lazy collection (typical — leaves room for incremental lazy mints)
+rare collection create lazy-batch-mint "My Lazy Collection" "MLC"
+
+# Capped lazy collection (immutable supply ceiling)
+rare collection create lazy-batch-mint "My Lazy Collection" "MLC" --max-tokens 100
+```
+
+**Lazy vs standard batch mint**:
+
+- `rare deploy erc721` deploys a SovereignBatchMint contract — tokens are minted directly via `rare mint` in the same tx as their creation. Use this for traditional editions where the artist mints up front.
+- `rare collection create lazy-batch-mint` deploys a LazySovereignBatchMint contract — designed to feed the lazy mint preparation/redemption pipeline. Use this when buyers (not the artist) trigger the on-chain mint at purchase time.
+
+The lazy factory is currently deployed on **mainnet** and **sepolia** only.
 
 ### Create a Sovereign Collection
 
@@ -114,22 +135,6 @@ Prepare a Lazy Sovereign collection for collector minting. Pass `--minter` when 
 rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token-count 100
 rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token-count 100 --minter 0x...
 ```
-
-Configure RareMinter release allowlists and limits from files or direct values. Allowlist CSV files can be a single address column or include an `address`, `user address`, `wallet`, or `wallet address` header. JSON files can be an array of address strings, address objects, or a generated artifact.
-
-```bash
-rare release allowlist build --input allowlist.csv --output allowlist-artifact.json
-rare release allowlist proof --input allowlist-artifact.json --account 0x...
-rare release allowlist set --contract 0x... --input allowlist-artifact.json --end-timestamp 1778500000
-rare release limits set-mint --contract 0x... --limit 5
-rare release limits set-tx --contract 0x... --limit 2
-rare release staking set-minimum --contract 0x... --minimum 1000000000000000000 --end-timestamp 1778500000
-rare release status --contract 0x... --account 0x...
-rare release mint --contract 0x... --quantity 1
-rare release mint --contract 0x... --quantity 1 --proof proof.json
-```
-
-`set-mint` limits the total mints per wallet, `set-tx` limits the number of mint transactions per wallet, and `staking set-minimum` configures the raw staking-token amount required while the end timestamp is active. Use `0` for a limit or minimum to disable that check on the contract. `release mint` reads the configured direct sale currency and price by default; pass `--currency` or `--price` only when you want the command to fail if on-chain sale settings differ. RareMinter direct sales mint to the connected wallet.
 
 Inspect creator and royalty data on Sovereign-style collections:
 
@@ -201,6 +206,101 @@ rare mint \
   --royalty-receiver 0x...
 ```
 
+### Direct Sale Releases
+
+After creating and preparing a lazy collection, configure its RareMinter direct sale:
+
+```bash
+rare listing release configure \
+  --contract 0x... \
+  --price 0.1 \
+  --max-mints 5
+
+# Optional payout splits. If omitted, 100% goes to the configured wallet.
+rare listing release configure \
+  --contract 0x... \
+  --price 100 \
+  --currency rare \
+  --start 2026-06-01T16:00:00Z \
+  --max-mints 5 \
+  --split 0x...artist=80 \
+  --split 0x...collaborator=20
+
+# Check release status (read-only)
+rare listing release status --contract 0x...
+
+# Include account-specific mint and transaction usage
+rare listing release status --contract 0x... --account 0x...
+
+# Mint from the configured direct sale release
+rare listing release mint \
+  --contract 0x... \
+  --quantity 1
+
+# Mint during an active allowlist window with a proof file
+rare listing release allowlist proof \
+  --input ./allowlist-artifact.json \
+  --account 0x... \
+  --output ./proof.json
+
+rare listing release mint \
+  --contract 0x... \
+  --quantity 2 \
+  --proof ./proof.json
+```
+
+Release configuration uses `RareMinter.prepareMintDirectSale`. It does not mint or modify protocol-admin settings.
+`--max-mints` must be between 1 and 100 because direct sale mint transactions cannot mint more than 100 tokens.
+Release minting uses `RareMinter.mintDirectSale`; the contract mints to the connected wallet.
+
+#### Release allowlists and limits
+
+Allowlists are two-step. First, build a reusable proof artifact from creator-provided wallet input. CSV files can put wallet addresses in the first column or use an `address`/`wallet` header. JSON files can be an array of address strings, an array of objects with `address` or `wallet`, or an object with `wallets`/`addresses`.
+
+```bash
+rare listing release allowlist build \
+  --input ./allowlist.csv \
+  --output ./allowlist-artifact.json
+```
+
+The artifact contains the Merkle root plus one proof per wallet. Configure the release with that root and the allowlist end time:
+
+```bash
+rare listing release allowlist set \
+  --contract 0x... \
+  --input ./allowlist-artifact.json \
+  --end-timestamp 2026-06-01T16:00:00Z
+
+# Or set a known root directly
+rare listing release allowlist set \
+  --contract 0x... \
+  --root 0x... \
+  --end-timestamp 1767283200
+
+# Read a reusable proof for an account
+rare listing release allowlist proof \
+  --input ./allowlist-artifact.json \
+  --account 0x...
+```
+
+Rare listing release minting checks the configured on-chain root while the allowlist window is active. The proof artifact is the portable file that maps each wallet to the proof needed by a mint client or service. Keep the artifact alongside release operations; the chain stores only the root and end timestamp.
+
+Creator-facing RareMinter limits are configured separately and verified after each write:
+
+```bash
+# Per-wallet token count across the release; 0 disables it.
+rare listing release limits set-mint --contract 0x... --limit 2
+
+# Per-wallet mint transaction count; 0 disables it.
+rare listing release limits set-tx --contract 0x... --limit 1
+
+# Minimum seller staking requirement in RARE; 0 disables it.
+rare listing release staking set-minimum \
+  --contract 0x... \
+  --minimum 100 \
+  --end-timestamp 2026-06-01T16:00:00Z
+```
+
 ### Auctions
 
 ```bash
@@ -219,8 +319,8 @@ rare auction create \
   --start-time 1778500000 \
   --starting-price 0.1 \
   --duration 86400 \
-  --split-recipient 0x...seller \
-  --split-ratio 100
+  --split 0x...artist=70 \
+  --split 0x...collaborator=30
 
 # Place a bid
 rare auction bid --contract 0x... --token-id 1 --amount 0.5
@@ -235,7 +335,7 @@ rare auction cancel --contract 0x... --token-id 1
 rare auction status --contract 0x... --token-id 1
 ```
 
-Reserve auctions start when the first valid bid meets the reserve. Scheduled auctions escrow the token at configuration time and become bid-ready at `--start-time`. Use repeated `--split-recipient` and `--split-ratio` pairs when seller proceeds should be split; ratios must sum to 100.
+Reserve auctions start when the first valid bid meets the reserve. Scheduled auctions escrow the token when configured and become bid-ready at `--start-time`; their starting price can be zero. `--split <ADDR=RATIO>` is repeatable for up to 5 recipients, and ratios must sum to exactly 100.
 
 ### Offers
 
@@ -249,12 +349,22 @@ rare offer create --contract 0x... --token-id 1 --amount 100 --currency usdc
 # Accept an offer on a token you own
 rare offer accept --contract 0x... --token-id 1 --amount 0.5
 
+# Accept with payout splits (must sum to 100; caller is NOT auto-included)
+rare offer accept --contract 0x... --token-id 1 --amount 0.5 \
+  --split 0xCollab=30 --split 0xMyWallet=70
+
 # Cancel your offer
 rare offer cancel --contract 0x... --token-id 1
 
 # Check offer status (read-only)
 rare offer status --contract 0x... --token-id 1
 ```
+
+`--amount` on `accept` is a slippage assertion: the on-chain offer must still match the value you pass, otherwise the tx reverts. Re-run `offer status` if you suspect drift.
+
+`--split <ADDR=RATIO>` is repeatable for up to 5 recipients. Ratios must sum to exactly 100. If you omit `--split`, the SDK defaults to `[caller, 100]` (100% to your wallet). If you pass any `--split`, you must specify the complete list — the caller is **not** auto-appended.
+
+NFT approval (`setApprovalForAll`) is auto-handled by `offer accept` when needed, just like `auction create` and `listing create`.
 
 ### Listings
 
@@ -265,21 +375,86 @@ rare listing create --contract 0x... --token-id 1 --price 1.0
 # List with ERC20 currency or a targeted buyer
 rare listing create --contract 0x... --token-id 1 --price 100 --currency rare --target 0x...buyer
 
+# List with payout splits (must sum to 100; caller is NOT auto-included)
+rare listing create --contract 0x... --token-id 1 --price 1.0 \
+  --split 0xCollab=30 --split 0xMyWallet=70
+
 # Buy a listed token
 rare listing buy --contract 0x... --token-id 1 --amount 1.0
 
 # Cancel a listing
 rare listing cancel --contract 0x... --token-id 1
 
-# Check listing status (read-only)
+# Check listing status (read-only) — includes seller, amount, currency, target,
+# split recipients, and whether the connected wallet can buy
 rare listing status --contract 0x... --token-id 1
 ```
+
+`--split <ADDR=RATIO>` is repeatable. Ratios must sum to exactly 100. If you omit `--split`, the SDK defaults to `[caller, 100]` (100% to your wallet). If you pass any `--split`, you must specify the complete list — the caller is **not** auto-appended.
+
+### Batch Listings
+
+Batch listings use Merkle artifacts: one root artifact describing the token set and listing config, and one proof artifact per token purchase.
+Root artifacts are produced outside the CLI. Token sets and allowlists must each contain at least two entries because the batch listing contract rejects empty Merkle proofs. If no split is provided, registration defaults to 100% to the connected seller wallet.
+
+```bash
+# Build a proof artifact for one token in the root
+rare listing batch merkle proof \
+  --root ./root.json \
+  --contract 0x... \
+  --token-id 1 \
+  --output ./proof.json
+
+# If the root has an allowlist, include the buyer when generating the proof
+rare listing batch merkle proof \
+  --root ./root.json \
+  --contract 0x... \
+  --token-id 1 \
+  --buyer 0x... \
+  --output ./proof.json
+
+# Register the batch listing from the root artifact
+rare listing batch create --root ./root.json --yes
+
+# Buy one token using a proof artifact
+rare listing batch buy \
+  --proof ./proof.json \
+  --creator 0x...seller \
+  --currency usdc \
+  --amount 25
+
+# Inspect the listing config
+rare listing batch status --root ./root.json --creator 0x...seller
+
+# Narrow status to a specific token with its proof
+rare listing batch status \
+  --root ./root.json \
+  --creator 0x...seller \
+  --contract 0x... \
+  --token-id 1 \
+  --proof ./proof.json
+
+# Attach an allowlist config to an existing root
+rare listing batch set-allowlist \
+  --root ./root.json
+
+# Or pass explicit values when using a hex root instead of an artifact path
+rare listing batch set-allowlist \
+  --root 0x... \
+  --allowlist-root 0x... \
+  --end-timestamp 1735689600
+
+# Cancel the listing root
+rare listing batch cancel --root ./root.json
+```
+
+Named currencies are parsed with chain-aware decimals. Arbitrary ERC20 addresses are supported and their `decimals()` values are resolved from chain RPC when sending buys.
 
 ### Currencies
 
 All marketplace commands (`auction`, `offer`, `listing`) accept `--currency` to specify a payment token. Named currencies (`eth`, `usdc`, `rare`) are resolved per-chain automatically. You can also pass any ERC20 address directly.
 
-ERC20 allowances are auto-approved when needed for bids, offers, and purchases.
+ERC20 allowances are auto-approved when needed for bids, offers, listing purchases, and batch-listing purchases.
 
 ```bash
 # List supported currencies and their addresses
@@ -465,44 +640,6 @@ const prepared = await rare.collection.prepareLazyMint({
 console.log(prepared.tokenCount);
 ```
 
-### Configure RareMinter release settings
-
-```ts
-const allowlist = rare.release.buildAllowlist({
-  content: 'address\n0x1111111111111111111111111111111111111111\n0x2222222222222222222222222222222222222222\n',
-  format: 'csv',
-});
-
-const proof = rare.release.getAllowlistProof({
-  artifact: allowlist,
-  address: '0x1111111111111111111111111111111111111111',
-});
-
-await rare.release.setAllowlistConfig({
-  contract: '0xLazySovereignContractAddress',
-  root: allowlist.root,
-  endTimestamp: 1778500000,
-});
-
-await rare.release.setMintLimit({
-  contract: '0xLazySovereignContractAddress',
-  limit: 5,
-});
-
-const status = await rare.release.getConfig({
-  contract: '0xLazySovereignContractAddress',
-  account: '0x1111111111111111111111111111111111111111',
-});
-
-const minted = await rare.release.mintDirectSale({
-  contract: '0xLazySovereignContractAddress',
-  quantity: 1,
-  proof: proof.proof,
-});
-
-console.log(proof.valid, status.mintLimit, minted.tokenIds);
-```
-
 ### Inspect and maintain collection owner settings
 
 ```ts
@@ -568,12 +705,12 @@ rare configure --show
 
 ## Contract Addresses
 
-| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Space Factory | RareMinter | Auction |
-|---|---|---|---|---|---|---|
-| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | not configured | `0xd28Dc0B89104d7BBd902F338a0193fF063617ccE` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` |
-| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x3b2d699110aa1788b2b1cae336e0ba8ff942a390` | `0x5fa112EFeD8297bec0010b312208d223E0cE891E` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` |
-| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | not configured | not configured | not configured | not configured | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` |
-| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | not configured | not configured | not configured | not configured | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` |
+| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Space Factory | Auction | RareMinter | Batch Listing |
+|---|---|---|---|---|---|---|---|
+| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | — | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` | `0xd28Dc0B89104d7BBd902F338a0193fF063617ccE` | `0xF2bE72d4343beD375Cb6d0E799a3c003163860e0` |
+| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x3b2d699110aa1788b2b1cae336e0ba8ff942a390` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` | `0x5fa112EFeD8297bec0010b312208d223E0cE891E` | `0x6a190885A806D39A0A8C348bfA1ac762D72E608d` |
+| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | — | — | — | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` | — | — |
+| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | — | — | — | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` | — | — |
 
 ## Underlying Solidity Contracts
 
@@ -585,7 +722,6 @@ If you want to inspect the on-chain contracts used by this CLI:
 - Factory used for Sovereign collection creation: [`SovereignNFTContractFactory.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/SovereignNFTContractFactory.sol)
 - Token contract used for Lazy Sovereign mint preparation: [`LazySovereignNFT.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/lazy/LazySovereignNFT.sol)
 - Factory used for Lazy Sovereign release collection creation: [`LazySovereignNFTFactory.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/lazy/LazySovereignNFTFactory.sol)
-- Minter used for release allowlists, mint limits, transaction limits, and seller staking requirements: [`RareMinter.sol`](https://github.com/rareprotocol/core/blob/main/src/collection/RareMinter.sol)
 - RareSpace collection contract: [`RareSpaceNFT.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/spaces/RareSpaceNFT.sol)
 - Factory used for RareSpace collection creation: [`RareSpaceNFTContractFactory.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/spaces/RareSpaceNFTContractFactory.sol)
 - Auction/market contract used for auction operations: [`SuperRareBazaar.sol`](https://github.com/superrare/core/blob/main/src/bazaar/SuperRareBazaar.sol)

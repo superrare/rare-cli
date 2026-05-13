@@ -1,16 +1,11 @@
-import type { Address, Hash, Hex, PublicClient, TransactionReceipt, WalletClient } from 'viem';
+import type { Address, Hash, PublicClient, TransactionReceipt, WalletClient } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
+import type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
+import type { LiquidFactoryConfig } from '../liquid/factory-config.js';
 import type {
   LazySovereignCollectionContractType,
   SovereignCollectionContractType,
 } from './collection-core.js';
-import type {
-  BuildReleaseAllowlistParams,
-  ReleaseCollectionSupply,
-  ReleaseAllowlistArtifact,
-  ReleaseAllowlistProof,
-  ReleaseDirectSaleConfig,
-} from './release-core.js';
 import type {
   CollectionSearchParams,
   ImportErc721Params,
@@ -21,108 +16,121 @@ import type {
   Nft,
   Collection,
   NftEvent,
+  NftEventOptions,
+  CollectionEventOptions,
   UserProfile,
 } from './api.js';
 
 export type IntegerInput = bigint | number | string;
 export type AmountInput = bigint | number | string;
+export type TimestampInput = IntegerInput | Date;
 export type WalletAccount = NonNullable<WalletClient['account']>;
 
-export interface RareClientConfig {
+export type RareClientConfig = {
   publicClient: PublicClient;
   walletClient?: WalletClient;
   account?: Address;
 }
 
-export interface TransactionResult {
+export type TransactionResult = {
   txHash: Hash;
   receipt: TransactionReceipt;
 }
 
-export interface DeployErc721Params {
+export type DeployErc721Params = {
   name: string;
   symbol: string;
   maxTokens?: IntegerInput;
 }
 
-export interface DeployErc721Result extends TransactionResult {
+export type DeployErc721Result = {
   contract: Address;
+} & TransactionResult
+
+export type DeployLazyBatchMintParams = {
+  name: string;
+  symbol: string;
+  maxTokens?: IntegerInput;
 }
 
-export interface CreateSovereignCollectionParams {
+export type DeployLazyBatchMintResult = {
+  contract: Address;
+} & TransactionResult
+
+export type CreateSovereignCollectionParams = {
   name: string;
   symbol: string;
   maxTokens?: IntegerInput;
   contractType?: SovereignCollectionContractType;
 }
 
-export interface CreateSovereignCollectionResult extends TransactionResult {
+export type CreateSovereignCollectionResult = {
   contract: Address;
   factory: Address;
   contractType: SovereignCollectionContractType;
-}
+} & TransactionResult
 
-export interface CreateLazySovereignCollectionParams {
+export type CreateLazySovereignCollectionParams = {
   name: string;
   symbol: string;
   maxTokens: IntegerInput;
   contractType?: LazySovereignCollectionContractType;
 }
 
-export interface CreateLazySovereignCollectionResult extends TransactionResult {
+export type CreateLazySovereignCollectionResult = {
   contract: Address;
   factory: Address;
   contractType: LazySovereignCollectionContractType;
   nextStep: string;
-}
+} & TransactionResult
 
-export interface CollectionMintBatchParams {
+export type CollectionMintBatchParams = {
   contract: Address;
   baseUri: string;
   tokenCount: IntegerInput;
 }
 
-export interface CollectionMintBatchResult extends TransactionResult {
+export type CollectionMintBatchResult = {
   contract: Address;
   baseUri: string;
   tokenCount: bigint;
   fromTokenId: bigint;
   toTokenId: bigint;
   owner: Address;
-}
+} & TransactionResult
 
-export interface CollectionPrepareLazyMintParams {
+export type CollectionPrepareLazyMintParams = {
   contract: Address;
   baseUri: string;
   tokenCount: IntegerInput;
   minter?: Address;
 }
 
-export interface CollectionPrepareLazyMintResult extends TransactionResult {
+export type CollectionPrepareLazyMintResult = {
   contract: Address;
   baseUri: string;
   tokenCount: bigint;
   minter?: Address;
-}
+} & TransactionResult
 
-export interface CollectionTokenCreatorParams {
+export type CollectionTokenCreatorParams = {
   contract: Address;
   tokenId: IntegerInput;
 }
 
-export interface CollectionTokenCreatorResult {
+export type CollectionTokenCreatorResult = {
   contract: Address;
   tokenId: bigint;
   creator: Address;
 }
 
-export interface CollectionRoyaltyInfoParams {
+export type CollectionRoyaltyInfoParams = {
   contract: Address;
   tokenId: IntegerInput;
   salePrice?: IntegerInput;
 }
 
-export interface CollectionRoyaltyInfoResult {
+export type CollectionRoyaltyInfoResult = {
   contract: Address;
   tokenId: bigint;
   salePrice: bigint;
@@ -132,204 +140,108 @@ export interface CollectionRoyaltyInfoResult {
   defaultPercentage?: bigint;
 }
 
-export interface CollectionSetDefaultRoyaltyReceiverParams {
+export type CollectionSetDefaultRoyaltyReceiverParams = {
   contract: Address;
   receiver: Address;
 }
 
-export interface CollectionSetDefaultRoyaltyReceiverResult extends TransactionResult {
+export type CollectionSetDefaultRoyaltyReceiverResult = {
   contract: Address;
   receiver: Address;
-}
+} & TransactionResult
 
-export interface CollectionSetTokenRoyaltyReceiverParams {
+export type CollectionSetTokenRoyaltyReceiverParams = {
   contract: Address;
   tokenId: IntegerInput;
   receiver: Address;
 }
 
-export interface CollectionSetTokenRoyaltyReceiverResult extends TransactionResult {
+export type CollectionSetTokenRoyaltyReceiverResult = {
   contract: Address;
   tokenId: bigint;
   receiver: Address;
-}
+} & TransactionResult
 
-export interface CollectionMintConfigParams {
+export type CollectionMintConfigParams = {
   contract: Address;
 }
 
-export interface CollectionMintConfigResult {
+export type CollectionMintConfigResult = {
   contract: Address;
   tokenCount: bigint;
   baseUri: string;
   lockedMetadata: boolean;
 }
 
-export interface CollectionUpdateBaseUriParams {
+export type CollectionUpdateBaseUriParams = {
   contract: Address;
   baseUri: string;
 }
 
-export interface CollectionUpdateBaseUriResult extends TransactionResult {
+export type CollectionUpdateBaseUriResult = {
   contract: Address;
   baseUri: string;
-}
+} & TransactionResult
 
-export interface CollectionUpdateTokenUriParams {
+export type CollectionUpdateTokenUriParams = {
   contract: Address;
   tokenId: IntegerInput;
   tokenUri: string;
 }
 
-export interface CollectionUpdateTokenUriResult extends TransactionResult {
+export type CollectionUpdateTokenUriResult = {
   contract: Address;
   tokenId: bigint;
   tokenUri: string;
-}
+} & TransactionResult
 
-export interface CollectionLockBaseUriParams {
+export type CollectionLockBaseUriParams = {
   contract: Address;
 }
 
-export interface CollectionLockBaseUriResult extends TransactionResult {
+export type CollectionLockBaseUriResult = {
   contract: Address;
   baseUri: string;
-}
+} & TransactionResult
 
-export interface CreateRareSpaceCollectionParams {
+export type CreateRareSpaceCollectionParams = {
   name: string;
   symbol: string;
 }
 
-export interface CreateRareSpaceCollectionResult extends TransactionResult {
+export type CreateRareSpaceCollectionResult = {
   contract: Address;
   factory: Address;
   operator: Address;
-}
+} & TransactionResult
 
-export interface MintRareSpaceTokenParams {
+export type MintRareSpaceTokenParams = {
   contract: Address;
   tokenUri: string;
   to?: Address;
   royaltyReceiver?: Address;
 }
 
-export interface MintRareSpaceTokenResult extends TransactionResult {
+export type MintRareSpaceTokenResult = {
   contract: Address;
   tokenId: bigint;
   tokenUri: string;
   to: Address;
   royaltyReceiver: Address;
-}
+} & TransactionResult
 
-export interface ReleaseAllowlistConfigParams {
-  contract: Address;
-  root: Hex;
-  endTimestamp: IntegerInput;
-}
-
-export interface ReleaseAllowlistConfigResult extends TransactionResult {
-  contract: Address;
-  minter: Address;
-  root: Hex;
-  endTimestamp: bigint;
-}
-
-export interface ReleaseLimitParams {
-  contract: Address;
-  limit: IntegerInput;
-}
-
-export interface ReleaseLimitResult extends TransactionResult {
-  contract: Address;
-  minter: Address;
-  limit: bigint;
-}
-
-export interface ReleaseSellerStakingMinimumParams {
-  contract: Address;
-  minimum: IntegerInput;
-  endTimestamp: IntegerInput;
-}
-
-export interface ReleaseSellerStakingMinimumResult extends TransactionResult {
-  contract: Address;
-  minter: Address;
-  minimum: bigint;
-  endTimestamp: bigint;
-}
-
-export interface ReleaseMintDirectSaleParams {
-  contract: Address;
-  quantity?: IntegerInput;
-  currency?: Address;
-  price?: AmountInput;
-  proof?: readonly Hex[];
-  recipient?: Address;
-  autoApprove?: boolean;
-}
-
-export interface ReleaseMintDirectSaleResult extends TransactionResult {
-  contract: Address;
-  minter: Address;
-  buyer: Address;
-  recipient: Address;
-  quantity: number;
-  currency: Address;
-  price: bigint;
-  totalPrice: bigint;
-  requiredPayment: bigint;
-  approvalTxHash?: Hash;
-  allowlistRequired: boolean;
-  tokenIdStart: bigint;
-  tokenIdEnd: bigint;
-  tokenIds: bigint[];
-}
-
-export interface ReleaseConfigParams {
-  contract: Address;
-  account?: Address;
-}
-
-export interface ReleaseConfig {
-  contract: Address;
-  minter: Address;
-  allowlistRoot: Hex;
-  allowlistEndTimestamp: bigint;
-  mintLimit: bigint;
-  txLimit: bigint;
-  sellerStakingMinimum: bigint;
-  sellerStakingMinimumEndTimestamp: bigint;
-  directSale: ReleaseDirectSaleConfig;
-  supply?: ReleaseCollectionSupply;
-  account?: Address;
-  accountMints?: bigint;
-  accountTxs?: bigint;
-}
-
-export interface ReleaseAllowlistProofParams {
-  artifact: ReleaseAllowlistArtifact;
-  address: Address;
-}
-
-export interface ReleaseAllowlistVerifyParams {
-  root: Hex;
-  address: Address;
-  proof: readonly Hex[];
-}
-
-export interface MintToParams {
+export type MintToParams = {
   contract: Address;
   tokenUri: string;
   to?: Address;
   royaltyReceiver?: Address;
 }
 
-export interface MintToResult extends TransactionResult {
+export type MintToResult = {
   tokenId: bigint;
-}
+} & TransactionResult
 
-export interface AuctionCreateParams {
+export type AuctionCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
   startingPrice: AmountInput;
@@ -342,29 +254,29 @@ export interface AuctionCreateParams {
   autoApprove?: boolean;
 }
 
-export interface AuctionBidParams {
+export type AuctionBidParams = {
   contract: Address;
   tokenId: IntegerInput;
   amount: AmountInput;
   currency?: Address;
 }
 
-export interface AuctionSettleParams {
+export type AuctionSettleParams = {
   contract: Address;
   tokenId: IntegerInput;
 }
 
-export interface AuctionCancelParams {
+export type AuctionCancelParams = {
   contract: Address;
   tokenId: IntegerInput;
 }
 
-export interface AuctionStatusParams {
+export type AuctionStatusParams = {
   contract: Address;
   tokenId: IntegerInput;
 }
 
-export interface AuctionStatus {
+export type AuctionStatus = {
   seller: Address;
   creationBlock: bigint;
   startingTime: bigint;
@@ -389,21 +301,20 @@ export interface AuctionStatus {
   settlementEligible: boolean;
 }
 
-export interface OfferCreateParams {
+export type OfferCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
   amount: AmountInput;
-  convertible?: boolean;
 }
 
-export interface OfferCancelParams {
+export type OfferCancelParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
 }
 
-export interface OfferAcceptParams {
+export type OfferAcceptParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
@@ -412,22 +323,26 @@ export interface OfferAcceptParams {
   splitRatios?: number[];
 }
 
-export interface OfferStatusParams {
+export type OfferStatusParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
 }
 
-export interface OfferStatus {
+export type OfferStatus = {
   buyer: Address;
   amount: bigint;
   timestamp: bigint;
   marketplaceFee: number;
-  convertible: boolean;
   hasOffer: boolean;
+  currency: Address;
+  tokenOwner: Address | null;
+  cancellableAfter: bigint | null;
+  canAccept: boolean | null;
+  canCancel: boolean | null;
 }
 
-export interface ListingCreateParams {
+export type ListingCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
@@ -438,34 +353,268 @@ export interface ListingCreateParams {
   autoApprove?: boolean;
 }
 
-export interface ListingCancelParams {
+export type ListingCancelParams = {
   contract: Address;
   tokenId: IntegerInput;
   target?: Address;
 }
 
-export interface ListingBuyParams {
+export type ListingBuyParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
   amount: AmountInput;
 }
 
-export interface ListingStatusParams {
+export type ListingStatusParams = {
   contract: Address;
   tokenId: IntegerInput;
   target?: Address;
 }
 
-export interface ListingStatus {
+export type ListingStatus = {
   seller: Address;
   currencyAddress: Address;
   amount: bigint;
   hasListing: boolean;
   isEth: boolean;
+  target: Address;
+  splitAddresses: Address[];
+  splitRatios: number[];
+  canBuy: boolean | null;
 }
 
-export interface TokenContractInfo {
+export type BatchListingTokenEntry = {
+  contract: Address;
+  tokenId: IntegerInput;
+}
+
+export type BatchListingRootArtifact = {
+  root: `0x${string}`;
+  currency: Address;
+  amount: string;
+  splitAddresses: Address[];
+  splitRatios: number[];
+  tokens: { contract: Address; tokenId: string }[];
+  allowList?: { root: `0x${string}`; addresses: Address[]; endTimestamp?: string };
+}
+
+export type BatchListingProofArtifact = {
+  root: `0x${string}`;
+  contract: Address;
+  tokenId: string;
+  proof: `0x${string}`[];
+  allowListProof?: `0x${string}`[];
+  allowListAddress?: Address;
+}
+
+export type BatchListingCreateParams = {
+  artifact: BatchListingRootArtifact;
+  autoApprove?: boolean;
+}
+
+export type BatchListingCreateResult = {
+  approvalTxHashes?: Hash[];
+} & TransactionResult
+
+export type BatchListingCancelParams = {
+  root: `0x${string}`;
+}
+
+export type BatchListingBuyParams = {
+  proofArtifact: BatchListingProofArtifact;
+  creator: Address;
+  currency: Address;
+  amount: AmountInput;
+}
+
+export type BatchListingSetAllowListParams = {
+  root: `0x${string}`;
+  allowListRoot: `0x${string}`;
+  endTimestamp: IntegerInput;
+}
+
+export type BatchListingStatusParams = {
+  root: `0x${string}`;
+  creator: Address;
+  contract?: Address;
+  tokenId?: IntegerInput;
+  proof?: `0x${string}`[];
+}
+
+export type BatchListingStatus = {
+  root: `0x${string}`;
+  seller: Address;
+  currencyAddress: Address;
+  amount: bigint;
+  splitRecipients: Address[];
+  splitRatios: number[];
+  nonce: bigint;
+  isEth: boolean;
+  hasListing: boolean;
+  allowList?: { root: `0x${string}`; endTimestamp: bigint };
+  tokenInRoot?: boolean;
+  tokenNonce?: bigint;
+}
+
+export type ReleaseConfigureParams = {
+  contract: Address;
+  currency?: Address;
+  price: AmountInput;
+  startTime?: TimestampInput;
+  maxMints: IntegerInput;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+}
+
+export type ReleaseConfigureResult = {
+  rareMinter: Address;
+  contract: Address;
+  currencyAddress: Address;
+  price: bigint;
+  startTime: bigint;
+  maxMints: bigint;
+  splitRecipients: Address[];
+  splitRatios: number[];
+} & TransactionResult
+
+export type ReleaseMintDirectSaleParams = {
+  contract: Address;
+  quantity?: IntegerInput;
+  currency?: Address;
+  price?: AmountInput;
+  proof?: readonly Hash[];
+  recipient?: Address;
+  autoApprove?: boolean;
+}
+
+export type ReleaseMintDirectSaleResult = {
+  rareMinter: Address;
+  contract: Address;
+  buyer: Address;
+  recipient: Address;
+  quantity: number;
+  currencyAddress: Address;
+  price: bigint;
+  totalPrice: bigint;
+  requiredPayment: bigint;
+  approvalTxHash?: Hash;
+  allowlistRequired: boolean;
+  tokenIdStart: bigint;
+  tokenIdEnd: bigint;
+  tokenIds: bigint[];
+} & TransactionResult
+
+export type ReleaseAllowlistWalletProof = {
+  address: Address;
+  leaf: Hash;
+  proof: Hash[];
+}
+
+export type ReleaseAllowlistArtifact = {
+  kind: 'rare-release-allowlist-v1';
+  version: 1;
+  leafEncoding: 'keccak256(address)';
+  tree: 'sorted-addresses-sort-pairs';
+  root: Hash;
+  wallets: ReleaseAllowlistWalletProof[];
+}
+
+export type ReleaseAllowlistConfig = {
+  rareMinter: Address;
+  contract: Address;
+  root: Hash;
+  endTimestamp: bigint;
+  active: boolean;
+  now: bigint;
+}
+
+export type ReleaseLimitConfig = {
+  rareMinter: Address;
+  contract: Address;
+  limit: bigint;
+  enabled: boolean;
+}
+
+export type ReleaseSellerStakingMinimum = {
+  rareMinter: Address;
+  contract: Address;
+  amount: bigint;
+  endTimestamp: bigint;
+  active: boolean;
+  now: bigint;
+}
+
+export type ReleaseSetAllowlistConfigParams = {
+  contract: Address;
+  root?: Hash;
+  artifact?: ReleaseAllowlistArtifact;
+  endTimestamp: TimestampInput;
+}
+
+export type ReleaseSetAllowlistConfigResult = {
+  config: ReleaseAllowlistConfig;
+} & TransactionResult
+
+export type ReleaseSetLimitParams = {
+  contract: Address;
+  limit: IntegerInput;
+}
+
+export type ReleaseSetLimitResult = {
+  config: ReleaseLimitConfig;
+} & TransactionResult
+
+export type ReleaseSetSellerStakingMinimumParams = {
+  contract: Address;
+  amount: AmountInput;
+  endTimestamp?: TimestampInput;
+}
+
+export type ReleaseSetSellerStakingMinimumResult = {
+  config: ReleaseSellerStakingMinimum;
+} & TransactionResult
+
+export type ReleaseStatusParams = {
+  contract: Address;
+  account?: Address;
+}
+
+export type ReleaseStatus = {
+  rareMinter: Address;
+  contract: Address;
+  configured: boolean;
+  seller: Address;
+  currencyAddress: Address;
+  currencyDecimals: number | null;
+  price: bigint;
+  startTime: bigint;
+  maxMints: bigint;
+  splitRecipients: Address[];
+  splitRatios: number[];
+  allowlistRoot: `0x${string}`;
+  allowlistEndTimestamp: bigint;
+  allowlistActive: boolean;
+  requiresAllowlist: boolean;
+  mintLimit: bigint;
+  txLimit: bigint;
+  account: Address | null;
+  accountMints: bigint | null;
+  accountTxs: bigint | null;
+  stakingMinimumAmount: bigint;
+  stakingMinimumEndTimestamp: bigint;
+  stakingMinimumActive: boolean;
+  totalSupply: bigint | null;
+  maxSupply: bigint | null;
+  remainingSupply: bigint | null;
+  soldOut: boolean | null;
+  started: boolean;
+  currentlyMintable: boolean;
+  isEth: boolean;
+  now: bigint;
+}
+
+export type TokenContractInfo = {
   contract: Address;
   chain: SupportedChain;
   name: string;
@@ -473,14 +622,186 @@ export interface TokenContractInfo {
   totalSupply: bigint;
 }
 
-export interface TokenInfo {
+export type TokenInfo = {
   contract: Address;
   tokenId: bigint;
   owner: Address;
   tokenUri: string;
 }
 
-export interface RareClient {
+export type GeneratePresetCurvesParams = {
+  preset: CurvePresetKey;
+}
+
+export type GeneratePresetCurvesResult = {
+  preset: CurvePresetKey;
+  rarePriceUsd: number;
+  curves: LiquidCurveSegment[];
+  preview: LiquidCurvePreview;
+}
+
+export type ValidateLiquidCurvesParams = {
+  curves: LiquidCurveSegment[];
+}
+
+export type DeployLiquidEditionParams = {
+  name: string;
+  symbol: string;
+  tokenUri: string;
+  initialRareLiquidity?: AmountInput;
+  curves: LiquidCurveSegment[];
+}
+
+export type DeployLiquidEditionResult = {
+  contract: Address;
+  tokenUri: string;
+  curves: LiquidCurveSegment[];
+} & TransactionResult
+
+export type RouterBuyParams = {
+  token: Address;
+  ethAmount: AmountInput;
+  minTokensOut: AmountInput;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export type RouterSellParams = {
+  token: Address;
+  tokenAmount: AmountInput;
+  minEthOut: AmountInput;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export type RouterSwapParams = {
+  tokenIn: Address;
+  amountIn: AmountInput;
+  tokenOut: Address;
+  minAmountOut: AmountInput;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export type BuyRareParams = {
+  ethAmount: AmountInput;
+  minRareOut?: AmountInput;
+  slippageBps?: IntegerInput;
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export type BuyTokenParams = {
+  token: Address;
+  ethAmount: AmountInput;
+  minTokensOut?: AmountInput;
+  slippageBps?: IntegerInput;
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export type SellTokenParams = {
+  token: Address;
+  tokenAmount: AmountInput;
+  minEthOut?: AmountInput;
+  slippageBps?: IntegerInput;
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export type TokenTradeRouteSource = 'liquid-edition' | 'known-pool' | 'uniswap-api';
+export type TokenTradeExecution = 'liquid-router' | 'uniswap-api';
+
+export type TokenTradeQuoteBase = {
+  amountIn: bigint;
+  estimatedAmountOut: bigint;
+  minAmountOut: bigint;
+  tokenIn: Address;
+  tokenOut: Address;
+  inputDecimals: number;
+  outputDecimals: number;
+  slippageBps: number;
+  routeDescription: string;
+}
+
+export type LiquidRouterTokenTradeQuote = {
+  routeSource: Extract<TokenTradeRouteSource, 'liquid-edition' | 'known-pool'>;
+  execution: 'liquid-router';
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+} & TokenTradeQuoteBase
+
+export type UniswapApiTokenTradeQuote = {
+  routeSource: 'uniswap-api';
+  execution: 'uniswap-api';
+} & TokenTradeQuoteBase
+
+export type TokenTradeQuote = LiquidRouterTokenTradeQuote | UniswapApiTokenTradeQuote;
+
+export type TokenTradeResult = {
+  estimatedAmountOut: bigint;
+  minAmountOut: bigint;
+  routeSource: TokenTradeRouteSource;
+  execution: TokenTradeExecution;
+  commands?: `0x${string}`;
+  inputs?: readonly `0x${string}`[];
+  approvalTxHash?: Hash;
+  approvalResetTxHash?: Hash;
+} & TransactionResult
+
+export type BuyRareQuote = {
+  ethAmount: bigint;
+  rareAddress: Address;
+  estimatedRareOut: bigint;
+  minRareOut: bigint;
+  slippageBps: number;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+}
+
+export type BuyRareResult = {
+  estimatedRareOut: bigint;
+  minRareOut: bigint;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+} & TransactionResult
+
+export type ReleaseNamespace = {
+  buildAllowlistArtifact: (params: { input: string; format: 'csv' | 'json' }) => ReleaseAllowlistArtifact;
+  parseAllowlistArtifact: (params: { input: string }) => ReleaseAllowlistArtifact;
+  getAllowlistProof: (params: { artifact: ReleaseAllowlistArtifact; address: Address }) => ReleaseAllowlistWalletProof | null;
+  configure: (params: ReleaseConfigureParams) => Promise<ReleaseConfigureResult>;
+  getAllowlistConfig: (params: { contract: Address }) => Promise<ReleaseAllowlistConfig>;
+  setAllowlistConfig: (params: ReleaseSetAllowlistConfigParams) => Promise<ReleaseSetAllowlistConfigResult>;
+  clearAllowlistConfig: (params: { contract: Address }) => Promise<ReleaseSetAllowlistConfigResult>;
+  getMintLimit: (params: { contract: Address }) => Promise<ReleaseLimitConfig>;
+  setMintLimit: (params: ReleaseSetLimitParams) => Promise<ReleaseSetLimitResult>;
+  getTxLimit: (params: { contract: Address }) => Promise<ReleaseLimitConfig>;
+  setTxLimit: (params: ReleaseSetLimitParams) => Promise<ReleaseSetLimitResult>;
+  getSellerStakingMinimum: (params: { contract: Address }) => Promise<ReleaseSellerStakingMinimum>;
+  setSellerStakingMinimum: (params: ReleaseSetSellerStakingMinimumParams) => Promise<ReleaseSetSellerStakingMinimumResult>;
+  mintDirectSale: (params: ReleaseMintDirectSaleParams) => Promise<ReleaseMintDirectSaleResult>;
+  getStatus: (params: ReleaseStatusParams) => Promise<ReleaseStatus>;
+}
+
+export type ListingMarketplaceNamespace = {
+  create: (params: ListingCreateParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
+  cancel: (params: ListingCancelParams) => Promise<TransactionResult>;
+  buy: (params: ListingBuyParams) => Promise<TransactionResult>;
+  getStatus: (params: ListingStatusParams) => Promise<ListingStatus>;
+}
+
+export type ListingNamespace = ListingMarketplaceNamespace & {
+  release: ReleaseNamespace;
+}
+
+export type RareClient = {
   chain: SupportedChain;
   chainId: number;
   contracts: {
@@ -490,82 +811,99 @@ export interface RareClient {
     lazySovereignFactory?: Address;
     spaceFactory?: Address;
     rareMinter?: Address;
+    lazyBatchMintFactory?: Address;
+    batchListing?: Address;
+    marketplaceSettings?: Address;
+    erc20ApprovalManager?: Address;
+    erc721ApprovalManager?: Address;
+    liquidFactory?: Address;
+    swapRouter?: Address;
+    v4Quoter?: Address;
   };
   deploy: {
-    erc721(params: DeployErc721Params): Promise<DeployErc721Result>;
+    erc721: (params: DeployErc721Params) => Promise<DeployErc721Result>;
+    lazyBatchMint: (params: DeployLazyBatchMintParams) => Promise<DeployLazyBatchMintResult>;
+  };
+  liquid: {
+    getFactoryConfig: () => Promise<LiquidFactoryConfig>;
+    generatePresetCurves: (params: GeneratePresetCurvesParams) => Promise<GeneratePresetCurvesResult>;
+    validateCurves: (params: ValidateLiquidCurvesParams) => Promise<LiquidCurvePreview>;
+    deployMultiCurve: (params: DeployLiquidEditionParams) => Promise<DeployLiquidEditionResult>;
   };
   mint: {
-    mintTo(params: MintToParams): Promise<MintToResult>;
+    mintTo: (params: MintToParams) => Promise<MintToResult>;
+  };
+  swap: {
+    buy: (params: RouterBuyParams) => Promise<TransactionResult>;
+    sell: (params: RouterSellParams) => Promise<TransactionResult>;
+    swap: (params: RouterSwapParams) => Promise<TransactionResult>;
+    quoteBuyToken: (params: BuyTokenParams) => Promise<TokenTradeQuote>;
+    buyToken: (params: BuyTokenParams) => Promise<TokenTradeResult>;
+    quoteSellToken: (params: SellTokenParams) => Promise<TokenTradeQuote>;
+    sellToken: (params: SellTokenParams) => Promise<TokenTradeResult>;
+    quoteBuyRare: (params: BuyRareParams) => Promise<BuyRareQuote>;
+    buyRare: (params: BuyRareParams) => Promise<BuyRareResult>;
   };
   auction: {
-    create(params: AuctionCreateParams): Promise<TransactionResult & { approvalTxHash?: Hash; auctionType: 'reserve' | 'scheduled'; startTime: bigint }>;
-    bid(params: AuctionBidParams): Promise<TransactionResult>;
-    settle(params: AuctionSettleParams): Promise<TransactionResult>;
-    cancel(params: AuctionCancelParams): Promise<TransactionResult>;
-    getStatus(params: AuctionStatusParams): Promise<AuctionStatus>;
+    create: (params: AuctionCreateParams) => Promise<TransactionResult & { approvalTxHash?: Hash; auctionType: 'reserve' | 'scheduled'; startTime: bigint }>;
+    bid: (params: AuctionBidParams) => Promise<TransactionResult>;
+    settle: (params: AuctionSettleParams) => Promise<TransactionResult>;
+    cancel: (params: AuctionCancelParams) => Promise<TransactionResult>;
+    getStatus: (params: AuctionStatusParams) => Promise<AuctionStatus>;
   };
   offer: {
-    create(params: OfferCreateParams): Promise<TransactionResult>;
-    cancel(params: OfferCancelParams): Promise<TransactionResult>;
-    accept(params: OfferAcceptParams): Promise<TransactionResult>;
-    getStatus(params: OfferStatusParams): Promise<OfferStatus>;
+    create: (params: OfferCreateParams) => Promise<TransactionResult>;
+    cancel: (params: OfferCancelParams) => Promise<TransactionResult>;
+    accept: (params: OfferAcceptParams) => Promise<TransactionResult>;
+    getStatus: (params: OfferStatusParams) => Promise<OfferStatus>;
   };
-  listing: {
-    create(params: ListingCreateParams): Promise<TransactionResult & { approvalTxHash?: Hash }>;
-    cancel(params: ListingCancelParams): Promise<TransactionResult>;
-    buy(params: ListingBuyParams): Promise<TransactionResult>;
-    getStatus(params: ListingStatusParams): Promise<ListingStatus>;
+  listing: ListingNamespace;
+  batchListing: {
+    create: (params: BatchListingCreateParams) => Promise<BatchListingCreateResult>;
+    cancel: (params: BatchListingCancelParams) => Promise<TransactionResult>;
+    buy: (params: BatchListingBuyParams) => Promise<TransactionResult>;
+    setAllowList: (params: BatchListingSetAllowListParams) => Promise<TransactionResult>;
+    getStatus: (params: BatchListingStatusParams) => Promise<BatchListingStatus>;
   };
   search: {
-    nfts(params?: NftSearchParams): Promise<SearchPageResponse<Nft>>;
-    collections(params?: CollectionSearchParams): Promise<SearchPageResponse<Collection>>;
+    nfts: (params?: NftSearchParams) => Promise<SearchPageResponse<Nft>>;
+    collections: (params?: CollectionSearchParams) => Promise<SearchPageResponse<Collection>>;
   };
   nft: {
-    get(universalTokenId: string): Promise<Nft>;
-    events(universalTokenId: string, opts?: { page?: number; perPage?: number; eventType?: string | string[]; sortBy?: 'newest' | 'oldest' }): Promise<SearchPageResponse<NftEvent>>;
+    get: (universalTokenId: string) => Promise<Nft>;
+    events: (universalTokenId: string, opts?: NftEventOptions) => Promise<SearchPageResponse<NftEvent>>;
   };
   collection: {
-    get(id: string): Promise<Collection>;
-    events(id: string, opts?: { page?: number; perPage?: number; eventType?: string | string[]; sortBy?: 'newest' | 'oldest' }): Promise<SearchPageResponse<NftEvent>>;
-    createSovereign(params: CreateSovereignCollectionParams): Promise<CreateSovereignCollectionResult>;
-    createLazySovereign(params: CreateLazySovereignCollectionParams): Promise<CreateLazySovereignCollectionResult>;
-    mintBatch(params: CollectionMintBatchParams): Promise<CollectionMintBatchResult>;
-    prepareLazyMint(params: CollectionPrepareLazyMintParams): Promise<CollectionPrepareLazyMintResult>;
-    getTokenCreator(params: CollectionTokenCreatorParams): Promise<CollectionTokenCreatorResult>;
-    getRoyaltyInfo(params: CollectionRoyaltyInfoParams): Promise<CollectionRoyaltyInfoResult>;
-    setDefaultRoyaltyReceiver(params: CollectionSetDefaultRoyaltyReceiverParams): Promise<CollectionSetDefaultRoyaltyReceiverResult>;
-    setTokenRoyaltyReceiver(params: CollectionSetTokenRoyaltyReceiverParams): Promise<CollectionSetTokenRoyaltyReceiverResult>;
-    getMintConfig(params: CollectionMintConfigParams): Promise<CollectionMintConfigResult>;
-    updateBaseUri(params: CollectionUpdateBaseUriParams): Promise<CollectionUpdateBaseUriResult>;
-    updateTokenUri(params: CollectionUpdateTokenUriParams): Promise<CollectionUpdateTokenUriResult>;
-    lockBaseUri(params: CollectionLockBaseUriParams): Promise<CollectionLockBaseUriResult>;
-    createSpace(params: CreateRareSpaceCollectionParams): Promise<CreateRareSpaceCollectionResult>;
-    mintSpace(params: MintRareSpaceTokenParams): Promise<MintRareSpaceTokenResult>;
-  };
-  release: {
-    buildAllowlist(params: BuildReleaseAllowlistParams): ReleaseAllowlistArtifact;
-    getAllowlistProof(params: ReleaseAllowlistProofParams): ReleaseAllowlistProof;
-    verifyAllowlistProof(params: ReleaseAllowlistVerifyParams): boolean;
-    getConfig(params: ReleaseConfigParams): Promise<ReleaseConfig>;
-    setAllowlistConfig(params: ReleaseAllowlistConfigParams): Promise<ReleaseAllowlistConfigResult>;
-    setMintLimit(params: ReleaseLimitParams): Promise<ReleaseLimitResult>;
-    setTxLimit(params: ReleaseLimitParams): Promise<ReleaseLimitResult>;
-    setSellerStakingMinimum(params: ReleaseSellerStakingMinimumParams): Promise<ReleaseSellerStakingMinimumResult>;
-    mintDirectSale(params: ReleaseMintDirectSaleParams): Promise<ReleaseMintDirectSaleResult>;
+    get: (id: string) => Promise<Collection>;
+    events: (id: string, opts?: CollectionEventOptions) => Promise<SearchPageResponse<NftEvent>>;
+    createSovereign: (params: CreateSovereignCollectionParams) => Promise<CreateSovereignCollectionResult>;
+    createLazySovereign: (params: CreateLazySovereignCollectionParams) => Promise<CreateLazySovereignCollectionResult>;
+    mintBatch: (params: CollectionMintBatchParams) => Promise<CollectionMintBatchResult>;
+    prepareLazyMint: (params: CollectionPrepareLazyMintParams) => Promise<CollectionPrepareLazyMintResult>;
+    getTokenCreator: (params: CollectionTokenCreatorParams) => Promise<CollectionTokenCreatorResult>;
+    getRoyaltyInfo: (params: CollectionRoyaltyInfoParams) => Promise<CollectionRoyaltyInfoResult>;
+    setDefaultRoyaltyReceiver: (params: CollectionSetDefaultRoyaltyReceiverParams) => Promise<CollectionSetDefaultRoyaltyReceiverResult>;
+    setTokenRoyaltyReceiver: (params: CollectionSetTokenRoyaltyReceiverParams) => Promise<CollectionSetTokenRoyaltyReceiverResult>;
+    getMintConfig: (params: CollectionMintConfigParams) => Promise<CollectionMintConfigResult>;
+    updateBaseUri: (params: CollectionUpdateBaseUriParams) => Promise<CollectionUpdateBaseUriResult>;
+    updateTokenUri: (params: CollectionUpdateTokenUriParams) => Promise<CollectionUpdateTokenUriResult>;
+    lockBaseUri: (params: CollectionLockBaseUriParams) => Promise<CollectionLockBaseUriResult>;
+    createSpace: (params: CreateRareSpaceCollectionParams) => Promise<CreateRareSpaceCollectionResult>;
+    mintSpace: (params: MintRareSpaceTokenParams) => Promise<MintRareSpaceTokenResult>;
   };
   user: {
-    get(address: string): Promise<UserProfile>;
+    get: (address: string) => Promise<UserProfile>;
   };
   media: {
-    upload(buffer: Uint8Array, filename: string): Promise<NftMediaEntry>;
-    pinMetadata(opts: PinMetadataParams): Promise<string>;
+    upload: (buffer: Uint8Array, filename: string) => Promise<NftMediaEntry>;
+    pinMetadata: (opts: PinMetadataParams) => Promise<string>;
   };
   import: {
-    erc721(params: ImportErc721Params): Promise<void>;
+    erc721: (params: ImportErc721Params) => Promise<void>;
   };
   token: {
-    getContractInfo(params: { contract: Address }): Promise<TokenContractInfo>;
-    getTokenInfo(params: { contract: Address; tokenId: IntegerInput }): Promise<TokenInfo>;
-    getPrice(symbol: string): Promise<{ symbol: string; priceUsd: number; decimals: number; chainId: number; address: string }>;
+    getContractInfo: (params: { contract: Address }) => Promise<TokenContractInfo>;
+    getTokenInfo: (params: { contract: Address; tokenId: IntegerInput }) => Promise<TokenInfo>;
+    getPrice: (symbol: string) => Promise<{ symbol: string; priceUsd: number; decimals: number; chainId: number; address: string }>;
   };
 }

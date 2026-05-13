@@ -1,575 +1,167 @@
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { extname } from 'node:path';
 import { Command } from 'commander';
-import { getAddress, isAddress, type Address, type Hex } from 'viem';
-import { getPublicClient, getWalletClient } from '../client.js';
+import { formatUnits, isAddress, zeroAddress, type Address, type Hex } from 'viem';
 import { getActiveChain } from '../config.js';
-import { requireContractAddress, resolveCurrency, type SupportedChain } from '../contracts/addresses.js';
+import { getPublicClient, getWalletClient } from '../client.js';
 import { printError } from '../errors.js';
-import { output, log } from '../output.js';
-import { createRareClient } from '../sdk/client.js';
-import type { RareClient } from '../sdk/types.js';
 import {
-  normalizeBytes32,
+  buildReleaseAllowlistArtifactFromInput,
+  collectReleaseSplit,
+  createRareClient,
+  finalizeReleaseSplitAccumulator,
   getReleaseAllowlistProof,
-  parseReleaseAllowlistArtifactOrBuild,
-  verifyReleaseAllowlistProof,
+  normalizeReleaseAllowlistProof,
+  parseReleaseAllowlistArtifactJson,
+  type RareClient,
   type ReleaseAllowlistArtifact,
   type ReleaseAllowlistInputFormat,
-} from '../sdk/release-core.js';
+  type ReleaseSplitAccumulator,
+} from '../sdk/index.js';
+import { resolveCurrency } from '../contracts/addresses.js';
+import { output, log } from '../output.js';
 
-type ReleaseCommandClient = {
-  chain: SupportedChain;
-  rare: RareClient;
+const ETH_ADDRESS = zeroAddress;
+
+type ReleaseConfigureOptions = {
+  contract: string;
+  price: string;
+  maxMints: string;
+  currency?: string;
+  start?: string;
+  split?: ReleaseSplitAccumulator;
+  chain?: string;
+  chainId?: string;
 };
 
-type AllowlistInputOptions = {
+type AllowlistBuildOptions = {
   input: string;
   format?: string;
   output?: string;
 };
 
-type AllowlistProofOptions = AllowlistInputOptions & {
+type AllowlistProofOptions = {
+  input: string;
   account: string;
-};
-
-type AllowlistVerifyOptions = AllowlistProofOptions & {
-  root?: string;
+  output?: string;
 };
 
 type AllowlistSetOptions = {
   contract: string;
-  root?: string;
-  input?: string;
   endTimestamp: string;
-  format?: string;
+  input?: string;
+  root?: string;
   chain?: string;
+  chainId?: string;
 };
 
-type ReleaseStatusOptions = {
+type ReleaseContractOptions = {
   contract: string;
+  chain?: string;
+  chainId?: string;
+};
+
+type ReleaseLimitOptions = ReleaseContractOptions & {
+  limit: string;
+};
+
+type ReleaseStakingOptions = ReleaseContractOptions & {
+  minimum: string;
+  endTimestamp?: string;
+};
+
+type ReleaseStatusOptions = ReleaseContractOptions & {
   account?: string;
-  chain?: string;
 };
 
-type ReleaseMintOptions = {
-  contract: string;
+type ReleaseMintOptions = ReleaseContractOptions & {
   quantity?: string;
   currency?: string;
   price?: string;
   proof?: string;
   recipient?: string;
-  chain?: string;
   autoApprove?: boolean;
 };
 
-type ReleaseLimitOptions = {
-  contract: string;
-  limit: string;
-  chain?: string;
-};
-
-type ReleaseSellerStakingOptions = {
-  contract: string;
-  minimum: string;
-  endTimestamp: string;
-  chain?: string;
-};
-
-function createAllowlistBuildCommand(): Command {
-  const cmd = new Command('build');
-  cmd.description('Build a RareMinter allowlist Merkle artifact from CSV or JSON');
-
-  cmd
-    .requiredOption('--input <path>', 'CSV or JSON wallet input file')
-    .option('--format <format>', 'input format (csv, json)')
-    .option('--output <path>', 'write the generated artifact JSON to a file')
-    .action(async (opts: AllowlistInputOptions) => {
-      try {
-        const artifact = await readAllowlistArtifact(opts.input, opts.format);
-        if (opts.output !== undefined) {
-          await writeJson(opts.output, artifact);
-        }
-
-        output(
-          opts.output === undefined ? artifact : {
-            root: artifact.root,
-            count: artifact.count,
-            output: opts.output,
-          },
-          () => {
-            console.log(`Allowlist root: ${artifact.root}`);
-            console.log(`Wallets: ${artifact.count}`);
-            if (opts.output !== undefined) {
-              console.log(`Artifact written to: ${opts.output}`);
-            }
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
-    });
-
-  return cmd;
+function formatTokenAmount(amount: bigint, decimals: number | null): string {
+  if (decimals === null) {
+    return amount.toString();
+  }
+  return formatUnits(amount, decimals);
 }
 
-function createAllowlistProofCommand(): Command {
-  const cmd = new Command('proof');
-  cmd.description('Generate a RareMinter allowlist proof for one account');
-
-  cmd
-    .requiredOption('--input <path>', 'allowlist artifact, CSV, or JSON wallet input file')
-    .requiredOption('--account <address>', 'account address to prove')
-    .option('--format <format>', 'input format (csv, json)')
-    .option('--output <path>', 'write the proof JSON to a file')
-    .action(async (opts: AllowlistProofOptions) => {
-      try {
-        const address = parseAddressOption(opts.account, '--account');
-        const artifact = await readAllowlistArtifact(opts.input, opts.format);
-        const proof = getReleaseAllowlistProof(artifact, address);
-
-        if (opts.output !== undefined) {
-          await writeJson(opts.output, proof);
-        }
-
-        output(
-          opts.output === undefined ? proof : {
-            root: proof.root,
-            address: proof.address,
-            proofLength: proof.proof.length,
-            valid: proof.valid,
-            output: opts.output,
-          },
-          () => {
-            console.log(`Allowlist root: ${proof.root}`);
-            console.log(`Address: ${proof.address}`);
-            console.log(`Proof entries: ${proof.proof.length}`);
-            console.log(`Valid: ${proof.valid ? 'yes' : 'no'}`);
-            if (opts.output !== undefined) {
-              console.log(`Proof written to: ${opts.output}`);
-            }
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
-    });
-
-  return cmd;
+function formatTimestamp(timestamp: bigint): string {
+  if (timestamp === 0n) {
+    return 'not set';
+  }
+  return new Date(Number(timestamp) * 1000).toISOString();
 }
 
-function createAllowlistVerifyCommand(): Command {
-  const cmd = new Command('verify');
-  cmd.description('Verify an account proof from an allowlist artifact or wallet file');
-
-  cmd
-    .requiredOption('--input <path>', 'allowlist artifact, CSV, or JSON wallet input file')
-    .requiredOption('--account <address>', 'account address to verify')
-    .option('--root <bytes32>', 'expected Merkle root; defaults to the input root')
-    .option('--format <format>', 'input format (csv, json)')
-    .action(async (opts: AllowlistVerifyOptions) => {
-      try {
-        const address = parseAddressOption(opts.account, '--account');
-        const root = opts.root === undefined ? undefined : normalizeBytes32(opts.root, '--root');
-        const artifact = await readAllowlistArtifact(opts.input, opts.format);
-        const proof = getReleaseAllowlistProof(artifact, address);
-        const valid = verifyReleaseAllowlistProof({
-          root: root ?? proof.root,
-          address,
-          proof: proof.proof,
-        });
-
-        output(
-          {
-            root: root ?? proof.root,
-            address: proof.address,
-            valid,
-          },
-          () => {
-            console.log(`Allowlist root: ${root ?? proof.root}`);
-            console.log(`Address: ${proof.address}`);
-            console.log(`Valid: ${valid ? 'yes' : 'no'}`);
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
-    });
-
-  return cmd;
+function formatLimit(limit: bigint): string {
+  return limit === 0n ? 'none' : limit.toString();
 }
 
-function createAllowlistSetCommand(): Command {
-  const cmd = new Command('set');
-  cmd.description('Set RareMinter allowlist root and end timestamp for a release collection');
-
-  cmd
-    .requiredOption('--contract <address>', 'release collection contract address')
-    .option('--root <bytes32>', 'allowlist Merkle root')
-    .option('--input <path>', 'allowlist artifact, CSV, or JSON wallet input file')
-    .requiredOption('--end-timestamp <seconds>', 'unix timestamp when the allowlist expires')
-    .option('--format <format>', 'input format (csv, json)')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts: AllowlistSetOptions) => {
-      try {
-        const contract = parseAddressOption(opts.contract, '--contract');
-        const root = await resolveAllowlistRoot(opts);
-        const { chain, rare } = createWriteReleaseClient(opts.chain);
-        const minterAddress = requireContractAddress(chain, 'rareMinter');
-
-        log(`Setting RareMinter allowlist on ${chain}...`);
-        log(`  Contract: ${contract}`);
-        log(`  RareMinter: ${minterAddress}`);
-        log(`  Root: ${root}`);
-        log(`  End timestamp: ${opts.endTimestamp}`);
-        log('Waiting for confirmation...');
-
-        const result = await rare.release.setAllowlistConfig({
-          contract,
-          root,
-          endTimestamp: opts.endTimestamp,
-        });
-
-        output(
-          {
-            txHash: result.txHash,
-            blockNumber: result.receipt.blockNumber.toString(),
-            contract: result.contract,
-            minter: result.minter,
-            root: result.root,
-            endTimestamp: result.endTimestamp,
-          },
-          () => {
-            console.log(`Transaction sent: ${result.txHash}`);
-            console.log(`Allowlist root set to: ${result.root}`);
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
-    });
-
-  return cmd;
+function formatStakingAmount(amount: bigint): string {
+  return `${formatUnits(amount, 18)} RARE`;
 }
 
-function createAllowlistCommand(): Command {
-  const cmd = new Command('allowlist');
-  cmd.description('Build, prove, verify, and configure RareMinter allowlists');
-  cmd.addCommand(createAllowlistBuildCommand());
-  cmd.addCommand(createAllowlistProofCommand());
-  cmd.addCommand(createAllowlistVerifyCommand());
-  cmd.addCommand(createAllowlistSetCommand());
-  return cmd;
-}
-
-function createStatusCommand(): Command {
-  const cmd = new Command('status');
-  cmd.description('Read RareMinter release configuration for a collection');
-
-  cmd
-    .requiredOption('--contract <address>', 'release collection contract address')
-    .option('--account <address>', 'optional account for mint and transaction usage reads')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts: ReleaseStatusOptions) => {
-      try {
-        const contract = parseAddressOption(opts.contract, '--contract');
-        const account = opts.account === undefined ? undefined : parseAddressOption(opts.account, '--account');
-        const { chain, rare } = createReadReleaseClient(opts.chain);
-        const result = await rare.release.getConfig({ contract, account });
-
-        output(
-          {
-            chain,
-            contract: result.contract,
-            minter: result.minter,
-            allowlistRoot: result.allowlistRoot,
-            allowlistEndTimestamp: result.allowlistEndTimestamp,
-            mintLimit: result.mintLimit,
-            txLimit: result.txLimit,
-            sellerStakingMinimum: result.sellerStakingMinimum,
-            sellerStakingMinimumEndTimestamp: result.sellerStakingMinimumEndTimestamp,
-            directSale: result.directSale,
-            supply: result.supply,
-            account: result.account,
-            accountMints: result.accountMints,
-            accountTxs: result.accountTxs,
-          },
-          () => {
-            console.log(`RareMinter: ${result.minter}`);
-            console.log(`Allowlist root: ${result.allowlistRoot}`);
-            console.log(`Allowlist end timestamp: ${result.allowlistEndTimestamp.toString()}`);
-            console.log(`Mint limit: ${result.mintLimit.toString()}`);
-            console.log(`Transaction limit: ${result.txLimit.toString()}`);
-            console.log(`Seller staking minimum: ${result.sellerStakingMinimum.toString()}`);
-            console.log(`Seller staking minimum end timestamp: ${result.sellerStakingMinimumEndTimestamp.toString()}`);
-            console.log(`Direct sale configured: ${result.directSale.configured ? 'yes' : 'no'}`);
-            if (result.directSale.configured) {
-              console.log(`Direct sale seller: ${result.directSale.seller}`);
-              console.log(`Direct sale currency: ${result.directSale.currencyAddress}`);
-              console.log(`Direct sale price: ${result.directSale.price.toString()}`);
-              console.log(`Direct sale start timestamp: ${result.directSale.startTime.toString()}`);
-              console.log(`Direct sale max mints per tx: ${result.directSale.maxMints.toString()}`);
-            }
-            if (result.supply?.remaining !== undefined) {
-              console.log(`Remaining mint supply: ${result.supply.remaining.toString()}`);
-            }
-            if (result.account !== undefined) {
-              console.log(`Account: ${result.account}`);
-              console.log(`Account mints: ${result.accountMints?.toString() ?? '0'}`);
-              console.log(`Account transactions: ${result.accountTxs?.toString() ?? '0'}`);
-            }
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
-    });
-
-  return cmd;
-}
-
-function createMintCommand(): Command {
-  const cmd = new Command('mint');
-  cmd.description('Mint from a RareMinter direct sale release');
-
-  cmd
-    .requiredOption('--contract <address>', 'release collection contract address')
-    .option('--quantity <number>', 'number of tokens to mint', '1')
-    .option('--currency <currency>', 'expected currency: eth, usdc, rare, or ERC20 address (defaults to configured sale currency)')
-    .option('--price <amount>', 'expected per-token price in ETH or token units (defaults to configured sale price)')
-    .option('--proof <path>', 'allowlist proof JSON from rare release allowlist proof')
-    .option('--recipient <address>', 'recipient when supported; RareMinter direct sales mint to the connected wallet')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .option('--no-auto-approve', 'fail instead of approving ERC20 allowance when insufficient')
-    .action(async (opts: ReleaseMintOptions) => {
-      try {
-        const contract = parseAddressOption(opts.contract, '--contract');
-        const recipient = opts.recipient === undefined ? undefined : parseAddressOption(opts.recipient, '--recipient');
-        const proof = opts.proof === undefined ? undefined : await readProofFile(opts.proof);
-        const chain = getActiveChain(opts.chain);
-        const minterAddress = requireContractAddress(chain, 'rareMinter');
-        const currency = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain);
-        const { rare } = createWriteReleaseClient(chain);
-
-        log(`Minting RareMinter direct sale on ${chain}...`);
-        log(`  Contract: ${contract}`);
-        log(`  RareMinter: ${minterAddress}`);
-        log(`  Quantity: ${opts.quantity ?? '1'}`);
-        if (currency !== undefined) {
-          log(`  Currency: ${currency}`);
-        }
-        if (opts.price !== undefined) {
-          log(`  Expected price: ${opts.price}`);
-        }
-        if (proof !== undefined) {
-          log(`  Proof entries: ${proof.length}`);
-        }
-        log('Waiting for confirmation...');
-
-        const result = await rare.release.mintDirectSale({
-          contract,
-          quantity: opts.quantity,
-          currency,
-          price: opts.price,
-          proof,
-          recipient,
-          autoApprove: opts.autoApprove,
-        });
-
-        output(
-          {
-            txHash: result.txHash,
-            blockNumber: result.receipt.blockNumber.toString(),
-            approvalTxHash: result.approvalTxHash ?? null,
-            contract: result.contract,
-            minter: result.minter,
-            buyer: result.buyer,
-            recipient: result.recipient,
-            quantity: result.quantity,
-            currency: result.currency,
-            price: result.price,
-            totalPrice: result.totalPrice,
-            requiredPayment: result.requiredPayment,
-            allowlistRequired: result.allowlistRequired,
-            tokenIdStart: result.tokenIdStart,
-            tokenIdEnd: result.tokenIdEnd,
-            tokenIds: result.tokenIds,
-          },
-          () => {
-            if (result.approvalTxHash !== undefined) {
-              console.log(`Approval tx sent: ${result.approvalTxHash}`);
-            }
-            console.log(`Transaction sent: ${result.txHash}`);
-            console.log(`Minted token IDs: ${result.tokenIds.map((tokenId) => tokenId.toString()).join(', ')}`);
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
-    });
-
-  return cmd;
-}
-
-function createSetMintLimitCommand(): Command {
-  const cmd = new Command('set-mint');
-  cmd.description('Set the per-wallet mint limit for a RareMinter release');
-
-  cmd
-    .requiredOption('--contract <address>', 'release collection contract address')
-    .requiredOption('--limit <number>', 'per-wallet mint limit; 0 disables the limit')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts: ReleaseLimitOptions) => setReleaseLimit('mint', opts));
-
-  return cmd;
-}
-
-function createSetTxLimitCommand(): Command {
-  const cmd = new Command('set-tx');
-  cmd.description('Set the per-wallet transaction limit for a RareMinter release');
-
-  cmd
-    .requiredOption('--contract <address>', 'release collection contract address')
-    .requiredOption('--limit <number>', 'per-wallet transaction limit; 0 disables the limit')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts: ReleaseLimitOptions) => setReleaseLimit('tx', opts));
-
-  return cmd;
-}
-
-function createLimitsCommand(): Command {
-  const cmd = new Command('limits');
-  cmd.description('Configure RareMinter mint and transaction limits');
-  cmd.addCommand(createSetMintLimitCommand());
-  cmd.addCommand(createSetTxLimitCommand());
-  return cmd;
-}
-
-function createSetSellerStakingMinimumCommand(): Command {
-  const cmd = new Command('set-minimum');
-  cmd.description('Set the seller staking minimum for a RareMinter release');
-
-  cmd
-    .requiredOption('--contract <address>', 'release collection contract address')
-    .requiredOption('--minimum <raw>', 'minimum staked amount in raw token units; 0 disables the minimum')
-    .requiredOption('--end-timestamp <seconds>', 'unix timestamp when the minimum expires')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts: ReleaseSellerStakingOptions) => {
-      try {
-        const contract = parseAddressOption(opts.contract, '--contract');
-        const { chain, rare } = createWriteReleaseClient(opts.chain);
-        const minterAddress = requireContractAddress(chain, 'rareMinter');
-
-        log(`Setting RareMinter seller staking minimum on ${chain}...`);
-        log(`  Contract: ${contract}`);
-        log(`  RareMinter: ${minterAddress}`);
-        log(`  Minimum: ${opts.minimum}`);
-        log(`  End timestamp: ${opts.endTimestamp}`);
-        log('Waiting for confirmation...');
-
-        const result = await rare.release.setSellerStakingMinimum({
-          contract,
-          minimum: opts.minimum,
-          endTimestamp: opts.endTimestamp,
-        });
-
-        output(
-          {
-            txHash: result.txHash,
-            blockNumber: result.receipt.blockNumber.toString(),
-            contract: result.contract,
-            minter: result.minter,
-            minimum: result.minimum,
-            endTimestamp: result.endTimestamp,
-          },
-          () => {
-            console.log(`Transaction sent: ${result.txHash}`);
-            console.log(`Seller staking minimum set to: ${result.minimum.toString()}`);
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
-    });
-
-  return cmd;
-}
-
-function createStakingCommand(): Command {
-  const cmd = new Command('staking');
-  cmd.description('Configure RareMinter seller staking requirements');
-  cmd.addCommand(createSetSellerStakingMinimumCommand());
-  return cmd;
-}
-
-export function releaseCommand(): Command {
-  const cmd = new Command('release');
-  cmd.description('Configure, inspect, and mint RareMinter releases');
-  cmd.addCommand(createAllowlistCommand());
-  cmd.addCommand(createStatusCommand());
-  cmd.addCommand(createMintCommand());
-  cmd.addCommand(createLimitsCommand());
-  cmd.addCommand(createStakingCommand());
-  return cmd;
-}
-
-async function setReleaseLimit(kind: 'mint' | 'tx', opts: ReleaseLimitOptions): Promise<void> {
+function readTextFile(filePath: string, label: string): string {
   try {
-    const contract = parseAddressOption(opts.contract, '--contract');
-    const { chain, rare } = createWriteReleaseClient(opts.chain);
-    const minterAddress = requireContractAddress(chain, 'rareMinter');
-    const methodLabel = kind === 'mint' ? 'mint' : 'transaction';
-
-    log(`Setting RareMinter ${methodLabel} limit on ${chain}...`);
-    log(`  Contract: ${contract}`);
-    log(`  RareMinter: ${minterAddress}`);
-    log(`  Limit: ${opts.limit}`);
-    log('Waiting for confirmation...');
-
-    const result = kind === 'mint'
-      ? await rare.release.setMintLimit({ contract, limit: opts.limit })
-      : await rare.release.setTxLimit({ contract, limit: opts.limit });
-
-    output(
-      {
-        txHash: result.txHash,
-        blockNumber: result.receipt.blockNumber.toString(),
-        contract: result.contract,
-        minter: result.minter,
-        limit: result.limit,
-      },
-      () => {
-        console.log(`Transaction sent: ${result.txHash}`);
-        console.log(`${methodLabel[0].toUpperCase()}${methodLabel.slice(1)} limit set to: ${result.limit.toString()}`);
-      },
-    );
+    return readFileSync(filePath, 'utf8');
   } catch (error) {
-    printError(error);
+    throw new Error(`Unable to read ${label} "${filePath}": ${errorMessage(error)}`);
   }
 }
 
-async function readAllowlistArtifact(
-  inputPath: string,
-  rawFormat: string | undefined,
-): Promise<ReleaseAllowlistArtifact> {
-  const format = parseFormatOption(rawFormat);
-  const content = await readFile(inputPath, 'utf8');
-  return parseReleaseAllowlistArtifactOrBuild({
-    content,
-    format,
-    sourceName: inputPath,
-  });
+function writeJsonFile(filePath: string, data: unknown): void {
+  try {
+    writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+  } catch (error) {
+    throw new Error(`Unable to write allowlist artifact "${filePath}": ${errorMessage(error)}`);
+  }
 }
 
-async function readProofFile(inputPath: string): Promise<Hex[]> {
-  const content = await readFile(inputPath, 'utf8');
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(content);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'invalid JSON';
-    throw new Error(`Could not parse --proof JSON: ${message}`);
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function detectAllowlistFormat(filePath: string, format?: string): ReleaseAllowlistInputFormat {
+  if (format !== undefined) {
+    if (format === 'csv' || format === 'json') {
+      return format;
+    }
+    throw new Error(`Invalid allowlist format "${format}". Expected csv or json.`);
   }
 
+  const extension = extname(filePath).toLowerCase();
+  if (extension === '.csv') return 'csv';
+  if (extension === '.json') return 'json';
+  throw new Error('Unable to infer allowlist format from file extension. Pass --format csv or --format json.');
+}
+
+function assertAddressOption(value: string, label: string): asserts value is Address {
+  if (!isAddress(value)) {
+    throw new Error(`Invalid ${label} address: "${value}".`);
+  }
+}
+
+function assertBytes32Option(value: string, label: string): asserts value is Hex {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(value)) {
+    throw new Error(`Invalid ${label} bytes32 value: "${value}".`);
+  }
+}
+
+function loadAllowlistArtifact(filePath: string): ReleaseAllowlistArtifact {
+  return parseReleaseAllowlistArtifactJson(readTextFile(filePath, 'allowlist artifact'));
+}
+
+function readProofFile(filePath: string): Hex[] {
+  const content = readTextFile(filePath, 'allowlist proof');
+  const parsed: unknown = parseProofJson(content);
   const proof = Array.isArray(parsed)
     ? parsed
     : isRecord(parsed) && Array.isArray(parsed.proof)
@@ -580,68 +172,557 @@ async function readProofFile(inputPath: string): Promise<Hex[]> {
     throw new Error('--proof must be a JSON array or an object with a proof array.');
   }
 
-  return proof.map((entry, index) => {
-    if (typeof entry !== 'string') {
-      throw new Error(`proof[${index}] must be a bytes32 hex string.`);
-    }
-    return normalizeBytes32(entry, `proof[${index}]`);
-  });
+  return normalizeReleaseAllowlistProof(proof);
 }
 
-async function resolveAllowlistRoot(opts: AllowlistSetOptions): Promise<Hex> {
-  if (opts.root !== undefined && opts.input !== undefined) {
-    throw new Error('Pass either --root or --input, not both.');
+function parseProofJson(content: string): unknown {
+  try {
+    return JSON.parse(content);
+  } catch (error) {
+    throw new Error(`Unable to parse allowlist proof JSON: ${errorMessage(error)}`);
   }
-  if (opts.root !== undefined) {
-    return normalizeBytes32(opts.root, '--root');
-  }
-  if (opts.input !== undefined) {
-    return (await readAllowlistArtifact(opts.input, opts.format)).root;
-  }
-  throw new Error('Pass --root or --input to set an allowlist config.');
 }
 
-function createReadReleaseClient(chainInput: string | undefined): ReleaseCommandClient {
-  const chain = getActiveChain(chainInput);
-  const publicClient = getPublicClient(chain);
-  return {
-    chain,
-    rare: createRareClient({ publicClient }),
-  };
-}
-
-function createWriteReleaseClient(chainInput: string | undefined): ReleaseCommandClient {
-  const chain = getActiveChain(chainInput);
+function releaseWriteClient(chain: ReturnType<typeof getActiveChain>): RareClient {
   const { client } = getWalletClient(chain);
   const publicClient = getPublicClient(chain);
-  return {
-    chain,
-    rare: createRareClient({ publicClient, walletClient: client }),
-  };
+  return createRareClient({ publicClient, walletClient: client });
 }
 
-function parseFormatOption(value: string | undefined): ReleaseAllowlistInputFormat | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (value === 'csv' || value === 'json') {
-    return value;
-  }
-  throw new Error('--format must be "csv" or "json".');
-}
+export function releaseCommand(): Command {
+  const cmd = new Command('release');
+  cmd.description('RareMinter release subcommands (configure, mint, allowlist, limits, status)');
 
-function parseAddressOption(value: string, optionName: string): Address {
-  if (!isAddress(value)) {
-    throw new Error(`${optionName} must be a valid 0x address.`);
-  }
+  cmd
+    .command('configure')
+    .description('Configure a RareMinter direct sale release')
+    .requiredOption('--contract <address>', 'collection contract address')
+    .requiredOption('--price <amount>', 'price per mint in ETH or token units')
+    .requiredOption('--max-mints <number>', 'max tokens per mint transaction (1-100)')
+    .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
+    .option('--start <time>', 'sale start time as unix seconds or an ISO date (defaults to now)')
+    .option(
+      '--split <addr=ratio>',
+      'payout split recipient (repeatable). Format: 0xADDR=RATIO. Ratios must sum to 100. If omitted, 100% goes to the connected wallet.',
+      collectReleaseSplit,
+    )
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .action(async (opts: ReleaseConfigureOptions): Promise<void> => {
+      try {
+        const splits = finalizeReleaseSplitAccumulator(opts.split);
+        assertAddressOption(opts.contract, 'contract');
 
-  return getAddress(value);
-}
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const { client, account } = getWalletClient(chain);
+        const publicClient = getPublicClient(chain);
+        const rare = createRareClient({ publicClient, walletClient: client });
+        const currency = opts.currency === undefined ? ETH_ADDRESS : resolveCurrency(opts.currency, chain);
+        const isEth = currency === ETH_ADDRESS;
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
+        log(`Configuring direct sale release on ${chain}...`);
+        log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
+        log(`  Collection: ${opts.contract}`);
+        log(`  Price:      ${opts.price} ${isEth ? 'ETH' : currency}`);
+        log(`  Max mints:  ${opts.maxMints}`);
+        log(`  Start:      ${opts.start ?? 'now'}`);
+        if (splits !== undefined) {
+          log('  Splits:');
+          splits.addresses.forEach((address, index) => {
+            log(`    ${address} = ${splits.ratios[index]}%`);
+          });
+        } else {
+          log(`  Splits:     ${account.address} = 100%`);
+        }
 
-async function writeJson(path: string, data: unknown): Promise<void> {
-  await writeFile(path, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+        const result = await rare.listing.release.configure({
+          contract: opts.contract,
+          currency,
+          price: opts.price,
+          startTime: opts.start,
+          maxMints: opts.maxMints,
+          splitAddresses: splits?.addresses,
+          splitRatios: splits?.ratios,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            rareMinter: result.rareMinter,
+            contract: result.contract,
+            currencyAddress: result.currencyAddress,
+            price: result.price,
+            startTime: result.startTime,
+            maxMints: result.maxMints,
+            splitRecipients: result.splitRecipients,
+            splitRatios: result.splitRatios,
+          },
+          () => {
+            console.log(`\nTransaction sent: ${result.txHash}`);
+            console.log(`Release configured! Block: ${result.receipt.blockNumber}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  cmd
+    .command('mint')
+    .description('Mint from a RareMinter direct sale release')
+    .requiredOption('--contract <address>', 'collection contract address')
+    .option('--quantity <number>', 'number of tokens to mint', '1')
+    .option('--currency <currency>', 'expected currency: eth, usdc, rare, or ERC20 address (defaults to configured sale currency)')
+    .option('--price <amount>', 'expected per-token price in ETH or token units (defaults to configured sale price)')
+    .option('--proof <file>', 'allowlist proof JSON from rare listing release allowlist proof')
+    .option('--recipient <address>', 'recipient when supported; RareMinter direct sales mint to the connected wallet')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--no-auto-approve', 'fail instead of approving ERC20 allowance when insufficient')
+    .action(async (opts: ReleaseMintOptions): Promise<void> => {
+      try {
+        assertAddressOption(opts.contract, 'contract');
+        if (opts.recipient !== undefined) {
+          assertAddressOption(opts.recipient, 'recipient');
+        }
+        const proof = opts.proof === undefined ? undefined : readProofFile(opts.proof);
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const rare = releaseWriteClient(chain);
+        const currency = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain);
+
+        log(`Minting direct sale release on ${chain}...`);
+        log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
+        log(`  Collection: ${opts.contract}`);
+        log(`  Quantity:   ${opts.quantity ?? '1'}`);
+        if (currency !== undefined) {
+          log(`  Currency:   ${currency}`);
+        }
+        if (opts.price !== undefined) {
+          log(`  Price:      ${opts.price}`);
+        }
+        if (proof !== undefined) {
+          log(`  Proof:      ${proof.length} entries`);
+        }
+
+        const result = await rare.listing.release.mintDirectSale({
+          contract: opts.contract,
+          quantity: opts.quantity,
+          currency,
+          price: opts.price,
+          proof,
+          recipient: opts.recipient,
+          autoApprove: opts.autoApprove,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            approvalTxHash: result.approvalTxHash ?? null,
+            rareMinter: result.rareMinter,
+            contract: result.contract,
+            buyer: result.buyer,
+            recipient: result.recipient,
+            quantity: result.quantity,
+            currencyAddress: result.currencyAddress,
+            price: result.price,
+            totalPrice: result.totalPrice,
+            requiredPayment: result.requiredPayment,
+            allowlistRequired: result.allowlistRequired,
+            tokenIdStart: result.tokenIdStart,
+            tokenIdEnd: result.tokenIdEnd,
+            tokenIds: result.tokenIds,
+          },
+          () => {
+            if (result.approvalTxHash !== undefined) {
+              console.log(`\nApproval transaction sent: ${result.approvalTxHash}`);
+            }
+            console.log(`\nTransaction sent: ${result.txHash}`);
+            console.log(`Release mint complete! Block: ${result.receipt.blockNumber}`);
+            console.log(`  Token IDs: ${result.tokenIds.map((tokenId) => tokenId.toString()).join(', ')}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  const allowlist = new Command('allowlist');
+  allowlist.description('Build allowlist proof artifacts and configure RareMinter allowlist roots');
+
+  allowlist
+    .command('build')
+    .description('Build a reusable RareMinter allowlist proof artifact from CSV or JSON wallets')
+    .requiredOption('--input <file>', 'CSV or JSON wallet allowlist input')
+    .option('--format <format>', 'input format: csv or json (defaults from file extension)')
+    .option('--output <file>', 'write the proof artifact JSON to a file')
+    .action((opts: AllowlistBuildOptions): void => {
+      try {
+        const format = detectAllowlistFormat(opts.input, opts.format);
+        const raw = readTextFile(opts.input, 'allowlist input');
+        const artifact = buildReleaseAllowlistArtifactFromInput(raw, format);
+
+        if (opts.output !== undefined) {
+          writeJsonFile(opts.output, artifact);
+        }
+
+        output({ artifact, outputPath: opts.output ?? null }, () => {
+          if (opts.output !== undefined) {
+            console.log('\nAllowlist artifact written:');
+            console.log(`  File:    ${opts.output}`);
+            console.log(`  Root:    ${artifact.root}`);
+            console.log(`  Wallets: ${artifact.wallets.length}`);
+          } else {
+            console.log(JSON.stringify(artifact, null, 2));
+          }
+        });
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  allowlist
+    .command('proof')
+    .description('Read an account proof from a RareMinter allowlist artifact')
+    .requiredOption('--input <file>', 'allowlist proof artifact JSON')
+    .requiredOption('--account <address>', 'account address to prove')
+    .option('--output <file>', 'write the proof JSON to a file')
+    .action((opts: AllowlistProofOptions): void => {
+      try {
+        assertAddressOption(opts.account, 'account');
+        const artifact = loadAllowlistArtifact(opts.input);
+        const proof = getReleaseAllowlistProof({ artifact, address: opts.account });
+        if (proof === null) {
+          throw new Error(`Account ${opts.account} is not present in allowlist artifact ${opts.input}.`);
+        }
+
+        if (opts.output !== undefined) {
+          writeJsonFile(opts.output, proof);
+        }
+
+        output({ root: artifact.root, ...proof, outputPath: opts.output ?? null }, () => {
+          console.log('\nAllowlist proof:');
+          console.log(`  Root:   ${artifact.root}`);
+          console.log(`  Account: ${proof.address}`);
+          console.log(`  Leaf:   ${proof.leaf}`);
+          console.log(`  Proof:  ${proof.proof.length === 0 ? '[]' : proof.proof.join(', ')}`);
+          if (opts.output !== undefined) {
+            console.log(`  File:   ${opts.output}`);
+          }
+        });
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  allowlist
+    .command('set')
+    .description('Set the RareMinter allowlist root and end time for a release')
+    .requiredOption('--contract <address>', 'collection contract address')
+    .requiredOption('--end-timestamp <time>', 'allowlist end time as unix seconds or an ISO date')
+    .option('--input <file>', 'allowlist proof artifact JSON; uses its root')
+    .option('--root <bytes32>', 'allowlist Merkle root to set when no input is provided')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .action(async (opts: AllowlistSetOptions): Promise<void> => {
+      try {
+        assertAddressOption(opts.contract, 'contract');
+        if (opts.input === undefined && opts.root === undefined) {
+          throw new Error('Pass --input or --root to set a release allowlist.');
+        }
+        if (opts.input !== undefined && opts.root !== undefined) {
+          throw new Error('Pass either --input or --root, not both.');
+        }
+
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const rare = releaseWriteClient(chain);
+        const artifact = opts.input === undefined ? undefined : loadAllowlistArtifact(opts.input);
+        if (opts.root !== undefined) {
+          assertBytes32Option(opts.root, '--root');
+        }
+        const root = opts.root;
+
+        log(`Configuring release allowlist on ${chain}...`);
+        log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
+        log(`  Collection: ${opts.contract}`);
+        log(`  Root:       ${artifact?.root ?? root}`);
+        log(`  Ends:       ${opts.endTimestamp}`);
+
+        const result = await rare.listing.release.setAllowlistConfig({
+          contract: opts.contract,
+          root,
+          artifact,
+          endTimestamp: opts.endTimestamp,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            config: result.config,
+          },
+          () => {
+            console.log(`\nTransaction sent: ${result.txHash}`);
+            console.log(`Allowlist configured! Block: ${result.receipt.blockNumber}`);
+            console.log(`  Root:   ${result.config.root}`);
+            console.log(`  Ends:   ${formatTimestamp(result.config.endTimestamp)}`);
+            console.log(`  Active: ${result.config.active ? 'yes' : 'no'}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  allowlist
+    .command('clear')
+    .description('Clear the RareMinter allowlist config for a release')
+    .requiredOption('--contract <address>', 'collection contract address')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .action(async (opts: ReleaseContractOptions): Promise<void> => {
+      try {
+        assertAddressOption(opts.contract, 'contract');
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const rare = releaseWriteClient(chain);
+
+        log(`Clearing release allowlist on ${chain}...`);
+        log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
+        log(`  Collection: ${opts.contract}`);
+
+        const result = await rare.listing.release.clearAllowlistConfig({
+          contract: opts.contract,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            config: result.config,
+          },
+          () => {
+            console.log(`\nTransaction sent: ${result.txHash}`);
+            console.log(`Allowlist cleared! Block: ${result.receipt.blockNumber}`);
+            console.log(`  Root:   ${result.config.root}`);
+            console.log(`  Ends:   ${formatTimestamp(result.config.endTimestamp)}`);
+            console.log(`  Active: ${result.config.active ? 'yes' : 'no'}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  cmd.addCommand(allowlist);
+
+  const limits = new Command('limits');
+  limits.description('Configure RareMinter mint and transaction limits');
+
+  limits
+    .command('set-mint')
+    .description('Set the RareMinter per-wallet mint limit for a release')
+    .requiredOption('--contract <address>', 'collection contract address')
+    .requiredOption('--limit <number>', 'per-wallet mint limit; 0 disables the limit')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .action(async (opts: ReleaseLimitOptions): Promise<void> => {
+      try {
+        assertAddressOption(opts.contract, 'contract');
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const rare = releaseWriteClient(chain);
+
+        log(`Configuring release mint limit on ${chain}...`);
+        log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
+        log(`  Collection: ${opts.contract}`);
+        log(`  Limit:      ${opts.limit}`);
+
+        const result = await rare.listing.release.setMintLimit({
+          contract: opts.contract,
+          limit: opts.limit,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            config: result.config,
+          },
+          () => {
+            console.log(`\nTransaction sent: ${result.txHash}`);
+            console.log(`Mint limit configured! Block: ${result.receipt.blockNumber}`);
+            console.log(`  Limit:   ${formatLimit(result.config.limit)}`);
+            console.log(`  Enabled: ${result.config.enabled ? 'yes' : 'no'}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  limits
+    .command('set-tx')
+    .description('Set the RareMinter per-wallet transaction limit for a release')
+    .requiredOption('--contract <address>', 'collection contract address')
+    .requiredOption('--limit <number>', 'per-wallet mint transaction limit; 0 disables the limit')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .action(async (opts: ReleaseLimitOptions): Promise<void> => {
+      try {
+        assertAddressOption(opts.contract, 'contract');
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const rare = releaseWriteClient(chain);
+
+        log(`Configuring release transaction limit on ${chain}...`);
+        log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
+        log(`  Collection: ${opts.contract}`);
+        log(`  Limit:      ${opts.limit}`);
+
+        const result = await rare.listing.release.setTxLimit({
+          contract: opts.contract,
+          limit: opts.limit,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            config: result.config,
+          },
+          () => {
+            console.log(`\nTransaction sent: ${result.txHash}`);
+            console.log(`Transaction limit configured! Block: ${result.receipt.blockNumber}`);
+            console.log(`  Limit:   ${formatLimit(result.config.limit)}`);
+            console.log(`  Enabled: ${result.config.enabled ? 'yes' : 'no'}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  cmd.addCommand(limits);
+
+  const staking = new Command('staking');
+  staking.description('Configure RareMinter seller staking requirements');
+
+  staking
+    .command('set-minimum')
+    .description('Set the RareMinter seller staking minimum for a release')
+    .requiredOption('--contract <address>', 'collection contract address')
+    .requiredOption('--minimum <rare>', 'minimum staked RARE amount; 0 disables the requirement')
+    .option('--end-timestamp <time>', 'staking minimum end time as unix seconds or an ISO date; required unless minimum is 0')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .action(async (opts: ReleaseStakingOptions): Promise<void> => {
+      try {
+        assertAddressOption(opts.contract, 'contract');
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const rare = releaseWriteClient(chain);
+
+        log(`Configuring release seller staking minimum on ${chain}...`);
+        log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
+        log(`  Collection: ${opts.contract}`);
+        log(`  Minimum:    ${opts.minimum} RARE`);
+        log(`  Ends:       ${opts.endTimestamp ?? '(not set)'}`);
+
+        const result = await rare.listing.release.setSellerStakingMinimum({
+          contract: opts.contract,
+          amount: opts.minimum,
+          endTimestamp: opts.endTimestamp,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            config: result.config,
+          },
+          () => {
+            console.log(`\nTransaction sent: ${result.txHash}`);
+            console.log(`Seller staking minimum configured! Block: ${result.receipt.blockNumber}`);
+            console.log(`  Amount: ${formatStakingAmount(result.config.amount)}`);
+            console.log(`  Ends:   ${formatTimestamp(result.config.endTimestamp)}`);
+            console.log(`  Active: ${result.config.active ? 'yes' : 'no'}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  cmd.addCommand(staking);
+
+  cmd
+    .command('status')
+    .description('Get RareMinter direct sale release details (read-only)')
+    .requiredOption('--contract <address>', 'collection contract address')
+    .option('--account <address>', 'account address to include mint and transaction usage')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .action(async (opts: ReleaseStatusOptions): Promise<void> => {
+      try {
+        assertAddressOption(opts.contract, 'contract');
+        if (opts.account !== undefined) {
+          assertAddressOption(opts.account, 'account');
+        }
+
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const publicClient = getPublicClient(chain);
+        const rare = createRareClient({ publicClient });
+        const result = await rare.listing.release.getStatus({
+          contract: opts.contract,
+          account: opts.account,
+        });
+        const currencyLabel = result.isEth ? 'ETH' : result.currencyAddress;
+        const price = `${formatTokenAmount(result.price, result.currencyDecimals)} ${currencyLabel}`;
+
+        output(result, () => {
+          console.log('\nRelease Details:');
+          console.log(`  RareMinter:         ${result.rareMinter}`);
+          console.log(`  Collection:         ${result.contract}`);
+          console.log(`  Configured:         ${result.configured ? 'yes' : 'no'}`);
+          if (result.configured) {
+            console.log(`  Seller:             ${result.seller}`);
+            console.log(`  Price:              ${price}`);
+            console.log(`  Currency:           ${currencyLabel}`);
+            console.log(`  Starts at:          ${formatTimestamp(result.startTime)}`);
+            console.log(`  Max mints per tx:   ${result.maxMints}`);
+            console.log('  Splits:');
+            result.splitRecipients.forEach((address, index) => {
+              console.log(`    ${address} = ${result.splitRatios[index]}%`);
+            });
+          }
+
+          console.log(`  Allowlist active:   ${result.allowlistActive ? 'yes' : 'no'}`);
+          if (result.allowlistRoot !== '0x0000000000000000000000000000000000000000000000000000000000000000') {
+            console.log(`  Allowlist root:     ${result.allowlistRoot}`);
+            console.log(`  Allowlist ends:     ${formatTimestamp(result.allowlistEndTimestamp)}`);
+          }
+          console.log(`  Mint limit:         ${result.mintLimit === 0n ? 'none' : result.mintLimit.toString()}`);
+          console.log(`  Transaction limit:  ${result.txLimit === 0n ? 'none' : result.txLimit.toString()}`);
+          if (result.stakingMinimumAmount > 0n) {
+            console.log(`  Staking minimum:    ${formatStakingAmount(result.stakingMinimumAmount)}`);
+            console.log(`  Staking ends:       ${formatTimestamp(result.stakingMinimumEndTimestamp)}`);
+          }
+          if (result.totalSupply !== null || result.maxSupply !== null) {
+            const total = result.totalSupply?.toString() ?? 'unknown';
+            const max = result.maxSupply?.toString() ?? 'unknown';
+            console.log(`  Minted supply:      ${total} / ${max}`);
+            console.log(`  Remaining supply:   ${result.remainingSupply?.toString() ?? 'unknown'}`);
+          }
+          if (result.account) {
+            console.log('  Account usage:');
+            console.log(`    Account:          ${result.account}`);
+            console.log(`    Mints:            ${result.accountMints?.toString() ?? 'unknown'}`);
+            console.log(`    Transactions:     ${result.accountTxs?.toString() ?? 'unknown'}`);
+          }
+          console.log(`  Currently mintable: ${result.currentlyMintable ? 'yes' : 'no'}`);
+        });
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
 }

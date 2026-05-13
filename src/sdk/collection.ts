@@ -37,7 +37,7 @@ export function createCollectionNamespace(
   return {
     ...baseCollection,
 
-    async createSovereign(params) {
+    async createSovereign(params): ReturnType<RareClient['collection']['createSovereign']> {
       const plan = planCreateSovereignCollection(params);
       const factoryAddress = requireContractAddress(chain, 'sovereignFactory');
       const { walletClient, account } = requireWallet(config);
@@ -69,7 +69,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async createLazySovereign(params) {
+    async createLazySovereign(params): ReturnType<RareClient['collection']['createLazySovereign']> {
       const plan = planCreateLazySovereignCollection(params);
       const factoryAddress = requireContractAddress(chain, 'lazySovereignFactory');
       const { walletClient, account } = requireWallet(config);
@@ -109,7 +109,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async createSpace(params) {
+    async createSpace(params): ReturnType<RareClient['collection']['createSpace']> {
       const plan = planCreateRareSpaceCollection(params);
       const factoryAddress = requireContractAddress(chain, 'spaceFactory');
       const { walletClient, account } = requireWallet(config);
@@ -141,7 +141,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async mintSpace(params) {
+    async mintSpace(params): ReturnType<RareClient['collection']['mintSpace']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const plan = planMintRareSpaceToken(params, accountAddress);
       const txHash = await writeMintRareSpaceToken({
@@ -173,7 +173,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async mintBatch(params) {
+    async mintBatch(params): ReturnType<RareClient['collection']['mintBatch']> {
       const plan = planCollectionMintBatch(params);
       const { walletClient, account } = requireWallet(config);
       const txHash = await writeCollectionBatchMint({
@@ -206,7 +206,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async prepareLazyMint(params) {
+    async prepareLazyMint(params): ReturnType<RareClient['collection']['prepareLazyMint']> {
       const plan = planCollectionPrepareLazyMint(params);
       const { walletClient, account } = requireWallet(config);
       const txHash = await writeCollectionPrepareLazyMint({
@@ -247,7 +247,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async getTokenCreator(params) {
+    async getTokenCreator(params): ReturnType<RareClient['collection']['getTokenCreator']> {
       const plan = planCollectionToken(params);
       const creator = await readTokenCreator(publicClient, plan.contract, plan.tokenId);
       return {
@@ -257,7 +257,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async getRoyaltyInfo(params) {
+    async getRoyaltyInfo(params): ReturnType<RareClient['collection']['getRoyaltyInfo']> {
       const plan = planCollectionRoyaltyInfo(params);
       const [receiver, royaltyAmount] = await readRoyaltyInfo(
         publicClient,
@@ -277,7 +277,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async setDefaultRoyaltyReceiver(params) {
+    async setDefaultRoyaltyReceiver(params): ReturnType<RareClient['collection']['setDefaultRoyaltyReceiver']> {
       const plan = planCollectionReceiver(params);
       const { walletClient, account } = requireWallet(config);
       const txHash = await writeSetDefaultRoyaltyReceiver({
@@ -296,7 +296,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async setTokenRoyaltyReceiver(params) {
+    async setTokenRoyaltyReceiver(params): ReturnType<RareClient['collection']['setTokenRoyaltyReceiver']> {
       const plan = planCollectionTokenReceiver(params);
       const { walletClient, account } = requireWallet(config);
       const txHash = await writeSetTokenRoyaltyReceiver({
@@ -316,7 +316,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async getMintConfig(params) {
+    async getMintConfig(params): ReturnType<RareClient['collection']['getMintConfig']> {
       const plan = planCollectionContract(params);
       const mintConfig = await readMintConfig(publicClient, plan.contract);
       return {
@@ -327,7 +327,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async updateBaseUri(params) {
+    async updateBaseUri(params): ReturnType<RareClient['collection']['updateBaseUri']> {
       const plan = planCollectionBaseUri(params);
       const { walletClient, account } = requireWallet(config);
       const txHash = await writeUpdateBaseUri({
@@ -352,7 +352,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async updateTokenUri(params) {
+    async updateTokenUri(params): ReturnType<RareClient['collection']['updateTokenUri']> {
       const plan = planCollectionTokenUri(params);
       const { walletClient, account } = requireWallet(config);
       const txHash = await writeUpdateTokenUri({
@@ -378,7 +378,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async lockBaseUri(params) {
+    async lockBaseUri(params): ReturnType<RareClient['collection']['lockBaseUri']> {
       const plan = planCollectionContract(params);
       const { walletClient, account } = requireWallet(config);
       const txHash = await writeLockBaseUri({

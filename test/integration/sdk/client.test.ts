@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import { createPublicClient, http } from 'viem';
+import { baseSepolia } from 'viem/chains';
 import { getContractAddresses } from '../../../src/contracts/addresses.js';
 import { createRareClient } from '../../../src/sdk/client.js';
-import { createTestSepoliaPublicClient } from '../../helpers/liveViem.js';
+import { createTestSepoliaPublicClient, hasTestRpcUrl } from '../../helpers/liveViem.js';
 
-describe('Rare SDK client live integration', () => {
+const describeLive = hasTestRpcUrl() ? describe : describe.skip;
+
+describeLive('Rare SDK client live integration', () => {
   it('uses a real viem Sepolia public client for chain and contract resolution', async () => {
     const publicClient = createTestSepoliaPublicClient();
     const rare = createRareClient({ publicClient });
@@ -12,6 +16,8 @@ describe('Rare SDK client live integration', () => {
     expect(rare.chain).toBe('sepolia');
     expect(rare.chainId).toBe(11_155_111);
     expect(rare.contracts).toEqual(getContractAddresses('sepolia'));
+    expect(rare.listing.release).toBeDefined();
+    expect('release' in rare).toBe(false);
   }, 30_000);
 
   it('defaults NFT search requests to the real client chain ID', async () => {
@@ -40,5 +46,18 @@ describe('Rare SDK client live integration', () => {
     await expect(
       rare.import.erc721({ contract: '0x1000000000000000000000000000000000000000' }),
     ).rejects.toThrow('No owner available for import.');
+  });
+
+  it('rejects lazy batch mint deploys on chains without a configured lazy factory before requiring a wallet', async () => {
+    const rare = createRareClient({
+      publicClient: createPublicClient({
+        chain: baseSepolia,
+        transport: http('http://127.0.0.1:8545'),
+      }),
+    });
+
+    await expect(
+      rare.deploy.lazyBatchMint({ name: 'Unsupported Lazy Collection', symbol: 'ULC' }),
+    ).rejects.toThrow('Lazy batch mint factory is not deployed on this chain.');
   });
 });

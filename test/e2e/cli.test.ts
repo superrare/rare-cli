@@ -37,7 +37,7 @@ describe('built CLI deterministic behavior', () => {
       expect(configure.stdout).toContain('Default chain set to: base-sepolia');
       expect(configure.stdout).toContain('Configuration updated for chain: sepolia');
 
-      const config = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
+      const config: unknown = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
       expect(config).toEqual({
         defaultChain: 'base-sepolia',
         chains: {
@@ -50,7 +50,8 @@ describe('built CLI deterministic behavior', () => {
 
       const show = await runCli(['configure', '--show'], { home });
       expect(show.code).toBe(0);
-      expect(JSON.parse(show.stdout)).toEqual({
+      const shownConfig: unknown = JSON.parse(show.stdout);
+      expect(shownConfig).toEqual({
         defaultChain: 'base-sepolia',
         chains: {
           sepolia: {
@@ -74,8 +75,61 @@ describe('built CLI deterministic behavior', () => {
       expect(saved.code).toBe(0);
       expect(saved.stdout).toContain('Private key saved to config for chain: sepolia');
 
-      const config = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
+      const config: unknown = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
+      if (!isConfigWithSepoliaPrivateKey(config)) {
+        throw new Error('Expected saved config to include a Sepolia private key.');
+      }
       expect(config.chains.sepolia.privateKey).toMatch(/^0x[0-9a-f]{64}$/);
+    });
+  });
+
+  it('exposes liquid edition deployment help', async () => {
+    await withTempHome(async (home) => {
+      const deploy = await runCli(['deploy', '--help'], { home });
+      expect(deploy.code).toBe(0);
+      expect(deploy.stdout).toContain('liquid-edition');
+      expect(deploy.stdout).not.toContain('liquid-token');
+      expect(deploy.stderr).toBe('');
+
+      const liquid = await runCli(['deploy', 'liquid-edition', '--help'], { home });
+      expect(liquid.code).toBe(0);
+      expect(liquid.stdout).toContain('Usage: rare deploy liquid-edition [options] <name> <symbol>');
+      expect(liquid.stdout).toContain('--curves-file <path>');
+      expect(liquid.stdout).toContain('--initial-rare-liquidity <amount>');
+      expect(liquid.stderr).toBe('');
+    });
+  });
+
+  it('exposes lazy batch mint collection help', async () => {
+    await withTempHome(async (home) => {
+      const collection = await runCli(['collection', '--help'], { home });
+      expect(collection.code).toBe(0);
+      expect(collection.stdout).toContain('create');
+      expect(collection.stderr).toBe('');
+
+      const create = await runCli(['collection', 'create', '--help'], { home });
+      expect(create.code).toBe(0);
+      expect(create.stdout).toContain('lazy-batch-mint');
+      expect(create.stderr).toBe('');
+
+      const lazyBatchMint = await runCli(['collection', 'create', 'lazy-batch-mint', '--help'], { home });
+      expect(lazyBatchMint.code).toBe(0);
+      expect(lazyBatchMint.stdout).toContain('Usage: rare collection create lazy-batch-mint [options] <name> <symbol>');
+      expect(lazyBatchMint.stdout).toContain('--max-tokens <number>');
+      expect(lazyBatchMint.stdout).toContain('--chain-id <id>');
+      expect(lazyBatchMint.stderr).toBe('');
+    });
+  });
+
+  it('exposes auction parity command help', async () => {
+    await withTempHome(async (home) => {
+      const create = await runCli(['auction', 'create', '--help'], { home });
+      expect(create.code).toBe(0);
+      expect(create.stdout).toContain('Usage: rare auction create [options]');
+      expect(create.stdout).toContain('--type <type>');
+      expect(create.stdout).toContain('--start-time <seconds>');
+      expect(create.stdout).toContain('--split <addr=ratio>');
+      expect(create.stderr).toBe('');
     });
   });
 
@@ -86,6 +140,136 @@ describe('built CLI deterministic behavior', () => {
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('Error: --default-chain must be one of: mainnet, sepolia, base, base-sepolia');
+    });
+  });
+
+  it('exposes aligned batch listing flags', async () => {
+    await withTempHome(async (home) => {
+      const proofHelp = await runCli(['listing', 'batch', 'merkle', 'proof', '--help'], { home });
+      expect(proofHelp.code).toBe(0);
+      expect(proofHelp.stdout).toContain('--output <path>');
+      expect(proofHelp.stdout).toContain('--buyer <address>');
+
+      const createHelp = await runCli(['listing', 'batch', 'create', '--help'], { home });
+      expect(createHelp.code).toBe(0);
+      expect(createHelp.stdout).toContain('--yes');
+      expect(createHelp.stdout).toContain('--chain-id <id>');
+      expect(createHelp.stdout).not.toContain('--no-approve');
+
+      const setAllowListHelp = await runCli(['listing', 'batch', 'set-allowlist', '--help'], { home });
+      expect(setAllowListHelp.code).toBe(0);
+      expect(setAllowListHelp.stdout).toContain('--allowlist-root <hex>');
+      expect(setAllowListHelp.stdout).toContain('--end-timestamp <unix>');
+    });
+  });
+
+  it('wires listing release commands and validates user-visible inputs before RPC setup', async () => {
+    await withTempHome(async (home) => {
+      const help = await runCli(['listing', 'release', '--help'], { home });
+      expect(help.code).toBe(0);
+      expect(help.stdout).toContain('RareMinter release subcommands');
+      expect(help.stdout).toContain('configure');
+      expect(help.stdout).toContain('allowlist');
+      expect(help.stdout).toContain('limits');
+      expect(help.stdout).toContain('staking');
+      expect(help.stdout).toContain('mint');
+      expect(help.stdout).toContain('status');
+
+      const configureHelp = await runCli(['listing', 'release', 'configure', '--help'], { home });
+      expect(configureHelp.code).toBe(0);
+      expect(configureHelp.stdout).toContain('--chain-id <id>');
+
+      const statusHelp = await runCli(['listing', 'release', 'status', '--help'], { home });
+      expect(statusHelp.code).toBe(0);
+      expect(statusHelp.stdout).toContain('--account <address>');
+      expect(statusHelp.stdout).toContain('--chain-id <id>');
+      expect(statusHelp.stdout).not.toContain('--wallet');
+
+      const mintHelp = await runCli(['listing', 'release', 'mint', '--help'], { home });
+      expect(mintHelp.code).toBe(0);
+      expect(mintHelp.stdout).toContain('--quantity <number>');
+      expect(mintHelp.stdout).toContain('--proof <file>');
+      expect(mintHelp.stdout).toContain('--chain-id <id>');
+
+      const allowlistProofHelp = await runCli(['listing', 'release', 'allowlist', 'proof', '--help'], { home });
+      expect(allowlistProofHelp.code).toBe(0);
+      expect(allowlistProofHelp.stdout).toContain('--input <file>');
+      expect(allowlistProofHelp.stdout).toContain('--account <address>');
+      expect(allowlistProofHelp.stdout).toContain('--output <file>');
+      expect(allowlistProofHelp.stdout).not.toContain('--artifact');
+      expect(allowlistProofHelp.stdout).not.toContain('--wallet');
+      expect(allowlistProofHelp.stdout).not.toContain('--address');
+
+      const result = await runCli(['listing', 'release', 'status', '--contract', 'not-an-address'], { home });
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('Error: Invalid contract address: "not-an-address".');
+    });
+  });
+
+  it('rejects malformed release mint proof files before wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const proof = join(home, 'bad-proof.json');
+      await writeFile(proof, JSON.stringify({ proof: ['0x1234'] }), 'utf8');
+
+      const result = await runCli([
+        'listing',
+        'release',
+        'mint',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--proof',
+        proof,
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('proof[0] must be a 32-byte hex string.');
+    });
+  });
+
+  it('builds and consumes release allowlist artifacts without RPC setup', async () => {
+    await withTempHome(async (home) => {
+      const input = join(home, 'allowlist.csv');
+      const artifactPath = join(home, 'allowlist-artifact.json');
+      const wallet = '0x0000000000000000000000000000000000000001';
+
+      await writeFile(input, `wallet\n${wallet}\n0x0000000000000000000000000000000000000002\n`, 'utf8');
+
+      const build = await runCli([
+        'listing',
+        'release',
+        'allowlist',
+        'build',
+        '--input',
+        input,
+        '--output',
+        artifactPath,
+      ], { home });
+      expect(build.code).toBe(0);
+      expect(build.stdout).toContain('Allowlist artifact written');
+      expect(build.stdout).toContain('Wallets: 2');
+
+      const artifact = JSON.parse(await readFile(artifactPath, 'utf8'));
+      expect(artifact.root).toMatch(/^0x[0-9a-f]{64}$/);
+      expect(artifact.wallets).toHaveLength(2);
+
+      const proof = parseJsonStdout<{ root: string; address: string; proof: string[] }>(
+        await runCli([
+          '--json',
+          'listing',
+          'release',
+          'allowlist',
+          'proof',
+          '--input',
+          artifactPath,
+          '--account',
+          wallet,
+        ], { home }),
+      );
+      expect(proof.root).toBe(artifact.root);
+      expect(proof.address).toBe(wallet);
+      expect(proof.proof).toEqual(expect.any(Array));
     });
   });
 
@@ -156,181 +340,6 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('exposes auction parity command help', async () => {
-    await withTempHome(async (home) => {
-      const create = await runCli(['auction', 'create', '--help'], { home });
-      expect(create.code).toBe(0);
-      expect(create.stdout).toContain('Usage: rare auction create [options]');
-      expect(create.stdout).toContain('--type <type>');
-      expect(create.stdout).toContain('--start-time <seconds>');
-      expect(create.stdout).toContain('--split-recipient <address>');
-      expect(create.stdout).toContain('--split-ratio <percent>');
-      expect(create.stderr).toBe('');
-    });
-  });
-
-  it('exposes release allowlist and configuration command help', async () => {
-    await withTempHome(async (home) => {
-      const allowlist = await runCli(['release', 'allowlist', 'build', '--help'], { home });
-      expect(allowlist.code).toBe(0);
-      expect(allowlist.stdout).toContain('Usage: rare release allowlist build [options]');
-      expect(allowlist.stdout).toContain('--input <path>');
-      expect(allowlist.stderr).toBe('');
-
-      const set = await runCli(['release', 'allowlist', 'set', '--help'], { home });
-      expect(set.code).toBe(0);
-      expect(set.stdout).toContain('Usage: rare release allowlist set [options]');
-      expect(set.stdout).toContain('--end-timestamp <seconds>');
-      expect(set.stderr).toBe('');
-
-      const proof = await runCli(['release', 'allowlist', 'proof', '--help'], { home });
-      expect(proof.code).toBe(0);
-      expect(proof.stdout).toContain('--account <address>');
-      expect(proof.stdout).not.toContain('--address <address>');
-      expect(proof.stderr).toBe('');
-
-      const verify = await runCli(['release', 'allowlist', 'verify', '--help'], { home });
-      expect(verify.code).toBe(0);
-      expect(verify.stdout).toContain('--account <address>');
-      expect(verify.stdout).not.toContain('--address <address>');
-      expect(verify.stderr).toBe('');
-
-      const limits = await runCli(['release', 'limits', 'set-mint', '--help'], { home });
-      expect(limits.code).toBe(0);
-      expect(limits.stdout).toContain('Usage: rare release limits set-mint [options]');
-      expect(limits.stdout).toContain('--limit <number>');
-      expect(limits.stderr).toBe('');
-
-      const mint = await runCli(['release', 'mint', '--help'], { home });
-      expect(mint.code).toBe(0);
-      expect(mint.stdout).toContain('Usage: rare release mint [options]');
-      expect(mint.stdout).toContain('--quantity <number>');
-      expect(mint.stdout).toContain('--proof <path>');
-      expect(mint.stderr).toBe('');
-    });
-  });
-
-  it('builds and verifies release allowlist artifacts without wallet setup', async () => {
-    await withTempHome(async (home) => {
-      const input = join(home, 'allowlist.csv');
-      const artifactPath = join(home, 'allowlist-artifact.json');
-      await writeFile(input, [
-        'address',
-        '0x2222222222222222222222222222222222222222',
-        '0x1111111111111111111111111111111111111111',
-        '',
-      ].join('\n'), 'utf8');
-
-      const build = parseJsonStdout<{
-        root: string;
-        count: number;
-        output: string;
-      }>(await runCli([
-        '--json',
-        'release',
-        'allowlist',
-        'build',
-        '--input',
-        input,
-        '--output',
-        artifactPath,
-      ], { home }));
-
-      expect(build.root).toMatch(/^0x[0-9a-f]{64}$/);
-      expect(build.count).toBe(2);
-      expect(build.output).toBe(artifactPath);
-
-      const artifact = JSON.parse(await readFile(artifactPath, 'utf8'));
-      expect(artifact.root).toBe(build.root);
-      expect(artifact.addresses).toEqual([
-        '0x1111111111111111111111111111111111111111',
-        '0x2222222222222222222222222222222222222222',
-      ]);
-
-      const proof = parseJsonStdout<{
-        root: string;
-        address: string;
-        valid: boolean;
-        proof: string[];
-      }>(await runCli([
-        '--json',
-        'release',
-        'allowlist',
-        'proof',
-        '--input',
-        artifactPath,
-        '--account',
-        '0x2222222222222222222222222222222222222222',
-      ], { home }));
-
-      expect(proof.root).toBe(build.root);
-      expect(proof.valid).toBe(true);
-      expect(proof.proof).toHaveLength(1);
-
-      const verify = parseJsonStdout<{
-        root: string;
-        address: string;
-        valid: boolean;
-      }>(await runCli([
-        '--json',
-        'release',
-        'allowlist',
-        'verify',
-        '--input',
-        artifactPath,
-        '--account',
-        '0x2222222222222222222222222222222222222222',
-      ], { home }));
-
-      expect(verify).toEqual({
-        root: build.root,
-        address: '0x2222222222222222222222222222222222222222',
-        valid: true,
-      });
-    });
-  });
-
-  it('rejects malformed release allowlists before wallet setup', async () => {
-    await withTempHome(async (home) => {
-      const input = join(home, 'bad-allowlist.csv');
-      await writeFile(input, 'address\nnot-an-address\n', 'utf8');
-
-      const result = await runCli([
-        'release',
-        'allowlist',
-        'build',
-        '--input',
-        input,
-      ], { home });
-
-      expect(result.code).toBe(1);
-      expect(result.stdout).toBe('');
-      expect(result.stderr).toContain('allowlist address at index 0 must be a valid 0x address.');
-    });
-  });
-
-  it('rejects malformed release mint options before wallet setup', async () => {
-    await withTempHome(async (home) => {
-      const proof = join(home, 'bad-proof.json');
-      await writeFile(proof, JSON.stringify({ proof: ['0x1234'] }), 'utf8');
-
-      const result = await runCli([
-        'release',
-        'mint',
-        '--contract',
-        '0x1111111111111111111111111111111111111111',
-        '--proof',
-        proof,
-        '--chain',
-        'sepolia',
-      ], { home });
-
-      expect(result.code).toBe(1);
-      expect(result.stdout).toBe('');
-      expect(result.stderr).toContain('proof[0] must be a bytes32 hex string.');
-    });
-  });
-
   it('rejects invalid collection mint addresses before wallet setup', async () => {
     await withTempHome(async (home) => {
       const result = await runCli([
@@ -365,23 +374,6 @@ describe('built CLI deterministic behavior', () => {
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('RARE Protocol spaceFactory contract is not configured on "sepolia".');
-    });
-  });
-
-  it('rejects RareMinter release reads on chains without a configured minter before wallet setup', async () => {
-    await withTempHome(async (home) => {
-      const result = await runCli([
-        'release',
-        'status',
-        '--contract',
-        '0x1111111111111111111111111111111111111111',
-        '--chain',
-        'base',
-      ], { home });
-
-      expect(result.code).toBe(1);
-      expect(result.stdout).toBe('');
-      expect(result.stderr).toContain('RARE Protocol rareMinter contract is not configured on "base".');
     });
   });
 
@@ -463,3 +455,20 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 });
+
+function isConfigWithSepoliaPrivateKey(value: unknown): value is {
+  chains: { sepolia: { privateKey: string } };
+} {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'chains' in value &&
+    typeof value.chains === 'object' &&
+    value.chains !== null &&
+    'sepolia' in value.chains &&
+    typeof value.chains.sepolia === 'object' &&
+    value.chains.sepolia !== null &&
+    'privateKey' in value.chains.sepolia &&
+    typeof value.chains.sepolia.privateKey === 'string'
+  );
+}

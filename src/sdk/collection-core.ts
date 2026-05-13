@@ -24,14 +24,14 @@ export type LazySovereignCollectionContractTypeReadName =
 
 export const defaultRoyaltyInfoSalePrice = 10000n;
 
-export interface PlanCreateSovereignCollectionParams {
+export type PlanCreateSovereignCollectionParams = {
   name: string;
   symbol: string;
   maxTokens?: IntegerInput;
   contractType?: SovereignCollectionContractType;
 }
 
-export interface CreateSovereignCollectionPlan {
+export type CreateSovereignCollectionPlan = {
   name: string;
   symbol: string;
   maxTokens?: bigint;
@@ -44,14 +44,14 @@ export type CreateSovereignCollectionWrite = {
   args: [string, string] | [string, string, bigint] | [string, string, bigint, Hex];
 };
 
-export interface PlanCreateLazySovereignCollectionParams {
+export type PlanCreateLazySovereignCollectionParams = {
   name: string;
   symbol: string;
   maxTokens: IntegerInput;
   contractType?: LazySovereignCollectionContractType;
 }
 
-export interface CreateLazySovereignCollectionPlan {
+export type CreateLazySovereignCollectionPlan = {
   name: string;
   symbol: string;
   maxTokens: bigint;
@@ -64,26 +64,26 @@ export type CreateLazySovereignCollectionWrite = {
   args: [string, string, bigint, Hex];
 };
 
-export interface PlanCollectionMintBatchParams {
+export type PlanCollectionMintBatchParams = {
   contract: Address;
   baseUri: string;
   tokenCount: IntegerInput;
 }
 
-export interface CollectionMintBatchPlan {
+export type CollectionMintBatchPlan = {
   contract: Address;
   baseUri: string;
   tokenCount: bigint;
 }
 
-export interface PlanCollectionPrepareLazyMintParams {
+export type PlanCollectionPrepareLazyMintParams = {
   contract: Address;
   baseUri: string;
   tokenCount: IntegerInput;
   minter?: Address;
 }
 
-export interface CollectionPrepareLazyMintPlan {
+export type CollectionPrepareLazyMintPlan = {
   contract: Address;
   baseUri: string;
   tokenCount: bigint;
@@ -100,86 +100,86 @@ export type CollectionPrepareLazyMintWrite = {
   args: [string, bigint] | [string, bigint, Address];
 };
 
-export interface PlanCollectionTokenParams {
+export type PlanCollectionTokenParams = {
   contract: Address;
   tokenId: IntegerInput;
 }
 
-export interface CollectionTokenPlan {
+export type CollectionTokenPlan = {
   contract: Address;
   tokenId: bigint;
 }
 
-export interface PlanCollectionRoyaltyInfoParams extends PlanCollectionTokenParams {
+export type PlanCollectionRoyaltyInfoParams = {
   salePrice?: IntegerInput;
-}
+} & PlanCollectionTokenParams
 
-export interface CollectionRoyaltyInfoPlan extends CollectionTokenPlan {
+export type CollectionRoyaltyInfoPlan = {
   salePrice: bigint;
-}
+} & CollectionTokenPlan
 
-export interface PlanCollectionReceiverParams {
+export type PlanCollectionReceiverParams = {
   contract: Address;
   receiver: Address;
 }
 
-export interface CollectionReceiverPlan {
+export type CollectionReceiverPlan = {
   contract: Address;
   receiver: Address;
 }
 
-export interface PlanCollectionTokenReceiverParams extends PlanCollectionTokenParams {
+export type PlanCollectionTokenReceiverParams = {
   receiver: Address;
-}
+} & PlanCollectionTokenParams
 
-export interface CollectionTokenReceiverPlan extends CollectionTokenPlan {
+export type CollectionTokenReceiverPlan = {
   receiver: Address;
-}
+} & CollectionTokenPlan
 
-export interface PlanCollectionBaseUriParams {
+export type PlanCollectionBaseUriParams = {
   contract: Address;
   baseUri: string;
 }
 
-export interface CollectionBaseUriPlan {
+export type CollectionBaseUriPlan = {
   contract: Address;
   baseUri: string;
 }
 
-export interface PlanCollectionTokenUriParams extends PlanCollectionTokenParams {
+export type PlanCollectionTokenUriParams = {
   tokenUri: string;
-}
+} & PlanCollectionTokenParams
 
-export interface CollectionTokenUriPlan extends CollectionTokenPlan {
+export type CollectionTokenUriPlan = {
   tokenUri: string;
-}
+} & CollectionTokenPlan
 
-export interface PlanCollectionContractParams {
+export type PlanCollectionContractParams = {
   contract: Address;
 }
 
-export interface CollectionContractPlan {
+export type CollectionContractPlan = {
   contract: Address;
 }
 
-export interface PlanCreateRareSpaceCollectionParams {
+export type PlanCreateRareSpaceCollectionParams = {
   name: string;
   symbol: string;
 }
 
-export interface CreateRareSpaceCollectionPlan {
+export type CreateRareSpaceCollectionPlan = {
   name: string;
   symbol: string;
 }
 
-export interface PlanMintRareSpaceTokenParams {
+export type PlanMintRareSpaceTokenParams = {
   contract: Address;
   tokenUri: string;
   to?: Address;
   royaltyReceiver?: Address;
 }
 
-export interface MintRareSpaceTokenPlan {
+export type MintRareSpaceTokenPlan = {
   contract: Address;
   tokenUri: string;
   to: Address;

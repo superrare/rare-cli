@@ -2,9 +2,10 @@ import {
   type Address,
   type Hash,
   type PublicClient,
+  type WalletClient,
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
-import type { RareClientConfig, RareClient } from './types.js';
+import type { RareClientConfig, RareClient, WalletAccount } from './types.js';
 import {
   approvalAbi,
   preparePayment,
@@ -25,33 +26,19 @@ export function createAuctionNamespace(
   addresses: { auction: Address },
 ): RareClient['auction'] {
   return {
-    async create(params) {
+    async create(params): ReturnType<RareClient['auction']['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const plan = planAuctionCreate(params, accountAddress);
-
-      let approvalTxHash: Hash | undefined;
-      if (params.autoApprove !== false) {
-        const isApproved = await publicClient.readContract({
-          address: plan.nftAddress,
-          abi: approvalAbi,
-          functionName: 'isApprovedForAll',
-          args: [accountAddress, addresses.auction],
+      const approvalTxHash = params.autoApprove === false
+        ? undefined
+        : await approveMarketplaceIfNeeded({
+          publicClient,
+          walletClient,
+          account,
+          accountAddress,
+          nftAddress: plan.nftAddress,
+          operator: addresses.auction,
         });
-
-        if (!isApproved) {
-          approvalTxHash = await walletClient.writeContract({
-            address: plan.nftAddress,
-            abi: approvalAbi,
-            functionName: 'setApprovalForAll',
-            args: [addresses.auction, true],
-            account,
-            chain: undefined,
-          });
-
-          await publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
-          await waitForApproval(publicClient, plan.nftAddress, accountAddress, addresses.auction);
-        }
-      }
 
       const auctionType = await publicClient.readContract({
         address: addresses.auction,
@@ -89,7 +76,7 @@ export function createAuctionNamespace(
       };
     },
 
-    async bid(params) {
+    async bid(params): ReturnType<RareClient['auction']['bid']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const plan = planAuctionBid(params);
 
@@ -112,7 +99,7 @@ export function createAuctionNamespace(
       return { txHash, receipt };
     },
 
-    async settle(params) {
+    async settle(params): ReturnType<RareClient['auction']['settle']> {
       const { walletClient, account } = requireWallet(config);
       const plan = planAuctionTokenAction(params);
 
@@ -129,7 +116,7 @@ export function createAuctionNamespace(
       return { txHash, receipt };
     },
 
-    async cancel(params) {
+    async cancel(params): ReturnType<RareClient['auction']['cancel']> {
       const { walletClient, account } = requireWallet(config);
       const plan = planAuctionTokenAction(params);
 
@@ -146,7 +133,7 @@ export function createAuctionNamespace(
       return { txHash, receipt };
     },
 
-    async getStatus(params) {
+    async getStatus(params): ReturnType<RareClient['auction']['getStatus']> {
       const plan = planAuctionTokenAction(params);
       const [
         result,
@@ -194,4 +181,38 @@ export function createAuctionNamespace(
       });
     },
   };
+}
+
+async function approveMarketplaceIfNeeded(opts: {
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  account: Address | WalletAccount;
+  accountAddress: Address;
+  nftAddress: Address;
+  operator: Address;
+}): Promise<Hash | undefined> {
+  const isApproved = await opts.publicClient.readContract({
+    address: opts.nftAddress,
+    abi: approvalAbi,
+    functionName: 'isApprovedForAll',
+    args: [opts.accountAddress, opts.operator],
+  });
+
+  if (isApproved) {
+    return undefined;
+  }
+
+  const approvalTxHash = await opts.walletClient.writeContract({
+    address: opts.nftAddress,
+    abi: approvalAbi,
+    functionName: 'setApprovalForAll',
+    args: [opts.operator, true],
+    account: opts.account,
+    chain: undefined,
+  });
+
+  await opts.publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
+  await waitForApproval(opts.publicClient, opts.nftAddress, opts.accountAddress, opts.operator);
+
+  return approvalTxHash;
 }

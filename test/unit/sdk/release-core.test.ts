@@ -1,325 +1,608 @@
 import { describe, expect, it } from 'vitest';
+import { parseEther, parseUnits, zeroAddress } from 'viem';
 import {
-  assertReleaseAllowlistConfigWriteMatches,
-  assertReleaseLimitWriteMatches,
-  assertReleaseSellerStakingMinimumWriteMatches,
+  ZERO_BYTES32,
+  assertReleaseAllowlistConfigMatches,
+  assertReleaseContractOwner,
+  assertReleaseLimitMatches,
+  assertReleaseSellerStakingMinimumMatches,
   buildReleaseAllowlistArtifact,
-  buildReleaseTokenIdRange,
+  buildReleaseAllowlistArtifactFromInput,
+  collectReleaseSplit,
+  finalizeReleaseSplitAccumulator,
   getReleaseAllowlistProof,
-  normalizeBytes32,
-  parseReleaseAllowlistAddresses,
+  normalizeReleasePrice,
+  normalizeReleaseStartTime,
   parseReleaseAllowlistArtifact,
-  planReleaseDirectSaleMint,
+  parseReleaseAllowlistCsv,
   planReleaseAllowlistConfig,
-  planReleaseMintLimit,
+  planReleaseConfigure,
+  planReleaseDirectSaleMint,
+  planReleaseLimitConfig,
   planReleaseSellerStakingMinimum,
-  planReleaseTxLimit,
   preflightReleaseDirectSaleMint,
-  shapeReleaseCollectionSupply,
-  shapeReleaseDirectSaleConfig,
+  resolveReleaseSplits,
+  shapeReleaseAllowlistConfig,
+  shapeReleaseLimitConfig,
+  shapeReleaseMintTokenRange,
+  shapeReleaseSellerStakingMinimum,
+  shapeReleaseStatus,
   verifyReleaseAllowlistProof,
 } from '../../../src/sdk/release-core.js';
 
-const COLLECTION_ADDRESS = '0x1111111111111111111111111111111111111111';
-const ETH_ADDRESS = '0x0000000000000000000000000000000000000000';
-const WALLET_A = '0x1111111111111111111111111111111111111111';
-const WALLET_B = '0x2222222222222222222222222222222222222222';
-const WALLET_C = '0x3333333333333333333333333333333333333333';
-const EXPECTED_ROOT = '0xcbf843e9efe7be41ca4d3a03347d27e7bb96d83ae75b3b36983ad907d2109c65';
+const ETH_ADDRESS = zeroAddress;
+const accountAddress = '0x0000000000000000000000000000000000000001' as const;
+const recipientAddress = '0x0000000000000000000000000000000000000002' as const;
+const erc20Currency = '0x3000000000000000000000000000000000000000' as const;
+const collection = '0x1000000000000000000000000000000000000000' as const;
+const rareMinter = '0x2000000000000000000000000000000000000000' as const;
 
-describe('RareMinter release core', () => {
-  it('builds deterministic allowlist artifacts from JSON wallet arrays', () => {
-    const artifact = buildReleaseAllowlistArtifact({
-      content: JSON.stringify([WALLET_B, WALLET_A, WALLET_C]),
-      format: 'json',
-    });
-
-    expect(artifact).toMatchObject({
-      version: 1,
-      type: 'rare-release-allowlist',
-      root: EXPECTED_ROOT,
-      count: 3,
-      addresses: [WALLET_A, WALLET_B, WALLET_C],
-    });
-    expect(artifact.entries).toHaveLength(3);
-    expect(artifact.entries[0].proof).toEqual([
-      '0x2ab0a4443bbea3fbe4d0e1503d11ff1367842fb0c8b28a5c8550f27599a40751',
-      '0x37d95e0aa71e34defa88b4c43498bc8b90207e31ad0ef4aa6f5bea78bd25a1ab',
-    ]);
-  });
-
-  it('parses CSV address columns and JSON address objects', () => {
-    expect(parseReleaseAllowlistAddresses({
-      content: `user address\n${WALLET_B}\n${WALLET_A}\n`,
-      format: 'csv',
-    })).toEqual([WALLET_A, WALLET_B]);
-
-    expect(parseReleaseAllowlistAddresses({
-      content: JSON.stringify([{ address: WALLET_B }, { ADDRESS: WALLET_A }]),
-      format: 'json',
-    })).toEqual([WALLET_A, WALLET_B]);
-  });
-
-  it('rejects duplicate and malformed allowlist rows', () => {
-    expect(() => parseReleaseAllowlistAddresses({
-      content: JSON.stringify([WALLET_A, WALLET_A]),
-      format: 'json',
-    })).toThrow(`Duplicate allowlist address: ${WALLET_A}.`);
-
-    expect(() => parseReleaseAllowlistAddresses({
-      content: 'address\nnot-an-address\n',
-      format: 'csv',
-    })).toThrow('allowlist address at index 0 must be a valid 0x address.');
-  });
-
-  it('generates and verifies address proofs', () => {
-    const artifact = buildReleaseAllowlistArtifact({
-      content: JSON.stringify([WALLET_B, WALLET_A, WALLET_C]),
-      format: 'json',
-    });
-    const proof = getReleaseAllowlistProof(artifact, WALLET_B);
-
-    expect(proof).toEqual({
-      root: EXPECTED_ROOT,
-      address: WALLET_B,
-      leaf: '0x2ab0a4443bbea3fbe4d0e1503d11ff1367842fb0c8b28a5c8550f27599a40751',
-      proof: [
-        '0xe2c07404b8c1df4c46226425cac68c28d27a766bbddce62309f36724839b22c0',
-        '0x37d95e0aa71e34defa88b4c43498bc8b90207e31ad0ef4aa6f5bea78bd25a1ab',
-      ],
-      valid: true,
-    });
-    expect(verifyReleaseAllowlistProof({
-      root: EXPECTED_ROOT,
-      address: WALLET_B,
-      proof: proof.proof,
-    })).toBe(true);
-    expect(verifyReleaseAllowlistProof({
-      root: EXPECTED_ROOT,
-      address: WALLET_C,
-      proof: proof.proof,
-    })).toBe(false);
-  });
-
-  it('parses artifacts and rejects mismatched roots', () => {
-    const artifact = buildReleaseAllowlistArtifact({
-      content: JSON.stringify([WALLET_B, WALLET_A]),
-      format: 'json',
-    });
-
-    expect(parseReleaseAllowlistArtifact(JSON.stringify(artifact)).root).toBe(artifact.root);
-    expect(() => parseReleaseAllowlistArtifact(JSON.stringify({
-      ...artifact,
-      root: EXPECTED_ROOT,
-    }))).toThrow('Allowlist artifact root does not match its address list.');
-  });
-
-  it('plans RareMinter config writes with non-negative integer inputs', () => {
-    expect(planReleaseAllowlistConfig({
-      contract: COLLECTION_ADDRESS,
-      root: EXPECTED_ROOT,
-      endTimestamp: '1778500000',
-    })).toEqual({
-      contract: COLLECTION_ADDRESS,
-      root: EXPECTED_ROOT,
-      endTimestamp: 1778500000n,
-    });
-
-    expect(planReleaseMintLimit({
-      contract: COLLECTION_ADDRESS,
-      limit: 0,
-    })).toEqual({
-      contract: COLLECTION_ADDRESS,
-      limit: 0n,
-    });
-
-    expect(planReleaseTxLimit({
-      contract: COLLECTION_ADDRESS,
-      limit: '3',
-    })).toEqual({
-      contract: COLLECTION_ADDRESS,
-      limit: 3n,
-    });
-
-    expect(planReleaseSellerStakingMinimum({
-      contract: COLLECTION_ADDRESS,
-      minimum: '1000000000000000000',
-      endTimestamp: 1778500000,
-    })).toEqual({
-      contract: COLLECTION_ADDRESS,
-      minimum: 1000000000000000000n,
-      endTimestamp: 1778500000n,
+describe('release configure planning', () => {
+  it('plans ETH release defaults from plain inputs', () => {
+    expect(
+      planReleaseConfigure(
+        {
+          contract: collection,
+          price: '0.5',
+          maxMints: '3',
+        },
+        {
+          accountAddress,
+          currencyDecimals: null,
+          nowSeconds: 1_700_000_000n,
+        },
+      ),
+    ).toEqual({
+      contract: collection,
+      currencyAddress: ETH_ADDRESS,
+      price: parseEther('0.5'),
+      startTime: 1_700_000_000n,
+      maxMints: 3n,
+      splitRecipients: [accountAddress],
+      splitRatios: [100],
     });
   });
 
-  it('rejects invalid bytes32 roots and negative config values', () => {
-    expect(() => normalizeBytes32('0x1234', 'root')).toThrow('root must be a bytes32 hex string.');
-    expect(() => planReleaseMintLimit({
-      contract: COLLECTION_ADDRESS,
-      limit: -1,
-    })).toThrow('limit must be greater than or equal to 0.');
+  it('plans ERC20 releases with explicit decimals, start time, and splits', () => {
+    expect(
+      planReleaseConfigure(
+        {
+          contract: collection,
+          currency: erc20Currency,
+          price: '1.25',
+          startTime: '2024-01-02T00:00:00.000Z',
+          maxMints: 10,
+          splitAddresses: [accountAddress, recipientAddress],
+          splitRatios: [70, 30],
+        },
+        {
+          accountAddress,
+          currencyDecimals: 6,
+          nowSeconds: 1_700_000_000n,
+        },
+      ),
+    ).toMatchObject({
+      currencyAddress: erc20Currency,
+      price: parseUnits('1.25', 6),
+      startTime: 1_704_153_600n,
+      maxMints: 10n,
+      splitRecipients: [accountAddress, recipientAddress],
+      splitRatios: [70, 30],
+    });
   });
 
-  it('verifies RareMinter write readbacks in pure core logic', () => {
-    const allowlistPlan = planReleaseAllowlistConfig({
-      contract: COLLECTION_ADDRESS,
-      root: EXPECTED_ROOT,
-      endTimestamp: 1778500000,
-    });
-    expect(() => assertReleaseAllowlistConfigWriteMatches(allowlistPlan, {
-      allowlistRoot: EXPECTED_ROOT,
-      allowlistEndTimestamp: 1778500000n,
-    })).not.toThrow();
-    expect(() => assertReleaseAllowlistConfigWriteMatches(allowlistPlan, {
-      allowlistRoot: EXPECTED_ROOT,
-      allowlistEndTimestamp: 1778500001n,
-    })).toThrow('RareMinter allowlist config write was mined but the verified read did not match.');
+  it('rejects invalid release business inputs before shell writes', () => {
+    expect(() =>
+      planReleaseConfigure(
+        { contract: collection, price: '1', maxMints: 0 },
+        { accountAddress, currencyDecimals: null, nowSeconds: 1n },
+      ),
+    ).toThrow('maxMints must be an integer between 1 and 100.');
+    expect(() => normalizeReleaseStartTime('-1', 1n)).toThrow(
+      'startTime must be greater than or equal to 0.',
+    );
+    expect(() =>
+      resolveReleaseSplits({
+        splitAddresses: [accountAddress],
+        splitRatios: [50],
+        defaultRecipient: accountAddress,
+      }),
+    ).toThrow('Split ratios must sum to 100 (got 50).');
+    expect(() =>
+      normalizeReleasePrice({
+        currencyAddress: erc20Currency,
+        amount: '1',
+        currencyDecimals: null,
+      }),
+    ).toThrow('currencyDecimals is required to normalize ERC20 price amounts.');
+  });
 
-    expect(() => assertReleaseLimitWriteMatches('mint limit', 2n, 2n)).not.toThrow();
-    expect(() => assertReleaseLimitWriteMatches('mint limit', 2n, 1n)).toThrow(
-      'RareMinter mint limit write was mined but the verified read did not match.',
+  it('parses repeatable split CLI values without mutating prior accumulator state', () => {
+    const first = collectReleaseSplit(`${accountAddress}=60`, undefined);
+    const second = collectReleaseSplit(`${recipientAddress}=40`, first);
+
+    expect(first).toEqual({ addresses: [accountAddress], ratios: [60] });
+    expect(second).toEqual({ addresses: [accountAddress, recipientAddress], ratios: [60, 40] });
+    expect(finalizeReleaseSplitAccumulator(second)).toEqual({
+      addresses: [accountAddress, recipientAddress],
+      ratios: [60, 40],
+    });
+  });
+
+  it('checks collection ownership as pure release validation', () => {
+    expect(() =>
+      assertReleaseContractOwner({
+        contract: collection,
+        accountAddress,
+        owner: recipientAddress,
+      }),
+    ).toThrow(`Connected wallet ${accountAddress} is not the owner of collection ${collection}.`);
+
+    expect(() =>
+      assertReleaseContractOwner({
+        contract: collection,
+        accountAddress,
+        owner: accountAddress,
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe('release allowlist artifacts', () => {
+  const walletA = '0x0000000000000000000000000000000000000003' as const;
+  const walletB = '0x0000000000000000000000000000000000000004' as const;
+  const walletC = '0x0000000000000000000000000000000000000005' as const;
+
+  it('builds reusable Merkle proof artifacts from CSV wallets', () => {
+    const artifact = buildReleaseAllowlistArtifactFromInput(
+      [
+        'wallet,notes',
+        `${walletC},third`,
+        `${walletA},first`,
+        `${walletB},second`,
+      ].join('\n'),
+      'csv',
     );
 
-    const stakingPlan = planReleaseSellerStakingMinimum({
-      contract: COLLECTION_ADDRESS,
-      minimum: 5,
-      endTimestamp: 1778500000,
+    expect(artifact).toMatchObject({
+      kind: 'rare-release-allowlist-v1',
+      version: 1,
+      leafEncoding: 'keccak256(address)',
+      tree: 'sorted-addresses-sort-pairs',
+      wallets: [
+        expect.objectContaining({ address: walletA }),
+        expect.objectContaining({ address: walletB }),
+        expect.objectContaining({ address: walletC }),
+      ],
     });
-    expect(() => assertReleaseSellerStakingMinimumWriteMatches(stakingPlan, {
-      sellerStakingMinimum: 5n,
-      sellerStakingMinimumEndTimestamp: 1778500000n,
-    })).not.toThrow();
-    expect(() => assertReleaseSellerStakingMinimumWriteMatches(stakingPlan, {
-      sellerStakingMinimum: 6n,
-      sellerStakingMinimumEndTimestamp: 1778500000n,
-    })).toThrow('RareMinter seller staking minimum write was mined but the verified read did not match.');
+    expect(artifact.root).toMatch(/^0x[0-9a-f]{64}$/);
+
+    for (const wallet of artifact.wallets) {
+      expect(verifyReleaseAllowlistProof({
+        root: artifact.root,
+        address: wallet.address,
+        proof: wallet.proof,
+      })).toBe(true);
+    }
   });
 
-  it('plans direct sale mints with uint8 quantity and optional proof inputs', () => {
+  it('builds artifacts from JSON wallet arrays and returns wallet proofs', () => {
+    const artifact = buildReleaseAllowlistArtifactFromInput(
+      JSON.stringify({
+        wallets: [
+          { wallet: walletB },
+          { address: walletA },
+        ],
+      }),
+      'json',
+    );
+    const proof = getReleaseAllowlistProof({ artifact, address: walletB });
+
+    expect(artifact.wallets).toHaveLength(2);
+    expect(proof?.address).toBe(walletB);
+    expect(proof?.proof).toHaveLength(1);
+    expect(parseReleaseAllowlistArtifact(JSON.parse(JSON.stringify(artifact)))).toEqual(artifact);
+  });
+
+  it('rejects invalid, duplicate, and malformed allowlist inputs with clear errors', () => {
+    expect(() => parseReleaseAllowlistCsv('wallet\nnot-an-address')).toThrow(
+      'Invalid allowlist address at CSV row 2: "not-an-address".',
+    );
+    expect(() => parseReleaseAllowlistCsv(`wallet\n${walletA}\n${walletA}`)).toThrow(
+      `Duplicate allowlist address at CSV row 3: "${walletA}" duplicates CSV row 2.`,
+    );
+    expect(() => parseReleaseAllowlistCsv('"unterminated')).toThrow(
+      'Malformed CSV allowlist at row 1: unterminated quoted field.',
+    );
+    expect(() => buildReleaseAllowlistArtifact([])).toThrow(
+      'Allowlist must contain at least one wallet address.',
+    );
+  });
+});
+
+describe('release allowlist and limit planning', () => {
+  it('plans allowlist config from an artifact root and parses ISO end timestamps', () => {
+    const artifact = buildReleaseAllowlistArtifact([accountAddress, recipientAddress]);
+
+    expect(
+      planReleaseAllowlistConfig({
+        contract: collection,
+        artifact,
+        endTimestamp: '2026-01-01T00:00:00.000Z',
+      }),
+    ).toEqual({
+      contract: collection,
+      root: artifact.root,
+      endTimestamp: 1_767_225_600n,
+    });
+  });
+
+  it('plans non-negative mint and transaction limits', () => {
+    expect(planReleaseLimitConfig({ contract: collection, limit: '0' })).toEqual({
+      contract: collection,
+      limit: 0n,
+    });
+    expect(planReleaseLimitConfig({ contract: collection, limit: 3 })).toEqual({
+      contract: collection,
+      limit: 3n,
+    });
+    expect(() => planReleaseLimitConfig({ contract: collection, limit: '-1' })).toThrow(
+      'limit must be greater than or equal to 0.',
+    );
+  });
+
+  it('plans seller staking minimum amounts in RARE units and allows zero to clear', () => {
+    expect(
+      planReleaseSellerStakingMinimum({
+        contract: collection,
+        amount: '12.5',
+        endTimestamp: 123n,
+      }),
+    ).toEqual({
+      contract: collection,
+      amount: parseEther('12.5'),
+      endTimestamp: 123n,
+    });
+    expect(
+      planReleaseSellerStakingMinimum({
+        contract: collection,
+        amount: '0',
+      }),
+    ).toEqual({
+      contract: collection,
+      amount: 0n,
+      endTimestamp: 0n,
+    });
+    expect(() =>
+      planReleaseSellerStakingMinimum({
+        contract: collection,
+        amount: '1',
+      }),
+    ).toThrow('endTimestamp is required.');
+  });
+});
+
+describe('release config result shaping and verification', () => {
+  it('shapes allowlist, limit, and staking config reads in the core', () => {
+    expect(shapeReleaseAllowlistConfig({
+      rareMinter,
+      contract: collection,
+      allowlist: { root: `0x${'11'.repeat(32)}`, endTimestamp: 2_000n },
+      nowSeconds: 1_000n,
+    })).toEqual({
+      rareMinter,
+      contract: collection,
+      root: `0x${'11'.repeat(32)}`,
+      endTimestamp: 2_000n,
+      active: true,
+      now: 1_000n,
+    });
+
+    expect(shapeReleaseLimitConfig({
+      rareMinter,
+      contract: collection,
+      limit: 0n,
+    })).toEqual({
+      rareMinter,
+      contract: collection,
+      limit: 0n,
+      enabled: false,
+    });
+
+    expect(shapeReleaseSellerStakingMinimum({
+      rareMinter,
+      contract: collection,
+      stakingMinimum: { amount: 1n, endTimestamp: 900n },
+      nowSeconds: 1_000n,
+    })).toEqual({
+      rareMinter,
+      contract: collection,
+      amount: 1n,
+      endTimestamp: 900n,
+      active: false,
+      now: 1_000n,
+    });
+  });
+
+  it('verifies RareMinter config readbacks without SDK shell logic', () => {
+    const allowlist = { root: `0x${'22'.repeat(32)}` as const, endTimestamp: 123n };
+    expect(() => assertReleaseAllowlistConfigMatches(allowlist, allowlist)).not.toThrow();
+    expect(() => assertReleaseAllowlistConfigMatches(allowlist, {
+      ...allowlist,
+      endTimestamp: 124n,
+    })).toThrow('RareMinter allowlist verification failed.');
+
+    expect(() => assertReleaseLimitMatches('mint limit', 2n, 2n)).not.toThrow();
+    expect(() => assertReleaseLimitMatches('mint limit', 2n, 1n)).toThrow(
+      'RareMinter mint limit verification failed.',
+    );
+
+    const staking = { amount: 5n, endTimestamp: 999n };
+    expect(() => assertReleaseSellerStakingMinimumMatches(staking, staking)).not.toThrow();
+    expect(() => assertReleaseSellerStakingMinimumMatches(staking, {
+      ...staking,
+      amount: 6n,
+    })).toThrow('RareMinter seller staking minimum verification failed.');
+  });
+});
+
+describe('release status shaping', () => {
+  it('classifies a configured started release as currently mintable', () => {
+    expect(
+      shapeReleaseStatus({
+        rareMinter,
+        contract: collection,
+        directSale: {
+          seller: accountAddress,
+          currencyAddress: ETH_ADDRESS,
+          price: parseEther('1'),
+          startTime: 900n,
+          maxMints: 5n,
+          splitRecipients: [accountAddress],
+          splitRatios: [100],
+        },
+        allowlist: { root: ZERO_BYTES32, endTimestamp: 0n },
+        mintLimit: 0n,
+        txLimit: 0n,
+        account: null,
+        accountMints: null,
+        accountTxs: null,
+        stakingMinimum: { amount: 0n, endTimestamp: 0n },
+        totalSupply: 5n,
+        maxSupply: 10n,
+        currencyDecimals: 18,
+        nowSeconds: 1_000n,
+      }),
+    ).toMatchObject({
+      configured: true,
+      started: true,
+      allowlistActive: false,
+      stakingMinimumActive: false,
+      remainingSupply: 5n,
+      soldOut: false,
+      currentlyMintable: true,
+      now: 1_000n,
+    });
+  });
+
+  it('uses limits and unconfigured seller state to mark releases unavailable', () => {
+    const limited = shapeReleaseStatus({
+      rareMinter,
+      contract: collection,
+      directSale: {
+        seller: accountAddress,
+        currencyAddress: ETH_ADDRESS,
+        price: parseEther('1'),
+        startTime: 900n,
+        maxMints: 5n,
+        splitRecipients: [accountAddress],
+        splitRatios: [100],
+      },
+      allowlist: { root: `0x${'11'.repeat(32)}`, endTimestamp: 1_500n },
+      mintLimit: 2n,
+      txLimit: 0n,
+      account: recipientAddress,
+      accountMints: 2n,
+      accountTxs: 0n,
+      stakingMinimum: { amount: 10n, endTimestamp: 1_500n },
+      totalSupply: 10n,
+      maxSupply: 10n,
+      currencyDecimals: 18,
+      nowSeconds: 1_000n,
+    });
+
+    expect(limited).toMatchObject({
+      allowlistActive: true,
+      requiresAllowlist: true,
+      stakingMinimumActive: true,
+      remainingSupply: 0n,
+      soldOut: true,
+      currentlyMintable: false,
+    });
+
+    const unconfigured = shapeReleaseStatus({
+      rareMinter,
+      contract: collection,
+      directSale: {
+        seller: ETH_ADDRESS,
+        currencyAddress: ETH_ADDRESS,
+        price: 0n,
+        startTime: 0n,
+        maxMints: 0n,
+        splitRecipients: [],
+        splitRatios: [],
+      },
+      allowlist: { root: ZERO_BYTES32, endTimestamp: 0n },
+      mintLimit: 0n,
+      txLimit: 0n,
+      account: null,
+      accountMints: null,
+      accountTxs: null,
+      stakingMinimum: { amount: 0n, endTimestamp: 0n },
+      totalSupply: null,
+      maxSupply: null,
+      currencyDecimals: 18,
+      nowSeconds: 1_000n,
+    });
+
+    expect(unconfigured.configured).toBe(false);
+    expect(unconfigured.currentlyMintable).toBe(false);
+  });
+});
+
+describe('release direct sale mint planning', () => {
+  it('plans direct sale mint inputs and validates uint8 quantity and proof entries', () => {
+    const root = `0x${'11'.repeat(32)}` as const;
+
     expect(planReleaseDirectSaleMint({
-      contract: COLLECTION_ADDRESS,
+      contract: collection,
       quantity: '2',
       price: '0.5',
-      proof: [EXPECTED_ROOT],
+      proof: [root],
     })).toEqual({
-      contract: COLLECTION_ADDRESS,
+      contract: collection,
       quantity: 2,
       currency: undefined,
-      price: 500000000000000000n,
-      proof: [EXPECTED_ROOT],
+      price: '0.5',
+      proof: [root],
       recipient: undefined,
       autoApprove: true,
     });
 
     expect(() => planReleaseDirectSaleMint({
-      contract: COLLECTION_ADDRESS,
+      contract: collection,
       quantity: 256,
     })).toThrow('quantity must be less than or equal to 255.');
+    expect(() => planReleaseDirectSaleMint({
+      contract: collection,
+      proof: ['0x1234'],
+    })).toThrow('proof[0] must be a 32-byte hex string.');
   });
 
-  it('preflights direct sale mint limits, supply, and allowlist proofs', () => {
-    const proof = getReleaseAllowlistProof(buildReleaseAllowlistArtifact({
-      content: JSON.stringify([WALLET_B, WALLET_A, WALLET_C]),
-      format: 'json',
-    }), WALLET_A);
-    const plan = planReleaseDirectSaleMint({
-      contract: COLLECTION_ADDRESS,
-      quantity: 1,
-      proof: proof.proof,
+  it('preflights direct sale mint limits, supply, price, and allowlist proofs', () => {
+    const artifact = buildReleaseAllowlistArtifact([recipientAddress, accountAddress]);
+    const walletProof = getReleaseAllowlistProof({ artifact, address: accountAddress });
+    if (walletProof === null) {
+      throw new Error('expected allowlist proof for accountAddress');
+    }
+
+    const status = shapeReleaseStatus({
+      rareMinter,
+      contract: collection,
+      directSale: {
+        seller: recipientAddress,
+        currencyAddress: ETH_ADDRESS,
+        price: 10n,
+        startTime: 90n,
+        maxMints: 2n,
+        splitRecipients: [recipientAddress],
+        splitRatios: [100],
+      },
+      allowlist: { root: artifact.root, endTimestamp: 200n },
+      mintLimit: 2n,
+      txLimit: 1n,
+      account: accountAddress,
+      accountMints: 1n,
+      accountTxs: 0n,
+      stakingMinimum: { amount: 0n, endTimestamp: 0n },
+      totalSupply: 1n,
+      maxSupply: 3n,
+      currencyDecimals: 18,
+      nowSeconds: 100n,
     });
 
     expect(preflightReleaseDirectSaleMint({
-      status: {
-        directSale: shapeReleaseDirectSaleConfig({
-          seller: WALLET_B,
-          currencyAddress: ETH_ADDRESS,
-          price: 10n,
-          startTime: 90n,
-          maxMints: 2n,
-          splitRecipients: [WALLET_B],
-          splitRatios: [100],
-        }),
-        allowlistRoot: EXPECTED_ROOT,
-        allowlistEndTimestamp: 200n,
-        mintLimit: 2n,
-        txLimit: 1n,
-        accountMints: 1n,
-        accountTxs: 0n,
-        supply: shapeReleaseCollectionSupply({
-          totalSupply: 1n,
-          preparedTokenCount: 2n,
-        }),
-      },
-      plan,
-      buyer: WALLET_A,
+      status,
+      plan: planReleaseDirectSaleMint({
+        contract: collection,
+        quantity: 1,
+        proof: walletProof.proof,
+      }),
+      buyer: accountAddress,
       nowSeconds: 100n,
-    })).toMatchObject({
-      contract: COLLECTION_ADDRESS,
-      buyer: WALLET_A,
-      recipient: WALLET_A,
+    })).toEqual({
+      contract: collection,
+      buyer: accountAddress,
+      recipient: accountAddress,
       quantity: 1,
       currency: ETH_ADDRESS,
       price: 10n,
       totalPrice: 10n,
+      proof: walletProof.proof,
       allowlistRequired: true,
     });
   });
 
-  it('rejects direct sale mints that fail preflight checks', () => {
-    const status = {
-      directSale: shapeReleaseDirectSaleConfig({
-        seller: WALLET_B,
+  it('rejects direct sale mints that fail contract preconditions', () => {
+    const baseStatusInput = {
+      rareMinter,
+      contract: collection,
+      directSale: {
+        seller: recipientAddress,
         currencyAddress: ETH_ADDRESS,
         price: 10n,
         startTime: 90n,
         maxMints: 1n,
-        splitRecipients: [WALLET_B],
+        splitRecipients: [recipientAddress],
         splitRatios: [100],
-      }),
-      allowlistRoot: EXPECTED_ROOT,
-      allowlistEndTimestamp: 200n,
+      },
+      allowlist: { root: `0x${'11'.repeat(32)}`, endTimestamp: 200n },
       mintLimit: 0n,
       txLimit: 0n,
-      supply: shapeReleaseCollectionSupply({
-        totalSupply: 2n,
-        preparedTokenCount: 2n,
-      }),
-    };
+      account: accountAddress,
+      accountMints: 0n,
+      accountTxs: 0n,
+      stakingMinimum: { amount: 0n, endTimestamp: 0n },
+      totalSupply: 2n,
+      maxSupply: 2n,
+      currencyDecimals: 18,
+      nowSeconds: 100n,
+    } as const;
+    const status = shapeReleaseStatus(baseStatusInput);
 
     expect(() => preflightReleaseDirectSaleMint({
       status,
-      plan: planReleaseDirectSaleMint({ contract: COLLECTION_ADDRESS }),
-      buyer: WALLET_A,
+      plan: planReleaseDirectSaleMint({ contract: collection }),
+      buyer: accountAddress,
       nowSeconds: 100n,
     })).toThrow('Release collection is sold out.');
 
+    const availableStatus = shapeReleaseStatus({
+      ...baseStatusInput,
+      allowlist: { root: `0x${'11'.repeat(32)}`, endTimestamp: 200n },
+      totalSupply: 0n,
+      maxSupply: 2n,
+    });
+
     expect(() => preflightReleaseDirectSaleMint({
-      status: {
-        ...status,
-        supply: shapeReleaseCollectionSupply({ totalSupply: 0n, preparedTokenCount: 2n }),
-      },
-      plan: planReleaseDirectSaleMint({ contract: COLLECTION_ADDRESS }),
-      buyer: WALLET_A,
+      status: availableStatus,
+      plan: planReleaseDirectSaleMint({ contract: collection }),
+      buyer: accountAddress,
       nowSeconds: 100n,
     })).toThrow('Active allowlist requires a proof.');
 
     expect(() => preflightReleaseDirectSaleMint({
-      status: {
-        ...status,
-        allowlistRoot: '0x0000000000000000000000000000000000000000000000000000000000000000',
-        supply: shapeReleaseCollectionSupply({ totalSupply: 0n, preparedTokenCount: 2n }),
-      },
-      plan: planReleaseDirectSaleMint({
-        contract: COLLECTION_ADDRESS,
-        recipient: WALLET_C,
+      status: shapeReleaseStatus({
+        ...baseStatusInput,
+        allowlist: { root: ZERO_BYTES32, endTimestamp: 0n },
+        totalSupply: 0n,
+        maxSupply: 2n,
       }),
-      buyer: WALLET_A,
+      plan: planReleaseDirectSaleMint({
+        contract: collection,
+        recipient: recipientAddress,
+      }),
+      buyer: accountAddress,
       nowSeconds: 100n,
     })).toThrow('does not support a separate recipient');
   });
 
-  it('builds inclusive direct sale token id ranges', () => {
-    expect(buildReleaseTokenIdRange(10n, 12n)).toEqual([10n, 11n, 12n]);
-    expect(buildReleaseTokenIdRange(12n, 10n)).toEqual([]);
+  it('shapes minted token ranges from MintDirectSale event arguments', () => {
+    expect(shapeReleaseMintTokenRange(3n, 5n)).toEqual({
+      tokenIdStart: 3n,
+      tokenIdEnd: 5n,
+      tokenIds: [3n, 4n, 5n],
+    });
+    expect(() => shapeReleaseMintTokenRange(5n, 3n)).toThrow('MintDirectSale event token range is invalid');
   });
 });

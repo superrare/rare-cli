@@ -1,13 +1,40 @@
 import { Command } from 'commander';
-import { formatEther, getAddress, isAddress, type Address } from 'viem';
+import { formatEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
-import { resolveCurrency } from '../contracts/addresses.js';
+import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
+import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
+import { parseAuctionTypeOption } from './auction-core.js';
+import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 
-const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+type AuctionCreateOptions = {
+  contract: string;
+  tokenId: string;
+  startingPrice: string;
+  duration: string;
+  currency?: string;
+  type?: string;
+  startTime?: string;
+  split?: SplitAccumulator;
+  chain?: string;
+};
+
+type AuctionBidOptions = {
+  contract: string;
+  tokenId: string;
+  amount: string;
+  currency?: string;
+  chain?: string;
+};
+
+type AuctionTokenOptions = {
+  contract: string;
+  tokenId: string;
+  chain?: string;
+};
 
 export function auctionCommand(): Command {
   const cmd = new Command('auction');
@@ -24,46 +51,52 @@ export function auctionCommand(): Command {
     .option('--type <type>', 'auction type: reserve or scheduled (defaults to reserve)')
     .option('--start-time <seconds>', 'unix timestamp for scheduled auctions; implies --type scheduled')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
-    .option('--split-recipient <address>', 'seller split recipient; repeat with --split-ratio', collect, [])
-    .option('--split-ratio <percent>', 'seller split ratio percentage; repeat with --split-recipient', collect, [])
+    .option(
+      '--split <addr=ratio>',
+      'seller payout split recipient (repeatable). Format: 0xADDR=RATIO. Ratios must sum to 100. If omitted, 100% goes to the connected wallet.',
+      collectSplit,
+    )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: AuctionCreateOptions): Promise<void> => {
+      const auctionType = parseAuctionTypeOption(opts.type, opts.startTime);
+      const splits = finalizeSplits(opts.split);
+      const chain = getActiveChain(opts.chain);
+      const { client } = getWalletClient(chain);
+      const publicClient = getPublicClient(chain);
+      const rare = createRareClient({ publicClient, walletClient: client });
+      const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
+      const isEth = currency === ETH_ADDRESS;
+      const contract = parseAddress(opts.contract, '--contract');
+
+      log(`Creating auction on ${chain}...`);
+      log(`  Auction contract: ${rare.contracts.auction}`);
+      log(`  NFT contract: ${contract}`);
+      log(`  Token ID: ${opts.tokenId}`);
+      log(`  Type: ${auctionType}`);
+      log(`  Starting price: ${opts.startingPrice} ${isEth ? 'ETH' : currency}`);
+      log(`  Duration: ${opts.duration} seconds`);
+      if (opts.startTime !== undefined) {
+        log(`  Start time: ${opts.startTime}`);
+      }
+      log(`  Currency: ${isEth ? 'ETH' : currency}`);
+      if (splits) {
+        log(`  Splits:`);
+        formatSplitLines(splits).forEach((line) => {
+          log(line);
+        });
+      }
+
       try {
-        const chain = getActiveChain(opts.chain);
-        const { client } = getWalletClient(chain);
-        const publicClient = getPublicClient(chain);
-        const rare = createRareClient({ publicClient, walletClient: client });
-        const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
-        const auctionType = parseAuctionType(opts.type, opts.startTime);
-        const splitAddresses = parseSplitRecipients(opts.splitRecipient);
-        const splitRatios = parseSplitRatios(opts.splitRatio);
-
-        log(`Creating auction on ${chain}...`);
-        log(`  Auction contract: ${rare.contracts.auction}`);
-        log(`  NFT contract: ${opts.contract}`);
-        log(`  Token ID: ${opts.tokenId}`);
-        log(`  Type: ${auctionType}`);
-        log(`  Starting price: ${opts.startingPrice} ${currency === ETH_ADDRESS ? 'ETH' : currency}`);
-        log(`  Duration: ${opts.duration} seconds`);
-        if (opts.startTime !== undefined) {
-          log(`  Start time: ${opts.startTime}`);
-        }
-        log(`  Currency: ${currency === ETH_ADDRESS ? 'ETH' : currency}`);
-        if (splitAddresses !== undefined) {
-          log(`  Split recipients: ${splitAddresses.join(', ')}`);
-          log(`  Split ratios: ${splitRatios?.join(', ') ?? ''}`);
-        }
-
         const result = await rare.auction.create({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
           startingPrice: opts.startingPrice,
           duration: opts.duration,
           currency,
           auctionType,
           startTime: opts.startTime,
-          splitAddresses,
-          splitRatios,
+          splitAddresses: splits?.addresses,
+          splitRatios: splits?.ratios,
         });
 
         output(
@@ -96,23 +129,24 @@ export function auctionCommand(): Command {
     .requiredOption('--amount <amount>', 'bid amount in ETH (or token units)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: AuctionBidOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
+      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Placing bid on ${chain}...`);
       log(`  Auction contract: ${rare.contracts.auction}`);
-      log(`  NFT contract: ${opts.contract}`);
+      log(`  NFT contract: ${contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
 
       try {
         const result = await rare.auction.bid({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
           amount: opts.amount,
           currency,
@@ -137,17 +171,18 @@ export function auctionCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: AuctionTokenOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
+      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Settling auction on ${chain}...`);
 
       try {
         const result = await rare.auction.settle({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
         });
 
@@ -170,17 +205,18 @@ export function auctionCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: AuctionTokenOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
+      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Cancelling auction on ${chain}...`);
 
       try {
         const result = await rare.auction.cancel({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
         });
 
@@ -203,13 +239,14 @@ export function auctionCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: AuctionTokenOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient });
+      const contract = parseAddress(opts.contract, '--contract');
 
       const result = await rare.auction.getStatus({
-        contract: opts.contract as `0x${string}`,
+        contract,
         tokenId: opts.tokenId,
       });
 
@@ -230,7 +267,9 @@ export function auctionCommand(): Command {
         console.log(`  Settleable:     ${result.settlementEligible ? 'yes' : 'no'}`);
         if (result.started) {
           console.log(`  Started at:     ${new Date(Number(result.startingTime) * 1000).toISOString()}`);
-          console.log(`  Ends at:        ${endDate!.toISOString()}`);
+          if (endDate) {
+            console.log(`  Ends at:        ${endDate.toISOString()}`);
+          }
         } else if (result.startingTime > 0n) {
           console.log(`  Starts at:      ${new Date(Number(result.startingTime) * 1000).toISOString()}`);
         }
@@ -240,50 +279,4 @@ export function auctionCommand(): Command {
     });
 
   return cmd;
-}
-
-function collect(value: string, previous: string[]): string[] {
-  return [...previous, value];
-}
-
-function parseAuctionType(value: string | undefined, startTime: string | undefined): 'reserve' | 'scheduled' {
-  if (value === undefined) {
-    return startTime === undefined ? 'reserve' : 'scheduled';
-  }
-
-  const normalized = value.trim().toLowerCase();
-  if (normalized === 'reserve' || normalized === 'coldie' || normalized === 'coldie-auction') {
-    return 'reserve';
-  }
-  if (normalized === 'scheduled' || normalized === 'scheduled-auction') {
-    return 'scheduled';
-  }
-  throw new Error('--type must be "reserve" or "scheduled".');
-}
-
-function parseSplitRecipients(values: string[] | undefined): Address[] | undefined {
-  if (values === undefined || values.length === 0) {
-    return undefined;
-  }
-
-  return values.map((value, index) => {
-    if (!isAddress(value)) {
-      throw new Error(`--split-recipient at index ${index} must be a valid 0x address.`);
-    }
-    return getAddress(value);
-  });
-}
-
-function parseSplitRatios(values: string[] | undefined): number[] | undefined {
-  if (values === undefined || values.length === 0) {
-    return undefined;
-  }
-
-  return values.map((value, index) => {
-    const parsed = Number(value);
-    if (!Number.isInteger(parsed)) {
-      throw new Error(`--split-ratio at index ${index} must be an integer.`);
-    }
-    return parsed;
-  });
 }
