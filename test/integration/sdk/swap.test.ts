@@ -2,14 +2,15 @@ import { describe, expect, it } from 'vitest';
 import { isHex, parseEther, parseUnits } from 'viem';
 import { ETH_ADDRESS, resolveCurrency } from '../../../src/contracts/addresses.js';
 import { createRareClient } from '../../../src/sdk/client.js';
-import { createTestSepoliaPublicClient, hasTestRpcUrl } from '../../helpers/liveViem.js';
+import { createTestPublicClientContext, hasTestRpcUrl } from '../../helpers/liveViem.js';
 
 const describeLive = hasTestRpcUrl() ? describe : describe.skip;
-const rareAddress = resolveCurrency('rare', 'sepolia');
 
 describeLive('Swap SDK live integration', () => {
   it('quotes the canonical RARE buy route with the live V4 quoter', async () => {
-    const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
+    const { publicClient, chain } = await createTestPublicClientContext();
+    const rare = createRareClient({ publicClient });
+    const rareAddress = resolveCurrency('rare', chain);
 
     const quote = await rare.swap.quoteBuyRare({
       ethAmount: '0.001',
@@ -26,7 +27,9 @@ describeLive('Swap SDK live integration', () => {
   }, 30_000);
 
   it('quotes canonical RARE token buy and sell routes through the SDK', async () => {
-    const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
+    const { publicClient, chain } = await createTestPublicClientContext();
+    const rare = createRareClient({ publicClient });
+    const rareAddress = resolveCurrency('rare', chain);
 
     const buy = await rare.swap.quoteBuyToken({
       token: rareAddress,

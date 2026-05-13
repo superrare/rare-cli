@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { isAddress, type Address } from 'viem';
-import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '../../../src/contracts/addresses.js';
+import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, type SupportedChain } from '../../../src/contracts/addresses.js';
 import { createRareClient } from '../../../src/sdk/client.js';
 import type { RareClient } from '../../../src/sdk/types.js';
-import { createTestSepoliaPublicClient, hasTestRpcUrl } from '../../helpers/liveViem.js';
+import { createTestPublicClientContext, hasTestRpcUrl } from '../../helpers/liveViem.js';
 
 type ReadableNftFixture = {
   contract: Address;
@@ -12,9 +12,10 @@ type ReadableNftFixture = {
 
 const describeLive = hasTestRpcUrl() ? describe : describe.skip;
 const setup = hasTestRpcUrl()
-  ? Promise.resolve().then(async (): Promise<{ rare: RareClient; fixture: ReadableNftFixture }> => {
-      const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
-      return { rare, fixture: await findReadableSepoliaNft(rare) };
+  ? Promise.resolve().then(async (): Promise<{ rare: RareClient; fixture: ReadableNftFixture; chain: SupportedChain; chainId: number }> => {
+      const { publicClient, chain, chainId } = await createTestPublicClientContext();
+      const rare = createRareClient({ publicClient });
+      return { rare, fixture: await findReadableNft(rare, chainId), chain, chainId };
     })
   : undefined;
 
@@ -24,10 +25,10 @@ describeLive('SDK contract read integration', () => {
   }, 30_000);
 
   it('reads token contract and token info through real RPC', async () => {
-    const { rare, fixture } = await requireSetup(setup);
+    const { rare, fixture, chain } = await requireSetup(setup);
     const contractInfo = await rare.token.getContractInfo({ contract: fixture.contract });
     expect(contractInfo.contract).toBe(fixture.contract);
-    expect(contractInfo.chain).toBe('sepolia');
+    expect(contractInfo.chain).toBe(chain);
     expect(contractInfo.name).toEqual(expect.any(String));
     expect(contractInfo.symbol).toEqual(expect.any(String));
     expect(contractInfo.totalSupply).toBeGreaterThanOrEqual(1n);
@@ -83,16 +84,16 @@ describeLive('SDK contract read integration', () => {
 });
 
 async function requireSetup(
-  setup: Promise<{ rare: RareClient; fixture: ReadableNftFixture }> | undefined,
-): Promise<{ rare: RareClient; fixture: ReadableNftFixture }> {
+  setup: Promise<{ rare: RareClient; fixture: ReadableNftFixture; chain: SupportedChain; chainId: number }> | undefined,
+): Promise<{ rare: RareClient; fixture: ReadableNftFixture; chain: SupportedChain; chainId: number }> {
   if (!setup) {
     throw new Error('SDK contract read integration setup did not run.');
   }
   return setup;
 }
 
-async function findReadableSepoliaNft(rareClient: RareClient): Promise<ReadableNftFixture> {
-  const search = await rareClient.search.nfts({ chainId: 11_155_111, page: 1, perPage: 10 });
+async function findReadableNft(rareClient: RareClient, chainId: number): Promise<ReadableNftFixture> {
+  const search = await rareClient.search.nfts({ chainId, page: 1, perPage: 10 });
 
   for (const nft of search.data) {
     if (!isAddress(nft.contractAddress)) continue;
@@ -111,5 +112,5 @@ async function findReadableSepoliaNft(rareClient: RareClient): Promise<ReadableN
     }
   }
 
-  throw new Error('Unable to find a readable Sepolia NFT fixture from the Rare API.');
+  throw new Error(`Unable to find a readable NFT fixture for chain ${chainId} from the Rare API.`);
 }

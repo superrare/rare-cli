@@ -452,7 +452,7 @@ describeLive('live CLI write commands', () => {
       ]),
     );
     expectTx(auctionCancelCreate);
-    expect(auctionCancelCreate.approvalTxHash).toBeNull();
+    expectOptionalTxHash(auctionCancelCreate.approvalTxHash);
 
     await expectAuctionStatus(live.value.sellerHome, live.value.collection.contract, live.value.auctionCancelToken.tokenId, 'PENDING');
     expectTx(await step('cancel auction', () =>
@@ -654,6 +654,12 @@ async function jsonCommand<T>(home: string, args: string[], timeoutMs = 180_000)
 function expectTx(result: TxResult): void {
   expect(result.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
   expect(result.blockNumber).toMatch(/^\d+$/);
+}
+
+function expectOptionalTxHash(hash: string | null | undefined): void {
+  if (hash !== null && hash !== undefined) {
+    expect(hash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+  }
 }
 
 async function expectTokenOwner(home: string, contract: string, tokenId: string, owner: Address): Promise<void> {

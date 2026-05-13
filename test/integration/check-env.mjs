@@ -8,7 +8,7 @@ if (existsSync(envPath)) {
 
 if (!process.env.TEST_RPC_URL) {
   console.error('Missing required integration test env var: TEST_RPC_URL');
-  console.error('npm run test includes live Sepolia RPC integration tests.');
+  console.error('npm run test includes live RPC integration tests.');
   console.error('Set TEST_RPC_URL in your shell or repo .env before running this command.');
   process.exit(1);
 }

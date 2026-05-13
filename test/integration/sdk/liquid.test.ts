@@ -1,16 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import { resolveCurrency } from '../../../src/contracts/addresses.js';
 import { createRareClient } from '../../../src/sdk/client.js';
-import { createTestSepoliaPublicClient, hasTestRpcUrl } from '../../helpers/liveViem.js';
+import { createTestPublicClientContext, hasTestRpcUrl } from '../../helpers/liveViem.js';
 
 const describeLive = hasTestRpcUrl() ? describe : describe.skip;
 
 describeLive('Liquid Editions SDK live integration', () => {
   it('reads the live factory config and validates curves against it', async () => {
-    const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
+    const { publicClient, chain } = await createTestPublicClientContext();
+    const rare = createRareClient({ publicClient });
 
     const factoryConfig = await rare.liquid.getFactoryConfig();
-    expect(factoryConfig.baseToken).toBe(resolveCurrency('rare', 'sepolia'));
+    expect(factoryConfig.baseToken).toBe(resolveCurrency('rare', chain));
     expect(factoryConfig.maxTotalSupplyWei).toBeGreaterThan(0n);
     expect(factoryConfig.curvePoolSupplyWei).toBeGreaterThan(0n);
     expect(factoryConfig.poolTickSpacing).toBeGreaterThan(0);
@@ -26,7 +27,8 @@ describeLive('Liquid Editions SDK live integration', () => {
   }, 30_000);
 
   it('generates preset curves from live factory config and the Rare price API', async () => {
-    const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
+    const { publicClient } = await createTestPublicClientContext();
+    const rare = createRareClient({ publicClient });
 
     const generated = await rare.liquid.generatePresetCurves({ preset: 'medium-demand' });
 

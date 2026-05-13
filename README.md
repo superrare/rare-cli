@@ -398,6 +398,24 @@ Batch listings use Merkle artifacts: one root artifact describing the token set 
 Root artifacts are produced outside the CLI. Token sets and allowlists must each contain at least two entries because the batch listing contract rejects empty Merkle proofs. If no split is provided, registration defaults to 100% to the connected seller wallet.
 
 ```bash
+# Build token-list Merkle artifacts for batch marketplace flows
+rare listing batch tree build \
+  --input batch-tokens.csv \
+  --chain-id 11155111 \
+  --output batch-token-artifact.json
+
+rare listing batch tree proof \
+  --input batch-token-artifact.json \
+  --contract 0x... \
+  --token-id 1 \
+  --output batch-token-proof.json
+
+rare listing batch tree verify \
+  --input batch-token-artifact.json \
+  --contract 0x... \
+  --token-id 1 \
+  --proof batch-token-proof.json
+
 # Build a proof artifact for one token in the root
 rare listing batch merkle proof \
   --root ./root.json \
@@ -447,6 +465,8 @@ rare listing batch set-allowlist \
 # Cancel the listing root
 rare listing batch cancel --root ./root.json
 ```
+
+Batch token CSV files should include contract and token ID columns such as `contract_address,token_id`; JSON files can be an array of `{ "contractAddress": "0x...", "tokenId": "1" }` objects or a generated artifact. Batch token artifacts use `type: "rare-batch-token-list"` and proof artifacts use `type: "rare-batch-token-proof"`.
 
 Named currencies are parsed with chain-aware decimals. Arbitrary ERC20 addresses are supported and their `decimals()` values are resolved from chain RPC when sending buys.
 
@@ -638,6 +658,30 @@ const prepared = await rare.collection.prepareLazyMint({
 });
 
 console.log(prepared.tokenCount);
+```
+
+### Build batch marketplace token trees
+
+```ts
+const tree = rare.batch.buildTree({
+  content: 'contract_address,token_id,chain_id\n0x1111111111111111111111111111111111111111,1,11155111\n',
+  format: 'csv',
+});
+
+const tokenProof = rare.batch.getTreeProof({
+  artifact: tree,
+  contractAddress: '0x1111111111111111111111111111111111111111',
+  tokenId: 1,
+});
+
+const proofValid = rare.batch.verifyTreeProof({
+  root: tree.root,
+  contractAddress: tokenProof.contractAddress,
+  tokenId: tokenProof.tokenId,
+  proof: tokenProof.proof,
+});
+
+console.log(tree.root, tokenProof.proof, proofValid);
 ```
 
 ### Inspect and maintain collection owner settings
