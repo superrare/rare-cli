@@ -121,6 +121,18 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('exposes auction parity command help', async () => {
+    await withTempHome(async (home) => {
+      const create = await runCli(['auction', 'create', '--help'], { home });
+      expect(create.code).toBe(0);
+      expect(create.stdout).toContain('Usage: rare auction create [options]');
+      expect(create.stdout).toContain('--type <type>');
+      expect(create.stdout).toContain('--start-time <seconds>');
+      expect(create.stdout).toContain('--split <addr=ratio>');
+      expect(create.stderr).toBe('');
+    });
+  });
+
   it('returns a non-zero exit and stderr for invalid non-chain configuration input', async () => {
     await withTempHome(async (home) => {
       const result = await runCli(['configure', '--default-chain', 'not-a-chain'], { home });

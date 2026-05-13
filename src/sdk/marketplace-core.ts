@@ -1,4 +1,4 @@
-import { isAddressEqual, type Address } from 'viem';
+import { hexToBigInt, isAddressEqual, type Address, type Hex } from 'viem';
 import type {
   AuctionBidParams,
   AuctionCancelParams,
@@ -61,6 +61,8 @@ export type AuctionCreatePlan = {
   currency: Address;
   startingPrice: bigint;
   duration: bigint;
+  auctionType: 'reserve' | 'scheduled';
+  startTime: bigint;
   splitAddresses: Address[];
   splitRatios: number[];
 };
@@ -70,6 +72,20 @@ export type AuctionBidPlan = {
   currency: Address;
   amount: bigint;
 };
+
+export type AuctionBidRead = {
+  bidder: Address;
+  currencyAddress: Address;
+  amount: bigint;
+  marketplaceFee: number;
+};
+
+export type AuctionTypeIds = {
+  reserve: Hex;
+  scheduled: Hex;
+};
+
+const zeroBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
 export function planListingCreate(params: ListingCreateParams, accountAddress: Address): ListingCreatePlan {
   const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
@@ -284,14 +300,21 @@ export function planProvidedSplits(
 }
 
 export function planAuctionCreate(params: AuctionCreateParams, accountAddress: Address): AuctionCreatePlan {
+  const auctionType = normalizeAuctionType(params);
+  const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
+
   return {
     nftAddress: params.contract,
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
-    startingPrice: toPositiveWei(params.startingPrice, 'startingPrice'),
+    startingPrice: auctionType === 'scheduled'
+      ? toNonNegativeWei(params.startingPrice, 'startingPrice')
+      : toPositiveWei(params.startingPrice, 'startingPrice'),
     duration: toPositiveInteger(params.duration, 'duration'),
-    splitAddresses: params.splitAddresses ?? [accountAddress],
-    splitRatios: params.splitRatios ?? [100],
+    auctionType,
+    startTime: auctionType === 'scheduled' ? toPositiveInteger(params.startTime ?? 0, 'startTime') : 0n,
+    splitAddresses: splits.addresses,
+    splitRatios: splits.ratios,
   };
 }
 
@@ -332,14 +355,36 @@ export function shapeAuctionStatus(
     readonly number[],
   ],
   nowSeconds: bigint,
+  opts: {
+    currentBid?: AuctionBidRead;
+    minimumBidIncreasePercentage?: number;
+    auctionTypeIds?: AuctionTypeIds;
+  } = {},
 ): AuctionStatus {
-  const started = startingTime > 0n;
+  const hasAuction = !isSameHex(auctionType, zeroBytes32);
+  const auctionTypeName = resolveAuctionTypeName(auctionType, opts.auctionTypeIds);
+  const started = hasAuction && startingTime > 0n && nowSeconds >= startingTime;
   const endTime = started ? startingTime + lengthOfAuction : null;
   const status: AuctionStatus['status'] = !started
     ? 'PENDING'
     : endTime !== null && nowSeconds >= endTime
       ? 'ENDED'
       : 'RUNNING';
+  const currentBid = opts.currentBid?.amount ?? 0n;
+  const currentBidder =
+    currentBid === 0n ||
+    opts.currentBid === undefined ||
+    isAddressEqual(opts.currentBid.bidder, ETH_ADDRESS)
+      ? null
+      : opts.currentBid.bidder;
+  const currentBidCurrency =
+    currentBid > 0n && opts.currentBid !== undefined ? opts.currentBid.currencyAddress : currency;
+  const currentBidMarketplaceFee = opts.currentBid?.marketplaceFee ?? 0;
+  const minimumNextBid =
+    currentBid > 0n
+      ? currentBid + (currentBid * BigInt(opts.minimumBidIncreasePercentage ?? 0)) / 100n
+      : minimumBid;
+  const settlementEligible = started && endTime !== null && nowSeconds >= endTime;
 
   return {
     seller,
@@ -349,11 +394,98 @@ export function shapeAuctionStatus(
     currency,
     minimumBid,
     auctionType,
+    auctionTypeName,
     splitAddresses: [...splitAddresses],
     splitRatios: [...splitRatios],
-    isEth: currency === ETH_ADDRESS,
+    isEth: isAddressEqual(currency, ETH_ADDRESS),
+    hasAuction,
     started,
     endTime,
     status,
+    state: auctionState({ hasAuction, auctionTypeName, started, endTime, nowSeconds }),
+    currentBidder,
+    currentBid,
+    currentBidCurrency,
+    currentBidMarketplaceFee,
+    minimumNextBid,
+    settlementEligible,
   };
+}
+
+export function shapeAuctionBidRead(
+  bid: readonly [Address, Address, bigint, number] | AuctionBidRead,
+): AuctionBidRead {
+  if (isRawAuctionBidRead(bid)) {
+    const [bidder, currencyAddress, amount, marketplaceFee] = bid;
+    return {
+      bidder,
+      currencyAddress,
+      amount,
+      marketplaceFee,
+    };
+  }
+
+  return bid;
+}
+
+function isRawAuctionBidRead(
+  bid: readonly [Address, Address, bigint, number] | AuctionBidRead,
+): bid is readonly [Address, Address, bigint, number] {
+  return Array.isArray(bid);
+}
+
+function normalizeAuctionType(params: AuctionCreateParams): 'reserve' | 'scheduled' {
+  const auctionType: unknown = params.auctionType;
+  if (auctionType !== undefined) {
+    if (auctionType !== 'reserve' && auctionType !== 'scheduled') {
+      throw new Error('auctionType must be "reserve" or "scheduled".');
+    }
+    if (auctionType === 'reserve' && params.startTime !== undefined) {
+      throw new Error('startTime can only be set for scheduled auctions.');
+    }
+    return auctionType;
+  }
+
+  return params.startTime === undefined ? 'reserve' : 'scheduled';
+}
+
+function resolveAuctionTypeName(auctionType: Hex, ids: AuctionTypeIds | undefined): AuctionStatus['auctionTypeName'] {
+  if (isSameHex(auctionType, zeroBytes32)) {
+    return 'none';
+  }
+  if (ids !== undefined) {
+    if (isSameHex(auctionType, ids.reserve)) {
+      return 'reserve';
+    }
+    if (isSameHex(auctionType, ids.scheduled)) {
+      return 'scheduled';
+    }
+  }
+  return 'unknown';
+}
+
+function isSameHex(left: Hex, right: Hex): boolean {
+  return hexToBigInt(left) === hexToBigInt(right);
+}
+
+function auctionState(params: {
+  hasAuction: boolean;
+  auctionTypeName: AuctionStatus['auctionTypeName'];
+  started: boolean;
+  endTime: bigint | null;
+  nowSeconds: bigint;
+}): AuctionStatus['state'] {
+  if (!params.hasAuction) {
+    return 'NONE';
+  }
+  if (params.endTime !== null && params.nowSeconds >= params.endTime) {
+    return 'ENDED';
+  }
+  if (params.started) {
+    return 'ACTIVE';
+  }
+  if (params.auctionTypeName === 'scheduled') {
+    return 'SCHEDULED';
+  }
+  return 'RESERVE_NOT_MET';
 }

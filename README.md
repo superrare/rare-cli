@@ -311,6 +311,17 @@ rare auction create \
   --starting-price 0.1 \
   --duration 86400
 
+# Create a scheduled auction with explicit seller splits
+rare auction create \
+  --contract 0x... \
+  --token-id 1 \
+  --type scheduled \
+  --start-time 1778500000 \
+  --starting-price 0.1 \
+  --duration 86400 \
+  --split 0x...artist=70 \
+  --split 0x...collaborator=30
+
 # Place a bid
 rare auction bid --contract 0x... --token-id 1 --amount 0.5
 
@@ -323,6 +334,8 @@ rare auction cancel --contract 0x... --token-id 1
 # Check auction status (read-only)
 rare auction status --contract 0x... --token-id 1
 ```
+
+Reserve auctions start when the first valid bid meets the reserve. Scheduled auctions escrow the token when configured and become bid-ready at `--start-time`; their starting price can be zero. `--split <ADDR=RATIO>` is repeatable for up to 5 recipients, and ratios must sum to exactly 100.
 
 ### Offers
 

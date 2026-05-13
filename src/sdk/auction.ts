@@ -16,6 +16,7 @@ import {
   planAuctionBid,
   planAuctionCreate,
   planAuctionTokenAction,
+  shapeAuctionBidRead,
   shapeAuctionStatus,
 } from './marketplace-core.js';
 
@@ -42,7 +43,7 @@ export function createAuctionNamespace(
       const auctionType = await publicClient.readContract({
         address: addresses.auction,
         abi: auctionAbi,
-        functionName: 'COLDIE_AUCTION',
+        functionName: plan.auctionType === 'scheduled' ? 'SCHEDULED_AUCTION' : 'COLDIE_AUCTION',
       });
 
       const txHash = await walletClient.writeContract({
@@ -56,7 +57,7 @@ export function createAuctionNamespace(
           plan.startingPrice,
           plan.currency,
           plan.duration,
-          0n,
+          plan.startTime,
           plan.splitAddresses,
           plan.splitRatios,
         ],
@@ -70,6 +71,8 @@ export function createAuctionNamespace(
         txHash,
         receipt,
         approvalTxHash,
+        auctionType: plan.auctionType,
+        startTime: plan.startTime,
       };
     },
 
@@ -132,14 +135,50 @@ export function createAuctionNamespace(
 
     async getStatus(params): ReturnType<RareClient['auction']['getStatus']> {
       const plan = planAuctionTokenAction(params);
-      const result = await publicClient.readContract({
-        address: addresses.auction,
-        abi: auctionAbi,
-        functionName: 'getAuctionDetails',
-        args: [params.contract, plan.tokenId],
-      });
+      const [
+        result,
+        currentBid,
+        minimumBidIncreasePercentage,
+        reserveType,
+        scheduledType,
+      ] = await Promise.all([
+        publicClient.readContract({
+          address: addresses.auction,
+          abi: auctionAbi,
+          functionName: 'getAuctionDetails',
+          args: [params.contract, plan.tokenId],
+        }),
+        publicClient.readContract({
+          address: addresses.auction,
+          abi: auctionAbi,
+          functionName: 'auctionBids',
+          args: [params.contract, plan.tokenId],
+        }),
+        publicClient.readContract({
+          address: addresses.auction,
+          abi: auctionAbi,
+          functionName: 'minimumBidIncreasePercentage',
+        }),
+        publicClient.readContract({
+          address: addresses.auction,
+          abi: auctionAbi,
+          functionName: 'COLDIE_AUCTION',
+        }),
+        publicClient.readContract({
+          address: addresses.auction,
+          abi: auctionAbi,
+          functionName: 'SCHEDULED_AUCTION',
+        }),
+      ]);
 
-      return shapeAuctionStatus(result, BigInt(Math.floor(Date.now() / 1000)));
+      return shapeAuctionStatus(result, BigInt(Math.floor(Date.now() / 1000)), {
+        currentBid: shapeAuctionBidRead(currentBid),
+        minimumBidIncreasePercentage,
+        auctionTypeIds: {
+          reserve: reserveType,
+          scheduled: scheduledType,
+        },
+      });
     },
   };
 }
