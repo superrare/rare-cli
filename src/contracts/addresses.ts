@@ -38,6 +38,7 @@ type ContractSet = {
   lazySovereignFactory?: Address;
   spaceFactory?: Address;
   rareMinter?: Address;
+  collectionMarket?: Address;
   batchOfferCreator?: Address;
   batchAuctionHouse?: Address;
   erc20ApprovalManager?: Address;
