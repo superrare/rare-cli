@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseEther } from 'viem';
+import { parseEther, zeroAddress } from 'viem';
 import {
   calculateCollectionOfferTopUp,
   planCollectionMarketListingBuy,
@@ -16,7 +16,7 @@ import {
   shapeCollectionMarketSalePriceRead,
 } from '../../../src/sdk/collection-market-core.js';
 
-const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+const ETH_ADDRESS = zeroAddress;
 const accountAddress = '0x0000000000000000000000000000000000000001' as const;
 const buyerAddress = '0x0000000000000000000000000000000000000002' as const;
 const sellerAddress = '0x0000000000000000000000000000000000000003' as const;

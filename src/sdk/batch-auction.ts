@@ -1,4 +1,5 @@
 import {
+  isAddressEqual,
   parseEventLogs,
   type Address,
   type Hash,
@@ -6,9 +7,8 @@ import {
   type PublicClient,
 } from 'viem';
 import { batchAuctionHouseAbi } from '../contracts/abis/batch-auctionhouse.js';
-import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
+import { ETH_ADDRESS, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
 import {
-  ETH_ADDRESS,
   approvalAbi,
   preparePaymentAmountForSpender,
   requireWallet,
@@ -34,7 +34,7 @@ export function createBatchAuctionNamespace(
   chain: SupportedChain,
 ): RareClient['batch']['auction'] {
   return {
-    async create(params) {
+    async create(params): ReturnType<RareClient['batch']['auction']['create']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account, accountAddress } = requireWallet(config);
       const plan = planBatchAuctionCreate(params, accountAddress);
@@ -91,9 +91,9 @@ export function createBatchAuctionNamespace(
       };
     },
 
-    async cancel(params) {
+    async cancel(params): ReturnType<RareClient['batch']['auction']['cancel']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
-      const { walletClient, account, accountAddress } = requireWallet(config);
+      const { walletClient, account } = requireWallet(config);
       const plan = planBatchAuctionRoot(params);
 
       const txHash = await walletClient.writeContract({
@@ -120,16 +120,16 @@ export function createBatchAuctionNamespace(
         txHash,
         receipt,
         batchAuctionHouse,
-        creator: cancelled.args.creator ?? accountAddress,
+        creator: cancelled.args.creator,
         root: cancelled.args.merkleRoot,
       };
     },
 
-    async bid(params) {
+    async bid(params): ReturnType<RareClient['batch']['auction']['bid']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account, accountAddress } = requireWallet(config);
       const plan = planBatchAuctionBid(params);
-      const erc20ApprovalManager = plan.currency.toLowerCase() === ETH_ADDRESS
+      const erc20ApprovalManager = isAddressEqual(plan.currency, ETH_ADDRESS)
         ? batchAuctionHouse
         : requireContractAddress(chain, 'erc20ApprovalManager');
       const payment = await preparePaymentAmountForSpender({
@@ -189,7 +189,7 @@ export function createBatchAuctionNamespace(
       };
     },
 
-    async settle(params) {
+    async settle(params): ReturnType<RareClient['batch']['auction']['settle']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account } = requireWallet(config);
       const plan = planBatchAuctionStatus(params);
@@ -228,7 +228,7 @@ export function createBatchAuctionNamespace(
       };
     },
 
-    async getStatus(params) {
+    async getStatus(params): ReturnType<RareClient['batch']['auction']['getStatus']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const plan = planBatchAuctionStatus(params);
       const [details, currentBid, block] = await Promise.all([

@@ -531,7 +531,7 @@ describe('built CLI deterministic behavior', () => {
         await runCli([
           '--json',
           'listing',
-          'release',
+          'lazy-sale',
           'allowlist',
           'proof',
           '--input',

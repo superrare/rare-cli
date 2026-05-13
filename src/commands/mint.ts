@@ -108,25 +108,29 @@ export function mintCommand(): Command {
 }
 
 async function uploadAndPinMetadata(plan: MintGeneratedMetadataPlan): Promise<string> {
-  const media: Partial<Record<MintMetadataUploadRole, NftMediaEntry>> = {};
-
-  for (const upload of plan.uploads) {
-    const buffer = await readFileOrThrow(upload.path, upload.role);
-    const filename = basename(upload.path);
-    const label = upload.role === 'image' ? 'Image' : 'Video';
-    log(`Uploading ${upload.role}: ${filename} (${buffer.byteLength} bytes)`);
-    media[upload.role] = await uploadMedia(new Uint8Array(buffer), filename);
-    log(`  ${label} uploaded: ${media[upload.role].url}`);
-  }
-
-  if (!media.image) {
+  const imageUpload = plan.uploads.find((upload) => upload.role === 'image');
+  if (imageUpload === undefined) {
     throw new Error('Image upload was not planned.');
   }
 
+  const videoUpload = plan.uploads.find((upload) => upload.role === 'video');
+  const image = await uploadMetadataMedia(imageUpload);
+  const video = videoUpload === undefined ? undefined : await uploadMetadataMedia(videoUpload);
+
   return pinMetadata(buildMintPinMetadataParams(plan, {
-    image: media.image,
-    video: media.video,
+    image,
+    video,
   }));
+}
+
+async function uploadMetadataMedia(upload: { role: MintMetadataUploadRole; path: string }): Promise<NftMediaEntry> {
+  const buffer = await readFileOrThrow(upload.path, upload.role);
+  const filename = basename(upload.path);
+  const label = upload.role === 'image' ? 'Image' : 'Video';
+  log(`Uploading ${upload.role}: ${filename} (${buffer.byteLength} bytes)`);
+  const media = await uploadMedia(new Uint8Array(buffer), filename);
+  log(`  ${label} uploaded: ${media.url}`);
+  return media;
 }
 
 async function readFileOrThrow(path: string, role: MintMetadataUploadRole): Promise<Buffer> {

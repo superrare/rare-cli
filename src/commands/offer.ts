@@ -479,5 +479,5 @@ function rejectTokenScopeOptions(opts: { contract?: string; tokenId?: string }, 
 
 function getConfiguredAccount(chain: ReturnType<typeof getActiveChain>): Address | undefined {
   const privateKey = readConfig().chains[chain]?.privateKey;
-  return privateKey ? privateKeyToAccount(privateKey as `0x${string}`).address : undefined;
+  return privateKey ? privateKeyToAccount(privateKey).address : undefined;
 }

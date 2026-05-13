@@ -1,6 +1,6 @@
-import type { Address, Hex } from 'viem';
+import { isAddressEqual, type Address, type Hex } from 'viem';
+import { ETH_ADDRESS } from '../contracts/addresses.js';
 import {
-  ETH_ADDRESS,
   toNonNegativeInteger,
   toPositiveInteger,
   toPositiveWei,
@@ -173,13 +173,13 @@ export function shapeBatchAuctionStatus(
   rootContext: BatchAuctionRootContext | undefined,
   nowSeconds: bigint,
 ): BatchAuctionStatus {
-  const hasAuction = details.startingTime > 0n && details.seller.toLowerCase() !== zeroAddress;
+  const hasAuction = details.startingTime > 0n && !isAddressEqual(details.seller, zeroAddress);
   const hasRootConfig = rootContext !== undefined && rootContext.config.duration > 0n;
   const duration = hasAuction ? details.duration : rootContext?.config.duration ?? 0n;
   const startingTime = hasAuction ? details.startingTime : 0n;
   const endTime = hasAuction ? startingTime + duration : null;
   const ended = endTime !== null && nowSeconds >= endTime;
-  const currentBidder = currentBid.amount > 0n && currentBid.bidder.toLowerCase() !== zeroAddress
+  const currentBidder = currentBid.amount > 0n && !isAddressEqual(currentBid.bidder, zeroAddress)
     ? currentBid.bidder
     : null;
   const seller = hasAuction ? details.seller : rootContext?.creator ?? zeroAddress;
@@ -219,7 +219,7 @@ export function shapeBatchAuctionStatus(
       hasRootConfig,
       tokenNonceConsumed,
     }),
-    isEth: currency.toLowerCase() === ETH_ADDRESS,
+    isEth: isAddressEqual(currency, ETH_ADDRESS),
   };
 }
 
@@ -299,7 +299,7 @@ export function resolveBatchAuctionRoot(params: {
 }): Hex {
   if (params.root !== undefined && params.artifact !== undefined) {
     const root = normalizeBytes32(params.root, 'root');
-    if (root.toLowerCase() !== params.artifact.root.toLowerCase()) {
+    if (root !== normalizeBytes32(params.artifact.root, 'artifact root')) {
       throw new Error('root does not match artifact root.');
     }
     return root;
@@ -316,7 +316,7 @@ export function resolveBatchAuctionRoot(params: {
 function resolveBatchAuctionProofRoot(params: BatchAuctionBidParams): Hex {
   if (params.root !== undefined && params.proofArtifact !== undefined) {
     const root = normalizeBytes32(params.root, 'root');
-    if (root.toLowerCase() !== params.proofArtifact.root.toLowerCase()) {
+    if (root !== normalizeBytes32(params.proofArtifact.root, 'proof artifact root')) {
       throw new Error('root does not match proof artifact root.');
     }
     return root;
@@ -394,7 +394,7 @@ function planSplitRecipients(
 
 function uniqueAddresses(addresses: readonly Address[]): Address[] {
   return addresses.reduce<Address[]>((unique, address) => (
-    unique.some((candidate) => candidate.toLowerCase() === address.toLowerCase())
+    unique.some((candidate) => isAddressEqual(candidate, address))
       ? unique
       : [...unique, address]
   ), []);

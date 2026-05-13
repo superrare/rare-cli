@@ -1223,10 +1223,10 @@ export type RareClient = {
       getStatus: (params: CollectionMarketOfferStatusParams) => Promise<CollectionMarketOfferStatus>;
     };
     listing: {
-      set(params: CollectionMarketListingSetParams): Promise<CollectionMarketListingSetResult>;
-      cancel(params: CollectionMarketListingCancelParams): Promise<CollectionMarketListingCancelResult>;
-      buy(params: CollectionMarketListingBuyParams): Promise<CollectionMarketListingBuyResult>;
-      getStatus(params: CollectionMarketListingStatusParams): Promise<CollectionMarketListingStatus>;
+      set: (params: CollectionMarketListingSetParams) => Promise<CollectionMarketListingSetResult>;
+      cancel: (params: CollectionMarketListingCancelParams) => Promise<CollectionMarketListingCancelResult>;
+      buy: (params: CollectionMarketListingBuyParams) => Promise<CollectionMarketListingBuyResult>;
+      getStatus: (params: CollectionMarketListingStatusParams) => Promise<CollectionMarketListingStatus>;
     };
   };
   listing: ListingNamespace;
@@ -1248,11 +1248,11 @@ export type RareClient = {
       getStatus: (params: BatchOfferStatusParams) => Promise<BatchOfferStatus>;
     };
     auction: {
-      create(params: BatchAuctionCreateParams): Promise<BatchAuctionCreateResult>;
-      cancel(params: BatchAuctionCancelParams): Promise<BatchAuctionCancelResult>;
-      bid(params: BatchAuctionBidParams): Promise<BatchAuctionBidResult>;
-      settle(params: BatchAuctionSettleParams): Promise<BatchAuctionSettleResult>;
-      getStatus(params: BatchAuctionStatusParams): Promise<BatchAuctionStatus>;
+      create: (params: BatchAuctionCreateParams) => Promise<BatchAuctionCreateResult>;
+      cancel: (params: BatchAuctionCancelParams) => Promise<BatchAuctionCancelResult>;
+      bid: (params: BatchAuctionBidParams) => Promise<BatchAuctionBidResult>;
+      settle: (params: BatchAuctionSettleParams) => Promise<BatchAuctionSettleResult>;
+      getStatus: (params: BatchAuctionStatusParams) => Promise<BatchAuctionStatus>;
     };
   };
   search: {

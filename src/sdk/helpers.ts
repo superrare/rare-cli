@@ -426,7 +426,6 @@ export async function preparePaymentAmountForSpender(opts: {
   } = opts;
   const isEth = currency === ETH_ADDRESS;
   const autoApprove = opts.autoApprove ?? true;
-  const requiredAmount = await calculateMarketplacePaymentAmount(publicClient, marketplaceSettingsSource, amount);
 
   if (requiredAmount === 0n) {
     return {

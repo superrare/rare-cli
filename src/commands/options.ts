@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { type Command } from 'commander';
 import { getAddress, isAddress, type Address } from 'viem';
 
 export const chainOptionDescription = 'chain name (mainnet, sepolia, base, base-sepolia)';
@@ -7,7 +7,7 @@ export const chainIdOptionDescription = 'chain ID (1, 11155111, 8453, 84532)';
 export function addChainOptions<T extends Command>(cmd: T): T {
   return cmd
     .option('--chain <chain>', chainOptionDescription)
-    .option('--chain-id <id>', chainIdOptionDescription) as T;
+    .option('--chain-id <id>', chainIdOptionDescription);
 }
 
 export type ChainOptions = {
@@ -34,9 +34,10 @@ export function parseSplitOptions(opts: SplitOptions): {
     };
   }
 
-  const splitAddresses: Address[] = [];
-  const splitRatios: number[] = [];
-  for (const [index, value] of opts.split.entries()) {
+  return opts.split.reduce<{
+    splitAddresses: Address[];
+    splitRatios: number[];
+  }>((acc, value, index) => {
     const [rawAddress, rawRatio, extra] = value.split('=');
     if (!rawAddress || rawRatio === undefined || extra !== undefined) {
       throw new Error(`--split at index ${index} must use addr=ratio.`);
@@ -50,9 +51,9 @@ export function parseSplitOptions(opts: SplitOptions): {
       throw new Error(`--split ratio at index ${index} must be an integer.`);
     }
 
-    splitAddresses.push(getAddress(rawAddress));
-    splitRatios.push(ratio);
-  }
-
-  return { splitAddresses, splitRatios };
+    return {
+      splitAddresses: [...acc.splitAddresses, getAddress(rawAddress)],
+      splitRatios: [...acc.splitRatios, ratio],
+    };
+  }, { splitAddresses: [], splitRatios: [] });
 }

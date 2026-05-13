@@ -488,7 +488,7 @@ function createOfferAcceptCommand(): Command {
         const proofInput = await readBatchProofFile(opts.proof);
         const root = resolveProofRoot(proofInput, opts.root);
         validateBatchTokenProofInputMatchesTarget(proofInput, {
-          artifact: { root } as BatchTokenListArtifact,
+          artifact: createRootOnlyArtifact(root),
           contractAddress: contract,
           tokenId: opts.tokenId,
           root,
@@ -729,7 +729,7 @@ function createAuctionBidCommand(): Command {
         const proofInput = await readBatchProofFile(opts.proof);
         const root = resolveProofRoot(proofInput, opts.root);
         validateBatchTokenProofInputMatchesTarget(proofInput, {
-          artifact: { root } as BatchTokenListArtifact,
+          artifact: createRootOnlyArtifact(root),
           contractAddress: contract,
           tokenId: opts.tokenId,
           root,
@@ -862,7 +862,7 @@ function createAuctionStatusCommand(): Command {
           : resolveProofRoot(proofInput, rootInput?.root);
         if (proofInput !== undefined && root !== undefined) {
           validateBatchTokenProofInputMatchesTarget(proofInput, {
-            artifact: { root } as BatchTokenListArtifact,
+            artifact: createRootOnlyArtifact(root),
             contractAddress: contract,
             tokenId: opts.tokenId,
             root,
@@ -1248,7 +1248,7 @@ async function resolveAuctionRootInput(opts: OfferRootOptions): Promise<AuctionR
     format: opts.format,
     chainId: opts.chainId,
   });
-  if (directRoot !== undefined && directRoot.toLowerCase() !== artifact.root.toLowerCase()) {
+  if (directRoot !== undefined && directRoot !== artifact.root) {
     throw new Error('--root does not match --input artifact root.');
   }
 
@@ -1271,10 +1271,21 @@ function resolveProofRoot(proofInput: BatchTokenProofInput, rawRoot: string | un
   if (root === undefined) {
     throw new Error('Pass --root or a proof artifact with a root field.');
   }
-  if (proofInput.root !== undefined && proofInput.root.toLowerCase() !== root.toLowerCase()) {
+  if (proofInput.root !== undefined && proofInput.root !== root) {
     throw new Error('Proof root does not match --root.');
   }
   return root;
+}
+
+function createRootOnlyArtifact(root: Hex): BatchTokenListArtifact {
+  return {
+    version: 1,
+    type: 'rare-batch-token-list',
+    root,
+    count: 0,
+    tokens: [],
+    entries: [],
+  };
 }
 
 async function readBatchProofFile(inputPath: string): Promise<BatchTokenProofInput> {

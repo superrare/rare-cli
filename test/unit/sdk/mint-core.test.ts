@@ -29,6 +29,7 @@ describe('mint metadata core', () => {
       value: 3,
     });
     expect(parseMintAttribute('loose')).toEqual({
+      trait_type: 'value',
       value: 'loose',
     });
     expect(parseMintAttribute('{"trait_type":"Boost","value":2,"display_type":"number"}')).toEqual({

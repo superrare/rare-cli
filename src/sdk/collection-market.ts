@@ -1,6 +1,9 @@
 import {
+  isAddress,
+  isAddressEqual,
   parseEventLogs,
   type Address,
+  type Hash,
   type PublicClient,
 } from 'viem';
 import { collectionMarketAbi } from '../contracts/abis/collection-market.js';
@@ -14,7 +17,7 @@ import {
   requireWallet,
   waitForApproval,
 } from './helpers.js';
-import type { RareClient, RareClientConfig } from './types.js';
+import type { RareClient, RareClientConfig, WalletAccount } from './types.js';
 import {
   calculateCollectionOfferTopUp,
   type CollectionMarketSalePriceRead,
@@ -40,7 +43,7 @@ export function createCollectionMarketNamespace(
 ): RareClient['collectionMarket'] {
   return {
     offer: {
-      async create(params) {
+      async create(params): ReturnType<RareClient['collectionMarket']['offer']['create']> {
         const collectionMarket = requireContractAddress(chain, 'collectionMarket');
         const { walletClient, account, accountAddress } = requireWallet(config);
         const plan = planCollectionMarketOfferCreate(params);
@@ -108,7 +111,7 @@ export function createCollectionMarketNamespace(
         };
       },
 
-      async cancel(params) {
+      async cancel(params): ReturnType<RareClient['collectionMarket']['offer']['cancel']> {
         const collectionMarket = requireContractAddress(chain, 'collectionMarket');
         const { walletClient, account, accountAddress } = requireWallet(config);
         const plan = planCollectionMarketOfferCancel(params);
@@ -147,7 +150,7 @@ export function createCollectionMarketNamespace(
         };
       },
 
-      async accept(params) {
+      async accept(params): ReturnType<RareClient['collectionMarket']['offer']['accept']> {
         const collectionMarket = requireContractAddress(chain, 'collectionMarket');
         const { walletClient, account, accountAddress } = requireWallet(config);
         const plan = planCollectionMarketOfferAccept(params, accountAddress);
@@ -158,34 +161,22 @@ export function createCollectionMarketNamespace(
           args: [plan.tokenId],
         });
 
-        if (owner.toLowerCase() !== accountAddress.toLowerCase()) {
+        if (!isAddressEqual(owner, accountAddress)) {
           throw new Error(
             `Connected wallet ${accountAddress} does not own token ${plan.originCollection} #${plan.tokenId.toString()}.`,
           );
         }
 
-        let approvalTxHash: `0x${string}` | undefined;
-        if (plan.autoApprove) {
-          const isApproved = await publicClient.readContract({
-            address: plan.originCollection,
-            abi: approvalAbi,
-            functionName: 'isApprovedForAll',
-            args: [accountAddress, collectionMarket],
-          });
-
-          if (!isApproved) {
-            approvalTxHash = await walletClient.writeContract({
-              address: plan.originCollection,
-              abi: approvalAbi,
-              functionName: 'setApprovalForAll',
-              args: [collectionMarket, true],
-              account,
-              chain: undefined,
-            });
-            await publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
-            await waitForApproval(publicClient, plan.originCollection, accountAddress, collectionMarket);
-          }
-        }
+        const approvalTxHash = plan.autoApprove
+          ? await approveNftContractIfNeeded({
+            publicClient,
+            walletClient,
+            account,
+            accountAddress,
+            nftAddress: plan.originCollection,
+            operator: collectionMarket,
+          })
+          : undefined;
 
         const txHash = await walletClient.writeContract({
           address: collectionMarket,
@@ -229,7 +220,7 @@ export function createCollectionMarketNamespace(
         };
       },
 
-      async getStatus(params) {
+      async getStatus(params): ReturnType<RareClient['collectionMarket']['offer']['getStatus']> {
         const collectionMarket = requireContractAddress(chain, 'collectionMarket');
         const account = params.account ?? config.account ?? config.walletClient?.account?.address;
         const plan = planCollectionMarketOfferStatus({ ...params, account });
@@ -255,33 +246,21 @@ export function createCollectionMarketNamespace(
       },
     },
     listing: {
-      async set(params) {
+      async set(params): ReturnType<RareClient['collectionMarket']['listing']['set']> {
         const collectionMarket = requireContractAddress(chain, 'collectionMarket');
         const { walletClient, account, accountAddress } = requireWallet(config);
         const plan = planCollectionMarketListingSet(params, accountAddress);
 
-        let approvalTxHash: `0x${string}` | undefined;
-        if (plan.autoApprove) {
-          const isApproved = await publicClient.readContract({
-            address: plan.originCollection,
-            abi: approvalAbi,
-            functionName: 'isApprovedForAll',
-            args: [accountAddress, collectionMarket],
-          });
-
-          if (!isApproved) {
-            approvalTxHash = await walletClient.writeContract({
-              address: plan.originCollection,
-              abi: approvalAbi,
-              functionName: 'setApprovalForAll',
-              args: [collectionMarket, true],
-              account,
-              chain: undefined,
-            });
-            await publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
-            await waitForApproval(publicClient, plan.originCollection, accountAddress, collectionMarket);
-          }
-        }
+        const approvalTxHash = plan.autoApprove
+          ? await approveNftContractIfNeeded({
+            publicClient,
+            walletClient,
+            account,
+            accountAddress,
+            nftAddress: plan.originCollection,
+            operator: collectionMarket,
+          })
+          : undefined;
 
         const txHash = await walletClient.writeContract({
           address: collectionMarket,
@@ -323,7 +302,7 @@ export function createCollectionMarketNamespace(
         };
       },
 
-      async cancel(params) {
+      async cancel(params): ReturnType<RareClient['collectionMarket']['listing']['cancel']> {
         const collectionMarket = requireContractAddress(chain, 'collectionMarket');
         const { walletClient, account, accountAddress } = requireWallet(config);
         const plan = planCollectionMarketListingCancel(params);
@@ -362,7 +341,7 @@ export function createCollectionMarketNamespace(
         };
       },
 
-      async buy(params) {
+      async buy(params): ReturnType<RareClient['collectionMarket']['listing']['buy']> {
         const collectionMarket = requireContractAddress(chain, 'collectionMarket');
         const { walletClient, account, accountAddress } = requireWallet(config);
         const plan = planCollectionMarketListingBuy(params);
@@ -377,7 +356,7 @@ export function createCollectionMarketNamespace(
           readMarketplaceSettings(publicClient, collectionMarket),
         ]);
 
-        if (tokenOwner.toLowerCase() !== plan.seller.toLowerCase()) {
+        if (!isAddressEqual(tokenOwner, plan.seller)) {
           throw new Error(
             `Seller ${plan.seller} does not own token ${plan.originCollection} #${plan.tokenId.toString()}.`,
           );
@@ -388,7 +367,7 @@ export function createCollectionMarketNamespace(
         if (salePrice.amount !== plan.amount) {
           throw new Error(`Collection sale price amount is ${salePrice.amount.toString()}, but ${plan.amount.toString()} was supplied.`);
         }
-        if (salePrice.currencyAddress.toLowerCase() !== plan.currency.toLowerCase()) {
+        if (!isAddressEqual(salePrice.currencyAddress, plan.currency)) {
           throw new Error(
             `Collection sale price currency is ${salePrice.currencyAddress}, but ${plan.currency} was supplied.`,
           );
@@ -456,7 +435,7 @@ export function createCollectionMarketNamespace(
         };
       },
 
-      async getStatus(params) {
+      async getStatus(params): ReturnType<RareClient['collectionMarket']['listing']['getStatus']> {
         const collectionMarket = requireContractAddress(chain, 'collectionMarket');
         const account = params.account ?? config.account ?? config.walletClient?.account?.address;
         const plan = planCollectionMarketListingStatus({ ...params, account });
@@ -503,11 +482,61 @@ async function readMarketplaceSettings(
     functionName: 'getMarketConfig',
   });
 
-  if (Array.isArray(marketConfig)) {
-    return marketConfig[1] as Address;
+  return readMarketplaceSettingsFromConfig(marketConfig);
+}
+
+async function approveNftContractIfNeeded(opts: {
+  publicClient: PublicClient;
+  walletClient: NonNullable<RareClientConfig['walletClient']>;
+  account: Address | WalletAccount;
+  accountAddress: Address;
+  nftAddress: Address;
+  operator: Address;
+}): Promise<Hash | undefined> {
+  const isApproved = await opts.publicClient.readContract({
+    address: opts.nftAddress,
+    abi: approvalAbi,
+    functionName: 'isApprovedForAll',
+    args: [opts.accountAddress, opts.operator],
+  });
+
+  if (isApproved) {
+    return undefined;
   }
 
-  return marketConfig.marketplaceSettings;
+  const approvalTxHash = await opts.walletClient.writeContract({
+    address: opts.nftAddress,
+    abi: approvalAbi,
+    functionName: 'setApprovalForAll',
+    args: [opts.operator, true],
+    account: opts.account,
+    chain: undefined,
+  });
+  await opts.publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
+  await waitForApproval(opts.publicClient, opts.nftAddress, opts.accountAddress, opts.operator);
+  return approvalTxHash;
+}
+
+function readMarketplaceSettingsFromConfig(marketConfig: unknown): Address {
+  if (Array.isArray(marketConfig)) {
+    const marketplaceSettings: unknown = marketConfig[1];
+    if (typeof marketplaceSettings === 'string' && isAddress(marketplaceSettings)) {
+      return marketplaceSettings;
+    }
+  }
+  if (
+    isRecord(marketConfig) &&
+    typeof marketConfig.marketplaceSettings === 'string' &&
+    isAddress(marketConfig.marketplaceSettings)
+  ) {
+    return marketConfig.marketplaceSettings;
+  }
+
+  throw new Error('Collection market config did not include marketplaceSettings.');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 async function readCollectionOffer(

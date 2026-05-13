@@ -15,15 +15,15 @@ export function createBatchNamespace(
   chain: SupportedChain,
 ): RareClient['batch'] {
   return {
-    buildTree(params) {
+    buildTree(params): ReturnType<RareClient['batch']['buildTree']> {
       return buildBatchTokenTreeArtifact(params);
     },
 
-    getTreeProof(params) {
+    getTreeProof(params): ReturnType<RareClient['batch']['getTreeProof']> {
       return getBatchTokenProof(params);
     },
 
-    verifyTreeProof(params) {
+    verifyTreeProof(params): ReturnType<RareClient['batch']['verifyTreeProof']> {
       return verifyBatchTokenProof(params);
     },
 

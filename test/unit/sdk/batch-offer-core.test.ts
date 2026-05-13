@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { zeroAddress } from 'viem';
 import {
   planBatchOfferAccept,
   planBatchOfferCreate,
@@ -15,10 +16,10 @@ const ACCOUNT = '0x1111111111111111111111111111111111111111';
 const CREATOR = '0x2222222222222222222222222222222222222222';
 const CONTRACT = '0x3333333333333333333333333333333333333333';
 const ROOT = '0xc9ea7316e48c69cf113a1746956da366068e750940ab24ae2633c3c55291f0cf';
-const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const ZERO_ADDRESS = zeroAddress;
 const ZERO_ROOT = '0x0000000000000000000000000000000000000000000000000000000000000000';
 
-function buildArtifact() {
+function buildArtifact(): ReturnType<typeof buildBatchTokenTreeArtifact> {
   return buildBatchTokenTreeArtifact({
     content: JSON.stringify([
       { contractAddress: CONTRACT, tokenId: '1' },

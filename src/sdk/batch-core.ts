@@ -3,6 +3,7 @@ import {
   encodePacked,
   getAddress,
   isAddress,
+  isAddressEqual,
   isHex,
   keccak256,
   maxUint256,
@@ -115,7 +116,7 @@ export function buildBatchTokenTreeArtifact(
   const tokens = parseBatchTokenList(params);
   const leaves = tokens.map((token) => hashBatchToken(token.contractAddress, token.tokenId));
   const levels = buildMerkleLevels(leaves);
-  const [root] = levels[levels.length - 1];
+  const root = levels.at(-1)?.[0];
 
   if (root === undefined) {
     throw new Error('Batch token list must include at least one token.');
@@ -129,11 +130,7 @@ export function buildBatchTokenTreeArtifact(
     count: tokens.length,
     ...(chainId === undefined ? {} : { chainId }),
     tokens,
-    entries: tokens.map((token, index) => ({
-      ...token,
-      leaf: leaves[index],
-      proof: buildMerkleProof(levels, index),
-    })),
+    entries: tokens.map((token, index) => buildBatchTokenTreeEntry(token, leaves, levels, index)),
   };
 }
 
@@ -176,7 +173,7 @@ export function parseBatchTokenListArtifact(content: string): BatchTokenListArti
   if (typeof parsed.count === 'number' && parsed.count !== artifact.count) {
     throw new Error('Batch token artifact count does not match its token list.');
   }
-  if (artifact.root.toLowerCase() !== root.toLowerCase()) {
+  if (artifact.root !== root) {
     throw new Error('Batch token artifact root does not match its token list.');
   }
 
@@ -212,7 +209,7 @@ export function getBatchTokenProof(params: BatchTokenProofParams): BatchTokenPro
   }
 
   const entry = params.artifact.entries.find((candidate) => (
-    candidate.contractAddress.toLowerCase() === contractAddress.toLowerCase() &&
+    isAddressEqual(candidate.contractAddress, contractAddress) &&
     candidate.tokenId === tokenId
   ));
 
@@ -246,7 +243,7 @@ export function verifyBatchTokenProof(params: BatchTokenProofVerifyParams): bool
     hashBatchToken(params.contractAddress, params.tokenId),
   );
 
-  return computedRoot.toLowerCase() === root.toLowerCase();
+  return computedRoot === root;
 }
 
 export function parseBatchTokenProofArtifact(content: string): BatchTokenProofArtifact {
@@ -290,7 +287,7 @@ export function parseBatchTokenProofArtifact(content: string): BatchTokenProofAr
       throw new Error('Batch token proof artifact leaf must be a bytes32 hex string.');
     }
     const parsedLeaf = normalizeBytes32(parsed.leaf, 'proof leaf');
-    if (parsedLeaf.toLowerCase() !== leaf.toLowerCase()) {
+    if (parsedLeaf !== leaf) {
       throw new Error('Batch token proof artifact leaf does not match its contractAddress and tokenId.');
     }
   }
@@ -373,20 +370,20 @@ export function validateBatchTokenProofInputMatchesTarget(
   if (
     proofInput.root !== undefined &&
     !target.allowRootOverride &&
-    proofInput.root.toLowerCase() !== target.artifact.root.toLowerCase()
+    proofInput.root !== target.artifact.root
   ) {
     throw new Error('Proof root does not match the input token list root.');
   }
   if (
     proofInput.root !== undefined &&
     target.allowRootOverride &&
-    proofInput.root.toLowerCase() !== target.root.toLowerCase()
+    proofInput.root !== target.root
   ) {
     throw new Error('Proof root does not match --root.');
   }
   if (
     proofInput.contractAddress !== undefined &&
-    proofInput.contractAddress.toLowerCase() !== target.contractAddress.toLowerCase()
+    !isAddressEqual(proofInput.contractAddress, target.contractAddress)
   ) {
     throw new Error('Proof artifact contractAddress does not match --contract.');
   }
@@ -413,7 +410,11 @@ export function normalizeBytes32(value: string, field: string): Hex {
     throw new Error(`${field} must be a bytes32 hex string.`);
   }
 
-  return value.toLowerCase() as Hex;
+  const normalized = value.toLocaleLowerCase();
+  if (!isHex(normalized, { strict: true }) || normalized.length !== 66) {
+    throw new Error(`${field} must be a bytes32 hex string.`);
+  }
+  return normalized;
 }
 
 function detectBatchTokenInputFormat(
@@ -474,7 +475,8 @@ function parseCsvBatchTokens(content: string): RawBatchToken[] {
     }));
   }
 
-  if (firstRow.length >= 2 && isAddress(firstRow[0])) {
+  const firstContractCell = firstRow[0];
+  if (firstRow.length >= 2 && firstContractCell !== undefined && isAddress(firstContractCell)) {
     return rows.map((row, index) => extractCsvBatchToken(row, {
       rowNumber: index + 1,
       contractIndex: 0,
@@ -570,17 +572,38 @@ function normalizeBatchTokens(
   }
 
   const chainId = explicitChainId ?? uniqueRowChainIds[0];
-  const seen = new Set<string>();
+  const tokens = rawTokens.map((rawToken, index) => normalizeBatchToken(rawToken, index, chainId));
+  const duplicate = tokens.find((token, index) => (
+    tokens.slice(0, index).some((candidate) => (
+      candidate.chainId === token.chainId &&
+      candidate.tokenId === token.tokenId &&
+      isAddressEqual(candidate.contractAddress, token.contractAddress)
+    ))
+  ));
 
-  return rawTokens.map((rawToken, index) => {
-    const token = normalizeBatchToken(rawToken, index, chainId);
-    const key = `${token.chainId ?? 'none'}:${token.contractAddress.toLowerCase()}:${token.tokenId}`;
-    if (seen.has(key)) {
-      throw new Error(`Duplicate batch token: ${token.contractAddress} #${token.tokenId}.`);
-    }
-    seen.add(key);
-    return token;
-  }).sort(compareBatchTokens);
+  if (duplicate !== undefined) {
+    throw new Error(`Duplicate batch token: ${duplicate.contractAddress} #${duplicate.tokenId}.`);
+  }
+
+  return [...tokens].sort(compareBatchTokens);
+}
+
+function buildBatchTokenTreeEntry(
+  token: BatchToken,
+  leaves: readonly Hex[],
+  levels: readonly Hex[][],
+  index: number,
+): BatchTokenTreeEntry {
+  const leaf = leaves[index];
+  if (leaf === undefined) {
+    throw new Error(`Missing Merkle leaf for batch token at index ${index}.`);
+  }
+
+  return {
+    ...token,
+    leaf,
+    proof: buildMerkleProof(levels, index),
+  };
 }
 
 function normalizeBatchToken(
@@ -706,7 +729,8 @@ function buildMerkleLevels(leaves: readonly Hex[]): Hex[][] {
     return [];
   }
   if (leaves.length === 1) {
-    return [[leaves[0]]];
+    const [leaf] = leaves;
+    return leaf === undefined ? [] : [[leaf]];
   }
 
   const level = [...leaves];

@@ -1,6 +1,6 @@
-import type { Address } from 'viem';
+import { isAddressEqual, type Address } from 'viem';
+import { ETH_ADDRESS } from '../contracts/addresses.js';
 import {
-  ETH_ADDRESS,
   toNonNegativeInteger,
   toPositiveWei,
 } from './helpers.js';
@@ -71,18 +71,21 @@ export type CollectionMarketOfferRead = {
   marketplaceFee: bigint;
 };
 
+type CollectionMarketOfferReadTuple = readonly [Address, bigint, bigint];
+
 export function shapeCollectionMarketOfferRead(
-  offer: readonly [Address, bigint, bigint] | CollectionMarketOfferRead,
+  offer: CollectionMarketOfferReadTuple | CollectionMarketOfferRead,
 ): CollectionMarketOfferRead {
-  if (Array.isArray(offer)) {
+  if (isCollectionMarketOfferReadTuple(offer)) {
+    const [currencyAddress, amount, marketplaceFee] = offer;
     return {
-      currencyAddress: offer[0],
-      amount: offer[1],
-      marketplaceFee: offer[2],
+      currencyAddress,
+      amount,
+      marketplaceFee,
     };
   }
 
-  return offer as CollectionMarketOfferRead;
+  return offer;
 }
 
 export type CollectionMarketSalePriceRead = {
@@ -92,24 +95,26 @@ export type CollectionMarketSalePriceRead = {
   splitRatios: number[];
 };
 
+type CollectionMarketSalePriceReadTuple = readonly [Address, bigint, readonly Address[], readonly number[]];
+
 export function shapeCollectionMarketSalePriceRead(
-  salePrice: readonly [Address, bigint, readonly Address[], readonly number[]] | CollectionMarketSalePriceRead,
+  salePrice: CollectionMarketSalePriceReadTuple | CollectionMarketSalePriceRead,
 ): CollectionMarketSalePriceRead {
-  if (Array.isArray(salePrice)) {
+  if (isCollectionMarketSalePriceReadTuple(salePrice)) {
+    const [currencyAddress, amount, splitRecipients, splitRatios] = salePrice;
     return {
-      currencyAddress: salePrice[0],
-      amount: salePrice[1],
-      splitRecipients: [...salePrice[2]],
-      splitRatios: [...salePrice[3]],
+      currencyAddress,
+      amount,
+      splitRecipients: [...splitRecipients],
+      splitRatios: [...splitRatios],
     };
   }
 
-  const shaped = salePrice as CollectionMarketSalePriceRead;
   return {
-    currencyAddress: shaped.currencyAddress,
-    amount: shaped.amount,
-    splitRecipients: [...shaped.splitRecipients],
-    splitRatios: [...shaped.splitRatios],
+    currencyAddress: salePrice.currencyAddress,
+    amount: salePrice.amount,
+    splitRecipients: [...salePrice.splitRecipients],
+    splitRatios: [...salePrice.splitRatios],
   };
 }
 
@@ -218,13 +223,13 @@ export function shapeCollectionMarketOfferStatus(
   const canCancel = Boolean(
     hasOffer &&
     currentWallet !== undefined &&
-    currentWallet.toLowerCase() === expected.buyer.toLowerCase(),
+    isAddressEqual(currentWallet, expected.buyer),
   );
   const canAccept = Boolean(
     hasOffer &&
     currentWallet !== undefined &&
     expected.tokenOwner !== undefined &&
-    currentWallet.toLowerCase() === expected.tokenOwner.toLowerCase(),
+    isAddressEqual(currentWallet, expected.tokenOwner),
   );
 
   return {
@@ -236,7 +241,7 @@ export function shapeCollectionMarketOfferStatus(
     requiredPayment: calculateRequiredPaymentFromFeePercentage(offer.amount, offer.marketplaceFee),
     hasOffer,
     state: hasOffer ? 'ACTIVE' : 'NONE',
-    isEth: offer.currencyAddress.toLowerCase() === ETH_ADDRESS,
+    isEth: isAddressEqual(offer.currencyAddress, ETH_ADDRESS),
     expiry: null,
     currentWallet,
     tokenId: expected.tokenId,
@@ -262,17 +267,17 @@ export function shapeCollectionMarketListingStatus(
   const currentWallet = expected.account;
   const tokenOwnedBySeller = Boolean(
     expected.tokenOwner !== undefined &&
-    expected.tokenOwner.toLowerCase() === expected.seller.toLowerCase(),
+    isAddressEqual(expected.tokenOwner, expected.seller),
   );
   const canCancel = Boolean(
     hasListing &&
     currentWallet !== undefined &&
-    currentWallet.toLowerCase() === expected.seller.toLowerCase(),
+    isAddressEqual(currentWallet, expected.seller),
   );
   const canBuy = Boolean(
     hasListing &&
     tokenOwnedBySeller &&
-    (currentWallet === undefined || currentWallet.toLowerCase() !== expected.seller.toLowerCase()),
+    (currentWallet === undefined || !isAddressEqual(currentWallet, expected.seller)),
   );
 
   return {
@@ -286,7 +291,7 @@ export function shapeCollectionMarketListingStatus(
     requiredPayment: expected.requiredPayment,
     hasListing,
     state: hasListing ? 'ACTIVE' : 'NONE',
-    isEth: salePrice.currencyAddress.toLowerCase() === ETH_ADDRESS,
+    isEth: isAddressEqual(salePrice.currencyAddress, ETH_ADDRESS),
     currentWallet,
     tokenId: expected.tokenId,
     tokenOwner: expected.tokenOwner,
@@ -307,7 +312,7 @@ export function calculateCollectionOfferTopUp(params: {
     return params.requiredPayment;
   }
 
-  const sameCurrency = existing.currencyAddress.toLowerCase() === params.currency.toLowerCase();
+  const sameCurrency = isAddressEqual(existing.currencyAddress, params.currency);
   const sameMarketplaceFee = existing.marketplaceFee === params.currentMarketplaceFeePercentage;
   if (!sameCurrency || !sameMarketplaceFee) {
     return params.requiredPayment;
@@ -319,6 +324,18 @@ export function calculateCollectionOfferTopUp(params: {
 
   const existingPayment = calculateRequiredPaymentFromFeePercentage(existing.amount, existing.marketplaceFee);
   return params.requiredPayment > existingPayment ? params.requiredPayment - existingPayment : 0n;
+}
+
+function isCollectionMarketOfferReadTuple(
+  value: CollectionMarketOfferReadTuple | CollectionMarketOfferRead,
+): value is CollectionMarketOfferReadTuple {
+  return Array.isArray(value);
+}
+
+function isCollectionMarketSalePriceReadTuple(
+  value: CollectionMarketSalePriceReadTuple | CollectionMarketSalePriceRead,
+): value is CollectionMarketSalePriceReadTuple {
+  return Array.isArray(value);
 }
 
 function calculateRequiredPaymentFromFeePercentage(amount: bigint, feePercentage: bigint): bigint {

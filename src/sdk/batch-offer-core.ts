@@ -1,6 +1,6 @@
-import type { Address, Hex } from 'viem';
+import { isAddressEqual, type Address, type Hex } from 'viem';
+import { ETH_ADDRESS } from '../contracts/addresses.js';
 import {
-  ETH_ADDRESS,
   toNonNegativeInteger,
   toPositiveInteger,
   toPositiveWei,
@@ -45,7 +45,9 @@ export type BatchOfferRead = {
   feePercentage?: bigint;
 };
 
-const zeroAddress = '0x0000000000000000000000000000000000000000' as const;
+type BatchOfferReadTuple = readonly [Address, Hex, bigint, Address, bigint, bigint?];
+
+const zeroAddress = ETH_ADDRESS;
 const zeroBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
 export function planBatchOfferCreate(
@@ -108,8 +110,8 @@ export function shapeBatchOfferStatus(
   nowSeconds: bigint,
 ): BatchOfferStatus {
   const hasOffer = (
-    offer.creator.toLowerCase() !== zeroAddress &&
-    offer.rootHash.toLowerCase() !== zeroBytes32 &&
+    !isAddressEqual(offer.creator, zeroAddress) &&
+    offer.rootHash !== zeroBytes32 &&
     offer.amount > 0n
   );
   const expired = hasOffer && offer.expiry <= nowSeconds;
@@ -131,23 +133,24 @@ export function shapeBatchOfferStatus(
     revoked: hasOffer ? false : null,
     fillable: hasOffer && !expired,
     state,
-    isEth: offer.currency.toLowerCase() === ETH_ADDRESS,
+    isEth: isAddressEqual(offer.currency, ETH_ADDRESS),
   };
 }
 
-export function shapeBatchOfferRead(value: readonly [Address, Hex, bigint, Address, bigint, bigint?] | BatchOfferRead): BatchOfferRead {
-  if (Array.isArray(value)) {
-    return {
-      creator: value[0],
-      rootHash: value[1],
-      amount: value[2],
-      currency: value[3],
-      expiry: value[4],
-      feePercentage: value[5],
-    };
+export function shapeBatchOfferRead(value: BatchOfferReadTuple | BatchOfferRead): BatchOfferRead {
+  if ('creator' in value) {
+    return value;
   }
 
-  return value as BatchOfferRead;
+  const [creator, rootHash, amount, currency, expiry, feePercentage] = value;
+  return {
+    creator,
+    rootHash,
+    amount,
+    currency,
+    expiry,
+    feePercentage,
+  };
 }
 
 export function resolveBatchOfferRoot(params: {
@@ -156,7 +159,7 @@ export function resolveBatchOfferRoot(params: {
 }): Hex {
   if (params.root !== undefined && params.artifact !== undefined) {
     const root = normalizeBytes32(params.root, 'root');
-    if (root.toLowerCase() !== params.artifact.root.toLowerCase()) {
+    if (root !== normalizeBytes32(params.artifact.root, 'artifact root')) {
       throw new Error('root does not match artifact root.');
     }
     return root;
@@ -173,7 +176,7 @@ export function resolveBatchOfferRoot(params: {
 function resolveBatchOfferProofRoot(params: BatchOfferAcceptParams): Hex {
   if (params.root !== undefined && params.proofArtifact !== undefined) {
     const root = normalizeBytes32(params.root, 'root');
-    if (root.toLowerCase() !== params.proofArtifact.root.toLowerCase()) {
+    if (root !== normalizeBytes32(params.proofArtifact.root, 'proof artifact root')) {
       throw new Error('root does not match proof artifact root.');
     }
     return root;
