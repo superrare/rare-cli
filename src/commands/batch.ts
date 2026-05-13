@@ -1,13 +1,14 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import { isAddressEqual, isHex, type Address } from 'viem';
+import { formatEther, isAddressEqual, isHex, type Address, type Hex } from 'viem';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
-import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
+import { ETH_ADDRESS, resolveCurrency, type SupportedChain } from '../contracts/addresses.js';
 import { printError } from '../errors.js';
 import { output, log } from '../output.js';
 import { createRareClient } from '../sdk/client.js';
+import type { RareClient } from '../sdk/types.js';
 import {
   buildProofArtifact,
   loadProofArtifact,
@@ -33,6 +34,11 @@ type ChainOptions = {
   chainId?: string;
 };
 
+type BatchCommandClient = {
+  chain: SupportedChain;
+  rare: RareClient;
+};
+
 type MerkleProofOptions = {
   root: string;
   contract: string;
@@ -56,6 +62,86 @@ type TreeProofOptions = TreeInputOptions & {
 type TreeVerifyOptions = TreeProofOptions & {
   proof?: string;
   root?: string;
+};
+
+type OfferRootOptions = {
+  root?: string;
+  input?: string;
+  format?: string;
+  chainId?: string;
+};
+
+type OfferCreateOptions = OfferRootOptions & {
+  amount: string;
+  currency?: string;
+  expiry: string;
+  chain?: string;
+};
+
+type OfferRevokeOptions = OfferRootOptions & {
+  chain?: string;
+};
+
+type OfferAcceptOptions = {
+  creator: string;
+  proof: string;
+  root?: string;
+  contract: string;
+  tokenId: string;
+  splitRecipient?: string[];
+  splitRatio?: string[];
+  chain?: string;
+  autoApprove?: boolean;
+};
+
+type OfferStatusOptions = OfferRootOptions & {
+  creator: string;
+  chain?: string;
+};
+
+type AuctionRootInput = {
+  root: Hex;
+  artifact?: BatchTokenListArtifact;
+};
+
+type AuctionCreateOptions = OfferRootOptions & {
+  reserve: string;
+  currency?: string;
+  duration: string;
+  splitRecipient?: string[];
+  splitRatio?: string[];
+  chain?: string;
+  autoApprove?: boolean;
+};
+
+type AuctionCancelOptions = OfferRootOptions & {
+  chain?: string;
+};
+
+type AuctionBidOptions = {
+  creator: string;
+  proof: string;
+  root?: string;
+  contract: string;
+  tokenId: string;
+  amount: string;
+  currency?: string;
+  chain?: string;
+  autoApprove?: boolean;
+};
+
+type AuctionSettleOptions = {
+  contract: string;
+  tokenId: string;
+  chain?: string;
+};
+
+type AuctionStatusOptions = OfferRootOptions & {
+  creator?: string;
+  proof?: string;
+  contract: string;
+  tokenId: string;
+  chain?: string;
 };
 
 type BatchListingCreateOptions = ChainOptions & {
@@ -99,8 +185,10 @@ async function resolveRootInput(input: string): Promise<`0x${string}`> {
 
 export function batchCommand(): Command {
   const cmd = new Command('batch');
-  cmd.description('Batch listing subcommands (tree, merkle, create, cancel, buy, status, set-allowlist)');
+  cmd.description('Batch marketplace subcommands (tree, offer, auction, merkle, create, cancel, buy, status, set-allowlist)');
   cmd.addCommand(createTreeCommand());
+  cmd.addCommand(createOfferCommand());
+  cmd.addCommand(createAuctionCommand());
   cmd.addCommand(merkleCommand());
   addBatchListingCommands(cmd);
   return cmd;
@@ -573,6 +661,552 @@ function addBatchListingCommands(cmd: Command): void {
 
 }
 
+function createOfferCommand(): Command {
+  const cmd = new Command('offer');
+  cmd.description('Create, revoke, accept, and inspect batch marketplace offers');
+  cmd.addCommand(createOfferCreateCommand());
+  cmd.addCommand(createOfferRevokeCommand());
+  cmd.addCommand(createOfferAcceptCommand());
+  cmd.addCommand(createOfferStatusCommand());
+  return cmd;
+}
+
+function createOfferCreateCommand(): Command {
+  const cmd = new Command('create');
+  cmd.description('Create a batch marketplace offer from a token Merkle root');
+
+  cmd
+    .option('--root <bytes32>', 'batch token Merkle root')
+    .option('--input <path>', 'batch token artifact, CSV, or JSON token list')
+    .option('--format <format>', 'input format for --input (csv, json)')
+    .option('--chain-id <id>', 'chain ID to use when building --input')
+    .requiredOption('--amount <amount>', 'offer amount in ETH or token units')
+    .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
+    .requiredOption('--expiry <seconds>', 'unix timestamp when the offer expires')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: OfferCreateOptions): Promise<void> => {
+      try {
+        const root = await resolveOfferRoot(opts);
+        const { chain, rare } = createWriteBatchClient(opts.chain);
+        const currency = opts.currency === undefined ? ETH_ADDRESS : resolveCurrency(opts.currency, chain);
+
+        log(`Creating batch offer on ${chain}...`);
+        log(`  BatchOfferCreator: ${rare.contracts.batchOfferCreator ?? 'not configured'}`);
+        log(`  Root: ${root}`);
+        log(`  Amount: ${opts.amount} ${formatCurrencyLabel(currency)}`);
+
+        const result = await rare.batch.offer.create({
+          root,
+          amount: opts.amount,
+          currency,
+          expiry: opts.expiry,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            approvalTxHash: result.approvalTxHash ?? null,
+            batchOfferCreator: result.batchOfferCreator,
+            creator: result.creator,
+            root: result.root,
+            amount: result.amount,
+            currency: result.currency,
+            expiry: result.expiry,
+            requiredPayment: result.requiredPayment,
+          },
+          () => {
+            if (result.approvalTxHash !== undefined) {
+              console.log(`Approval tx sent: ${result.approvalTxHash}`);
+            }
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Batch offer created for root: ${result.root}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createOfferRevokeCommand(): Command {
+  const cmd = new Command('revoke');
+  cmd.description('Revoke a batch marketplace offer');
+
+  cmd
+    .option('--root <bytes32>', 'batch token Merkle root')
+    .option('--input <path>', 'batch token artifact, CSV, or JSON token list')
+    .option('--format <format>', 'input format for --input (csv, json)')
+    .option('--chain-id <id>', 'chain ID to use when building --input')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: OfferRevokeOptions): Promise<void> => {
+      try {
+        const root = await resolveOfferRoot(opts);
+        const { chain, rare } = createWriteBatchClient(opts.chain);
+
+        log(`Revoking batch offer on ${chain}...`);
+        log(`  BatchOfferCreator: ${rare.contracts.batchOfferCreator ?? 'not configured'}`);
+        log(`  Root: ${root}`);
+
+        const result = await rare.batch.offer.revoke({ root });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            batchOfferCreator: result.batchOfferCreator,
+            creator: result.creator,
+            root: result.root,
+            amount: result.amount,
+            currency: result.currency,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Batch offer revoked for root: ${result.root}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createOfferAcceptCommand(): Command {
+  const cmd = new Command('accept');
+  cmd.description('Accept a batch marketplace offer for a proof-backed token');
+
+  cmd
+    .requiredOption('--creator <address>', 'batch offer creator/buyer address')
+    .requiredOption('--proof <path>', 'proof JSON from rare batch tree proof')
+    .option('--root <bytes32>', 'expected Merkle root; defaults to proof root')
+    .requiredOption('--contract <address>', 'token contract address')
+    .requiredOption('--token-id <id>', 'token ID to accept with')
+    .option('--split-recipient <address>', 'seller split recipient; repeat with --split-ratio', collect, [])
+    .option('--split-ratio <percent>', 'seller split ratio percentage; repeat with --split-recipient', collect, [])
+    .option('--no-auto-approve', 'do not auto-approve the NFT transfer')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: OfferAcceptOptions): Promise<void> => {
+      try {
+        const creator = parseAddress(opts.creator, '--creator');
+        const contract = parseAddress(opts.contract, '--contract');
+        const proofInput = await readBatchProofFile(opts.proof);
+        const root = resolveProofRoot(proofInput, opts.root);
+        validateBatchTokenProofInputMatchesTarget(proofInput, {
+          artifact: createRootOnlyArtifact(root),
+          contractAddress: contract,
+          tokenId: opts.tokenId,
+          root,
+          allowRootOverride: opts.root !== undefined,
+        });
+        const splitAddresses = parseSplitRecipients(opts.splitRecipient);
+        const splitRatios = parseSplitRatios(opts.splitRatio);
+        const { chain, rare } = createWriteBatchClient(opts.chain);
+
+        log(`Accepting batch offer on ${chain}...`);
+        log(`  BatchOfferCreator: ${rare.contracts.batchOfferCreator ?? 'not configured'}`);
+        log(`  Creator: ${creator}`);
+        log(`  Root: ${root}`);
+        log(`  Token: ${contract} #${opts.tokenId}`);
+
+        const result = await rare.batch.offer.accept({
+          creator,
+          root,
+          proof: proofInput.proof,
+          contract,
+          tokenId: opts.tokenId,
+          splitAddresses,
+          splitRatios,
+          autoApprove: opts.autoApprove,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            approvalTxHash: result.approvalTxHash ?? null,
+            batchOfferCreator: result.batchOfferCreator,
+            seller: result.seller,
+            buyer: result.buyer,
+            creator: result.creator,
+            contract: result.contract,
+            tokenId: result.tokenId,
+            root: result.root,
+            amount: result.amount,
+            currency: result.currency,
+          },
+          () => {
+            if (result.approvalTxHash !== undefined) {
+              console.log(`Approval tx sent: ${result.approvalTxHash}`);
+            }
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Batch offer accepted for token: ${result.contract} #${result.tokenId}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createOfferStatusCommand(): Command {
+  const cmd = new Command('status');
+  cmd.description('Read batch marketplace offer status');
+
+  cmd
+    .requiredOption('--creator <address>', 'batch offer creator/buyer address')
+    .option('--root <bytes32>', 'batch token Merkle root')
+    .option('--input <path>', 'batch token artifact, CSV, or JSON token list')
+    .option('--format <format>', 'input format for --input (csv, json)')
+    .option('--chain-id <id>', 'chain ID to use when building --input')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: OfferStatusOptions): Promise<void> => {
+      try {
+        const root = await resolveOfferRoot(opts);
+        const creator = parseAddress(opts.creator, '--creator');
+        const { rare } = createReadBatchClient(opts.chain);
+        const result = await rare.batch.offer.getStatus({ creator, root });
+        const expiry = result.expiry > 0n ? new Date(Number(result.expiry) * 1000).toISOString() : 'none';
+
+        output(result, () => {
+          console.log('\nBatch Offer Details:');
+          console.log(`  State:     ${result.state}`);
+          console.log(`  Creator:   ${result.creator}`);
+          console.log(`  Root:      ${result.root}`);
+          console.log(`  Amount:    ${formatEther(result.amount)} ${formatCurrencyLabel(result.currency)}`);
+          console.log(`  Expiry:    ${expiry}`);
+          console.log(`  Fillable:  ${result.fillable ? 'yes' : 'no'}`);
+          console.log(`  Revoked:   ${result.revoked === null ? 'unknown' : result.revoked ? 'yes' : 'no'}`);
+        });
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createAuctionCommand(): Command {
+  const cmd = new Command('auction');
+  cmd.description('Create, cancel, bid, settle, and inspect batch reserve auctions');
+  cmd.addCommand(createAuctionCreateCommand());
+  cmd.addCommand(createAuctionCancelCommand());
+  cmd.addCommand(createAuctionBidCommand());
+  cmd.addCommand(createAuctionSettleCommand());
+  cmd.addCommand(createAuctionStatusCommand());
+  return cmd;
+}
+
+function createAuctionCreateCommand(): Command {
+  const cmd = new Command('create');
+  cmd.description('Create a batch reserve auction from a token Merkle root');
+
+  cmd
+    .option('--root <bytes32>', 'batch token Merkle root')
+    .option('--input <path>', 'batch token artifact, CSV, or JSON token list')
+    .option('--format <format>', 'input format for --input (csv, json)')
+    .option('--chain-id <id>', 'chain ID to use when building --input')
+    .requiredOption('--reserve <amount>', 'reserve amount in ETH or token units')
+    .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
+    .requiredOption('--duration <seconds>', 'auction duration in seconds after reserve is met')
+    .option('--split-recipient <address>', 'seller split recipient; repeat with --split-ratio', collect, [])
+    .option('--split-ratio <percent>', 'seller split ratio percentage; repeat with --split-recipient', collect, [])
+    .option('--no-auto-approve', 'do not auto-approve token contracts from --input')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: AuctionCreateOptions): Promise<void> => {
+      try {
+        const rootInput = await resolveAuctionRootInput(opts);
+        const { chain, rare } = createWriteBatchClient(opts.chain);
+        const currency = opts.currency === undefined ? ETH_ADDRESS : resolveCurrency(opts.currency, chain);
+        const splitAddresses = parseSplitRecipients(opts.splitRecipient);
+        const splitRatios = parseSplitRatios(opts.splitRatio);
+
+        log(`Creating batch auction on ${chain}...`);
+        log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse ?? 'not configured'}`);
+        log(`  Root: ${rootInput.root}`);
+        log(`  Reserve: ${opts.reserve} ${formatCurrencyLabel(currency)}`);
+
+        const result = await rare.batch.auction.create({
+          root: rootInput.root,
+          artifact: rootInput.artifact,
+          reserveAmount: opts.reserve,
+          currency,
+          duration: opts.duration,
+          splitAddresses,
+          splitRatios,
+          autoApprove: opts.autoApprove,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            approvalTxHashes: result.approvalTxHashes,
+            batchAuctionHouse: result.batchAuctionHouse,
+            creator: result.creator,
+            root: result.root,
+            currency: result.currency,
+            reserveAmount: result.reserveAmount,
+            duration: result.duration,
+            nonce: result.nonce,
+          },
+          () => {
+            result.approvalTxHashes.forEach((approvalTxHash) => {
+              console.log(`Approval tx sent: ${approvalTxHash}`);
+            });
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Batch auction created for root: ${result.root}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createAuctionCancelCommand(): Command {
+  const cmd = new Command('cancel');
+  cmd.description('Cancel a batch reserve auction Merkle root');
+
+  cmd
+    .option('--root <bytes32>', 'batch token Merkle root')
+    .option('--input <path>', 'batch token artifact, CSV, or JSON token list')
+    .option('--format <format>', 'input format for --input (csv, json)')
+    .option('--chain-id <id>', 'chain ID to use when building --input')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: AuctionCancelOptions): Promise<void> => {
+      try {
+        const root = await resolveOfferRoot(opts);
+        const { chain, rare } = createWriteBatchClient(opts.chain);
+
+        log(`Cancelling batch auction on ${chain}...`);
+        log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse ?? 'not configured'}`);
+        log(`  Root: ${root}`);
+
+        const result = await rare.batch.auction.cancel({ root });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            batchAuctionHouse: result.batchAuctionHouse,
+            creator: result.creator,
+            root: result.root,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Batch auction cancelled for root: ${result.root}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createAuctionBidCommand(): Command {
+  const cmd = new Command('bid');
+  cmd.description('Bid on a proof-backed batch reserve auction token');
+
+  cmd
+    .requiredOption('--creator <address>', 'batch auction creator/seller address')
+    .requiredOption('--proof <path>', 'proof JSON from rare batch tree proof')
+    .option('--root <bytes32>', 'expected Merkle root; defaults to proof root')
+    .requiredOption('--contract <address>', 'token contract address')
+    .requiredOption('--token-id <id>', 'token ID to bid on')
+    .requiredOption('--amount <amount>', 'bid amount in ETH or token units')
+    .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
+    .option('--no-auto-approve', 'do not auto-approve ERC20 allowance')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: AuctionBidOptions): Promise<void> => {
+      try {
+        const creator = parseAddress(opts.creator, '--creator');
+        const contract = parseAddress(opts.contract, '--contract');
+        const proofInput = await readBatchProofFile(opts.proof);
+        const root = resolveProofRoot(proofInput, opts.root);
+        validateBatchTokenProofInputMatchesTarget(proofInput, {
+          artifact: createRootOnlyArtifact(root),
+          contractAddress: contract,
+          tokenId: opts.tokenId,
+          root,
+          allowRootOverride: opts.root !== undefined,
+        });
+        const { chain, rare } = createWriteBatchClient(opts.chain);
+        const currency = opts.currency === undefined ? ETH_ADDRESS : resolveCurrency(opts.currency, chain);
+
+        log(`Bidding on batch auction token on ${chain}...`);
+        log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse ?? 'not configured'}`);
+        log(`  Creator: ${creator}`);
+        log(`  Root: ${root}`);
+        log(`  Token: ${contract} #${opts.tokenId}`);
+        log(`  Amount: ${opts.amount} ${formatCurrencyLabel(currency)}`);
+
+        const result = await rare.batch.auction.bid({
+          creator,
+          root,
+          proof: proofInput.proof,
+          contract,
+          tokenId: opts.tokenId,
+          currency,
+          amount: opts.amount,
+          autoApprove: opts.autoApprove,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            approvalTxHash: result.approvalTxHash ?? null,
+            batchAuctionHouse: result.batchAuctionHouse,
+            bidder: result.bidder,
+            creator: result.creator,
+            contract: result.contract,
+            tokenId: result.tokenId,
+            root: result.root,
+            currency: result.currency,
+            amount: result.amount,
+            nonce: result.nonce,
+            requiredPayment: result.requiredPayment,
+          },
+          () => {
+            if (result.approvalTxHash !== undefined) {
+              console.log(`Approval tx sent: ${result.approvalTxHash}`);
+            }
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Batch auction bid placed for token: ${result.contract} #${result.tokenId}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createAuctionSettleCommand(): Command {
+  const cmd = new Command('settle');
+  cmd.description('Settle a batch reserve auction token');
+
+  cmd
+    .requiredOption('--contract <address>', 'token contract address')
+    .requiredOption('--token-id <id>', 'token ID to settle')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: AuctionSettleOptions): Promise<void> => {
+      try {
+        const contract = parseAddress(opts.contract, '--contract');
+        const { chain, rare } = createWriteBatchClient(opts.chain);
+
+        log(`Settling batch auction token on ${chain}...`);
+        log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse ?? 'not configured'}`);
+        log(`  Token: ${contract} #${opts.tokenId}`);
+
+        const result = await rare.batch.auction.settle({
+          contract,
+          tokenId: opts.tokenId,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            batchAuctionHouse: result.batchAuctionHouse,
+            seller: result.seller,
+            bidder: result.bidder,
+            contract: result.contract,
+            tokenId: result.tokenId,
+            currency: result.currency,
+            amount: result.amount,
+            marketplaceFee: result.marketplaceFee,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Batch auction settled for token: ${result.contract} #${result.tokenId}`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
+function createAuctionStatusCommand(): Command {
+  const cmd = new Command('status');
+  cmd.description('Read batch reserve auction status');
+
+  cmd
+    .requiredOption('--contract <address>', 'token contract address')
+    .requiredOption('--token-id <id>', 'token ID to inspect')
+    .option('--creator <address>', 'batch auction creator/seller address for root config status')
+    .option('--root <bytes32>', 'batch token Merkle root')
+    .option('--input <path>', 'batch token artifact, CSV, or JSON token list')
+    .option('--proof <path>', 'proof JSON from rare batch tree proof')
+    .option('--format <format>', 'input format for --input (csv, json)')
+    .option('--chain-id <id>', 'chain ID to use when building --input')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .action(async (opts: AuctionStatusOptions): Promise<void> => {
+      try {
+        const contract = parseAddress(opts.contract, '--contract');
+        const rootInput = await resolveOptionalAuctionRootInput(opts);
+        const proofInput = opts.proof === undefined ? undefined : await readBatchProofFile(opts.proof);
+        const root = proofInput === undefined
+          ? rootInput?.root
+          : resolveProofRoot(proofInput, rootInput?.root);
+        if (proofInput !== undefined && root !== undefined) {
+          validateBatchTokenProofInputMatchesTarget(proofInput, {
+            artifact: createRootOnlyArtifact(root),
+            contractAddress: contract,
+            tokenId: opts.tokenId,
+            root,
+            allowRootOverride: opts.root !== undefined || rootInput !== undefined,
+          });
+        }
+        const creator = opts.creator === undefined ? undefined : parseAddress(opts.creator, '--creator');
+        const { rare } = createReadBatchClient(opts.chain);
+        const result = await rare.batch.auction.getStatus({
+          contract,
+          tokenId: opts.tokenId,
+          creator,
+          root,
+          artifact: rootInput?.artifact,
+          proof: proofInput?.proof,
+        });
+        const endTime = result.endTime === null ? 'none' : new Date(Number(result.endTime) * 1000).toISOString();
+        const startTime = result.startingTime === 0n
+          ? 'not started'
+          : new Date(Number(result.startingTime) * 1000).toISOString();
+
+        output(result, () => {
+          console.log('\nBatch Auction Details:');
+          console.log(`  State:       ${result.state}`);
+          console.log(`  Seller:      ${result.seller}`);
+          console.log(`  Root:        ${result.root ?? 'unknown'}`);
+          console.log(`  Reserve:     ${formatEther(result.reserveAmount)} ${formatCurrencyLabel(result.currency)}`);
+          console.log(`  Current bid: ${formatEther(result.currentBid)} ${formatCurrencyLabel(result.currentBidCurrency)}`);
+          console.log(`  Bidder:      ${result.currentBidder ?? 'none'}`);
+          console.log(`  Starts:      ${startTime}`);
+          console.log(`  Ends:        ${endTime}`);
+          console.log(`  Settle:      ${result.settlementEligible ? 'yes' : 'no'}`);
+        });
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
 function parseOptionalAddress(value: string | undefined, field: string): Address | undefined {
   return value === undefined ? undefined : parseAddress(value, field);
 }
@@ -595,6 +1229,53 @@ async function readBatchTreeArtifact(opts: TreeInputOptions): Promise<BatchToken
   });
 }
 
+async function resolveOfferRoot(opts: OfferRootOptions): Promise<Hex> {
+  return (await resolveAuctionRootInput(opts)).root;
+}
+
+async function resolveAuctionRootInput(opts: OfferRootOptions): Promise<AuctionRootInput> {
+  const directRoot = opts.root === undefined ? undefined : normalizeBytes32(opts.root, '--root');
+  if (opts.input === undefined) {
+    if (directRoot === undefined) {
+      throw new Error('Pass --root or --input.');
+    }
+    return { root: directRoot };
+  }
+
+  const artifact = await readBatchTreeArtifact({
+    input: opts.input,
+    format: opts.format,
+    chainId: opts.chainId,
+  });
+  if (directRoot !== undefined && directRoot !== artifact.root) {
+    throw new Error('--root does not match --input artifact root.');
+  }
+
+  return {
+    root: artifact.root,
+    artifact,
+  };
+}
+
+async function resolveOptionalAuctionRootInput(opts: OfferRootOptions): Promise<AuctionRootInput | undefined> {
+  if (opts.root === undefined && opts.input === undefined) {
+    return undefined;
+  }
+
+  return resolveAuctionRootInput(opts);
+}
+
+function resolveProofRoot(proofInput: BatchTokenProofInput, rawRoot: string | undefined): Hex {
+  const root = rawRoot === undefined ? proofInput.root : normalizeBytes32(rawRoot, '--root');
+  if (root === undefined) {
+    throw new Error('Pass --root or a proof artifact with a root field.');
+  }
+  if (proofInput.root !== undefined && proofInput.root !== root) {
+    throw new Error('Proof root does not match --root.');
+  }
+  return root;
+}
+
 async function readBatchProofFile(inputPath: string): Promise<BatchTokenProofInput> {
   const content = await readFile(inputPath, 'utf8');
   return parseBatchTokenProofInput(content);
@@ -608,6 +1289,66 @@ function parseFormatOption(value: string | undefined): BatchTokenListInputFormat
     return value;
   }
   throw new Error('--format must be "csv" or "json".');
+}
+
+function collect(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
+function parseSplitRecipients(values: string[] | undefined): Address[] | undefined {
+  if (values === undefined || values.length === 0) {
+    return undefined;
+  }
+
+  return values.map((value, index) => parseAddress(value, `--split-recipient[${index}]`));
+}
+
+function parseSplitRatios(values: string[] | undefined): number[] | undefined {
+  if (values === undefined || values.length === 0) {
+    return undefined;
+  }
+
+  return values.map((value, index) => {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed)) {
+      throw new Error(`--split-ratio at index ${index} must be an integer.`);
+    }
+    return parsed;
+  });
+}
+
+function createReadBatchClient(chainInput: string | undefined): BatchCommandClient {
+  const chain = getActiveChain(chainInput);
+  const publicClient = getPublicClient(chain);
+  return {
+    chain,
+    rare: createRareClient({ publicClient }),
+  };
+}
+
+function createWriteBatchClient(chainInput: string | undefined): BatchCommandClient {
+  const chain = getActiveChain(chainInput);
+  const { client } = getWalletClient(chain);
+  const publicClient = getPublicClient(chain);
+  return {
+    chain,
+    rare: createRareClient({ publicClient, walletClient: client }),
+  };
+}
+
+function createRootOnlyArtifact(root: Hex): BatchTokenListArtifact {
+  return {
+    version: 1,
+    type: 'rare-batch-token-list',
+    root,
+    count: 0,
+    tokens: [],
+    entries: [],
+  };
+}
+
+function formatCurrencyLabel(currency: Address): string {
+  return isAddressEqual(currency, ETH_ADDRESS) ? 'ETH' : currency;
 }
 
 async function writeJson(path: string, data: unknown): Promise<void> {

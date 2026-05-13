@@ -1,4 +1,4 @@
-import type { Address } from 'viem';
+import { erc721Abi, isAddressEqual, type Address } from 'viem';
 import {
   E2E_TOKEN_URI,
   expectTx,
@@ -62,6 +62,23 @@ export async function mintToken(
   expectTx(result);
   expectToken(result, contract);
   return result;
+}
+
+export async function expectTokenOwner(
+  live: LiveFixture,
+  contract: Address,
+  tokenId: string,
+  expectedOwner: Address,
+): Promise<void> {
+  const owner = await live.publicClient.readContract({
+    address: contract,
+    abi: erc721Abi,
+    functionName: 'ownerOf',
+    args: [BigInt(tokenId)],
+  });
+  if (!isAddressEqual(owner, expectedOwner)) {
+    throw new Error(`Token owner mismatch. Expected ${expectedOwner}, received ${owner}.`);
+  }
 }
 
 function expectToken(result: MintResult, contract: Address): void {

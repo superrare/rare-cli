@@ -13,6 +13,9 @@ import { listingCommand } from './commands/listing.js';
 import { collectionCommand } from './commands/collection.js';
 import { currenciesCommand } from './commands/currencies.js';
 import { swapCommand } from './commands/swap.js';
+import { releaseCommand } from './commands/release.js';
+import { batchCommand } from './commands/batch.js';
+import { mcpCommand } from './commands/mcp.js';
 import { printError } from './errors.js';
 
 const program = new Command();
@@ -37,6 +40,9 @@ program.addCommand(listingCommand());
 program.addCommand(collectionCommand());
 program.addCommand(currenciesCommand());
 program.addCommand(swapCommand());
+program.addCommand(releaseCommand());
+program.addCommand(batchCommand());
+program.addCommand(mcpCommand());
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   printError(err);
