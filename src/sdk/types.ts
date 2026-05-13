@@ -1,4 +1,4 @@
-import type { Address, Hash, PublicClient, TransactionReceipt, WalletClient } from 'viem';
+import type { Address, Hash, Hex, PublicClient, TransactionReceipt, WalletClient } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
 import type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
 import type { LiquidFactoryConfig } from '../liquid/factory-config.js';
@@ -6,6 +6,13 @@ import type {
   LazySovereignCollectionContractType,
   SovereignCollectionContractType,
 } from './collection-core.js';
+import type {
+  BatchTokenListArtifact,
+  BatchTokenProofArtifact,
+  BatchTokenProofParams,
+  BatchTokenProofVerifyParams,
+  BuildBatchTokenTreeParams,
+} from './batch-core.js';
 import type {
   CollectionSearchParams,
   ImportErc721Params,
@@ -342,6 +349,163 @@ export type OfferStatus = {
   canCancel: boolean | null;
 }
 
+export type CollectionMarketOfferCreateParams = {
+  originCollection: Address;
+  currency?: Address;
+  amount: AmountInput;
+  autoApprove?: boolean;
+}
+
+export type CollectionMarketOfferCreateResult = {
+  collectionMarket: Address;
+  buyer: Address;
+  originCollection: Address;
+  currency: Address;
+  amount: bigint;
+  requiredPayment: bigint;
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type CollectionMarketOfferCancelParams = {
+  originCollection: Address;
+}
+
+export type CollectionMarketOfferCancelResult = {
+  collectionMarket: Address;
+  buyer: Address;
+  originCollection: Address;
+  hadOffer: boolean;
+  currency: Address;
+  amount: bigint;
+} & TransactionResult
+
+export type CollectionMarketOfferAcceptParams = {
+  buyer: Address;
+  originCollection: Address;
+  tokenId: IntegerInput;
+  currency?: Address;
+  amount: AmountInput;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+  autoApprove?: boolean;
+}
+
+export type CollectionMarketOfferAcceptResult = {
+  collectionMarket: Address;
+  seller: Address;
+  buyer: Address;
+  originCollection: Address;
+  tokenId: bigint;
+  currency: Address;
+  amount: bigint;
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type CollectionMarketOfferStatusParams = {
+  buyer: Address;
+  originCollection: Address;
+  tokenId?: IntegerInput;
+  account?: Address;
+}
+
+export type CollectionMarketOfferStatus = {
+  buyer: Address;
+  originCollection: Address;
+  amount: bigint;
+  currency: Address;
+  marketplaceFee: bigint;
+  requiredPayment: bigint;
+  hasOffer: boolean;
+  state: 'NONE' | 'ACTIVE';
+  isEth: boolean;
+  expiry: null;
+  currentWallet?: Address;
+  tokenId?: bigint;
+  tokenOwner?: Address;
+  canCancel: boolean;
+  canAccept: boolean;
+}
+
+export type CollectionMarketListingSetParams = {
+  originCollection: Address;
+  currency?: Address;
+  amount: AmountInput;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+  autoApprove?: boolean;
+}
+
+export type CollectionMarketListingSetResult = {
+  collectionMarket: Address;
+  seller: Address;
+  originCollection: Address;
+  currency: Address;
+  amount: bigint;
+  splitRecipients: Address[];
+  splitRatios: number[];
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type CollectionMarketListingCancelParams = {
+  originCollection: Address;
+}
+
+export type CollectionMarketListingCancelResult = {
+  collectionMarket: Address;
+  seller: Address;
+  originCollection: Address;
+  hadListing: boolean;
+  currency: Address;
+  amount: bigint;
+} & TransactionResult
+
+export type CollectionMarketListingBuyParams = {
+  originCollection: Address;
+  seller: Address;
+  tokenId: IntegerInput;
+  currency?: Address;
+  amount: AmountInput;
+  autoApprove?: boolean;
+}
+
+export type CollectionMarketListingBuyResult = {
+  collectionMarket: Address;
+  seller: Address;
+  buyer: Address;
+  originCollection: Address;
+  tokenId: bigint;
+  currency: Address;
+  amount: bigint;
+  requiredPayment: bigint;
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type CollectionMarketListingStatusParams = {
+  originCollection: Address;
+  seller: Address;
+  tokenId?: IntegerInput;
+  account?: Address;
+}
+
+export type CollectionMarketListingStatus = {
+  seller: Address;
+  originCollection: Address;
+  amount: bigint;
+  currency: Address;
+  splitRecipients: Address[];
+  splitRatios: number[];
+  marketplaceFee: bigint;
+  requiredPayment: bigint;
+  hasListing: boolean;
+  state: 'NONE' | 'ACTIVE';
+  isEth: boolean;
+  currentWallet?: Address;
+  tokenId?: bigint;
+  tokenOwner?: Address;
+  canCancel: boolean;
+  canBuy: boolean;
+}
+
 export type ListingCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
@@ -614,6 +778,197 @@ export type ReleaseStatus = {
   now: bigint;
 }
 
+export type BatchOfferCreateParams = {
+  root?: Hex;
+  artifact?: BatchTokenListArtifact;
+  amount: AmountInput;
+  currency?: Address;
+  expiry: IntegerInput;
+}
+
+export type BatchOfferCreateResult = {
+  batchOfferCreator: Address;
+  creator: Address;
+  root: Hex;
+  amount: bigint;
+  currency: Address;
+  expiry: bigint;
+  requiredPayment: bigint;
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type BatchOfferRevokeParams = {
+  root?: Hex;
+  artifact?: BatchTokenListArtifact;
+}
+
+export type BatchOfferRevokeResult = {
+  batchOfferCreator: Address;
+  creator: Address;
+  root: Hex;
+  amount: bigint;
+  currency: Address;
+} & TransactionResult
+
+export type BatchOfferAcceptParams = {
+  creator: Address;
+  root?: Hex;
+  proof?: readonly Hex[];
+  proofArtifact?: BatchTokenProofArtifact;
+  contract: Address;
+  tokenId: IntegerInput;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+  autoApprove?: boolean;
+}
+
+export type BatchOfferAcceptResult = {
+  batchOfferCreator: Address;
+  seller: Address;
+  buyer: Address;
+  creator: Address;
+  contract: Address;
+  tokenId: bigint;
+  root: Hex;
+  currency: Address;
+  amount: bigint;
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type BatchOfferStatusParams = {
+  creator: Address;
+  root?: Hex;
+  artifact?: BatchTokenListArtifact;
+}
+
+export type BatchOfferStatus = {
+  creator: Address;
+  root: Hex;
+  amount: bigint;
+  currency: Address;
+  expiry: bigint;
+  feePercentage: bigint;
+  hasOffer: boolean;
+  expired: boolean;
+  revoked: boolean | null;
+  fillable: boolean;
+  state: 'NONE' | 'ACTIVE' | 'EXPIRED';
+  isEth: boolean;
+}
+
+export type BatchAuctionCreateParams = {
+  root?: Hex;
+  artifact?: BatchTokenListArtifact;
+  reserveAmount: AmountInput;
+  currency?: Address;
+  duration: IntegerInput;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+  autoApprove?: boolean;
+}
+
+export type BatchAuctionCreateResult = {
+  batchAuctionHouse: Address;
+  creator: Address;
+  root: Hex;
+  currency: Address;
+  reserveAmount: bigint;
+  duration: bigint;
+  nonce: number;
+  approvalTxHashes: Hash[];
+} & TransactionResult
+
+export type BatchAuctionCancelParams = {
+  root?: Hex;
+  artifact?: BatchTokenListArtifact;
+}
+
+export type BatchAuctionCancelResult = {
+  batchAuctionHouse: Address;
+  creator: Address;
+  root: Hex;
+} & TransactionResult
+
+export type BatchAuctionBidParams = {
+  creator: Address;
+  root?: Hex;
+  proof?: readonly Hex[];
+  proofArtifact?: BatchTokenProofArtifact;
+  contract: Address;
+  tokenId: IntegerInput;
+  currency?: Address;
+  amount: AmountInput;
+  autoApprove?: boolean;
+}
+
+export type BatchAuctionBidResult = {
+  batchAuctionHouse: Address;
+  bidder: Address;
+  creator: Address;
+  contract: Address;
+  tokenId: bigint;
+  root: Hex;
+  currency: Address;
+  amount: bigint;
+  nonce: number;
+  requiredPayment: bigint;
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type BatchAuctionSettleParams = {
+  contract: Address;
+  tokenId: IntegerInput;
+}
+
+export type BatchAuctionSettleResult = {
+  batchAuctionHouse: Address;
+  seller: Address;
+  bidder: Address;
+  contract: Address;
+  tokenId: bigint;
+  currency: Address;
+  amount: bigint;
+  marketplaceFee: number;
+} & TransactionResult
+
+export type BatchAuctionStatusParams = {
+  contract: Address;
+  tokenId: IntegerInput;
+  creator?: Address;
+  root?: Hex;
+  artifact?: BatchTokenListArtifact;
+  proof?: readonly Hex[];
+  proofArtifact?: BatchTokenProofArtifact;
+}
+
+export type BatchAuctionStatus = {
+  seller: Address;
+  root: Hex | null;
+  currency: Address;
+  reserveAmount: bigint;
+  duration: bigint;
+  creationBlock: bigint;
+  startingTime: bigint;
+  endTime: bigint | null;
+  splitAddresses: Address[];
+  splitRatios: number[];
+  hasRootConfig: boolean;
+  rootNonce: number | null;
+  tokenNonce: number | null;
+  tokenNonceConsumed: boolean | null;
+  hasAuction: boolean;
+  started: boolean;
+  ended: boolean;
+  settlementEligible: boolean;
+  currentBidder: Address | null;
+  currentBid: bigint;
+  currentBidCurrency: Address;
+  currentBidMarketplaceFee: number;
+  minimumNextBid: bigint;
+  state: 'NONE' | 'CONFIGURED' | 'RESERVE_NOT_MET' | 'ACTIVE' | 'ENDED' | 'USED';
+  isEth: boolean;
+}
+
 export type TokenContractInfo = {
   contract: Address;
   chain: SupportedChain;
@@ -813,6 +1168,9 @@ export type RareClient = {
     rareMinter?: Address;
     lazyBatchMintFactory?: Address;
     batchListing?: Address;
+    collectionMarket?: Address;
+    batchOfferCreator?: Address;
+    batchAuctionHouse?: Address;
     marketplaceSettings?: Address;
     erc20ApprovalManager?: Address;
     erc721ApprovalManager?: Address;
@@ -857,6 +1215,20 @@ export type RareClient = {
     accept: (params: OfferAcceptParams) => Promise<TransactionResult>;
     getStatus: (params: OfferStatusParams) => Promise<OfferStatus>;
   };
+  collectionMarket: {
+    offer: {
+      create: (params: CollectionMarketOfferCreateParams) => Promise<CollectionMarketOfferCreateResult>;
+      cancel: (params: CollectionMarketOfferCancelParams) => Promise<CollectionMarketOfferCancelResult>;
+      accept: (params: CollectionMarketOfferAcceptParams) => Promise<CollectionMarketOfferAcceptResult>;
+      getStatus: (params: CollectionMarketOfferStatusParams) => Promise<CollectionMarketOfferStatus>;
+    };
+    listing: {
+      set: (params: CollectionMarketListingSetParams) => Promise<CollectionMarketListingSetResult>;
+      cancel: (params: CollectionMarketListingCancelParams) => Promise<CollectionMarketListingCancelResult>;
+      buy: (params: CollectionMarketListingBuyParams) => Promise<CollectionMarketListingBuyResult>;
+      getStatus: (params: CollectionMarketListingStatusParams) => Promise<CollectionMarketListingStatus>;
+    };
+  };
   listing: ListingNamespace;
   batchListing: {
     create: (params: BatchListingCreateParams) => Promise<BatchListingCreateResult>;
@@ -864,6 +1236,24 @@ export type RareClient = {
     buy: (params: BatchListingBuyParams) => Promise<TransactionResult>;
     setAllowList: (params: BatchListingSetAllowListParams) => Promise<TransactionResult>;
     getStatus: (params: BatchListingStatusParams) => Promise<BatchListingStatus>;
+  };
+  batch: {
+    buildTree: (params: BuildBatchTokenTreeParams) => BatchTokenListArtifact;
+    getTreeProof: (params: BatchTokenProofParams) => BatchTokenProofArtifact;
+    verifyTreeProof: (params: BatchTokenProofVerifyParams) => boolean;
+    offer: {
+      create: (params: BatchOfferCreateParams) => Promise<BatchOfferCreateResult>;
+      revoke: (params: BatchOfferRevokeParams) => Promise<BatchOfferRevokeResult>;
+      accept: (params: BatchOfferAcceptParams) => Promise<BatchOfferAcceptResult>;
+      getStatus: (params: BatchOfferStatusParams) => Promise<BatchOfferStatus>;
+    };
+    auction: {
+      create: (params: BatchAuctionCreateParams) => Promise<BatchAuctionCreateResult>;
+      cancel: (params: BatchAuctionCancelParams) => Promise<BatchAuctionCancelResult>;
+      bid: (params: BatchAuctionBidParams) => Promise<BatchAuctionBidResult>;
+      settle: (params: BatchAuctionSettleParams) => Promise<BatchAuctionSettleResult>;
+      getStatus: (params: BatchAuctionStatusParams) => Promise<BatchAuctionStatus>;
+    };
   };
   search: {
     nfts: (params?: NftSearchParams) => Promise<SearchPageResponse<Nft>>;

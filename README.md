@@ -136,6 +136,16 @@ rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token
 rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token-count 100 --minter 0x...
 ```
 
+Build batch marketplace token-list Merkle artifacts for later batch offer, batch listing, and batch auction flows. CSV files should include contract and token ID columns such as `contract_address,token_id`; JSON files can be an array of `{ "contractAddress": "0x...", "tokenId": "1" }` objects or a generated artifact. Pass `--chain-id` or include a `chain_id` column when the artifact should carry chain context.
+
+```bash
+rare batch tree build --input batch-tokens.csv --chain-id 11155111 --output batch-token-artifact.json
+rare batch tree proof --input batch-token-artifact.json --contract 0x... --token-id 1 --output proof.json
+rare batch tree verify --input batch-token-artifact.json --contract 0x... --token-id 1 --proof proof.json
+```
+
+Batch token artifacts use `type: "rare-batch-token-list"` and include `root`, `count`, optional `chainId`, canonical sorted `tokens`, and per-token `entries` with leaves and proofs. Proof artifacts use `type: "rare-batch-token-proof"` and include `root`, `contractAddress`, `tokenId`, optional `chainId`, `leaf`, `proof`, and `valid`.
+
 Inspect creator and royalty data on Sovereign-style collections:
 
 ```bash
@@ -178,7 +188,7 @@ rare import erc721 --contract 0x... --chain sepolia
 Upload local media to IPFS and mint in one step:
 
 ```bash
-rare mint \
+rare collection mint \
   --contract 0x... \
   --name "My NFT" \
   --description "A description" \
@@ -188,13 +198,13 @@ rare mint \
 Or mint with a pre-built metadata URI:
 
 ```bash
-rare mint --contract 0x... --token-uri ipfs://Qm...
+rare collection mint --contract 0x... --token-uri ipfs://Qm...
 ```
 
 Additional options:
 
 ```bash
-rare mint \
+rare collection mint \
   --contract 0x... \
   --name "My NFT" \
   --description "A cool piece" \
@@ -211,13 +221,13 @@ rare mint \
 After creating and preparing a lazy collection, configure its RareMinter direct sale:
 
 ```bash
-rare listing release configure \
+rare listing lazy-sale configure \
   --contract 0x... \
   --price 0.1 \
   --max-mints 5
 
 # Optional payout splits. If omitted, 100% goes to the configured wallet.
-rare listing release configure \
+rare listing lazy-sale configure \
   --contract 0x... \
   --price 100 \
   --currency rare \
@@ -227,23 +237,23 @@ rare listing release configure \
   --split 0x...collaborator=20
 
 # Check release status (read-only)
-rare listing release status --contract 0x...
+rare listing lazy-sale status --contract 0x...
 
 # Include account-specific mint and transaction usage
-rare listing release status --contract 0x... --account 0x...
+rare listing lazy-sale status --contract 0x... --account 0x...
 
 # Mint from the configured direct sale release
-rare listing release mint \
+rare listing lazy-sale mint \
   --contract 0x... \
   --quantity 1
 
 # Mint during an active allowlist window with a proof file
-rare listing release allowlist proof \
+rare listing lazy-sale allowlist proof \
   --input ./allowlist-artifact.json \
   --account 0x... \
   --output ./proof.json
 
-rare listing release mint \
+rare listing lazy-sale mint \
   --contract 0x... \
   --quantity 2 \
   --proof ./proof.json
@@ -258,7 +268,7 @@ Release minting uses `RareMinter.mintDirectSale`; the contract mints to the conn
 Allowlists are two-step. First, build a reusable proof artifact from creator-provided wallet input. CSV files can put wallet addresses in the first column or use an `address`/`wallet` header. JSON files can be an array of address strings, an array of objects with `address` or `wallet`, or an object with `wallets`/`addresses`.
 
 ```bash
-rare listing release allowlist build \
+rare listing lazy-sale allowlist build \
   --input ./allowlist.csv \
   --output ./allowlist-artifact.json
 ```
@@ -266,36 +276,36 @@ rare listing release allowlist build \
 The artifact contains the Merkle root plus one proof per wallet. Configure the release with that root and the allowlist end time:
 
 ```bash
-rare listing release allowlist set \
+rare listing lazy-sale allowlist set \
   --contract 0x... \
   --input ./allowlist-artifact.json \
   --end-timestamp 2026-06-01T16:00:00Z
 
 # Or set a known root directly
-rare listing release allowlist set \
+rare listing lazy-sale allowlist set \
   --contract 0x... \
   --root 0x... \
   --end-timestamp 1767283200
 
 # Read a reusable proof for an account
-rare listing release allowlist proof \
+rare listing lazy-sale allowlist proof \
   --input ./allowlist-artifact.json \
   --account 0x...
 ```
 
-Rare listing release minting checks the configured on-chain root while the allowlist window is active. The proof artifact is the portable file that maps each wallet to the proof needed by a mint client or service. Keep the artifact alongside release operations; the chain stores only the root and end timestamp.
+Rare listing lazy-sale minting checks the configured on-chain root while the allowlist window is active. The proof artifact is the portable file that maps each wallet to the proof needed by a mint client or service. Keep the artifact alongside release operations; the chain stores only the root and end timestamp.
 
 Creator-facing RareMinter limits are configured separately and verified after each write:
 
 ```bash
 # Per-wallet token count across the release; 0 disables it.
-rare listing release limits set-mint --contract 0x... --limit 2
+rare listing lazy-sale limits set-mint --contract 0x... --limit 2
 
 # Per-wallet mint transaction count; 0 disables it.
-rare listing release limits set-tx --contract 0x... --limit 1
+rare listing lazy-sale limits set-tx --contract 0x... --limit 1
 
 # Minimum seller staking requirement in RARE; 0 disables it.
-rare listing release staking set-minimum \
+rare listing lazy-sale staking set-minimum \
   --contract 0x... \
   --minimum 100 \
   --end-timestamp 2026-06-01T16:00:00Z
@@ -640,6 +650,30 @@ const prepared = await rare.collection.prepareLazyMint({
 console.log(prepared.tokenCount);
 ```
 
+### Build batch marketplace token trees
+
+```ts
+const tree = rare.batch.buildTree({
+  content: 'contract_address,token_id,chain_id\n0x1111111111111111111111111111111111111111,1,11155111\n',
+  format: 'csv',
+});
+
+const tokenProof = rare.batch.getTreeProof({
+  artifact: tree,
+  contractAddress: '0x1111111111111111111111111111111111111111',
+  tokenId: 1,
+});
+
+const proofValid = rare.batch.verifyTreeProof({
+  root: tree.root,
+  contractAddress: tokenProof.contractAddress,
+  tokenId: tokenProof.tokenId,
+  proof: tokenProof.proof,
+});
+
+console.log(tree.root, tokenProof.proof, proofValid);
+```
+
 ### Inspect and maintain collection owner settings
 
 ```ts
@@ -705,12 +739,12 @@ rare configure --show
 
 ## Contract Addresses
 
-| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Space Factory | Auction | RareMinter | Batch Listing |
-|---|---|---|---|---|---|---|---|
-| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | — | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` | `0xd28Dc0B89104d7BBd902F338a0193fF063617ccE` | `0xF2bE72d4343beD375Cb6d0E799a3c003163860e0` |
-| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x3b2d699110aa1788b2b1cae336e0ba8ff942a390` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` | `0x5fa112EFeD8297bec0010b312208d223E0cE891E` | `0x6a190885A806D39A0A8C348bfA1ac762D72E608d` |
-| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | — | — | — | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` | — | — |
-| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | — | — | — | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` | — | — |
+| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Space Factory | Auction | RareMinter | Batch Listing | BatchOfferCreator |
+|---|---|---|---|---|---|---|---|---|
+| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | — | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` | `0xd28Dc0B89104d7BBd902F338a0193fF063617ccE` | `0xF2bE72d4343beD375Cb6d0E799a3c003163860e0` | `0x371cca54ef859bb0c7b910581a528ee47773fd56` |
+| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x3b2d699110aa1788b2b1cae336e0ba8ff942a390` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` | `0x5fa112EFeD8297bec0010b312208d223E0cE891E` | `0x6a190885A806D39A0A8C348bfA1ac762D72E608d` | `0xe15cf80b25272ade261532efdb7912f9104851d4` |
+| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | — | — | — | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` | — | — | — |
+| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | — | — | — | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` | — | — | — |
 
 ## Underlying Solidity Contracts
 

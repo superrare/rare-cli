@@ -13,6 +13,7 @@ import {
 } from '../sdk/collection-core.js';
 import { printError } from '../errors.js';
 import { output, log } from '../output.js';
+import { mintCommand } from './mint.js';
 
 type LazyBatchMintOptions = {
   maxTokens?: string;
@@ -200,7 +201,7 @@ function createSovereignCollectionCommand(): Command {
 
 function createLazySovereignCollectionCommand(): Command {
   const cmd = new Command('lazy-sovereign');
-  cmd.description('Create a Lazy Sovereign NFT collection for release minting');
+  cmd.description('Create a Lazy Sovereign NFT collection for lazy-sale minting');
 
   cmd
     .argument('<name>', 'name of the NFT collection')
@@ -843,6 +844,7 @@ export function collectionCommand(): Command {
   const cmd = new Command('collection');
   cmd.description('Create and manage NFT collections');
   cmd.addCommand(createCollectionCreateCommand());
+  cmd.addCommand(mintCommand());
   cmd.addCommand(createMintBatchCommand());
   cmd.addCommand(createPrepareLazyMintCommand());
   cmd.addCommand(createTokenCreatorCommand());

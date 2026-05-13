@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import { configureCommand } from './commands/configure.js';
 import { deployCommand } from './commands/deploy.js';
-import { mintCommand } from './commands/mint.js';
 import { auctionCommand } from './commands/auction.js';
 import { statusCommand } from './commands/status.js';
 import { walletCommand } from './commands/wallet.js';
@@ -13,6 +12,7 @@ import { listingCommand } from './commands/listing.js';
 import { collectionCommand } from './commands/collection.js';
 import { currenciesCommand } from './commands/currencies.js';
 import { swapCommand } from './commands/swap.js';
+import { batchCommand } from './commands/batch.js';
 import { printError } from './errors.js';
 
 const program = new Command();
@@ -25,7 +25,6 @@ program
 
 program.addCommand(configureCommand());
 program.addCommand(deployCommand());
-program.addCommand(mintCommand());
 program.addCommand(auctionCommand());
 program.addCommand(statusCommand());
 program.addCommand(walletCommand());
@@ -37,6 +36,7 @@ program.addCommand(listingCommand());
 program.addCommand(collectionCommand());
 program.addCommand(currenciesCommand());
 program.addCommand(swapCommand());
+program.addCommand(batchCommand());
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   printError(err);

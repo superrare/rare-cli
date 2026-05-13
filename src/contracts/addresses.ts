@@ -49,6 +49,9 @@ export type ContractAddresses = {
   rareMinter?: Address;
   lazyBatchMintFactory?: Address;
   batchListing?: Address;
+  collectionMarket?: Address;
+  batchOfferCreator?: Address;
+  batchAuctionHouse?: Address;
   marketplaceSettings?: Address;
   erc20ApprovalManager?: Address;
   erc721ApprovalManager?: Address;
@@ -71,6 +74,8 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
     rareMinter: getAddress('0xd28Dc0B89104d7BBd902F338a0193fF063617ccE'),
     lazyBatchMintFactory: getAddress('0xE5efBA88D556aDA98124654fE505465b8d494858'),
     batchListing: getAddress('0xF2bE72d4343beD375Cb6d0E799a3c003163860e0'),
+    batchOfferCreator: getAddress('0x371cca54ef859bb0c7b910581a528ee47773fd56'),
+    batchAuctionHouse: getAddress('0x293AE7701A7830B1d38A7608EdF86A106d9E2645'),
     marketplaceSettings: getAddress('0x972dEe8fa339ad2D9c6cbDA31b67f98Fac242d13'),
     erc20ApprovalManager: getAddress('0x4619eB29e84392CE91C27FC936A5c94d1D14b93f'),
     erc721ApprovalManager: getAddress('0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E'),
@@ -87,6 +92,8 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
     rareMinter: getAddress('0x5fa112EFeD8297bec0010b312208d223E0cE891E'),
     lazyBatchMintFactory: getAddress('0x40F9E4b420D5A8fF5aED32B5F72A37013c0739B6'),
     batchListing: getAddress('0x6a190885A806D39A0A8C348bfA1ac762D72E608d'),
+    batchOfferCreator: getAddress('0xe15cf80b25272ade261532efdb7912f9104851d4'),
+    batchAuctionHouse: getAddress('0x71742c7196f1c334C4c038ce6dcDcEE98097F9Da'),
     marketplaceSettings: getAddress('0x61DBF87164d33FD3695256DC8Ba74D3B1d304170'),
     erc20ApprovalManager: getAddress('0xa837a7eAff154Ab837617Cf7250648D3Ec0A4436'),
     erc721ApprovalManager: getAddress('0x4bb0Deea6d1A30C601338aAB776d394C2AE5c0F8'),
@@ -97,10 +104,12 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
   base: {
     factory: getAddress('0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd'),
     auction: getAddress('0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2'),
+    batchAuctionHouse: getAddress('0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd'),
   },
   'base-sepolia': {
     factory: getAddress('0x2b181ae0f1aea6fed75591b04991b1a3f9868d51'),
     auction: getAddress('0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2'),
+    batchAuctionHouse: getAddress('0x2b181ae0f1aea6fed75591b04991b1a3f9868d51'),
   },
 };
 

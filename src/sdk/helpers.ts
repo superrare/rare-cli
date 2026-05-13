@@ -42,6 +42,13 @@ export const marketplaceSettingsAbi = [
     stateMutability: 'view',
     type: 'function',
   },
+  {
+    inputs: [],
+    name: 'getMarketplaceFeePercentage',
+    outputs: [{ name: '', type: 'uint8' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
 ] as const;
 
 /**
@@ -376,21 +383,51 @@ export async function preparePaymentForSpender(opts: {
   requiredAmount: bigint;
   approvalTxHash?: Hash;
 }> {
+  const requiredAmount = await calculateMarketplacePaymentAmount(
+    opts.publicClient,
+    opts.marketplaceSettingsSource,
+    opts.amount,
+  );
+
+  return preparePaymentAmountForSpender({
+    publicClient: opts.publicClient,
+    walletClient: opts.walletClient,
+    account: opts.account,
+    accountAddress: opts.accountAddress,
+    spenderAddress: opts.spenderAddress,
+    currency: opts.currency,
+    requiredAmount,
+    autoApprove: opts.autoApprove,
+  });
+}
+
+export async function preparePaymentAmountForSpender(opts: {
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  account: Address | WalletAccount;
+  accountAddress: Address;
+  spenderAddress: Address;
+  currency: Address;
+  requiredAmount: bigint;
+  autoApprove?: boolean;
+}): Promise<{
+  value: bigint;
+  requiredAmount: bigint;
+  approvalTxHash?: Hash;
+}> {
   const {
     publicClient,
     walletClient,
     account,
     accountAddress,
-    marketplaceSettingsSource,
     spenderAddress,
     currency,
-    amount,
+    requiredAmount,
   } = opts;
   const isEth = currency === ETH_ADDRESS;
   const autoApprove = opts.autoApprove ?? true;
-  const requiredAmount = await calculateMarketplacePaymentAmount(publicClient, marketplaceSettingsSource, amount);
 
-  if (amount === 0n) {
+  if (requiredAmount === 0n) {
     return {
       value: 0n,
       requiredAmount,
@@ -449,8 +486,20 @@ export async function calculateMarketplacePaymentAmount(
     abi: auctionAbi,
     functionName: 'marketplaceSettings',
   });
+  return calculateMarketplacePaymentAmountFromSettings(publicClient, settingsAddress, amount);
+}
+
+export async function calculateMarketplacePaymentAmountFromSettings(
+  publicClient: PublicClient,
+  marketplaceSettings: Address,
+  amount: bigint,
+): Promise<bigint> {
+  if (amount === 0n) {
+    return 0n;
+  }
+
   const fee = await publicClient.readContract({
-    address: settingsAddress,
+    address: marketplaceSettings,
     abi: marketplaceSettingsAbi,
     functionName: 'calculateMarketplaceFee',
     args: [amount],

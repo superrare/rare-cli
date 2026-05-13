@@ -3,9 +3,14 @@ import { basename } from 'node:path';
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import type { NftAttribute, NftMediaEntry } from '../sdk/api.js';
+import { pinMetadata, uploadMedia, type NftMediaEntry } from '../sdk/api.js';
 import { createRareClient } from '../sdk/client.js';
-import type { RareClient } from '../sdk/types.js';
+import {
+  buildMintPinMetadataParams,
+  planMintTokenUri,
+  type MintGeneratedMetadataPlan,
+  type MintMetadataUploadRole,
+} from '../sdk/mint-core.js';
 import { parseAddress, parseOptionalAddress } from '../sdk/validation.js';
 import { printError } from '../errors.js';
 import { output, log } from '../output.js';
@@ -23,29 +28,6 @@ type MintOptions = {
   royaltyReceiver?: string;
   chain?: string;
 };
-
-function parseAttribute(raw: string): NftAttribute {
-  if (raw.startsWith('{')) {
-    const parsed: unknown = JSON.parse(raw);
-    if (!isNftAttribute(parsed)) {
-      throw new Error(`Attribute JSON must include "value": ${raw}`);
-    }
-    return parsed;
-  }
-
-  const eqIndex = raw.indexOf('=');
-  if (eqIndex === -1) {
-    return { trait_type: 'value', value: raw };
-  }
-
-  const trait_type = raw.slice(0, eqIndex);
-  const rawValue = raw.slice(eqIndex + 1);
-
-  const numValue = Number(rawValue);
-  const value = rawValue.length > 0 && !Number.isNaN(numValue) ? numValue : rawValue;
-
-  return { trait_type, value };
-}
 
 export function mintCommand(): Command {
   const cmd = new Command('mint');
@@ -65,10 +47,21 @@ export function mintCommand(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts: MintOptions): Promise<void> => {
       try {
+        const tokenUriPlan = planMintTokenUri({
+          tokenUri: opts.tokenUri,
+          name: opts.name,
+          description: opts.description,
+          image: opts.image,
+          video: opts.video,
+          tags: opts.tag,
+          attributes: opts.attribute,
+        });
+        const tokenUri = tokenUriPlan.mode === 'provided'
+          ? tokenUriPlan.tokenUri
+          : await uploadAndPinMetadata(tokenUriPlan.metadata);
+
         const chain = getActiveChain(opts.chain);
         const publicClient = getPublicClient(chain);
-        const mediaClient = createRareClient({ publicClient });
-        const tokenUri = await resolveTokenUri(mediaClient, opts);
         const { client, account } = getWalletClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
         const contractAddress = parseAddress(opts.contract, '--contract');
@@ -114,85 +107,36 @@ export function mintCommand(): Command {
   return cmd;
 }
 
-async function resolveTokenUri(rare: RareClient, opts: MintOptions): Promise<string> {
-  if (opts.tokenUri) {
-    return opts.tokenUri;
+async function uploadAndPinMetadata(plan: MintGeneratedMetadataPlan): Promise<string> {
+  const imageUpload = plan.uploads.find((upload) => upload.role === 'image');
+  if (imageUpload === undefined) {
+    throw new Error('Image upload was not planned.');
   }
 
-  const { name, description, image } = requireMetadataOptions(opts);
-  const imageMedia = await uploadFileMedia(rare, image, 'image');
-  const videoMedia = opts.video ? await uploadFileMedia(rare, opts.video, 'video') : undefined;
-  const tags = opts.tag.length > 0 ? opts.tag : undefined;
-  const attributes = opts.attribute.length > 0 ? opts.attribute.map(parseAttribute) : undefined;
+  const videoUpload = plan.uploads.find((upload) => upload.role === 'video');
+  const image = await uploadMetadataMedia(imageUpload);
+  const video = videoUpload === undefined ? undefined : await uploadMetadataMedia(videoUpload);
 
-  return rare.media.pinMetadata({
-    name,
-    description,
-    image: imageMedia,
-    video: videoMedia,
-    tags,
-    attributes,
-  });
+  return pinMetadata(buildMintPinMetadataParams(plan, {
+    image,
+    video,
+  }));
 }
 
-function requireMetadataOptions(opts: MintOptions): { name: string; description: string; image: string } {
-  if (!opts.name) {
-    throw new Error('--name is required when not using --token-uri');
-  }
-  if (!opts.description) {
-    throw new Error('--description is required when not using --token-uri');
-  }
-  if (!opts.image) {
-    throw new Error('--image is required when not using --token-uri');
-  }
-
-  return { name: opts.name, description: opts.description, image: opts.image };
-}
-
-async function uploadFileMedia(
-  rare: RareClient,
-  filePath: string,
-  label: 'image' | 'video',
-): Promise<NftMediaEntry> {
-  const fileBuffer = await readFileOrThrow(filePath, label);
-  const filename = basename(filePath);
-
-  log(`Uploading ${label}: ${filename} (${fileBuffer.byteLength} bytes)`);
-  const media = await rare.media.upload(new Uint8Array(fileBuffer), filename);
-  const labelCapitalized = `${label.charAt(0).toUpperCase()}${label.slice(1)}`;
-  log(`  ${labelCapitalized} uploaded: ${media.url}`);
-
+async function uploadMetadataMedia(upload: { role: MintMetadataUploadRole; path: string }): Promise<NftMediaEntry> {
+  const buffer = await readFileOrThrow(upload.path, upload.role);
+  const filename = basename(upload.path);
+  const label = upload.role === 'image' ? 'Image' : 'Video';
+  log(`Uploading ${upload.role}: ${filename} (${buffer.byteLength} bytes)`);
+  const media = await uploadMedia(new Uint8Array(buffer), filename);
+  log(`  ${label} uploaded: ${media.url}`);
   return media;
 }
 
-async function readFileOrThrow(filePath: string, label: string): Promise<Buffer> {
+async function readFileOrThrow(path: string, role: MintMetadataUploadRole): Promise<Buffer> {
   try {
-    return await readFile(filePath);
+    return await readFile(path);
   } catch {
-    throw new Error(`Could not read ${label} file: ${filePath}`);
+    throw new Error(`Could not read ${role} file: ${path}`);
   }
-}
-
-function isNftAttribute(value: unknown): value is NftAttribute {
-  if (!isRecord(value) || !isAttributeValue(value.value)) {
-    return false;
-  }
-
-  return (
-    typeof value.trait_type === 'string' &&
-    (value.display_type === undefined || isDisplayType(value.display_type)) &&
-    (value.max_value === undefined || typeof value.max_value === 'number')
-  );
-}
-
-function isAttributeValue(value: unknown): value is NftAttribute['value'] {
-  return typeof value === 'string' || typeof value === 'number';
-}
-
-function isDisplayType(value: unknown): value is NonNullable<NftAttribute['display_type']> {
-  return value === 'number' || value === 'boost_number' || value === 'boost_percentage' || value === 'date';
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
