@@ -467,6 +467,33 @@ export type ReleaseConfigureResult = {
   splitRatios: number[];
 } & TransactionResult
 
+export type ReleaseMintDirectSaleParams = {
+  contract: Address;
+  quantity?: IntegerInput;
+  currency?: Address;
+  price?: AmountInput;
+  proof?: readonly Hash[];
+  recipient?: Address;
+  autoApprove?: boolean;
+}
+
+export type ReleaseMintDirectSaleResult = {
+  rareMinter: Address;
+  contract: Address;
+  buyer: Address;
+  recipient: Address;
+  quantity: number;
+  currencyAddress: Address;
+  price: bigint;
+  totalPrice: bigint;
+  requiredPayment: bigint;
+  approvalTxHash?: Hash;
+  allowlistRequired: boolean;
+  tokenIdStart: bigint;
+  tokenIdEnd: bigint;
+  tokenIds: bigint[];
+} & TransactionResult
+
 export type ReleaseAllowlistWalletProof = {
   address: Address;
   leaf: Hash;
@@ -748,6 +775,7 @@ export type ReleaseNamespace = {
   setTxLimit: (params: ReleaseSetLimitParams) => Promise<ReleaseSetLimitResult>;
   getSellerStakingMinimum: (params: { contract: Address }) => Promise<ReleaseSellerStakingMinimum>;
   setSellerStakingMinimum: (params: ReleaseSetSellerStakingMinimumParams) => Promise<ReleaseSetSellerStakingMinimumResult>;
+  mintDirectSale: (params: ReleaseMintDirectSaleParams) => Promise<ReleaseMintDirectSaleResult>;
   getStatus: (params: ReleaseStatusParams) => Promise<ReleaseStatus>;
 }
 

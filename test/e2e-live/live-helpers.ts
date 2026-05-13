@@ -168,6 +168,7 @@ function isLiveWriteCommand(args: string[]): boolean {
     if (subcommand !== 'release') return false;
     const releaseSubcommand = args[2];
     if (releaseSubcommand === 'configure') return true;
+    if (releaseSubcommand === 'mint') return true;
     if (releaseSubcommand === 'allowlist') return args[3] === 'set';
     if (releaseSubcommand === 'limits') return args[3]?.startsWith('set-') === true;
     return false;

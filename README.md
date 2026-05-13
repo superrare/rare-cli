@@ -231,10 +231,27 @@ rare listing release status --contract 0x...
 
 # Include account-specific mint and transaction usage
 rare listing release status --contract 0x... --account 0x...
+
+# Mint from the configured direct sale release
+rare listing release mint \
+  --contract 0x... \
+  --quantity 1
+
+# Mint during an active allowlist window with a proof file
+rare listing release allowlist proof \
+  --input ./allowlist-artifact.json \
+  --account 0x... \
+  --output ./proof.json
+
+rare listing release mint \
+  --contract 0x... \
+  --quantity 2 \
+  --proof ./proof.json
 ```
 
 Release configuration uses `RareMinter.prepareMintDirectSale`. It does not mint or modify protocol-admin settings.
 `--max-mints` must be between 1 and 100 because direct sale mint transactions cannot mint more than 100 tokens.
+Release minting uses `RareMinter.mintDirectSale`; the contract mints to the connected wallet.
 
 #### Release allowlists and limits
 
@@ -266,7 +283,7 @@ rare listing release allowlist proof \
   --account 0x...
 ```
 
-Rare release minting checks the configured on-chain root while the allowlist window is active. The proof artifact is the portable file that maps each wallet to the proof needed by a mint client or service. Keep the artifact alongside release operations; the chain stores only the root and end timestamp.
+Rare listing release minting checks the configured on-chain root while the allowlist window is active. The proof artifact is the portable file that maps each wallet to the proof needed by a mint client or service. Keep the artifact alongside release operations; the chain stores only the root and end timestamp.
 
 Creator-facing RareMinter limits are configured separately and verified after each write:
 

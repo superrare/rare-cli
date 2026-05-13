@@ -15,17 +15,19 @@ import type {
   IntegerInput,
   ReleaseConfigureParams,
   ReleaseLimitConfig,
+  ReleaseMintDirectSaleParams,
   ReleaseSellerStakingMinimum,
   ReleaseStatus,
   TimestampInput,
 } from './types.js';
 import { ETH_ADDRESS } from '../contracts/addresses.js';
-import { toInteger, toNonNegativeInteger } from './helpers.js';
+import { toInteger, toNonNegativeInteger, toPositiveInteger } from './helpers.js';
 
 export const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 export const RELEASE_ALLOWLIST_ARTIFACT_KIND = 'rare-release-allowlist-v1' as const;
 const RELEASE_ALLOWLIST_LEAF_ENCODING = 'keccak256(address)' as const;
 const RELEASE_ALLOWLIST_TREE = 'sorted-addresses-sort-pairs' as const;
+const MAX_DIRECT_SALE_MINT_QUANTITY = 255n;
 
 export type ReleaseAllowlistInputFormat = 'csv' | 'json';
 
@@ -89,6 +91,34 @@ export type ReleaseConfigurePlan = {
   maxMints: bigint;
   splitRecipients: Address[];
   splitRatios: number[];
+};
+
+export type ReleaseDirectSaleMintPlan = {
+  contract: Address;
+  quantity: number;
+  currency?: Address;
+  price?: AmountInput;
+  proof: Hex[];
+  recipient?: Address;
+  autoApprove: boolean;
+};
+
+export type ReleaseDirectSaleMintPreflight = {
+  contract: Address;
+  buyer: Address;
+  recipient: Address;
+  quantity: number;
+  currency: Address;
+  price: bigint;
+  totalPrice: bigint;
+  proof: Hex[];
+  allowlistRequired: boolean;
+};
+
+export type ReleaseMintTokenRange = {
+  tokenIdStart: bigint;
+  tokenIdEnd: bigint;
+  tokenIds: bigint[];
 };
 
 export type ReleaseSplitAccumulator = {
@@ -350,6 +380,27 @@ export function normalizeReleaseStakingAmount(amount: AmountInput): bigint {
   return normalized;
 }
 
+export function planReleaseDirectSaleMint(params: ReleaseMintDirectSaleParams): ReleaseDirectSaleMintPlan {
+  const quantity = toPositiveInteger(params.quantity ?? 1, 'quantity');
+  if (quantity > MAX_DIRECT_SALE_MINT_QUANTITY) {
+    throw new Error('quantity must be less than or equal to 255.');
+  }
+
+  return {
+    contract: params.contract,
+    quantity: Number(quantity),
+    currency: params.currency,
+    price: params.price,
+    proof: normalizeReleaseAllowlistProof(params.proof ?? []),
+    recipient: params.recipient,
+    autoApprove: params.autoApprove ?? true,
+  };
+}
+
+export function normalizeReleaseAllowlistProof(proof: readonly unknown[]): Hex[] {
+  return proof.map((entry, index) => normalizeBytes32(entry, `proof[${index}]`));
+}
+
 export function collectReleaseSplit(
   value: string,
   previous: ReleaseSplitAccumulator | undefined,
@@ -556,6 +607,112 @@ export function verifyReleaseAllowlistProof(opts: {
   return hexEquals(hash, root);
 }
 
+export function preflightReleaseDirectSaleMint(params: {
+  status: ReleaseStatus;
+  plan: ReleaseDirectSaleMintPlan;
+  buyer: Address;
+  nowSeconds: bigint;
+}): ReleaseDirectSaleMintPreflight {
+  const { status, plan, buyer, nowSeconds } = params;
+  const quantity = BigInt(plan.quantity);
+
+  if (!isAddressEqual(status.contract, plan.contract)) {
+    throw new Error(`Release status is for ${status.contract}, but mint plan is for ${plan.contract}.`);
+  }
+  if (!status.configured) {
+    throw new Error('RareMinter direct sale is not configured for this contract.');
+  }
+  if (plan.recipient !== undefined && !isAddressEqual(plan.recipient, buyer)) {
+    throw new Error('RareMinter direct sale mint does not support a separate recipient; it mints to the connected wallet.');
+  }
+  if (status.startTime > nowSeconds) {
+    throw new Error(`RareMinter direct sale has not started. Starts at ${status.startTime}.`);
+  }
+  if (status.soldOut === true || (status.remainingSupply !== null && quantity > status.remainingSupply)) {
+    throw new Error('Release collection is sold out.');
+  }
+  if (status.maxMints !== 0n && quantity > status.maxMints) {
+    throw new Error(`quantity exceeds the release max mints per transaction (${status.maxMints}).`);
+  }
+  if (status.mintLimit > 0n) {
+    const accountMints = requireReleaseAccountCounter(status.accountMints, 'mint');
+    if (accountMints + quantity > status.mintLimit) {
+      throw new Error(`quantity exceeds the remaining per-wallet mint limit (${status.mintLimit - accountMints}).`);
+    }
+  }
+  if (status.txLimit > 0n) {
+    const accountTxs = requireReleaseAccountCounter(status.accountTxs, 'transaction');
+    if (accountTxs + 1n > status.txLimit) {
+      throw new Error('buyer has reached the per-wallet transaction limit.');
+    }
+  }
+  if (plan.currency !== undefined && !isAddressEqual(plan.currency, status.currencyAddress)) {
+    throw new Error(`expected currency ${plan.currency} does not match configured currency ${status.currencyAddress}.`);
+  }
+
+  const price = plan.price === undefined
+    ? status.price
+    : normalizeReleasePrice({
+        currencyAddress: status.currencyAddress,
+        amount: plan.price,
+        currencyDecimals: status.currencyDecimals,
+      });
+  if (price !== status.price) {
+    throw new Error(`expected price ${price} does not match configured price ${status.price}.`);
+  }
+
+  const allowlistRequired = isReleaseAllowlistActive(status, nowSeconds);
+  if (allowlistRequired && plan.proof.length === 0) {
+    throw new Error('Active allowlist requires a proof.');
+  }
+  if (
+    allowlistRequired &&
+    !verifyReleaseAllowlistProof({
+      root: status.allowlistRoot,
+      address: buyer,
+      proof: plan.proof,
+    })
+  ) {
+    throw new Error('Allowlist proof does not match the connected wallet and release root.');
+  }
+
+  return {
+    contract: plan.contract,
+    buyer,
+    recipient: buyer,
+    quantity: plan.quantity,
+    currency: status.currencyAddress,
+    price,
+    totalPrice: price * quantity,
+    proof: plan.proof,
+    allowlistRequired,
+  };
+}
+
+export function isReleaseAllowlistActive(
+  status: Pick<ReleaseStatus, 'allowlistRoot' | 'allowlistEndTimestamp'>,
+  nowSeconds: bigint,
+): boolean {
+  return !hexEquals(status.allowlistRoot, ZERO_BYTES32) && status.allowlistEndTimestamp > nowSeconds;
+}
+
+export function shapeReleaseMintTokenRange(tokenIdStart: bigint, tokenIdEnd: bigint): ReleaseMintTokenRange {
+  if (tokenIdEnd < tokenIdStart) {
+    throw new Error(`MintDirectSale event token range is invalid: ${tokenIdStart} to ${tokenIdEnd}.`);
+  }
+
+  const count = tokenIdEnd - tokenIdStart + 1n;
+  if (count > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error('MintDirectSale event token range is too large to materialize.');
+  }
+
+  return {
+    tokenIdStart,
+    tokenIdEnd,
+    tokenIds: Array.from({ length: Number(count) }, (_value, index) => tokenIdStart + BigInt(index)),
+  };
+}
+
 export function shapeReleaseAllowlistConfig(opts: {
   rareMinter: Address;
   contract: Address;
@@ -725,6 +882,13 @@ function requireCurrencyDecimals(decimals: number | null): number {
     throw new Error('currencyDecimals must be a non-negative integer.');
   }
   return decimals;
+}
+
+function requireReleaseAccountCounter(value: bigint | null, label: string): bigint {
+  if (value === null) {
+    throw new Error(`Release ${label} limit preflight requires account usage reads.`);
+  }
+  return value;
 }
 
 function normalizeBytes32(value: unknown, field: string): Hex {

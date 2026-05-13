@@ -17,11 +17,14 @@ import {
   parseReleaseAllowlistCsv,
   planReleaseAllowlistConfig,
   planReleaseConfigure,
+  planReleaseDirectSaleMint,
   planReleaseLimitConfig,
   planReleaseSellerStakingMinimum,
+  preflightReleaseDirectSaleMint,
   resolveReleaseSplits,
   shapeReleaseAllowlistConfig,
   shapeReleaseLimitConfig,
+  shapeReleaseMintTokenRange,
   shapeReleaseSellerStakingMinimum,
   shapeReleaseStatus,
   verifyReleaseAllowlistProof,
@@ -444,5 +447,162 @@ describe('release status shaping', () => {
 
     expect(unconfigured.configured).toBe(false);
     expect(unconfigured.currentlyMintable).toBe(false);
+  });
+});
+
+describe('release direct sale mint planning', () => {
+  it('plans direct sale mint inputs and validates uint8 quantity and proof entries', () => {
+    const root = `0x${'11'.repeat(32)}` as const;
+
+    expect(planReleaseDirectSaleMint({
+      contract: collection,
+      quantity: '2',
+      price: '0.5',
+      proof: [root],
+    })).toEqual({
+      contract: collection,
+      quantity: 2,
+      currency: undefined,
+      price: '0.5',
+      proof: [root],
+      recipient: undefined,
+      autoApprove: true,
+    });
+
+    expect(() => planReleaseDirectSaleMint({
+      contract: collection,
+      quantity: 256,
+    })).toThrow('quantity must be less than or equal to 255.');
+    expect(() => planReleaseDirectSaleMint({
+      contract: collection,
+      proof: ['0x1234'],
+    })).toThrow('proof[0] must be a 32-byte hex string.');
+  });
+
+  it('preflights direct sale mint limits, supply, price, and allowlist proofs', () => {
+    const artifact = buildReleaseAllowlistArtifact([recipientAddress, accountAddress]);
+    const walletProof = getReleaseAllowlistProof({ artifact, address: accountAddress });
+    if (walletProof === null) {
+      throw new Error('expected allowlist proof for accountAddress');
+    }
+
+    const status = shapeReleaseStatus({
+      rareMinter,
+      contract: collection,
+      directSale: {
+        seller: recipientAddress,
+        currencyAddress: ETH_ADDRESS,
+        price: 10n,
+        startTime: 90n,
+        maxMints: 2n,
+        splitRecipients: [recipientAddress],
+        splitRatios: [100],
+      },
+      allowlist: { root: artifact.root, endTimestamp: 200n },
+      mintLimit: 2n,
+      txLimit: 1n,
+      account: accountAddress,
+      accountMints: 1n,
+      accountTxs: 0n,
+      stakingMinimum: { amount: 0n, endTimestamp: 0n },
+      totalSupply: 1n,
+      maxSupply: 3n,
+      currencyDecimals: 18,
+      nowSeconds: 100n,
+    });
+
+    expect(preflightReleaseDirectSaleMint({
+      status,
+      plan: planReleaseDirectSaleMint({
+        contract: collection,
+        quantity: 1,
+        proof: walletProof.proof,
+      }),
+      buyer: accountAddress,
+      nowSeconds: 100n,
+    })).toEqual({
+      contract: collection,
+      buyer: accountAddress,
+      recipient: accountAddress,
+      quantity: 1,
+      currency: ETH_ADDRESS,
+      price: 10n,
+      totalPrice: 10n,
+      proof: walletProof.proof,
+      allowlistRequired: true,
+    });
+  });
+
+  it('rejects direct sale mints that fail contract preconditions', () => {
+    const baseStatusInput = {
+      rareMinter,
+      contract: collection,
+      directSale: {
+        seller: recipientAddress,
+        currencyAddress: ETH_ADDRESS,
+        price: 10n,
+        startTime: 90n,
+        maxMints: 1n,
+        splitRecipients: [recipientAddress],
+        splitRatios: [100],
+      },
+      allowlist: { root: `0x${'11'.repeat(32)}`, endTimestamp: 200n },
+      mintLimit: 0n,
+      txLimit: 0n,
+      account: accountAddress,
+      accountMints: 0n,
+      accountTxs: 0n,
+      stakingMinimum: { amount: 0n, endTimestamp: 0n },
+      totalSupply: 2n,
+      maxSupply: 2n,
+      currencyDecimals: 18,
+      nowSeconds: 100n,
+    } as const;
+    const status = shapeReleaseStatus(baseStatusInput);
+
+    expect(() => preflightReleaseDirectSaleMint({
+      status,
+      plan: planReleaseDirectSaleMint({ contract: collection }),
+      buyer: accountAddress,
+      nowSeconds: 100n,
+    })).toThrow('Release collection is sold out.');
+
+    const availableStatus = shapeReleaseStatus({
+      ...baseStatusInput,
+      allowlist: { root: `0x${'11'.repeat(32)}`, endTimestamp: 200n },
+      totalSupply: 0n,
+      maxSupply: 2n,
+    });
+
+    expect(() => preflightReleaseDirectSaleMint({
+      status: availableStatus,
+      plan: planReleaseDirectSaleMint({ contract: collection }),
+      buyer: accountAddress,
+      nowSeconds: 100n,
+    })).toThrow('Active allowlist requires a proof.');
+
+    expect(() => preflightReleaseDirectSaleMint({
+      status: shapeReleaseStatus({
+        ...baseStatusInput,
+        allowlist: { root: ZERO_BYTES32, endTimestamp: 0n },
+        totalSupply: 0n,
+        maxSupply: 2n,
+      }),
+      plan: planReleaseDirectSaleMint({
+        contract: collection,
+        recipient: recipientAddress,
+      }),
+      buyer: accountAddress,
+      nowSeconds: 100n,
+    })).toThrow('does not support a separate recipient');
+  });
+
+  it('shapes minted token ranges from MintDirectSale event arguments', () => {
+    expect(shapeReleaseMintTokenRange(3n, 5n)).toEqual({
+      tokenIdStart: 3n,
+      tokenIdEnd: 5n,
+      tokenIds: [3n, 4n, 5n],
+    });
+    expect(() => shapeReleaseMintTokenRange(5n, 3n)).toThrow('MintDirectSale event token range is invalid');
   });
 });

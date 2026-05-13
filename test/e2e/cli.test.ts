@@ -160,6 +160,7 @@ describe('built CLI deterministic behavior', () => {
       expect(help.stdout).toContain('allowlist');
       expect(help.stdout).toContain('limits');
       expect(help.stdout).toContain('staking');
+      expect(help.stdout).toContain('mint');
       expect(help.stdout).toContain('status');
 
       const configureHelp = await runCli(['listing', 'release', 'configure', '--help'], { home });
@@ -171,6 +172,12 @@ describe('built CLI deterministic behavior', () => {
       expect(statusHelp.stdout).toContain('--account <address>');
       expect(statusHelp.stdout).toContain('--chain-id <id>');
       expect(statusHelp.stdout).not.toContain('--wallet');
+
+      const mintHelp = await runCli(['listing', 'release', 'mint', '--help'], { home });
+      expect(mintHelp.code).toBe(0);
+      expect(mintHelp.stdout).toContain('--quantity <number>');
+      expect(mintHelp.stdout).toContain('--proof <file>');
+      expect(mintHelp.stdout).toContain('--chain-id <id>');
 
       const allowlistProofHelp = await runCli(['listing', 'release', 'allowlist', 'proof', '--help'], { home });
       expect(allowlistProofHelp.code).toBe(0);
@@ -185,6 +192,27 @@ describe('built CLI deterministic behavior', () => {
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('Error: Invalid contract address: "not-an-address".');
+    });
+  });
+
+  it('rejects malformed release mint proof files before wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const proof = join(home, 'bad-proof.json');
+      await writeFile(proof, JSON.stringify({ proof: ['0x1234'] }), 'utf8');
+
+      const result = await runCli([
+        'listing',
+        'release',
+        'mint',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--proof',
+        proof,
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('proof[0] must be a 32-byte hex string.');
     });
   });
 
