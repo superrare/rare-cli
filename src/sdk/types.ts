@@ -42,6 +42,16 @@ export type DeployErc721Result = {
   contract: Address;
 } & TransactionResult
 
+export type DeployLazyBatchMintParams = {
+  name: string;
+  symbol: string;
+  maxTokens?: IntegerInput;
+}
+
+export type DeployLazyBatchMintResult = {
+  contract: Address;
+} & TransactionResult
+
 export type MintToParams = {
   contract: Address;
   tokenUri: string;
@@ -422,6 +432,7 @@ export type RareClient = {
   contracts: {
     factory: Address;
     auction: Address;
+    lazyBatchMintFactory?: Address;
     batchListing?: Address;
     marketplaceSettings?: Address;
     erc20ApprovalManager?: Address;
@@ -432,6 +443,7 @@ export type RareClient = {
   };
   deploy: {
     erc721: (params: DeployErc721Params) => Promise<DeployErc721Result>;
+    lazyBatchMint: (params: DeployLazyBatchMintParams) => Promise<DeployLazyBatchMintResult>;
   };
   liquid: {
     getFactoryConfig: () => Promise<LiquidFactoryConfig>;

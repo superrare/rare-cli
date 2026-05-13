@@ -23,6 +23,7 @@ describe('chain and currency helpers', () => {
     expect(getContractAddresses('sepolia')).toEqual({
       factory: getAddress('0x3c7526a0975156299ceef369b8ff3c01cc670523'),
       auction: getAddress('0xC8Edc7049b233641ad3723D6C60019D1c8771612'),
+      lazyBatchMintFactory: getAddress('0xE5efBA88D556aDA98124654fE505465b8d494858'),
       batchListing: getAddress('0xF2bE72d4343beD375Cb6d0E799a3c003163860e0'),
       marketplaceSettings: getAddress('0x972dEe8fa339ad2D9c6cbDA31b67f98Fac242d13'),
       erc20ApprovalManager: getAddress('0x4619eB29e84392CE91C27FC936A5c94d1D14b93f'),

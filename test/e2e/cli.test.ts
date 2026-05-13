@@ -100,6 +100,27 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('exposes lazy batch mint collection help', async () => {
+    await withTempHome(async (home) => {
+      const collection = await runCli(['collection', '--help'], { home });
+      expect(collection.code).toBe(0);
+      expect(collection.stdout).toContain('create');
+      expect(collection.stderr).toBe('');
+
+      const create = await runCli(['collection', 'create', '--help'], { home });
+      expect(create.code).toBe(0);
+      expect(create.stdout).toContain('lazy-batch-mint');
+      expect(create.stderr).toBe('');
+
+      const lazyBatchMint = await runCli(['collection', 'create', 'lazy-batch-mint', '--help'], { home });
+      expect(lazyBatchMint.code).toBe(0);
+      expect(lazyBatchMint.stdout).toContain('Usage: rare collection create lazy-batch-mint [options] <name> <symbol>');
+      expect(lazyBatchMint.stdout).toContain('--max-tokens <number>');
+      expect(lazyBatchMint.stdout).toContain('--chain-id <id>');
+      expect(lazyBatchMint.stderr).toBe('');
+    });
+  });
+
   it('returns a non-zero exit and stderr for invalid non-chain configuration input', async () => {
     await withTempHome(async (home) => {
       const result = await runCli(['configure', '--default-chain', 'not-a-chain'], { home });

@@ -37,6 +37,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
     contracts: {
       factory: addresses.factory,
       auction: addresses.auction,
+      lazyBatchMintFactory: addresses.lazyBatchMintFactory,
       batchListing: addresses.batchListing,
       marketplaceSettings: addresses.marketplaceSettings,
       erc20ApprovalManager: addresses.erc20ApprovalManager,
