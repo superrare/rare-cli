@@ -101,4 +101,46 @@ export const rareMinterAbi = [
     stateMutability: 'nonpayable',
     type: 'function',
   },
+  {
+    inputs: [
+      { name: '_root', type: 'bytes32' },
+      { name: '_endTimestamp', type: 'uint256' },
+      { name: '_contractAddress', type: 'address' },
+    ],
+    name: 'setContractAllowListConfig',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: '_contractAddress', type: 'address' },
+      { name: '_limit', type: 'uint256' },
+    ],
+    name: 'setContractMintLimit',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: '_contractAddress', type: 'address' },
+      { name: '_minimum', type: 'uint256' },
+      { name: '_endTimestamp', type: 'uint256' },
+    ],
+    name: 'setContractSellerStakingMinimum',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: '_contractAddress', type: 'address' },
+      { name: '_limit', type: 'uint256' },
+    ],
+    name: 'setContractTxLimit',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
 ] as const;

@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isAddress } from 'viem';
@@ -155,8 +155,11 @@ describe('built CLI deterministic behavior', () => {
     await withTempHome(async (home) => {
       const help = await runCli(['listing', 'release', '--help'], { home });
       expect(help.code).toBe(0);
-      expect(help.stdout).toContain('Direct sale release subcommands');
+      expect(help.stdout).toContain('RareMinter release subcommands');
       expect(help.stdout).toContain('configure');
+      expect(help.stdout).toContain('allowlist');
+      expect(help.stdout).toContain('limits');
+      expect(help.stdout).toContain('staking');
       expect(help.stdout).toContain('status');
 
       const configureHelp = await runCli(['listing', 'release', 'configure', '--help'], { home });
@@ -169,10 +172,64 @@ describe('built CLI deterministic behavior', () => {
       expect(statusHelp.stdout).toContain('--chain-id <id>');
       expect(statusHelp.stdout).not.toContain('--wallet');
 
+      const allowlistProofHelp = await runCli(['listing', 'release', 'allowlist', 'proof', '--help'], { home });
+      expect(allowlistProofHelp.code).toBe(0);
+      expect(allowlistProofHelp.stdout).toContain('--input <file>');
+      expect(allowlistProofHelp.stdout).toContain('--account <address>');
+      expect(allowlistProofHelp.stdout).toContain('--output <file>');
+      expect(allowlistProofHelp.stdout).not.toContain('--artifact');
+      expect(allowlistProofHelp.stdout).not.toContain('--wallet');
+      expect(allowlistProofHelp.stdout).not.toContain('--address');
+
       const result = await runCli(['listing', 'release', 'status', '--contract', 'not-an-address'], { home });
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('Error: Invalid contract address: "not-an-address".');
+    });
+  });
+
+  it('builds and consumes release allowlist artifacts without RPC setup', async () => {
+    await withTempHome(async (home) => {
+      const input = join(home, 'allowlist.csv');
+      const artifactPath = join(home, 'allowlist-artifact.json');
+      const wallet = '0x0000000000000000000000000000000000000001';
+
+      await writeFile(input, `wallet\n${wallet}\n0x0000000000000000000000000000000000000002\n`, 'utf8');
+
+      const build = await runCli([
+        'listing',
+        'release',
+        'allowlist',
+        'build',
+        '--input',
+        input,
+        '--output',
+        artifactPath,
+      ], { home });
+      expect(build.code).toBe(0);
+      expect(build.stdout).toContain('Allowlist artifact written');
+      expect(build.stdout).toContain('Wallets: 2');
+
+      const artifact = JSON.parse(await readFile(artifactPath, 'utf8'));
+      expect(artifact.root).toMatch(/^0x[0-9a-f]{64}$/);
+      expect(artifact.wallets).toHaveLength(2);
+
+      const proof = parseJsonStdout<{ root: string; address: string; proof: string[] }>(
+        await runCli([
+          '--json',
+          'listing',
+          'release',
+          'allowlist',
+          'proof',
+          '--input',
+          artifactPath,
+          '--account',
+          wallet,
+        ], { home }),
+      );
+      expect(proof.root).toBe(artifact.root);
+      expect(proof.address).toBe(wallet);
+      expect(proof.proof).toEqual(expect.any(Array));
     });
   });
 });

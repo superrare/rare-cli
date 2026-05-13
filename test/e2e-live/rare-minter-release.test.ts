@@ -76,6 +76,7 @@ describeLive('live Sepolia RareMinter release commands', () => {
 
     const result = await step('configure direct sale release', () =>
       jsonCommand<ReleaseConfigureResult>(live.sellerHome, [
+        'listing',
         'release',
         'configure',
         '--contract',
@@ -110,6 +111,7 @@ describeLive('live Sepolia RareMinter release commands', () => {
       price: string;
       maxMints: string;
     }>(live.sellerHome, [
+      'listing',
       'release',
       'status',
       '--contract',

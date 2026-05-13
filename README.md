@@ -147,6 +147,84 @@ rare mint \
   --royalty-receiver 0x...
 ```
 
+### Direct Sale Releases
+
+After creating and preparing a lazy collection, configure its RareMinter direct sale:
+
+```bash
+rare listing release configure \
+  --contract 0x... \
+  --price 0.1 \
+  --max-mints 5
+
+# Optional payout splits. If omitted, 100% goes to the configured wallet.
+rare listing release configure \
+  --contract 0x... \
+  --price 100 \
+  --currency rare \
+  --start 2026-06-01T16:00:00Z \
+  --max-mints 5 \
+  --split 0x...artist=80 \
+  --split 0x...collaborator=20
+
+# Check release status (read-only)
+rare listing release status --contract 0x...
+
+# Include account-specific mint and transaction usage
+rare listing release status --contract 0x... --account 0x...
+```
+
+Release configuration uses `RareMinter.prepareMintDirectSale`. It does not mint or modify protocol-admin settings.
+`--max-mints` must be between 1 and 100 because direct sale mint transactions cannot mint more than 100 tokens.
+
+#### Release allowlists and limits
+
+Allowlists are two-step. First, build a reusable proof artifact from creator-provided wallet input. CSV files can put wallet addresses in the first column or use an `address`/`wallet` header. JSON files can be an array of address strings, an array of objects with `address` or `wallet`, or an object with `wallets`/`addresses`.
+
+```bash
+rare listing release allowlist build \
+  --input ./allowlist.csv \
+  --output ./allowlist-artifact.json
+```
+
+The artifact contains the Merkle root plus one proof per wallet. Configure the release with that root and the allowlist end time:
+
+```bash
+rare listing release allowlist set \
+  --contract 0x... \
+  --input ./allowlist-artifact.json \
+  --end-timestamp 2026-06-01T16:00:00Z
+
+# Or set a known root directly
+rare listing release allowlist set \
+  --contract 0x... \
+  --root 0x... \
+  --end-timestamp 1767283200
+
+# Read a reusable proof for an account
+rare listing release allowlist proof \
+  --input ./allowlist-artifact.json \
+  --account 0x...
+```
+
+Rare release minting checks the configured on-chain root while the allowlist window is active. The proof artifact is the portable file that maps each wallet to the proof needed by a mint client or service. Keep the artifact alongside release operations; the chain stores only the root and end timestamp.
+
+Creator-facing RareMinter limits are configured separately and verified after each write:
+
+```bash
+# Per-wallet token count across the release; 0 disables it.
+rare listing release limits set-mint --contract 0x... --limit 2
+
+# Per-wallet mint transaction count; 0 disables it.
+rare listing release limits set-tx --contract 0x... --limit 1
+
+# Minimum seller staking requirement in RARE; 0 disables it.
+rare listing release staking set-minimum \
+  --contract 0x... \
+  --minimum 100 \
+  --end-timestamp 2026-06-01T16:00:00Z
+```
+
 ### Auctions
 
 ```bash

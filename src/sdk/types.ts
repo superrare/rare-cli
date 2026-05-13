@@ -290,6 +290,76 @@ export type ReleaseConfigureResult = {
   splitRatios: number[];
 } & TransactionResult
 
+export type ReleaseAllowlistWalletProof = {
+  address: Address;
+  leaf: Hash;
+  proof: Hash[];
+}
+
+export type ReleaseAllowlistArtifact = {
+  kind: 'rare-release-allowlist-v1';
+  version: 1;
+  leafEncoding: 'keccak256(address)';
+  tree: 'sorted-addresses-sort-pairs';
+  root: Hash;
+  wallets: ReleaseAllowlistWalletProof[];
+}
+
+export type ReleaseAllowlistConfig = {
+  rareMinter: Address;
+  contract: Address;
+  root: Hash;
+  endTimestamp: bigint;
+  active: boolean;
+  now: bigint;
+}
+
+export type ReleaseLimitConfig = {
+  rareMinter: Address;
+  contract: Address;
+  limit: bigint;
+  enabled: boolean;
+}
+
+export type ReleaseSellerStakingMinimum = {
+  rareMinter: Address;
+  contract: Address;
+  amount: bigint;
+  endTimestamp: bigint;
+  active: boolean;
+  now: bigint;
+}
+
+export type ReleaseSetAllowlistConfigParams = {
+  contract: Address;
+  root?: Hash;
+  artifact?: ReleaseAllowlistArtifact;
+  endTimestamp: TimestampInput;
+}
+
+export type ReleaseSetAllowlistConfigResult = {
+  config: ReleaseAllowlistConfig;
+} & TransactionResult
+
+export type ReleaseSetLimitParams = {
+  contract: Address;
+  limit: IntegerInput;
+}
+
+export type ReleaseSetLimitResult = {
+  config: ReleaseLimitConfig;
+} & TransactionResult
+
+export type ReleaseSetSellerStakingMinimumParams = {
+  contract: Address;
+  amount: AmountInput;
+  endTimestamp?: TimestampInput;
+}
+
+export type ReleaseSetSellerStakingMinimumResult = {
+  config: ReleaseSellerStakingMinimum;
+} & TransactionResult
+
 export type ReleaseStatusParams = {
   contract: Address;
   account?: Address;
@@ -554,7 +624,19 @@ export type RareClient = {
     getStatus: (params: BatchListingStatusParams) => Promise<BatchListingStatus>;
   };
   release: {
+    buildAllowlistArtifact(params: { input: string; format: 'csv' | 'json' }): ReleaseAllowlistArtifact;
+    parseAllowlistArtifact(params: { input: string }): ReleaseAllowlistArtifact;
+    getAllowlistProof(params: { artifact: ReleaseAllowlistArtifact; address: Address }): ReleaseAllowlistWalletProof | null;
     configure(params: ReleaseConfigureParams): Promise<ReleaseConfigureResult>;
+    getAllowlistConfig(params: { contract: Address }): Promise<ReleaseAllowlistConfig>;
+    setAllowlistConfig(params: ReleaseSetAllowlistConfigParams): Promise<ReleaseSetAllowlistConfigResult>;
+    clearAllowlistConfig(params: { contract: Address }): Promise<ReleaseSetAllowlistConfigResult>;
+    getMintLimit(params: { contract: Address }): Promise<ReleaseLimitConfig>;
+    setMintLimit(params: ReleaseSetLimitParams): Promise<ReleaseSetLimitResult>;
+    getTxLimit(params: { contract: Address }): Promise<ReleaseLimitConfig>;
+    setTxLimit(params: ReleaseSetLimitParams): Promise<ReleaseSetLimitResult>;
+    getSellerStakingMinimum(params: { contract: Address }): Promise<ReleaseSellerStakingMinimum>;
+    setSellerStakingMinimum(params: ReleaseSetSellerStakingMinimumParams): Promise<ReleaseSetSellerStakingMinimumResult>;
     getStatus(params: ReleaseStatusParams): Promise<ReleaseStatus>;
   };
   search: {

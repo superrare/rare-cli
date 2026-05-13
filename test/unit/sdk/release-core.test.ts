@@ -2,14 +2,29 @@ import { describe, expect, it } from 'vitest';
 import { parseEther, parseUnits } from 'viem';
 import {
   ZERO_BYTES32,
+  assertReleaseAllowlistConfigMatches,
   assertReleaseContractOwner,
+  assertReleaseLimitMatches,
+  assertReleaseSellerStakingMinimumMatches,
+  buildReleaseAllowlistArtifact,
+  buildReleaseAllowlistArtifactFromInput,
   collectReleaseSplit,
   finalizeReleaseSplitAccumulator,
+  getReleaseAllowlistProof,
   normalizeReleasePrice,
   normalizeReleaseStartTime,
+  parseReleaseAllowlistArtifact,
+  parseReleaseAllowlistCsv,
+  planReleaseAllowlistConfig,
   planReleaseConfigure,
+  planReleaseLimitConfig,
+  planReleaseSellerStakingMinimum,
   resolveReleaseSplits,
+  shapeReleaseAllowlistConfig,
+  shapeReleaseLimitConfig,
+  shapeReleaseSellerStakingMinimum,
   shapeReleaseStatus,
+  verifyReleaseAllowlistProof,
 } from '../../../src/sdk/release-core.js';
 
 const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
@@ -127,6 +142,204 @@ describe('release configure planning', () => {
         owner: accountAddress,
       }),
     ).not.toThrow();
+  });
+});
+
+describe('release allowlist artifacts', () => {
+  const walletA = '0x0000000000000000000000000000000000000003' as const;
+  const walletB = '0x0000000000000000000000000000000000000004' as const;
+  const walletC = '0x0000000000000000000000000000000000000005' as const;
+
+  it('builds reusable Merkle proof artifacts from CSV wallets', () => {
+    const artifact = buildReleaseAllowlistArtifactFromInput(
+      [
+        'wallet,notes',
+        `${walletC},third`,
+        `${walletA},first`,
+        `${walletB},second`,
+      ].join('\n'),
+      'csv',
+    );
+
+    expect(artifact).toMatchObject({
+      kind: 'rare-release-allowlist-v1',
+      version: 1,
+      leafEncoding: 'keccak256(address)',
+      tree: 'sorted-addresses-sort-pairs',
+      wallets: [
+        expect.objectContaining({ address: walletA }),
+        expect.objectContaining({ address: walletB }),
+        expect.objectContaining({ address: walletC }),
+      ],
+    });
+    expect(artifact.root).toMatch(/^0x[0-9a-f]{64}$/);
+
+    for (const wallet of artifact.wallets) {
+      expect(verifyReleaseAllowlistProof({
+        root: artifact.root,
+        address: wallet.address,
+        proof: wallet.proof,
+      })).toBe(true);
+    }
+  });
+
+  it('builds artifacts from JSON wallet arrays and returns wallet proofs', () => {
+    const artifact = buildReleaseAllowlistArtifactFromInput(
+      JSON.stringify({
+        wallets: [
+          { wallet: walletB },
+          { address: walletA },
+        ],
+      }),
+      'json',
+    );
+    const proof = getReleaseAllowlistProof({ artifact, address: walletB });
+
+    expect(artifact.wallets).toHaveLength(2);
+    expect(proof?.address).toBe(walletB);
+    expect(proof?.proof).toHaveLength(1);
+    expect(parseReleaseAllowlistArtifact(JSON.parse(JSON.stringify(artifact)))).toEqual(artifact);
+  });
+
+  it('rejects invalid, duplicate, and malformed allowlist inputs with clear errors', () => {
+    expect(() => parseReleaseAllowlistCsv('wallet\nnot-an-address')).toThrow(
+      'Invalid allowlist address at CSV row 2: "not-an-address".',
+    );
+    expect(() => parseReleaseAllowlistCsv(`wallet\n${walletA}\n${walletA}`)).toThrow(
+      `Duplicate allowlist address at CSV row 3: "${walletA}" duplicates CSV row 2.`,
+    );
+    expect(() => parseReleaseAllowlistCsv('"unterminated')).toThrow(
+      'Malformed CSV allowlist at row 1: unterminated quoted field.',
+    );
+    expect(() => buildReleaseAllowlistArtifact([])).toThrow(
+      'Allowlist must contain at least one wallet address.',
+    );
+  });
+});
+
+describe('release allowlist and limit planning', () => {
+  it('plans allowlist config from an artifact root and parses ISO end timestamps', () => {
+    const artifact = buildReleaseAllowlistArtifact([accountAddress, recipientAddress]);
+
+    expect(
+      planReleaseAllowlistConfig({
+        contract: collection,
+        artifact,
+        endTimestamp: '2026-01-01T00:00:00.000Z',
+      }),
+    ).toEqual({
+      contract: collection,
+      root: artifact.root,
+      endTimestamp: 1_767_225_600n,
+    });
+  });
+
+  it('plans non-negative mint and transaction limits', () => {
+    expect(planReleaseLimitConfig({ contract: collection, limit: '0' })).toEqual({
+      contract: collection,
+      limit: 0n,
+    });
+    expect(planReleaseLimitConfig({ contract: collection, limit: 3 })).toEqual({
+      contract: collection,
+      limit: 3n,
+    });
+    expect(() => planReleaseLimitConfig({ contract: collection, limit: '-1' })).toThrow(
+      'limit must be greater than or equal to 0.',
+    );
+  });
+
+  it('plans seller staking minimum amounts in RARE units and allows zero to clear', () => {
+    expect(
+      planReleaseSellerStakingMinimum({
+        contract: collection,
+        amount: '12.5',
+        endTimestamp: 123n,
+      }),
+    ).toEqual({
+      contract: collection,
+      amount: parseEther('12.5'),
+      endTimestamp: 123n,
+    });
+    expect(
+      planReleaseSellerStakingMinimum({
+        contract: collection,
+        amount: '0',
+      }),
+    ).toEqual({
+      contract: collection,
+      amount: 0n,
+      endTimestamp: 0n,
+    });
+    expect(() =>
+      planReleaseSellerStakingMinimum({
+        contract: collection,
+        amount: '1',
+      }),
+    ).toThrow('endTimestamp is required.');
+  });
+});
+
+describe('release config result shaping and verification', () => {
+  it('shapes allowlist, limit, and staking config reads in the core', () => {
+    expect(shapeReleaseAllowlistConfig({
+      rareMinter,
+      contract: collection,
+      allowlist: { root: `0x${'11'.repeat(32)}`, endTimestamp: 2_000n },
+      nowSeconds: 1_000n,
+    })).toEqual({
+      rareMinter,
+      contract: collection,
+      root: `0x${'11'.repeat(32)}`,
+      endTimestamp: 2_000n,
+      active: true,
+      now: 1_000n,
+    });
+
+    expect(shapeReleaseLimitConfig({
+      rareMinter,
+      contract: collection,
+      limit: 0n,
+    })).toEqual({
+      rareMinter,
+      contract: collection,
+      limit: 0n,
+      enabled: false,
+    });
+
+    expect(shapeReleaseSellerStakingMinimum({
+      rareMinter,
+      contract: collection,
+      stakingMinimum: { amount: 1n, endTimestamp: 900n },
+      nowSeconds: 1_000n,
+    })).toEqual({
+      rareMinter,
+      contract: collection,
+      amount: 1n,
+      endTimestamp: 900n,
+      active: false,
+      now: 1_000n,
+    });
+  });
+
+  it('verifies RareMinter config readbacks without SDK shell logic', () => {
+    const allowlist = { root: `0x${'22'.repeat(32)}` as const, endTimestamp: 123n };
+    expect(() => assertReleaseAllowlistConfigMatches(allowlist, allowlist)).not.toThrow();
+    expect(() => assertReleaseAllowlistConfigMatches(allowlist, {
+      ...allowlist,
+      endTimestamp: 124n,
+    })).toThrow('RareMinter allowlist verification failed.');
+
+    expect(() => assertReleaseLimitMatches('mint limit', 2n, 2n)).not.toThrow();
+    expect(() => assertReleaseLimitMatches('mint limit', 2n, 1n)).toThrow(
+      'RareMinter mint limit verification failed.',
+    );
+
+    const staking = { amount: 5n, endTimestamp: 999n };
+    expect(() => assertReleaseSellerStakingMinimumMatches(staking, staking)).not.toThrow();
+    expect(() => assertReleaseSellerStakingMinimumMatches(staking, {
+      ...staking,
+      amount: 6n,
+    })).toThrow('RareMinter seller staking minimum verification failed.');
   });
 });
 
