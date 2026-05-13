@@ -436,11 +436,11 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('wires listing lazy-sale commands and validates user-visible inputs before RPC setup', async () => {
+  it('wires listing release commands and validates user-visible inputs before RPC setup', async () => {
     await withTempHome(async (home) => {
-      const help = await runCli(['listing', 'lazy-sale', '--help'], { home });
+      const help = await runCli(['listing', 'release', '--help'], { home });
       expect(help.code).toBe(0);
-      expect(help.stdout).toContain('RareMinter lazy sale subcommands');
+      expect(help.stdout).toContain('RareMinter release subcommands');
       expect(help.stdout).toContain('configure');
       expect(help.stdout).toContain('allowlist');
       expect(help.stdout).toContain('limits');
@@ -448,23 +448,23 @@ describe('built CLI deterministic behavior', () => {
       expect(help.stdout).toContain('mint');
       expect(help.stdout).toContain('status');
 
-      const configureHelp = await runCli(['listing', 'lazy-sale', 'configure', '--help'], { home });
+      const configureHelp = await runCli(['listing', 'release', 'configure', '--help'], { home });
       expect(configureHelp.code).toBe(0);
       expect(configureHelp.stdout).toContain('--chain-id <id>');
 
-      const statusHelp = await runCli(['listing', 'lazy-sale', 'status', '--help'], { home });
+      const statusHelp = await runCli(['listing', 'release', 'status', '--help'], { home });
       expect(statusHelp.code).toBe(0);
       expect(statusHelp.stdout).toContain('--account <address>');
       expect(statusHelp.stdout).toContain('--chain-id <id>');
       expect(statusHelp.stdout).not.toContain('--wallet');
 
-      const mintHelp = await runCli(['listing', 'lazy-sale', 'mint', '--help'], { home });
+      const mintHelp = await runCli(['listing', 'release', 'mint', '--help'], { home });
       expect(mintHelp.code).toBe(0);
       expect(mintHelp.stdout).toContain('--quantity <number>');
       expect(mintHelp.stdout).toContain('--proof <file>');
       expect(mintHelp.stdout).toContain('--chain-id <id>');
 
-      const allowlistProofHelp = await runCli(['listing', 'lazy-sale', 'allowlist', 'proof', '--help'], { home });
+      const allowlistProofHelp = await runCli(['listing', 'release', 'allowlist', 'proof', '--help'], { home });
       expect(allowlistProofHelp.code).toBe(0);
       expect(allowlistProofHelp.stdout).toContain('--input <file>');
       expect(allowlistProofHelp.stdout).toContain('--account <address>');
@@ -473,21 +473,21 @@ describe('built CLI deterministic behavior', () => {
       expect(allowlistProofHelp.stdout).not.toContain('--wallet');
       expect(allowlistProofHelp.stdout).not.toContain('--address');
 
-      const result = await runCli(['listing', 'lazy-sale', 'status', '--contract', 'not-an-address'], { home });
+      const result = await runCli(['listing', 'release', 'status', '--contract', 'not-an-address'], { home });
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('Error: Invalid contract address: "not-an-address".');
     });
   });
 
-  it('rejects malformed lazy-sale mint proof files before wallet setup', async () => {
+  it('rejects malformed release mint proof files before wallet setup', async () => {
     await withTempHome(async (home) => {
       const proof = join(home, 'bad-proof.json');
       await writeFile(proof, JSON.stringify({ proof: ['0x1234'] }), 'utf8');
 
       const result = await runCli([
         'listing',
-        'lazy-sale',
+        'release',
         'mint',
         '--contract',
         '0x1111111111111111111111111111111111111111',
@@ -501,7 +501,7 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('builds and consumes lazy-sale allowlist artifacts without RPC setup', async () => {
+  it('builds and consumes release allowlist artifacts without RPC setup', async () => {
     await withTempHome(async (home) => {
       const input = join(home, 'allowlist.csv');
       const artifactPath = join(home, 'allowlist-artifact.json');
@@ -511,7 +511,7 @@ describe('built CLI deterministic behavior', () => {
 
       const build = await runCli([
         'listing',
-        'lazy-sale',
+        'release',
         'allowlist',
         'build',
         '--input',
@@ -531,7 +531,7 @@ describe('built CLI deterministic behavior', () => {
         await runCli([
           '--json',
           'listing',
-          'lazy-sale',
+          'release',
           'allowlist',
           'proof',
           '--input',
