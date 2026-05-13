@@ -152,10 +152,11 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('exposes aligned batch listing flags', async () => {
+  it('exposes utility merkle and batch listing flags', async () => {
     await withTempHome(async (home) => {
-      const proofHelp = await runCli(['listing', 'batch', 'merkle', 'proof', '--help'], { home });
+      const proofHelp = await runCli(['utils', 'merkle', 'proof', '--help'], { home });
       expect(proofHelp.code).toBe(0);
+      expect(proofHelp.stdout).toContain('Usage: rare utils merkle proof [options]');
       expect(proofHelp.stdout).toContain('--output <path>');
       expect(proofHelp.stdout).toContain('--buyer <address>');
 
@@ -172,18 +173,18 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('exposes batch marketplace tree command help', async () => {
+  it('exposes utility tree command help', async () => {
     await withTempHome(async (home) => {
-      const build = await runCli(['batch', 'tree', 'build', '--help'], { home });
+      const build = await runCli(['utils', 'tree', 'build', '--help'], { home });
       expect(build.code).toBe(0);
-      expect(build.stdout).toContain('Usage: rare batch tree build [options]');
+      expect(build.stdout).toContain('Usage: rare utils tree build [options]');
       expect(build.stdout).toContain('--input <path>');
       expect(build.stdout).toContain('--chain-id <id>');
       expect(build.stderr).toBe('');
 
-      const proof = await runCli(['batch', 'tree', 'proof', '--help'], { home });
+      const proof = await runCli(['utils', 'tree', 'proof', '--help'], { home });
       expect(proof.code).toBe(0);
-      expect(proof.stdout).toContain('Usage: rare batch tree proof [options]');
+      expect(proof.stdout).toContain('Usage: rare utils tree proof [options]');
       expect(proof.stdout).toContain('--contract <address>');
       expect(proof.stdout).toContain('--token-id <id>');
       expect(proof.stderr).toBe('');
@@ -274,7 +275,7 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('builds and verifies batch marketplace token tree artifacts without wallet setup', async () => {
+  it('builds and verifies utility token tree artifacts without wallet setup', async () => {
     await withTempHome(async (home) => {
       const input = join(home, 'batch-tokens.csv');
       const artifactPath = join(home, 'batch-token-artifact.json');
@@ -294,7 +295,7 @@ describe('built CLI deterministic behavior', () => {
         output: string;
       }>(await runCli([
         '--json',
-        'batch',
+        'utils',
         'tree',
         'build',
         '--input',
@@ -326,7 +327,7 @@ describe('built CLI deterministic behavior', () => {
         output: string;
       }>(await runCli([
         '--json',
-        'batch',
+        'utils',
         'tree',
         'proof',
         '--input',
@@ -353,7 +354,7 @@ describe('built CLI deterministic behavior', () => {
         valid: boolean;
       }>(await runCli([
         '--json',
-        'batch',
+        'utils',
         'tree',
         'verify',
         '--input',
@@ -375,13 +376,13 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('rejects malformed batch token trees before wallet setup', async () => {
+  it('rejects malformed utility token trees before wallet setup', async () => {
     await withTempHome(async (home) => {
       const input = join(home, 'bad-batch-tokens.csv');
       await writeFile(input, 'contract,tokenId\nnot-an-address,1\n', 'utf8');
 
       const result = await runCli([
-        'batch',
+        'utils',
         'tree',
         'build',
         '--input',

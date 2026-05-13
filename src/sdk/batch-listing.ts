@@ -3,6 +3,7 @@ import { batchListingAbi } from '../contracts/abis/batch-listing.js';
 import { ETH_ADDRESS } from '../contracts/addresses.js';
 import type {
   BatchListingCreateResult,
+  BatchListingProofArtifact,
   BatchListingRootArtifact,
   BatchListingStatus,
   RareClient,
@@ -20,6 +21,12 @@ import {
   waitForApproval,
 } from './helpers.js';
 import { planSplits } from './marketplace-core.js';
+import {
+  generateApiAddressMerkleRoot,
+  generateApiNftMerkleRoot,
+  resolveApiAddressMerkleProof,
+  resolveApiNftMerkleProof,
+} from './merkle-api.js';
 
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
@@ -31,12 +38,13 @@ export function createBatchListingNamespace(
     marketplaceSettings: Address;
     erc20ApprovalManager: Address;
     erc721ApprovalManager: Address;
+    chainId: number;
   },
 ): RareClient['batchListing'] {
   return {
     async create(params): Promise<BatchListingCreateResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const { artifact } = params;
+      const artifact = await resolveApiBatchListingRootArtifact(config, params.artifact);
       const splitConfig = prepareRootRegistrationConfig(artifact, accountAddress);
 
       const uniqueContracts = uniqueAddresses(artifact.tokens.map((token) => token.contract));
@@ -105,7 +113,12 @@ export function createBatchListingNamespace(
         chain: undefined,
       });
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return { txHash, receipt, approvalTxHashes: approvalTxHashes.length > 0 ? approvalTxHashes : undefined };
+      return {
+        txHash,
+        receipt,
+        root: artifact.root,
+        approvalTxHashes: approvalTxHashes.length > 0 ? approvalTxHashes : undefined,
+      };
     },
 
     async cancel(params): Promise<TransactionResult> {
@@ -124,14 +137,22 @@ export function createBatchListingNamespace(
 
     async buy(params): Promise<TransactionResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
+      const proofArtifact = await resolveBatchListingBuyProofArtifact({
+        publicClient,
+        config,
+        batchListingAddress: addresses.batchListing,
+        chainId: addresses.chainId,
+        params,
+        accountAddress,
+      });
 
-      if (params.proofArtifact.proof.length === 0) {
+      if (proofArtifact.proof.length === 0) {
         throw new Error('Proof artifact proof must not be empty; the batch listing contract rejects empty token proofs');
       }
 
       const amount = await toTokenAmount(publicClient, params.currency, params.amount, 'amount');
-      const tokenIdBig = toInteger(params.proofArtifact.tokenId, 'tokenId');
-      const allowListProof = params.proofArtifact.allowListProof ?? [];
+      const tokenIdBig = toInteger(proofArtifact.tokenId, 'tokenId');
+      const allowListProof = proofArtifact.allowListProof ?? [];
 
       const value = await prepareBatchListingPayment({
         publicClient,
@@ -149,13 +170,13 @@ export function createBatchListingNamespace(
         abi: batchListingAbi,
         functionName: 'buyWithMerkleProof',
         args: [
-          params.proofArtifact.contract,
+          proofArtifact.contract,
           tokenIdBig,
           params.currency,
           amount,
           params.creator,
-          params.proofArtifact.root,
-          params.proofArtifact.proof,
+          proofArtifact.root,
+          proofArtifact.proof,
           allowListProof,
         ],
         account,
@@ -181,29 +202,34 @@ export function createBatchListingNamespace(
     },
 
     async getStatus(params): Promise<BatchListingStatus> {
+      const resolvedParams = await resolveBatchListingStatusParams({
+        config,
+        chainId: addresses.chainId,
+        params,
+      });
       const listingConfig = (await publicClient.readContract({
         address: addresses.batchListing,
         abi: batchListingAbi,
         functionName: 'getMerkleSalePriceConfig',
-        args: [params.creator, params.root],
+        args: [resolvedParams.creator, resolvedParams.root],
       }));
 
       const cancellationNonce = (await publicClient.readContract({
         address: addresses.batchListing,
         abi: batchListingAbi,
         functionName: 'getCreatorSalePriceMerkleRootNonce',
-        args: [params.creator, params.root],
+        args: [resolvedParams.creator, resolvedParams.root],
       }));
 
       const hasListing =
         listingConfig.amount > 0n &&
         cancellationNonce === listingConfig.nonce;
-      const allowList = await readAllowListConfig(publicClient, addresses.batchListing, params.creator, params.root);
-      const tokenStatus = await readTokenStatus(publicClient, addresses.batchListing, params);
+      const allowList = await readAllowListConfig(publicClient, addresses.batchListing, resolvedParams.creator, resolvedParams.root);
+      const tokenStatus = await readTokenStatus(publicClient, addresses.batchListing, resolvedParams);
 
       return {
-        root: params.root,
-        seller: params.creator,
+        root: resolvedParams.root,
+        seller: resolvedParams.creator,
         currencyAddress: listingConfig.currency,
         amount: listingConfig.amount,
         splitRecipients: [...listingConfig.splitRecipients],
@@ -215,6 +241,137 @@ export function createBatchListingNamespace(
         ...tokenStatus,
       };
     },
+  };
+}
+
+async function resolveApiBatchListingRootArtifact(
+  config: RareClientConfig,
+  artifact: BatchListingRootArtifact,
+): Promise<BatchListingRootArtifact> {
+  const [root, allowListRoot] = await Promise.all([
+    generateApiNftMerkleRoot(
+      config,
+      artifact.tokens.map((token) => ({
+        contractAddress: token.contract,
+        tokenId: token.tokenId,
+      })),
+    ),
+    artifact.allowList === undefined
+      ? Promise.resolve(undefined)
+      : generateApiAddressMerkleRoot(config, {
+          addresses: artifact.allowList.addresses,
+          storageTarget: 'batch-listing',
+        }),
+  ]);
+
+  return {
+    ...artifact,
+    root,
+    ...(artifact.allowList === undefined
+      ? {}
+      : {
+          allowList: {
+            ...artifact.allowList,
+            root: allowListRoot ?? artifact.allowList.root,
+          },
+        }),
+  };
+}
+
+async function resolveBatchListingBuyProofArtifact(opts: {
+  publicClient: PublicClient;
+  config: RareClientConfig;
+  batchListingAddress: Address;
+  chainId: number;
+  params: Parameters<RareClient['batchListing']['buy']>[0];
+  accountAddress: Address;
+}): Promise<BatchListingProofArtifact> {
+  const tokenProof = opts.params.proofArtifact ?? await resolveBatchListingTokenProof(opts);
+  const allowList = await readAllowListConfig(
+    opts.publicClient,
+    opts.batchListingAddress,
+    opts.params.creator,
+    tokenProof.root,
+  );
+  const block = allowList === undefined || tokenProof.allowListProof !== undefined
+    ? undefined
+    : await opts.publicClient.getBlock();
+  const allowListActive = allowList !== undefined &&
+    (block === undefined || allowList.endTimestamp > BigInt(block.timestamp));
+
+  if (!allowListActive || tokenProof.allowListProof !== undefined) {
+    return tokenProof;
+  }
+
+  const allowListProof = await resolveApiAddressMerkleProof(opts.config, {
+    root: allowList.root,
+    address: opts.accountAddress,
+    storageTarget: 'batch-listing',
+  });
+
+  return {
+    ...tokenProof,
+    allowListProof: allowListProof.proof,
+    allowListAddress: allowListProof.address,
+  };
+}
+
+async function resolveBatchListingTokenProof(opts: {
+  config: RareClientConfig;
+  chainId: number;
+  params: Parameters<RareClient['batchListing']['buy']>[0];
+}): Promise<BatchListingProofArtifact> {
+  if (opts.params.contract === undefined || opts.params.tokenId === undefined) {
+    throw new Error('Pass --proof, or pass --contract and --token-id so rare-api can resolve the batch listing proof.');
+  }
+
+  const proof = await resolveApiNftMerkleProof(opts.config, {
+    chainId: opts.chainId,
+    contractAddress: opts.params.contract,
+    tokenId: opts.params.tokenId,
+    root: opts.params.root,
+    context: 'batch-listing',
+    creator: opts.params.creator,
+  });
+
+  return {
+    root: proof.root,
+    contract: proof.contractAddress,
+    tokenId: proof.tokenId,
+    proof: proof.proof,
+  };
+}
+
+type ResolvedBatchListingStatusParams =
+  Parameters<RareClient['batchListing']['getStatus']>[0] & {
+    root: `0x${string}`;
+  };
+
+async function resolveBatchListingStatusParams(opts: {
+  config: RareClientConfig;
+  chainId: number;
+  params: Parameters<RareClient['batchListing']['getStatus']>[0];
+}): Promise<ResolvedBatchListingStatusParams> {
+  const { root } = opts.params;
+  if (root !== undefined) {
+    return { ...opts.params, root };
+  }
+  if (opts.params.contract === undefined || opts.params.tokenId === undefined) {
+    throw new Error('Pass --root, or pass --contract and --token-id so rare-api can resolve the batch listing root.');
+  }
+
+  const proof = await resolveApiNftMerkleProof(opts.config, {
+    chainId: opts.chainId,
+    contractAddress: opts.params.contract,
+    tokenId: opts.params.tokenId,
+    context: 'batch-listing',
+    creator: opts.params.creator,
+  });
+
+  return {
+    ...opts.params,
+    root: proof.root,
+    proof: opts.params.proof ?? proof.proof,
   };
 }
 
@@ -307,7 +464,7 @@ async function readAllowListConfig(
 async function readTokenStatus(
   publicClient: PublicClient,
   batchListingAddress: Address,
-  params: Parameters<RareClient['batchListing']['getStatus']>[0],
+  params: ResolvedBatchListingStatusParams,
 ): Promise<Pick<BatchListingStatus, 'tokenInRoot' | 'tokenNonce'>> {
   if (params.contract === undefined || params.tokenId === undefined || params.proof === undefined) {
     return {};

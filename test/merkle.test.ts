@@ -5,10 +5,10 @@ import { join } from 'node:path';
 import type { Address } from 'viem';
 import { ETH_ADDRESS } from '../src/contracts/addresses.js';
 import {
-  buildProofArtifact,
-  loadRootArtifact,
-  validateProofArtifact,
-  validateRootArtifact,
+  buildMerkleProofArtifact,
+  loadMerkleRootArtifact,
+  validateMerkleProofArtifact,
+  validateMerkleRootArtifact,
 } from '../src/sdk/merkle.js';
 import type { BatchListingRootArtifact } from '../src/sdk/types.js';
 
@@ -37,9 +37,9 @@ const allowListedRootArtifact = {
   },
 } satisfies BatchListingRootArtifact;
 
-describe('batch merkle artifact utilities', () => {
+describe('merkle artifact utilities', () => {
   it('builds token proofs from a service-provided root artifact', () => {
-    const proof = buildProofArtifact(rootArtifact, contract, '1');
+    const proof = buildMerkleProofArtifact(rootArtifact, contract, '1');
 
     expect(proof).toEqual({
       root: rootArtifact.root,
@@ -50,7 +50,7 @@ describe('batch merkle artifact utilities', () => {
   });
 
   it('includes allowListProof for an allowlisted buyer', () => {
-    const proof = buildProofArtifact(allowListedRootArtifact, contract, '1', buyer);
+    const proof = buildMerkleProofArtifact(allowListedRootArtifact, contract, '1', buyer);
 
     expect(proof.allowListProof).toEqual([
       '0x8dfad888a2f79bcfe6633c369a5652e94379f63f5849d8e8fe519c586bb49633',
@@ -60,7 +60,7 @@ describe('batch merkle artifact utilities', () => {
 
   it('catches structural errors and root mismatches', () => {
     expect(() =>
-      validateRootArtifact({
+      validateMerkleRootArtifact({
         root: `0x${'11'.repeat(32)}`,
         currency: '0x1111111111111111111111111111111111111111',
         amount: '1',
@@ -71,7 +71,7 @@ describe('batch merkle artifact utilities', () => {
     ).toThrow(/tokens must contain at least two entries/);
 
     expect(() =>
-      validateProofArtifact({
+      validateMerkleProofArtifact({
         root: `0x${'11'.repeat(32)}`,
         contract: '0x1111111111111111111111111111111111111111',
         tokenId: '1',
@@ -80,7 +80,7 @@ describe('batch merkle artifact utilities', () => {
     ).toThrow(/proof entry must be a 0x-prefixed bytes32 hex string/);
 
     expect(() =>
-      buildProofArtifact(
+      buildMerkleProofArtifact(
         { ...rootArtifact, root: `0x${'00'.repeat(32)}` },
         contract,
         '1',
@@ -93,12 +93,12 @@ describe('batch merkle artifact utilities', () => {
     const path = join(dir, 'artifact.json');
     try {
       await writeFile(path, JSON.stringify(allowListedRootArtifact, null, 2));
-      const loaded = await loadRootArtifact(path);
+      const loaded = await loadMerkleRootArtifact(path);
       expect(loaded.root).toBe(allowListedRootArtifact.root);
       expect(loaded.allowList?.root).toBe(allowListedRootArtifact.allowList.root);
 
       const parsed = JSON.parse(await readFile(path, 'utf8')) as unknown;
-      expect(() => validateRootArtifact(parsed)).not.toThrow();
+      expect(() => validateMerkleRootArtifact(parsed)).not.toThrow();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

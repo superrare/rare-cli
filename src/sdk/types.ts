@@ -12,6 +12,11 @@ import type {
   BatchTokenProofParams,
   BatchTokenProofVerifyParams,
   BuildBatchTokenTreeParams,
+  BuildUtilsTreeParams,
+  UtilsTreeArtifact,
+  UtilsTreeProofArtifact,
+  UtilsTreeProofParams,
+  UtilsTreeProofVerifyParams,
 } from './batch-core.js';
 import type {
   CollectionSearchParams,
@@ -37,6 +42,8 @@ export type RareClientConfig = {
   publicClient: PublicClient;
   walletClient?: WalletClient;
   account?: Address;
+  apiBaseUrl?: string;
+  apiFetch?: typeof fetch;
 }
 
 export type TransactionResult = {
@@ -546,12 +553,24 @@ export type BatchListingProofArtifact = {
   allowListAddress?: Address;
 }
 
+export type UtilsMerkleTokenEntry = BatchListingTokenEntry;
+export type UtilsMerkleRootArtifact = BatchListingRootArtifact;
+export type UtilsMerkleProofArtifact = BatchListingProofArtifact;
+
+export type UtilsMerkleProofParams = {
+  artifact: UtilsMerkleRootArtifact;
+  contract: Address;
+  tokenId: IntegerInput;
+  buyer?: Address;
+}
+
 export type BatchListingCreateParams = {
   artifact: BatchListingRootArtifact;
   autoApprove?: boolean;
 }
 
 export type BatchListingCreateResult = {
+  root: `0x${string}`;
   approvalTxHashes?: Hash[];
 } & TransactionResult
 
@@ -560,7 +579,10 @@ export type BatchListingCancelParams = {
 }
 
 export type BatchListingBuyParams = {
-  proofArtifact: BatchListingProofArtifact;
+  proofArtifact?: BatchListingProofArtifact;
+  root?: `0x${string}`;
+  contract?: Address;
+  tokenId?: IntegerInput;
   creator: Address;
   currency: Address;
   amount: AmountInput;
@@ -573,7 +595,7 @@ export type BatchListingSetAllowListParams = {
 }
 
 export type BatchListingStatusParams = {
-  root: `0x${string}`;
+  root?: `0x${string}`;
   creator: Address;
   contract?: Address;
   tokenId?: IntegerInput;
@@ -1226,6 +1248,16 @@ export type RareClient = {
       bid: (params: BatchAuctionBidParams) => Promise<BatchAuctionBidResult>;
       settle: (params: BatchAuctionSettleParams) => Promise<BatchAuctionSettleResult>;
       getStatus: (params: BatchAuctionStatusParams) => Promise<BatchAuctionStatus>;
+    };
+  };
+  utils: {
+    tree: {
+      build: (params: BuildUtilsTreeParams) => UtilsTreeArtifact;
+      proof: (params: UtilsTreeProofParams) => UtilsTreeProofArtifact;
+      verify: (params: UtilsTreeProofVerifyParams) => boolean;
+    };
+    merkle: {
+      proof: (params: UtilsMerkleProofParams) => UtilsMerkleProofArtifact;
     };
   };
   search: {

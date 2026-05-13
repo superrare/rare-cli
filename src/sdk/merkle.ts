@@ -142,7 +142,7 @@ export function getAddressProof(tree: MerkleTree, address: Address): `0x${string
   return parseBytes32Array(tree.getHexProof(leaf), 'proof');
 }
 
-export function buildProofArtifact(
+export function buildMerkleProofArtifact(
   artifact: BatchListingRootArtifact,
   contract: Address,
   tokenId: IntegerInput,
@@ -186,7 +186,7 @@ function buildAllowListProofFields(
   if (artifact.allowList === undefined) return undefined;
   if (buyer === undefined) {
     throw new Error(
-      'This root has an allowlist; pass buyer address to buildProofArtifact to include allowListProof',
+      'This root has an allowlist; pass buyer address to buildMerkleProofArtifact to include allowListProof',
     );
   }
   if (!isAddress(buyer)) throw new Error(`Invalid buyer address: ${buyer}`);
@@ -253,6 +253,8 @@ export function validateRootArtifact(value: unknown): asserts value is BatchList
   }
 }
 
+export const validateMerkleRootArtifact = validateRootArtifact;
+
 export function validateProofArtifact(value: unknown): asserts value is BatchListingProofArtifact {
   assertRecord(value, 'Proof artifact');
   assertHexRoot(value.root, 'root');
@@ -268,22 +270,30 @@ export function validateProofArtifact(value: unknown): asserts value is BatchLis
   }
 }
 
+export const validateMerkleProofArtifact = validateProofArtifact;
+
 function parseJson(text: string): unknown {
   return JSON.parse(text) as unknown;
 }
 
-export async function loadRootArtifact(path: string): Promise<BatchListingRootArtifact> {
+export const buildProofArtifact = buildMerkleProofArtifact;
+
+export async function loadMerkleRootArtifact(path: string): Promise<BatchListingRootArtifact> {
   const parsed = parseJson(await readFile(path, 'utf8'));
   validateRootArtifact(parsed);
   return parsed;
 }
 
-export async function loadProofArtifact(path: string): Promise<BatchListingProofArtifact> {
+export async function loadMerkleProofArtifact(path: string): Promise<BatchListingProofArtifact> {
   const parsed = parseJson(await readFile(path, 'utf8'));
   validateProofArtifact(parsed);
   return parsed;
 }
 
-export async function writeArtifact(path: string, data: unknown): Promise<void> {
+export async function writeMerkleArtifact(path: string, data: unknown): Promise<void> {
   await writeFile(path, `${JSON.stringify(data, null, 2)}\n`);
 }
+
+export const loadRootArtifact = loadMerkleRootArtifact;
+export const loadProofArtifact = loadMerkleProofArtifact;
+export const writeArtifact = writeMerkleArtifact;

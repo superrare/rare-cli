@@ -15,10 +15,17 @@ const addresses = {
   marketplaceSettings: marketplaceSettingsAddress,
   erc20ApprovalManager: erc20ApprovalManagerAddress,
   erc721ApprovalManager: approvalManagerAddress,
+  chainId: 11155111,
 } as const;
 
 function receipt() {
   return { blockNumber: 1n } as never;
+}
+
+function rareApiRootFetch(root = hex32('2')): typeof fetch {
+  return async () => new Response(JSON.stringify({ merkleRoot: root }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
 describe('batch listing namespace', () => {
@@ -37,6 +44,7 @@ describe('batch listing namespace', () => {
       } as never,
       {
         publicClient: {} as never,
+        apiFetch: rareApiRootFetch(),
         walletClient: {
           account: { address: accountAddress },
           async writeContract(params: unknown) {
@@ -78,6 +86,7 @@ describe('batch listing namespace', () => {
       } as never,
       {
         publicClient: {} as never,
+        apiFetch: rareApiRootFetch(),
         walletClient: {
           account: { address: accountAddress },
         } as never,
@@ -112,6 +121,12 @@ describe('batch listing namespace', () => {
             expect(params.args?.[1]).toBe(erc20ApprovalManagerAddress);
             return 10n ** 18n;
           }
+          if (params.functionName === 'getAllowListConfig') {
+            return {
+              root: `0x${'00'.repeat(32)}`,
+              endTimestamp: 0n,
+            };
+          }
           throw new Error(`Unexpected readContract: ${params.functionName}`);
         },
         async waitForTransactionReceipt() {
@@ -120,6 +135,7 @@ describe('batch listing namespace', () => {
       } as never,
       {
         publicClient: {} as never,
+        apiFetch: rareApiRootFetch(),
         walletClient: {
           account: { address: accountAddress },
           async writeContract(params: { functionName: string; args: unknown[] }) {
@@ -239,6 +255,7 @@ describe('batch listing namespace', () => {
       } as never,
       {
         publicClient: {} as never,
+        apiFetch: rareApiRootFetch(),
         walletClient: {
           account: { address: accountAddress },
           async writeContract(params: { functionName: string; args: unknown[] }) {

@@ -39,7 +39,12 @@ import {
   type RawDirectSaleConfig,
   type RawStakingMinimum,
   type ReleaseMintTokenRange,
+  ZERO_BYTES32,
 } from './release-core.js';
+import {
+  generateApiAddressMerkleRoot,
+  resolveApiAddressMerkleProof,
+} from './merkle-api.js';
 
 const releaseCollectionAbi = [
   {
@@ -397,7 +402,8 @@ export function createReleaseNamespace(
     async setAllowlistConfig(params): ReturnType<ReleaseNamespace['setAllowlistConfig']> {
       const rareMinter = requireRareMinterAddress(addresses.rareMinter);
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const plan = planReleaseAllowlistConfig(params);
+      const resolvedParams = await resolveReleaseAllowlistConfigParams(config, params);
+      const plan = planReleaseAllowlistConfig(resolvedParams);
 
       await assertCollectionOwnerForReleaseWrite({
         publicClient,
@@ -617,9 +623,16 @@ export function createReleaseNamespace(
         account: accountAddress,
       });
       const block = await publicClient.getBlock();
+      const proof = plan.proof.length > 0 || status.allowlistRoot === ZERO_BYTES32 || status.allowlistEndTimestamp <= BigInt(block.timestamp)
+        ? plan.proof
+        : (await resolveApiAddressMerkleProof(config, {
+            root: status.allowlistRoot,
+            address: accountAddress,
+            storageTarget: 'collection-allowlist',
+          })).proof;
       const mint = preflightReleaseDirectSaleMint({
         status,
-        plan,
+        plan: { ...plan, proof },
         buyer: accountAddress,
         nowSeconds: BigInt(block.timestamp),
       });
@@ -689,4 +702,24 @@ export function createReleaseNamespace(
 
 function currentUnixTimestamp(): bigint {
   return BigInt(Math.floor(Date.now() / 1000));
+}
+
+async function resolveReleaseAllowlistConfigParams(
+  config: RareClientConfig,
+  params: Parameters<ReleaseNamespace['setAllowlistConfig']>[0],
+): Promise<Parameters<ReleaseNamespace['setAllowlistConfig']>[0]> {
+  if (params.root !== undefined || params.artifact === undefined) {
+    return params;
+  }
+
+  const root = await generateApiAddressMerkleRoot(config, {
+    addresses: params.artifact.wallets.map((wallet) => wallet.address),
+    storageTarget: 'collection-allowlist',
+  });
+
+  return {
+    ...params,
+    root,
+    artifact: undefined,
+  };
 }

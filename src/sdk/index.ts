@@ -120,14 +120,22 @@ export {
 } from './batch-auction-core.js';
 export {
   buildBatchTokenTreeArtifact,
+  buildBatchTokenTreeArtifact as buildUtilsTreeArtifact,
   getBatchTokenProof,
+  getBatchTokenProof as getUtilsTreeProof,
   hashBatchToken,
+  hashBatchToken as hashUtilsTreeToken,
   normalizeBytes32 as normalizeBatchBytes32,
   parseBatchTokenList,
+  parseBatchTokenList as parseUtilsTreeTokenList,
   parseBatchTokenListArtifact,
+  parseBatchTokenListArtifact as parseUtilsTreeArtifact,
   parseBatchTokenListArtifactOrBuild,
+  parseBatchTokenListArtifactOrBuild as parseUtilsTreeArtifactOrBuild,
   parseBatchTokenProofArtifact,
+  parseBatchTokenProofArtifact as parseUtilsTreeProofArtifact,
   verifyBatchTokenProof,
+  verifyBatchTokenProof as verifyUtilsTreeProof,
 } from './batch-core.js';
 export {
   buildMintPinMetadataParams,
@@ -144,6 +152,13 @@ export type {
   BatchTokenProofVerifyParams,
   BatchTokenTreeEntry,
   BuildBatchTokenTreeParams,
+  BuildUtilsTreeParams,
+  UtilsTreeArtifact,
+  UtilsTreeEntry,
+  UtilsTreeProofArtifact,
+  UtilsTreeProofParams,
+  UtilsTreeProofVerifyParams,
+  UtilsTreeToken,
 } from './batch-core.js';
 export type {
   CollectionMarketListingBuyPlan,
@@ -247,11 +262,17 @@ export { uniswapV4QuoterAbi } from '../contracts/abis/uniswap-v4-quoter.js';
 export { rareMinterAbi } from '../contracts/abis/rare-minter.js';
 
 export {
+  buildMerkleProofArtifact,
   buildProofArtifact,
+  loadMerkleRootArtifact,
   loadRootArtifact,
+  loadMerkleProofArtifact,
   loadProofArtifact,
+  validateMerkleRootArtifact,
   validateRootArtifact,
+  validateMerkleProofArtifact,
   validateProofArtifact,
+  writeMerkleArtifact,
   writeArtifact,
 } from './merkle.js';
 export type {
@@ -265,4 +286,8 @@ export type {
   BatchListingSetAllowListParams,
   BatchListingStatusParams,
   BatchListingStatus,
+  UtilsMerkleProofArtifact,
+  UtilsMerkleProofParams,
+  UtilsMerkleRootArtifact,
+  UtilsMerkleTokenEntry,
 } from './types.js';

@@ -7,7 +7,7 @@ import {
   type PublicClient,
 } from 'viem';
 import { batchAuctionHouseAbi } from '../contracts/abis/batch-auctionhouse.js';
-import { ETH_ADDRESS, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
+import { ETH_ADDRESS, chainIds, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
 import {
   approvalAbi,
   preparePaymentAmountForSpender,
@@ -27,6 +27,10 @@ import {
   type BatchAuctionReadDetails,
   type BatchAuctionRootContext,
 } from './batch-auction-core.js';
+import {
+  generateApiNftMerkleRoot,
+  resolveApiNftMerkleProof,
+} from './merkle-api.js';
 
 export function createBatchAuctionNamespace(
   publicClient: PublicClient,
@@ -37,7 +41,8 @@ export function createBatchAuctionNamespace(
     async create(params): ReturnType<RareClient['batch']['auction']['create']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const plan = planBatchAuctionCreate(params, accountAddress);
+      const resolvedParams = await resolveBatchAuctionCreateParams(config, params);
+      const plan = planBatchAuctionCreate(resolvedParams, accountAddress);
       const erc721ApprovalManager = plan.approvalContracts.length === 0
         ? undefined
         : requireContractAddress(chain, 'erc721ApprovalManager');
@@ -128,7 +133,8 @@ export function createBatchAuctionNamespace(
     async bid(params): ReturnType<RareClient['batch']['auction']['bid']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const plan = planBatchAuctionBid(params);
+      const resolvedParams = await resolveBatchAuctionBidParams(config, chainIds[chain], params);
+      const plan = planBatchAuctionBid(resolvedParams);
       const erc20ApprovalManager = isAddressEqual(plan.currency, ETH_ADDRESS)
         ? batchAuctionHouse
         : requireContractAddress(chain, 'erc20ApprovalManager');
@@ -230,7 +236,8 @@ export function createBatchAuctionNamespace(
 
     async getStatus(params): ReturnType<RareClient['batch']['auction']['getStatus']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
-      const plan = planBatchAuctionStatus(params);
+      const resolvedParams = await resolveBatchAuctionStatusParams(config, chainIds[chain], params);
+      const plan = planBatchAuctionStatus(resolvedParams);
       const [details, currentBid, block] = await Promise.all([
         publicClient.readContract({
           address: batchAuctionHouse,
@@ -272,6 +279,78 @@ export function createBatchAuctionNamespace(
         block.timestamp,
       );
     },
+  };
+}
+
+async function resolveBatchAuctionCreateParams(
+  config: RareClientConfig,
+  params: Parameters<RareClient['batch']['auction']['create']>[0],
+): Promise<Parameters<RareClient['batch']['auction']['create']>[0]> {
+  if (params.root !== undefined || params.artifact === undefined) {
+    return params;
+  }
+
+  const root = await generateApiNftMerkleRoot(config, params.artifact.tokens);
+  return {
+    ...params,
+    root,
+    artifact: {
+      ...params.artifact,
+      root,
+    },
+  };
+}
+
+async function resolveBatchAuctionBidParams(
+  config: RareClientConfig,
+  chainId: number,
+  params: Parameters<RareClient['batch']['auction']['bid']>[0],
+): Promise<Parameters<RareClient['batch']['auction']['bid']>[0]> {
+  if (
+    params.proofArtifact !== undefined ||
+    (params.root !== undefined && params.proof !== undefined)
+  ) {
+    return params;
+  }
+
+  const proof = await resolveApiNftMerkleProof(config, {
+    chainId,
+    contractAddress: params.contract,
+    tokenId: params.tokenId,
+    root: params.root,
+    context: 'batch-auction',
+    creator: params.creator,
+  });
+
+  return {
+    ...params,
+    root: proof.root,
+    proof: proof.proof,
+  };
+}
+
+async function resolveBatchAuctionStatusParams(
+  config: RareClientConfig,
+  chainId: number,
+  params: Parameters<RareClient['batch']['auction']['getStatus']>[0],
+): Promise<Parameters<RareClient['batch']['auction']['getStatus']>[0]> {
+  if (params.root !== undefined || params.creator === undefined) {
+    return params;
+  }
+
+  const proof = await resolveApiNftMerkleProof(config, {
+    chainId,
+    contractAddress: params.contract,
+    tokenId: params.tokenId,
+    root: params.root,
+    context: 'batch-auction',
+    creator: params.creator,
+  });
+
+  return {
+    ...params,
+    root: proof.root,
+    proof: params.proof ?? params.proofArtifact?.proof ?? proof.proof,
   };
 }
 

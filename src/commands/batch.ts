@@ -21,10 +21,10 @@ import {
   type BatchTokenProofInput,
 } from '../sdk/batch-core.js';
 import {
-  buildProofArtifact,
-  loadProofArtifact,
-  loadRootArtifact,
-  writeArtifact,
+  buildMerkleProofArtifact,
+  loadMerkleProofArtifact,
+  loadMerkleRootArtifact,
+  writeMerkleArtifact,
 } from '../sdk/merkle.js';
 import { parseAddress } from '../sdk/validation.js';
 import { formatBatchAmount, parseBatchAmount } from './batch-amounts.js';
@@ -74,7 +74,10 @@ type BatchListingRootOptions = ChainOptions & {
 };
 
 type BatchListingBuyOptions = ChainOptions & {
-  proof: string;
+  proof?: string;
+  root?: string;
+  contract?: string;
+  tokenId?: string;
   creator: string;
   currency: string;
   amount: string;
@@ -87,7 +90,7 @@ type BatchListingSetAllowListOptions = ChainOptions & {
 };
 
 type BatchListingStatusOptions = ChainOptions & {
-  root: string;
+  root?: string;
   creator: string;
   contract?: string;
   tokenId?: string;
@@ -97,7 +100,7 @@ type BatchListingStatusOptions = ChainOptions & {
 async function resolveRootInput(input: string): Promise<`0x${string}`> {
   if (isHex(input) && input.length === 66) return input;
   if (existsSync(input)) {
-    const artifact = await loadRootArtifact(input);
+    const artifact = await loadMerkleRootArtifact(input);
     return artifact.root;
   }
   throw new Error(`--root must be a 0x-prefixed bytes32 or a path to a root artifact JSON file. Got: ${input}`);
@@ -105,11 +108,9 @@ async function resolveRootInput(input: string): Promise<`0x${string}`> {
 
 export function batchCommand(): Command {
   const cmd = new Command('batch');
-  cmd.description('Batch marketplace utilities and listing subcommands');
-  cmd.addCommand(createTreeCommand());
+  cmd.description('Batch marketplace offer, auction, and listing subcommands');
   cmd.addCommand(createOfferCommand());
   cmd.addCommand(createAuctionCommand());
-  cmd.addCommand(merkleCommand());
   addBatchListingCommands(cmd);
   return cmd;
 }
@@ -134,7 +135,7 @@ type OfferRevokeOptions = OfferRootOptions & {
 
 type OfferAcceptOptions = {
   creator: string;
-  proof: string;
+  proof?: string;
   root?: string;
   contract: string;
   tokenId: string;
@@ -170,7 +171,7 @@ type AuctionCancelOptions = OfferRootOptions & {
 
 type AuctionBidOptions = {
   creator: string;
-  proof: string;
+  proof?: string;
   root?: string;
   contract: string;
   tokenId: string;
@@ -194,9 +195,9 @@ type AuctionStatusOptions = OfferRootOptions & {
   chain?: string;
 };
 
-function createTreeBuildCommand(): Command {
+function createUtilsTreeBuildCommand(): Command {
   const cmd = new Command('build');
-  cmd.description('Build a batch marketplace token Merkle artifact from CSV or JSON');
+  cmd.description('Build a token Merkle tree artifact from CSV or JSON');
 
   cmd
     .requiredOption('--input <path>', 'CSV, JSON, or artifact token list')
@@ -236,12 +237,12 @@ function createTreeBuildCommand(): Command {
   return cmd;
 }
 
-function createTreeProofCommand(): Command {
+function createUtilsTreeProofCommand(): Command {
   const cmd = new Command('proof');
-  cmd.description('Generate a batch marketplace Merkle proof for one token');
+  cmd.description('Generate a Merkle tree proof for one token');
 
   cmd
-    .requiredOption('--input <path>', 'batch token artifact, CSV, or JSON token list')
+    .requiredOption('--input <path>', 'token tree artifact, CSV, or JSON token list')
     .requiredOption('--contract <address>', 'token contract address')
     .requiredOption('--token-id <id>', 'token ID to prove')
     .option('--format <format>', 'input format (csv, json)')
@@ -293,15 +294,15 @@ function createTreeProofCommand(): Command {
   return cmd;
 }
 
-function createTreeVerifyCommand(): Command {
+function createUtilsTreeVerifyCommand(): Command {
   const cmd = new Command('verify');
-  cmd.description('Verify a batch marketplace token proof');
+  cmd.description('Verify a token Merkle tree proof');
 
   cmd
-    .requiredOption('--input <path>', 'batch token artifact, CSV, or JSON token list')
+    .requiredOption('--input <path>', 'token tree artifact, CSV, or JSON token list')
     .requiredOption('--contract <address>', 'token contract address')
     .requiredOption('--token-id <id>', 'token ID to verify')
-    .option('--proof <path>', 'proof JSON from rare batch tree proof')
+    .option('--proof <path>', 'proof JSON from rare utils tree proof')
     .option('--root <bytes32>', 'expected Merkle root; defaults to the input or proof root')
     .option('--format <format>', 'input format (csv, json)')
     .option('--chain-id <id>', 'chain ID to use for artifact/proof checks')
@@ -473,8 +474,8 @@ function createOfferAcceptCommand(): Command {
 
   cmd
     .requiredOption('--creator <address>', 'batch offer creator/buyer address')
-    .requiredOption('--proof <path>', 'proof JSON from rare batch tree proof')
-    .option('--root <bytes32>', 'expected Merkle root; defaults to proof root')
+    .option('--proof <path>', 'proof JSON from rare utils tree proof')
+    .option('--root <bytes32>', 'expected Merkle root; rare-api resolves it when omitted')
     .requiredOption('--contract <address>', 'token contract address')
     .requiredOption('--token-id <id>', 'token ID to accept with')
     .option('--split-recipient <address>', 'seller split recipient; repeat with --split-ratio', collect, [])
@@ -485,15 +486,19 @@ function createOfferAcceptCommand(): Command {
       try {
         const creator = parseAddressOption(opts.creator, '--creator');
         const contract = parseAddressOption(opts.contract, '--contract');
-        const proofInput = await readBatchProofFile(opts.proof);
-        const root = resolveProofRoot(proofInput, opts.root);
-        validateBatchTokenProofInputMatchesTarget(proofInput, {
-          artifact: createRootOnlyArtifact(root),
-          contractAddress: contract,
-          tokenId: opts.tokenId,
-          root,
-          allowRootOverride: opts.root !== undefined,
-        });
+        const proofInput = opts.proof === undefined ? undefined : await readBatchProofFile(opts.proof);
+        const root = proofInput === undefined
+          ? opts.root === undefined ? undefined : parseBytes32(opts.root, '--root')
+          : resolveProofRoot(proofInput, opts.root);
+        if (proofInput !== undefined && root !== undefined) {
+          validateBatchTokenProofInputMatchesTarget(proofInput, {
+            artifact: createRootOnlyArtifact(root),
+            contractAddress: contract,
+            tokenId: opts.tokenId,
+            root,
+            allowRootOverride: opts.root !== undefined,
+          });
+        }
         const splitAddresses = parseSplitRecipients(opts.splitRecipient);
         const splitRatios = parseSplitRatios(opts.splitRatio);
         const { chain, rare } = createWriteBatchClient(opts.chain);
@@ -501,7 +506,7 @@ function createOfferAcceptCommand(): Command {
         log(`Accepting batch offer on ${chain}...`);
         log(`  BatchOfferCreator: ${rare.contracts.batchOfferCreator}`);
         log(`  Creator: ${creator}`);
-        log(`  Root: ${root}`);
+        log(`  Root: ${root ?? 'rare-api'}`);
         log(`  Token: ${contract} #${opts.tokenId}`);
         if (splitAddresses !== undefined) {
           log(`  Split recipients: ${splitAddresses.join(', ')}`);
@@ -512,7 +517,7 @@ function createOfferAcceptCommand(): Command {
         const result = await rare.batch.offer.accept({
           creator,
           root,
-          proof: proofInput.proof,
+          proof: proofInput?.proof,
           contract,
           tokenId: opts.tokenId,
           splitAddresses,
@@ -714,8 +719,8 @@ function createAuctionBidCommand(): Command {
 
   cmd
     .requiredOption('--creator <address>', 'batch auction creator/seller address')
-    .requiredOption('--proof <path>', 'proof JSON from rare batch tree proof')
-    .option('--root <bytes32>', 'expected Merkle root; defaults to proof root')
+    .option('--proof <path>', 'proof JSON from rare utils tree proof')
+    .option('--root <bytes32>', 'expected Merkle root; rare-api resolves it when omitted')
     .requiredOption('--contract <address>', 'token contract address')
     .requiredOption('--token-id <id>', 'token ID to bid on')
     .requiredOption('--amount <amount>', 'bid amount in ETH or token units')
@@ -726,22 +731,26 @@ function createAuctionBidCommand(): Command {
       try {
         const creator = parseAddressOption(opts.creator, '--creator');
         const contract = parseAddressOption(opts.contract, '--contract');
-        const proofInput = await readBatchProofFile(opts.proof);
-        const root = resolveProofRoot(proofInput, opts.root);
-        validateBatchTokenProofInputMatchesTarget(proofInput, {
-          artifact: createRootOnlyArtifact(root),
-          contractAddress: contract,
-          tokenId: opts.tokenId,
-          root,
-          allowRootOverride: opts.root !== undefined,
-        });
+        const proofInput = opts.proof === undefined ? undefined : await readBatchProofFile(opts.proof);
+        const root = proofInput === undefined
+          ? opts.root === undefined ? undefined : parseBytes32(opts.root, '--root')
+          : resolveProofRoot(proofInput, opts.root);
+        if (proofInput !== undefined && root !== undefined) {
+          validateBatchTokenProofInputMatchesTarget(proofInput, {
+            artifact: createRootOnlyArtifact(root),
+            contractAddress: contract,
+            tokenId: opts.tokenId,
+            root,
+            allowRootOverride: opts.root !== undefined,
+          });
+        }
         const { chain, rare } = createWriteBatchClient(opts.chain);
         const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
 
         log(`Bidding on batch auction token on ${chain}...`);
         log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse}`);
         log(`  Creator: ${creator}`);
-        log(`  Root: ${root}`);
+        log(`  Root: ${root ?? 'rare-api'}`);
         log(`  Token: ${contract} #${opts.tokenId}`);
         log(`  Amount: ${opts.amount} ${currency === ETH_ADDRESS ? 'ETH' : currency}`);
         log('Waiting for confirmation...');
@@ -749,7 +758,7 @@ function createAuctionBidCommand(): Command {
         const result = await rare.batch.auction.bid({
           creator,
           root,
-          proof: proofInput.proof,
+          proof: proofInput?.proof,
           contract,
           tokenId: opts.tokenId,
           currency,
@@ -848,7 +857,7 @@ function createAuctionStatusCommand(): Command {
     .option('--creator <address>', 'batch auction creator/seller address for root config status')
     .option('--root <bytes32>', 'batch token Merkle root')
     .option('--input <path>', 'batch token artifact, CSV, or JSON token list')
-    .option('--proof <path>', 'proof JSON from rare batch tree proof')
+    .option('--proof <path>', 'proof JSON from rare utils tree proof')
     .option('--format <format>', 'input format for --input (csv, json)')
     .option('--chain-id <id>', 'chain ID to use when building --input')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
@@ -923,18 +932,18 @@ function createOfferCommand(): Command {
   return cmd;
 }
 
-function createTreeCommand(): Command {
+export function createUtilsTreeCommand(): Command {
   const cmd = new Command('tree');
-  cmd.description('Build, prove, and verify batch marketplace token trees');
-  cmd.addCommand(createTreeBuildCommand());
-  cmd.addCommand(createTreeProofCommand());
-  cmd.addCommand(createTreeVerifyCommand());
+  cmd.description('Build, prove, and verify token Merkle trees');
+  cmd.addCommand(createUtilsTreeBuildCommand());
+  cmd.addCommand(createUtilsTreeProofCommand());
+  cmd.addCommand(createUtilsTreeVerifyCommand());
   return cmd;
 }
 
-function merkleCommand(): Command {
+export function createUtilsMerkleCommand(): Command {
   const cmd = new Command('merkle');
-  cmd.description('Merkle proof artifact generation for batch listings');
+  cmd.description('Merkle proof artifact utilities');
 
   cmd
     .command('proof')
@@ -946,8 +955,8 @@ function merkleCommand(): Command {
     .option('--output <path>', 'write artifact to this path (otherwise stdout)')
     .action(async (opts: MerkleProofOptions): Promise<void> => {
       try {
-        const rootArtifact = await loadRootArtifact(opts.root);
-        const proof = buildProofArtifact(
+        const rootArtifact = await loadMerkleRootArtifact(opts.root);
+        const proof = buildMerkleProofArtifact(
           rootArtifact,
           parseAddress(opts.contract, '--contract'),
           opts.tokenId,
@@ -955,7 +964,7 @@ function merkleCommand(): Command {
         );
 
         if (opts.output !== undefined) {
-          await writeArtifact(opts.output, proof);
+          await writeMerkleArtifact(opts.output, proof);
           log(`Proof artifact written to ${opts.output}`);
         }
 
@@ -994,11 +1003,11 @@ function addBatchListingCommands(cmd: Command): void {
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
-        const artifact = await loadRootArtifact(opts.root);
+        const artifact = await loadMerkleRootArtifact(opts.root);
 
         log(`Registering batch listing on ${chain}...`);
         log(`  Marketplace contract: ${rare.contracts.batchListing}`);
-        log(`  Root: ${artifact.root}`);
+        log('  Root: rare-api canonical root from artifact');
         log(`  Tokens in set: ${artifact.tokens.length}`);
         log(
           `  Amount: ${await formatBatchAmount(publicClient, chain, artifact.currency, BigInt(artifact.amount))}` +
@@ -1016,13 +1025,14 @@ function addBatchListingCommands(cmd: Command): void {
             txHash: result.txHash,
             blockNumber: result.receipt.blockNumber.toString(),
             approvalTxHashes: result.approvalTxHashes ?? null,
-            root: artifact.root,
+            root: result.root,
           },
           () => {
             if (result.approvalTxHashes !== undefined && result.approvalTxHashes.length > 0) {
               console.log(`Approval txs: ${result.approvalTxHashes.join(', ')}`);
             }
             console.log(`\nTransaction sent: ${result.txHash}`);
+            console.log(`Root: ${result.root}`);
             console.log(`Batch listing registered! Block: ${result.receipt.blockNumber}`);
           },
         );
@@ -1064,8 +1074,11 @@ function addBatchListingCommands(cmd: Command): void {
 
   cmd
     .command('buy')
-    .description('Buy one token from a batch listing using a proof artifact')
-    .requiredOption('--proof <path>', 'path to a proof artifact JSON')
+    .description('Buy one token from a batch listing using a proof artifact or rare-api proof resolution')
+    .option('--proof <path>', 'path to a proof artifact JSON')
+    .option('--root <hex>', 'batch listing Merkle root; rare-api resolves it when omitted')
+    .option('--contract <address>', 'NFT contract address; required when --proof is omitted')
+    .option('--token-id <id>', 'token ID; required when --proof is omitted')
     .requiredOption('--creator <address>', 'address of the listing creator (seller)')
     .requiredOption('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address')
     .requiredOption('--amount <amount>', 'purchase amount in ETH (or token units)')
@@ -1073,18 +1086,23 @@ function addBatchListingCommands(cmd: Command): void {
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: BatchListingBuyOptions): Promise<void> => {
       try {
+        const proofArtifact = opts.proof === undefined ? undefined : await loadMerkleProofArtifact(opts.proof);
+        const contract = proofArtifact?.contract ?? parseOptionalAddress(opts.contract, '--contract');
+        const tokenId = proofArtifact?.tokenId ?? opts.tokenId;
+        if (proofArtifact === undefined && (contract === undefined || tokenId === undefined)) {
+          throw new Error('Pass --proof, or pass --contract and --token-id so rare-api can resolve the batch listing proof.');
+        }
         const chain = getActiveChain(opts.chain, opts.chainId);
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
         const currency = resolveCurrency(opts.currency, chain);
-        const proofArtifact = await loadProofArtifact(opts.proof);
         const amount = await parseBatchAmount(publicClient, chain, currency, opts.amount);
 
         log(`Buying batch-listed token on ${chain}...`);
         log(`  Marketplace contract: ${rare.contracts.batchListing}`);
-        log(`  Token: ${proofArtifact.contract}/${proofArtifact.tokenId}`);
-        log(`  Root: ${proofArtifact.root}`);
+        log(`  Token: ${contract}/${tokenId}`);
+        log(`  Root: ${proofArtifact?.root ?? opts.root ?? 'rare-api'}`);
         log(
           `  Amount: ${await formatBatchAmount(publicClient, chain, currency, amount)}` +
             `${isAddressEqual(currency, ETH_ADDRESS) ? ' ETH' : ` ${currency}`}`,
@@ -1092,6 +1110,9 @@ function addBatchListingCommands(cmd: Command): void {
 
         const result = await rare.batchListing.buy({
           proofArtifact,
+          root: opts.root === undefined ? undefined : parseBytes32(opts.root, '--root'),
+          contract,
+          tokenId,
           creator: parseAddress(opts.creator, '--creator'),
           currency,
           amount,
@@ -1101,8 +1122,8 @@ function addBatchListingCommands(cmd: Command): void {
           {
             txHash: result.txHash,
             blockNumber: result.receipt.blockNumber.toString(),
-            tokenContract: proofArtifact.contract,
-            tokenId: proofArtifact.tokenId,
+            tokenContract: contract,
+            tokenId,
           },
           () => {
             console.log(`\nTransaction sent: ${result.txHash}`);
@@ -1128,7 +1149,7 @@ function addBatchListingCommands(cmd: Command): void {
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
-        const rootArtifact = existsSync(opts.root) ? await loadRootArtifact(opts.root) : undefined;
+        const rootArtifact = existsSync(opts.root) ? await loadMerkleRootArtifact(opts.root) : undefined;
         const root = rootArtifact?.root ?? await resolveRootInput(opts.root);
         const allowListRoot = opts.allowlistRoot === undefined
           ? rootArtifact?.allowList?.root
@@ -1163,8 +1184,8 @@ function addBatchListingCommands(cmd: Command): void {
 
   cmd
     .command('status')
-    .description('Get batch listing status (read-only). Optionally narrow by token+proof.')
-    .requiredOption('--root <hexOrPath>', '0x-prefixed bytes32 root, or path to a root artifact JSON')
+    .description('Get batch listing status (read-only). Optionally resolve root/proof from rare-api by token.')
+    .option('--root <hexOrPath>', '0x-prefixed bytes32 root, or path to a root artifact JSON')
     .requiredOption('--creator <address>', 'address of the listing creator')
     .option('--contract <address>', 'NFT contract (with --token-id and --proof, populates tokenInRoot)')
     .option('--token-id <id>', 'token ID')
@@ -1176,8 +1197,8 @@ function addBatchListingCommands(cmd: Command): void {
         const chain = getActiveChain(opts.chain, opts.chainId);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient });
-        const root = await resolveRootInput(opts.root);
-        const proofArtifact = opts.proof === undefined ? undefined : await loadProofArtifact(opts.proof);
+        const root = opts.root === undefined ? undefined : await resolveRootInput(opts.root);
+        const proofArtifact = opts.proof === undefined ? undefined : await loadMerkleProofArtifact(opts.proof);
         const result = await rare.batchListing.getStatus({
           root,
           creator: parseAddress(opts.creator, '--creator'),
