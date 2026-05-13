@@ -1,10 +1,16 @@
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createPublicClient, http, type Address } from 'viem';
+import { createPublicClient, http, zeroAddress, type Address, type PublicClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
 import { describe, expect } from 'vitest';
+import {
+  chainIds,
+  supportedChains,
+  viemChains,
+  type SupportedChain,
+} from '../../src/contracts/addresses.js';
+import { parseAddress, parseHexString } from '../../src/sdk/validation.js';
 import { parseJsonStdout, runCli } from '../helpers/cli.js';
 import { loadDotEnv, missingLiveEnv } from './env.mjs';
 
@@ -18,32 +24,28 @@ export type TxResult = {
   approvalTxHash?: string | null;
 };
 
-export async function configureLiveHome(home: string, privateKey: string): Promise<void> {
-  if (!privateKey.startsWith('0x')) {
-    throw new Error('Live E2E private key must be 0x-prefixed.');
-  }
-
+export async function configureLiveHome(home: string, privateKey: `0x${string}`, chain: SupportedChain): Promise<void> {
   const result = await runCli([
     'configure',
     '--default-chain',
-    'sepolia',
+    chain,
     '--chain',
-    'sepolia',
+    chain,
     '--private-key',
     privateKey,
     '--rpc-url',
-    process.env.TEST_RPC_URL!,
+    liveRpcUrl(),
   ], { home });
 
   expect(result.code).toBe(0);
   expect(result.stderr).toBe('');
-  await writeFile(liveAccountPath(home), privateKeyToAccount(privateKey as `0x${string}`).address);
+  await writeFile(liveAccountPath(home), privateKeyToAccount(privateKey).address);
 }
 
 export async function jsonCommand<T>(home: string, args: string[], timeoutMs = 180_000): Promise<T> {
   const label = `rare ${args.join(' ')}`;
   return retryNonceConflict(label, async () => {
-    const run = async () => parseJsonStdout<T>(await runCli(['--json', ...args], { home, timeoutMs }));
+    const run = async (): Promise<T> => parseJsonStdout<T>(await runCli(['--json', ...args], { home, timeoutMs }));
     if (!isLiveWriteCommand(args)) {
       return run();
     }
@@ -56,19 +58,29 @@ export function expectTx(result: TxResult): void {
   expect(result.blockNumber).toMatch(/^\d+$/);
 }
 
-export function createLivePublicClient() {
+export async function detectLiveChain(): Promise<SupportedChain> {
+  const publicClient = createPublicClient({ transport: http(liveRpcUrl()) });
+  const chainId = await publicClient.getChainId();
+  const chain = supportedChains.find((supportedChain) => chainIds[supportedChain] === chainId);
+  if (!chain) {
+    throw new Error(`TEST_RPC_URL returned unsupported chain id ${chainId}. Supported chain ids: ${Object.values(chainIds).join(', ')}`);
+  }
+  return chain;
+}
+
+export function createLivePublicClient(chain: SupportedChain): PublicClient {
   return createPublicClient({
-    chain: sepolia,
-    transport: http(process.env.TEST_RPC_URL!),
+    chain: viemChains[chain],
+    transport: http(liveRpcUrl()),
   });
 }
 
 export function livePrivateKey(name: 'E2E_SELLER_PRIVATE_KEY' | 'E2E_BUYER_PRIVATE_KEY'): `0x${string}` {
   const value = process.env[name];
-  if (!value || !value.startsWith('0x')) {
+  if (!value) {
     throw new Error(`${name} must be set to a 0x-prefixed private key.`);
   }
-  return value as `0x${string}`;
+  return parseHexString(value, name);
 }
 
 export async function createTempHome(): Promise<string> {
@@ -151,13 +163,28 @@ function isNonceConflict(error: unknown): boolean {
 function isLiveWriteCommand(args: string[]): boolean {
   const [command, subcommand] = args;
   if (command === 'deploy' || command === 'mint') return true;
-  if (command === 'listing') return subcommand === 'create' || subcommand === 'cancel' || subcommand === 'buy';
+  if (command === 'listing') {
+    if (subcommand === 'create' || subcommand === 'cancel' || subcommand === 'buy') return true;
+    if (subcommand !== 'release') return false;
+    const releaseSubcommand = args[2];
+    if (releaseSubcommand === 'configure') return true;
+    if (releaseSubcommand === 'allowlist') return args[3] === 'set';
+    if (releaseSubcommand === 'limits') return args[3]?.startsWith('set-') === true;
+    return false;
+  }
   if (command === 'auction') {
     return subcommand === 'create' || subcommand === 'cancel' || subcommand === 'bid' || subcommand === 'settle';
   }
   if (command === 'offer') return subcommand === 'create' || subcommand === 'cancel' || subcommand === 'accept';
-  if (command === 'release') return subcommand === 'configure';
   return false;
+}
+
+export function liveRpcUrl(): string {
+  const value = process.env.TEST_RPC_URL;
+  if (!value) {
+    throw new Error('TEST_RPC_URL must be set.');
+  }
+  return value;
 }
 
 function liveNonceRetryAttempts(): number {
@@ -171,9 +198,9 @@ async function sleep(ms: number): Promise<void> {
 
 async function readLiveAccount(home: string): Promise<Address> {
   try {
-    return (await readFile(liveAccountPath(home), 'utf8')).trim() as Address;
+    return parseAddress((await readFile(liveAccountPath(home), 'utf8')).trim(), 'live account');
   } catch {
-    return '0x0000000000000000000000000000000000000000';
+    return zeroAddress;
   }
 }
 

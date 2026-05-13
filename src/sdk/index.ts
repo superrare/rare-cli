@@ -35,6 +35,9 @@ export type {
   ReleaseSetSellerStakingMinimumResult,
   ReleaseStatus,
   ReleaseStatusParams,
+  ReleaseNamespace,
+  ListingMarketplaceNamespace,
+  ListingNamespace,
 } from './types.js';
 export type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
 export type { LiquidFactoryConfig } from '../liquid/factory-config.js';

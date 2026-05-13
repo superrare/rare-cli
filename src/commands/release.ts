@@ -143,7 +143,7 @@ export function releaseCommand(): Command {
       }
 
       try {
-        const result = await rare.release.configure({
+        const result = await rare.listing.release.configure({
           contract: opts.contract as Address,
           currency,
           price: opts.price,
@@ -274,7 +274,7 @@ export function releaseCommand(): Command {
         log(`  Root:       ${artifact?.root ?? root}`);
         log(`  Ends:       ${opts.endTimestamp}`);
 
-        const result = await rare.release.setAllowlistConfig({
+        const result = await rare.listing.release.setAllowlistConfig({
           contract: opts.contract,
           root,
           artifact,
@@ -316,7 +316,7 @@ export function releaseCommand(): Command {
         log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
         log(`  Collection: ${opts.contract}`);
 
-        const result = await rare.release.clearAllowlistConfig({
+        const result = await rare.listing.release.clearAllowlistConfig({
           contract: opts.contract,
         });
 
@@ -362,7 +362,7 @@ export function releaseCommand(): Command {
         log(`  Collection: ${opts.contract}`);
         log(`  Limit:      ${opts.limit}`);
 
-        const result = await rare.release.setMintLimit({
+        const result = await rare.listing.release.setMintLimit({
           contract: opts.contract,
           limit: opts.limit,
         });
@@ -403,7 +403,7 @@ export function releaseCommand(): Command {
         log(`  Collection: ${opts.contract}`);
         log(`  Limit:      ${opts.limit}`);
 
-        const result = await rare.release.setTxLimit({
+        const result = await rare.listing.release.setTxLimit({
           contract: opts.contract,
           limit: opts.limit,
         });
@@ -451,7 +451,7 @@ export function releaseCommand(): Command {
         log(`  Minimum:    ${opts.minimum} RARE`);
         log(`  Ends:       ${opts.endTimestamp ?? '(not set)'}`);
 
-        const result = await rare.release.setSellerStakingMinimum({
+        const result = await rare.listing.release.setSellerStakingMinimum({
           contract: opts.contract,
           amount: opts.minimum,
           endTimestamp: opts.endTimestamp,
@@ -500,7 +500,7 @@ export function releaseCommand(): Command {
       const rare = createRareClient({ publicClient });
 
       try {
-        const result = await rare.release.getStatus({
+        const result = await rare.listing.release.getStatus({
           contract: opts.contract as Address,
           account: opts.account as Address | undefined,
         });

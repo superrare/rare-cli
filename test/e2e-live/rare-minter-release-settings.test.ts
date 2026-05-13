@@ -1,20 +1,24 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import {
-  createPublicClient,
-  createWalletClient,
-  http,
-  type Address,
-} from 'viem';
+import { createWalletClient, http, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia } from 'viem/chains';
-import { getContractAddresses } from '../../src/contracts/addresses.js';
-import { parseJsonStdout, runCli } from '../helpers/cli.js';
-import { loadDotEnv } from './env.mjs';
-
-loadDotEnv();
+import { getContractAddresses, viemChains, type SupportedChain } from '../../src/contracts/addresses.js';
+import {
+  cleanupTempHome,
+  configureLiveHome,
+  createLivePublicClient,
+  createTempHome,
+  detectLiveChain,
+  expectTx,
+  jsonCommand,
+  livePrivateKey,
+  liveRpcUrl,
+  retryNonceConflict,
+  step,
+  withLiveTransactionLock,
+  type TxResult,
+} from './live-helpers.js';
 
 const requiredEnv = [
   'TEST_RPC_URL',
@@ -27,11 +31,6 @@ const describeLive = missingEnv.length === 0 ? describe.sequential : describe.sk
 // Runtime dispatches owner() and mintTo(address). Creation code injects the seller as owner.
 const releaseFixtureRuntimePrefix = '60003560e01c80638da5cb5b14601f578063755edd1714603d5760006000fd5b73';
 const releaseFixtureRuntimeSuffix = '60005260206000f35b600160005260206000f3';
-
-type TxResult = {
-  txHash: string;
-  blockNumber: string;
-};
 
 type ReleaseAllowlistSetResult = TxResult & {
   config: {
@@ -56,25 +55,30 @@ type LiveState = {
   sellerHome: string;
   sellerAddress: Address;
   releaseContract: Address;
+  chain: SupportedChain;
 };
 
 let live: LiveState;
 
-describeLive('live Sepolia RareMinter release settings', () => {
+describeLive('live RareMinter release settings', () => {
   beforeAll(async () => {
     const sellerHome = await createTempHome();
-    const sellerAddress = privateKeyToAccount(livePrivateKey()).address;
+    const chain = await detectLiveChain();
+    const sellerAddress = privateKeyToAccount(livePrivateKey('E2E_SELLER_PRIVATE_KEY')).address;
 
     try {
-      await step('configure seller wallet', () => configureLiveHome(sellerHome, process.env.E2E_SELLER_PRIVATE_KEY!));
+      await step('configure seller wallet', () =>
+        configureLiveHome(sellerHome, livePrivateKey('E2E_SELLER_PRIVATE_KEY'), chain),
+      );
       const releaseContract = await step('deploy RareMinter release fixture contract', () =>
-        deployReleaseFixtureContract(livePrivateKey(), sellerAddress),
+        deployReleaseFixtureContract(chain, livePrivateKey('E2E_SELLER_PRIVATE_KEY'), sellerAddress),
       );
 
       live = {
         sellerHome,
         sellerAddress,
         releaseContract,
+        chain,
       };
     } catch (error) {
       await cleanupTempHome(sellerHome);
@@ -88,7 +92,7 @@ describeLive('live Sepolia RareMinter release settings', () => {
 
   it('configures release allowlist', async () => {
     const contract = live.releaseContract;
-    const rareMinter = getContractAddresses('sepolia').rareMinter!;
+    const rareMinter = getContractAddresses(live.chain).rareMinter!;
     const endTimestamp = Math.floor(Date.now() / 1000) + 3_600;
     const allowlistCsv = join(live.sellerHome, 'release-allowlist.csv');
     const allowlistArtifact = join(live.sellerHome, 'release-allowlist-artifact.json');
@@ -129,7 +133,7 @@ describeLive('live Sepolia RareMinter release settings', () => {
         '--end-timestamp',
         endTimestamp.toString(),
         '--chain',
-        'sepolia',
+        live.chain,
       ], 240_000),
     );
     expectTx(allowlist);
@@ -149,7 +153,7 @@ describeLive('live Sepolia RareMinter release settings', () => {
       '--contract',
       contract,
       '--chain',
-      'sepolia',
+      live.chain,
     ]);
 
     expect(status.allowlistRoot).toBe(artifactBuild.artifact.root);
@@ -158,7 +162,7 @@ describeLive('live Sepolia RareMinter release settings', () => {
 
   it('configures release mint limit', async () => {
     const contract = live.releaseContract;
-    const rareMinter = getContractAddresses('sepolia').rareMinter!;
+    const rareMinter = getContractAddresses(live.chain).rareMinter!;
 
     const mintLimit = await step('set release mint limit', () =>
       jsonCommand<ReleaseLimitSetResult>(live.sellerHome, [
@@ -171,7 +175,7 @@ describeLive('live Sepolia RareMinter release settings', () => {
         '--limit',
         '2',
         '--chain',
-        'sepolia',
+        live.chain,
       ], 240_000),
     );
     expectTx(mintLimit);
@@ -187,7 +191,7 @@ describeLive('live Sepolia RareMinter release settings', () => {
       '--contract',
       contract,
       '--chain',
-      'sepolia',
+      live.chain,
     ]);
 
     expect(status.mintLimit).toBe('2');
@@ -195,7 +199,7 @@ describeLive('live Sepolia RareMinter release settings', () => {
 
   it('configures release transaction limit', async () => {
     const contract = live.releaseContract;
-    const rareMinter = getContractAddresses('sepolia').rareMinter!;
+    const rareMinter = getContractAddresses(live.chain).rareMinter!;
 
     const txLimit = await step('set release transaction limit', () =>
       jsonCommand<ReleaseLimitSetResult>(live.sellerHome, [
@@ -208,7 +212,7 @@ describeLive('live Sepolia RareMinter release settings', () => {
         '--limit',
         '1',
         '--chain',
-        'sepolia',
+        live.chain,
       ], 240_000),
     );
     expectTx(txLimit);
@@ -224,44 +228,32 @@ describeLive('live Sepolia RareMinter release settings', () => {
       '--contract',
       contract,
       '--chain',
-      'sepolia',
+      live.chain,
     ]);
 
     expect(status.txLimit).toBe('1');
   });
 });
 
-async function configureLiveHome(home: string, privateKey: string): Promise<void> {
-  const result = await runCli([
-    'configure',
-    '--default-chain',
-    'sepolia',
-    '--chain',
-    'sepolia',
-    '--private-key',
-    privateKey,
-    '--rpc-url',
-    process.env.TEST_RPC_URL!,
-  ], { home });
-
-  expect(result.code).toBe(0);
-  expect(result.stderr).toBe('');
-}
-
-async function deployReleaseFixtureContract(privateKey: `0x${string}`, owner: Address): Promise<Address> {
+async function deployReleaseFixtureContract(chain: SupportedChain, privateKey: `0x${string}`, owner: Address): Promise<Address> {
   const account = privateKeyToAccount(privateKey);
-  const publicClient = createLivePublicClient();
+  const publicClient = createLivePublicClient(chain);
+  const viemChain = viemChains[chain];
   const walletClient = createWalletClient({
     account,
-    chain: sepolia,
-    transport: http(process.env.TEST_RPC_URL!),
+    chain: viemChain,
+    transport: http(liveRpcUrl()),
   });
 
-  const txHash = await walletClient.sendTransaction({
-    account,
-    chain: sepolia,
-    data: releaseFixtureBytecode(owner),
-  });
+  const txHash = await retryNonceConflict('deploy RareMinter release fixture contract', () =>
+    withLiveTransactionLock(account.address, 'deploy RareMinter release fixture contract', () =>
+      walletClient.sendTransaction({
+        account,
+        chain: viemChain,
+        data: releaseFixtureBytecode(owner),
+      }),
+    ),
+  );
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
   if (!receipt.contractAddress) {
     throw new Error('Release fixture deployment did not return a contract address.');
@@ -272,42 +264,4 @@ async function deployReleaseFixtureContract(privateKey: `0x${string}`, owner: Ad
 function releaseFixtureBytecode(owner: Address): `0x${string}` {
   const ownerBytes = owner.slice(2).toLowerCase();
   return `0x6048600c60003960486000f3${releaseFixtureRuntimePrefix}${ownerBytes}${releaseFixtureRuntimeSuffix}`;
-}
-
-async function jsonCommand<T>(home: string, args: string[], timeoutMs = 180_000): Promise<T> {
-  return parseJsonStdout<T>(await runCli(['--json', ...args], { home, timeoutMs }));
-}
-
-function expectTx(result: TxResult): void {
-  expect(result.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
-  expect(result.blockNumber).toMatch(/^\d+$/);
-}
-
-function createLivePublicClient() {
-  return createPublicClient({
-    chain: sepolia,
-    transport: http(process.env.TEST_RPC_URL!),
-  });
-}
-
-function livePrivateKey(): `0x${string}` {
-  const value = process.env.E2E_SELLER_PRIVATE_KEY;
-  if (!value || !value.startsWith('0x')) {
-    throw new Error('E2E_SELLER_PRIVATE_KEY must be set to a 0x-prefixed private key.');
-  }
-  return value as `0x${string}`;
-}
-
-async function createTempHome(): Promise<string> {
-  return mkdtemp(join(tmpdir(), 'rare-cli-live-rareminter-home-'));
-}
-
-async function cleanupTempHome(home: string | undefined): Promise<void> {
-  if (!home) return;
-  await rm(home, { recursive: true, force: true });
-}
-
-async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
-  console.error(`[live rareminter e2e] ${label}`);
-  return fn();
 }

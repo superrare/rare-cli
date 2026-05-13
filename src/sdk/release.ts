@@ -6,7 +6,7 @@ import {
 import { rareMinterAbi } from '../contracts/abis/rare-minter.js';
 import { tokenAbi } from '../contracts/abis/token.js';
 import type {
-  RareClient,
+  ReleaseNamespace,
   RareClientConfig,
 } from './types.js';
 import { ETH_ADDRESS } from '../contracts/addresses.js';
@@ -198,7 +198,7 @@ export function createReleaseNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
   addresses: { rareMinter?: Address },
-): RareClient['release'] {
+): ReleaseNamespace {
   return {
     buildAllowlistArtifact(params) {
       return buildReleaseAllowlistArtifactFromInput(params.input, params.format);

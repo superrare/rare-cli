@@ -16,6 +16,7 @@ describeLive('Rare SDK client live integration', () => {
     expect(rare.chain).toBe('sepolia');
     expect(rare.chainId).toBe(11_155_111);
     expect(rare.contracts).toEqual(getContractAddresses('sepolia'));
+    expect(rare.listing.release).toBe(rare.release);
   }, 30_000);
 
   it('defaults NFT search requests to the real client chain ID', async () => {

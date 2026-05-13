@@ -4,9 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { getContractAddresses, type SupportedChain } from '../../src/contracts/addresses.js';
 import { parseHexString } from '../../src/sdk/validation.js';
 import { parseJsonStdout, runCli } from '../helpers/cli.js';
 import { loadDotEnv } from '../helpers/env.js';
+import { detectLiveChain } from './live-helpers.js';
 
 loadDotEnv();
 
@@ -76,6 +78,7 @@ type LiveState = {
   buyerHome: string;
   sellerAddress: Address;
   buyerAddress: Address;
+  chain: SupportedChain;
   collection: DeployResult;
   auctionCancelToken: MintResult;
   auctionSettleToken: MintResult;
@@ -105,17 +108,18 @@ class LiveStateRef {
 
 const live = new LiveStateRef();
 
-describeLive('live Sepolia CLI write commands', () => {
+describeLive('live CLI write commands', () => {
   beforeAll(async () => {
     const sellerHome = await createTempHome();
     const buyerHome = await createTempHome();
+    const chain = await detectLiveChain();
     const suffix = Date.now().toString(36);
     const sellerAddress = privateKeyToAccount(livePrivateKey('E2E_SELLER_PRIVATE_KEY')).address;
     const buyerAddress = privateKeyToAccount(livePrivateKey('E2E_BUYER_PRIVATE_KEY')).address;
 
     try {
-      await step('configure seller wallet', () => configureLiveHome(sellerHome, livePrivateKey('E2E_SELLER_PRIVATE_KEY')));
-      await step('configure buyer wallet', () => configureLiveHome(buyerHome, livePrivateKey('E2E_BUYER_PRIVATE_KEY')));
+      await step('configure seller wallet', () => configureLiveHome(sellerHome, livePrivateKey('E2E_SELLER_PRIVATE_KEY'), chain));
+      await step('configure buyer wallet', () => configureLiveHome(buyerHome, livePrivateKey('E2E_BUYER_PRIVATE_KEY'), chain));
 
       const collection = await step('deploy ERC-721 collection', () =>
         jsonCommand<DeployResult>(sellerHome, [
@@ -126,7 +130,7 @@ describeLive('live Sepolia CLI write commands', () => {
           '--max-tokens',
           '6',
           '--chain',
-          'sepolia',
+          chain,
         ]),
       );
       expectTx(collection);
@@ -137,18 +141,19 @@ describeLive('live Sepolia CLI write commands', () => {
         buyerHome,
         sellerAddress,
         buyerAddress,
+        chain,
         collection,
         auctionCancelToken: await step('mint auction cancel token', () =>
-          mintToken(sellerHome, collection.contract),
+          mintToken(sellerHome, collection.contract, chain),
         ),
         auctionSettleToken: await step('mint auction settle token', () =>
-          mintToken(sellerHome, collection.contract),
+          mintToken(sellerHome, collection.contract, chain),
         ),
         buyerAuctionCancelToken: await step('mint buyer-owned auction token', () =>
-          mintToken(sellerHome, collection.contract, { to: buyerAddress }),
+          mintToken(sellerHome, collection.contract, chain, { to: buyerAddress }),
         ),
         buyerMintToken: await step('mint token directly to buyer', () =>
-          mintToken(sellerHome, collection.contract, { to: buyerAddress }),
+          mintToken(sellerHome, collection.contract, chain, { to: buyerAddress }),
         ),
       });
     } catch (error) {
@@ -182,7 +187,7 @@ describeLive('live Sepolia CLI write commands', () => {
   it('creates a standard Sovereign collection through the newer factory', async () => {
     const suffix = Date.now().toString(36);
     const created = await step('create standard Sovereign collection', () =>
-      jsonCommand<CreateSovereignResult>(live.sellerHome, [
+      jsonCommand<CreateSovereignResult>(live.value.sellerHome, [
         'collection',
         'create',
         'sovereign',
@@ -191,17 +196,17 @@ describeLive('live Sepolia CLI write commands', () => {
         '--max-tokens',
         '3',
         '--chain',
-        'sepolia',
+        live.value.chain,
       ]),
     );
 
     expectTx(created);
     expect(created.contract).toMatch(/^0x[0-9a-fA-F]{40}$/);
-    expect(created.factory).toBe('0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf');
+    expect(created.factory).toBe(getContractAddresses(live.value.chain).sovereignFactory);
     expect(created.contractType).toBe('standard');
 
     const minted = await step('batch mint standard Sovereign collection', () =>
-      jsonCommand<CollectionMintBatchResult>(live.sellerHome, [
+      jsonCommand<CollectionMintBatchResult>(live.value.sellerHome, [
         'collection',
         'mint-batch',
         '--contract',
@@ -211,7 +216,7 @@ describeLive('live Sepolia CLI write commands', () => {
         '--token-count',
         '2',
         '--chain',
-        'sepolia',
+        live.value.chain,
       ]),
     );
 
@@ -221,13 +226,13 @@ describeLive('live Sepolia CLI write commands', () => {
     expect(minted.tokenCount).toBe('2');
     expect(minted.fromTokenId).toBe('1');
     expect(minted.toTokenId).toBe('2');
-    expect(minted.owner.toLowerCase()).toBe(live.sellerAddress.toLowerCase());
+    expect(minted.owner.toLowerCase()).toBe(live.value.sellerAddress.toLowerCase());
   });
 
   it('creates a Lazy Sovereign release collection through the lazy factory', async () => {
     const suffix = Date.now().toString(36);
     const created = await step('create Lazy Sovereign collection', () =>
-      jsonCommand<CreateSovereignResult>(live.sellerHome, [
+      jsonCommand<CreateSovereignResult>(live.value.sellerHome, [
         'collection',
         'create',
         'lazy-sovereign',
@@ -236,18 +241,18 @@ describeLive('live Sepolia CLI write commands', () => {
         '--max-tokens',
         '3',
         '--chain',
-        'sepolia',
+        live.value.chain,
       ]),
     );
 
     expectTx(created);
     expect(created.contract).toMatch(/^0x[0-9a-fA-F]{40}$/);
-    expect(created.factory).toBe('0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA');
+    expect(created.factory).toBe(getContractAddresses(live.value.chain).lazySovereignFactory);
     expect(created.contractType).toBe('lazy');
     expect(created.nextStep).toContain('Configure release sale and mint settings');
 
     const prepared = await step('prepare lazy mint batch', () =>
-      jsonCommand<CollectionPrepareLazyMintResult>(live.sellerHome, [
+      jsonCommand<CollectionPrepareLazyMintResult>(live.value.sellerHome, [
         'collection',
         'prepare-lazy-mint',
         '--contract',
@@ -257,9 +262,9 @@ describeLive('live Sepolia CLI write commands', () => {
         '--token-count',
         '2',
         '--minter',
-        live.buyerAddress,
+        live.value.buyerAddress,
         '--chain',
-        'sepolia',
+        live.value.chain,
       ]),
     );
 
@@ -267,7 +272,7 @@ describeLive('live Sepolia CLI write commands', () => {
     expect(prepared.contract).toBe(created.contract);
     expect(prepared.baseUri).toBe(E2E_LAZY_BASE_URI);
     expect(prepared.tokenCount).toBe('2');
-    expect(prepared.minter?.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
+    expect(prepared.minter?.toLowerCase()).toBe(live.value.buyerAddress.toLowerCase());
   });
 
   it('mints directly to another recipient', async () => {
@@ -288,7 +293,7 @@ describeLive('live Sepolia CLI write commands', () => {
         '--duration',
         liveAuctionDurationSeconds().toString(),
         '--chain',
-        'sepolia',
+        live.value.chain,
       ]),
     );
     expectTx(auctionCancelCreate);
@@ -304,7 +309,7 @@ describeLive('live Sepolia CLI write commands', () => {
         '--token-id',
         live.value.auctionCancelToken.tokenId,
         '--chain',
-        'sepolia',
+        live.value.chain,
       ]),
     ));
   });
@@ -323,7 +328,7 @@ describeLive('live Sepolia CLI write commands', () => {
         '--duration',
         liveAuctionDurationSeconds().toString(),
         '--chain',
-        'sepolia',
+        live.value.chain,
       ]),
     );
 
@@ -340,7 +345,7 @@ describeLive('live Sepolia CLI write commands', () => {
         '--token-id',
         live.value.buyerAuctionCancelToken.tokenId,
         '--chain',
-        'sepolia',
+        live.value.chain,
       ]),
     ));
   });
@@ -359,7 +364,7 @@ describeLive('live Sepolia CLI write commands', () => {
         '--duration',
         liveAuctionDurationSeconds().toString(),
         '--chain',
-        'sepolia',
+        live.value.chain,
       ]),
     );
     expectTx(auctionSettleCreate);
@@ -376,7 +381,7 @@ describeLive('live Sepolia CLI write commands', () => {
         '--amount',
         '0.000001',
         '--chain',
-        'sepolia',
+        live.value.chain,
       ]),
     ));
     await step('wait for auction to end', waitForAuctionToEnd);
@@ -390,20 +395,20 @@ describeLive('live Sepolia CLI write commands', () => {
         '--token-id',
         live.value.auctionSettleToken.tokenId,
         '--chain',
-        'sepolia',
+        live.value.chain,
       ]),
     ));
   });
 
 });
 
-async function configureLiveHome(home: string, privateKey: string): Promise<void> {
+async function configureLiveHome(home: string, privateKey: string, chain: SupportedChain): Promise<void> {
   const result = await runCli([
     'configure',
     '--default-chain',
-    'sepolia',
+    chain,
     '--chain',
-    'sepolia',
+    chain,
     '--private-key',
     privateKey,
     '--rpc-url',
@@ -414,7 +419,7 @@ async function configureLiveHome(home: string, privateKey: string): Promise<void
   expect(result.stderr).toBe('');
 }
 
-async function mintToken(home: string, contract: string, opts: { to?: string } = {}): Promise<MintResult> {
+async function mintToken(home: string, contract: string, chain: SupportedChain, opts: { to?: string } = {}): Promise<MintResult> {
   const baseArgs = [
     'mint',
     '--contract',
@@ -422,7 +427,7 @@ async function mintToken(home: string, contract: string, opts: { to?: string } =
     '--token-uri',
     E2E_TOKEN_URI,
     '--chain',
-    'sepolia',
+    chain,
   ];
   const args = opts.to ? [...baseArgs, '--to', opts.to] : baseArgs;
 
@@ -449,7 +454,7 @@ async function expectAuctionStatus(
     '--token-id',
     tokenId,
     '--chain',
-    'sepolia',
+    live.value.chain,
   ]);
   expect(status.status).toBe(expectedStatus);
 }
@@ -473,7 +478,7 @@ async function expectTokenOwner(home: string, contract: string, tokenId: string,
     '--token-id',
     tokenId,
     '--chain',
-    'sepolia',
+    live.value.chain,
   ]);
 
   const token = status.token;

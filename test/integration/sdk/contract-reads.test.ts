@@ -48,7 +48,7 @@ describeLive('SDK contract read integration', () => {
       rare.listing.getStatus({ contract: fixture.contract, tokenId: fixture.tokenId }),
       rare.offer.getStatus({ contract: fixture.contract, tokenId: fixture.tokenId }),
       rare.auction.getStatus({ contract: fixture.contract, tokenId: fixture.tokenId }),
-      rare.release.getStatus({ contract: fixture.contract }),
+      rare.listing.release.getStatus({ contract: fixture.contract }),
     ]);
 
     expect(isAddress(listing.seller)).toBe(true);
@@ -76,7 +76,7 @@ describeLive('SDK contract read integration', () => {
 
     expect(release.contract).toBe(fixture.contract);
     expect(isAddress(release.rareMinter)).toBe(true);
-    expect(release.configured).toBe(release.seller !== '0x0000000000000000000000000000000000000000');
+    expect(release.configured).toBe(release.seller !== ETH_ADDRESS);
     expect(release.currentlyMintable).toBeTypeOf('boolean');
     expect(release.splitRecipients.length).toBe(release.splitRatios.length);
   }, 30_000);

@@ -617,6 +617,34 @@ export type BuyRareResult = {
   inputs: readonly `0x${string}`[];
 } & TransactionResult
 
+export type ReleaseNamespace = {
+  buildAllowlistArtifact: (params: { input: string; format: 'csv' | 'json' }) => ReleaseAllowlistArtifact;
+  parseAllowlistArtifact: (params: { input: string }) => ReleaseAllowlistArtifact;
+  getAllowlistProof: (params: { artifact: ReleaseAllowlistArtifact; address: Address }) => ReleaseAllowlistWalletProof | null;
+  configure: (params: ReleaseConfigureParams) => Promise<ReleaseConfigureResult>;
+  getAllowlistConfig: (params: { contract: Address }) => Promise<ReleaseAllowlistConfig>;
+  setAllowlistConfig: (params: ReleaseSetAllowlistConfigParams) => Promise<ReleaseSetAllowlistConfigResult>;
+  clearAllowlistConfig: (params: { contract: Address }) => Promise<ReleaseSetAllowlistConfigResult>;
+  getMintLimit: (params: { contract: Address }) => Promise<ReleaseLimitConfig>;
+  setMintLimit: (params: ReleaseSetLimitParams) => Promise<ReleaseSetLimitResult>;
+  getTxLimit: (params: { contract: Address }) => Promise<ReleaseLimitConfig>;
+  setTxLimit: (params: ReleaseSetLimitParams) => Promise<ReleaseSetLimitResult>;
+  getSellerStakingMinimum: (params: { contract: Address }) => Promise<ReleaseSellerStakingMinimum>;
+  setSellerStakingMinimum: (params: ReleaseSetSellerStakingMinimumParams) => Promise<ReleaseSetSellerStakingMinimumResult>;
+  getStatus: (params: ReleaseStatusParams) => Promise<ReleaseStatus>;
+}
+
+export type ListingMarketplaceNamespace = {
+  create: (params: ListingCreateParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
+  cancel: (params: ListingCancelParams) => Promise<TransactionResult>;
+  buy: (params: ListingBuyParams) => Promise<TransactionResult>;
+  getStatus: (params: ListingStatusParams) => Promise<ListingStatus>;
+}
+
+export type ListingNamespace = ListingMarketplaceNamespace & {
+  release: ReleaseNamespace;
+}
+
 export type RareClient = {
   chain: SupportedChain;
   chainId: number;
@@ -672,12 +700,7 @@ export type RareClient = {
     accept: (params: OfferAcceptParams) => Promise<TransactionResult>;
     getStatus: (params: OfferStatusParams) => Promise<OfferStatus>;
   };
-  listing: {
-    create: (params: ListingCreateParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
-    cancel: (params: ListingCancelParams) => Promise<TransactionResult>;
-    buy: (params: ListingBuyParams) => Promise<TransactionResult>;
-    getStatus: (params: ListingStatusParams) => Promise<ListingStatus>;
-  };
+  listing: ListingNamespace;
   batchListing: {
     create: (params: BatchListingCreateParams) => Promise<BatchListingCreateResult>;
     cancel: (params: BatchListingCancelParams) => Promise<TransactionResult>;
@@ -685,22 +708,7 @@ export type RareClient = {
     setAllowList: (params: BatchListingSetAllowListParams) => Promise<TransactionResult>;
     getStatus: (params: BatchListingStatusParams) => Promise<BatchListingStatus>;
   };
-  release: {
-    buildAllowlistArtifact(params: { input: string; format: 'csv' | 'json' }): ReleaseAllowlistArtifact;
-    parseAllowlistArtifact(params: { input: string }): ReleaseAllowlistArtifact;
-    getAllowlistProof(params: { artifact: ReleaseAllowlistArtifact; address: Address }): ReleaseAllowlistWalletProof | null;
-    configure(params: ReleaseConfigureParams): Promise<ReleaseConfigureResult>;
-    getAllowlistConfig(params: { contract: Address }): Promise<ReleaseAllowlistConfig>;
-    setAllowlistConfig(params: ReleaseSetAllowlistConfigParams): Promise<ReleaseSetAllowlistConfigResult>;
-    clearAllowlistConfig(params: { contract: Address }): Promise<ReleaseSetAllowlistConfigResult>;
-    getMintLimit(params: { contract: Address }): Promise<ReleaseLimitConfig>;
-    setMintLimit(params: ReleaseSetLimitParams): Promise<ReleaseSetLimitResult>;
-    getTxLimit(params: { contract: Address }): Promise<ReleaseLimitConfig>;
-    setTxLimit(params: ReleaseSetLimitParams): Promise<ReleaseSetLimitResult>;
-    getSellerStakingMinimum(params: { contract: Address }): Promise<ReleaseSellerStakingMinimum>;
-    setSellerStakingMinimum(params: ReleaseSetSellerStakingMinimumParams): Promise<ReleaseSetSellerStakingMinimumResult>;
-    getStatus(params: ReleaseStatusParams): Promise<ReleaseStatus>;
-  };
+  release: ReleaseNamespace;
   search: {
     nfts: (params?: NftSearchParams) => Promise<SearchPageResponse<Nft>>;
     collections: (params?: CollectionSearchParams) => Promise<SearchPageResponse<Collection>>;

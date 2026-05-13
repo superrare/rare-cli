@@ -5,7 +5,11 @@ import {
   type WalletClient,
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
-import type { RareClientConfig, RareClient, WalletAccount } from './types.js';
+import type {
+  ListingMarketplaceNamespace,
+  RareClientConfig,
+  WalletAccount,
+} from './types.js';
 import {
   approvalAbi,
   preparePayment,
@@ -24,9 +28,9 @@ export function createListingNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
   addresses: { auction: Address },
-): RareClient['listing'] {
+): ListingMarketplaceNamespace {
   return {
-    async create(params): ReturnType<RareClient['listing']['create']> {
+    async create(params): ReturnType<ListingMarketplaceNamespace['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const plan = planListingCreate(params, accountAddress);
       const approvalTxHash = params.autoApprove === false
@@ -61,7 +65,7 @@ export function createListingNamespace(
       return { txHash, receipt, approvalTxHash };
     },
 
-    async cancel(params): ReturnType<RareClient['listing']['cancel']> {
+    async cancel(params): ReturnType<ListingMarketplaceNamespace['cancel']> {
       const { walletClient, account } = requireWallet(config);
       const plan = planListingCancel(params);
 
@@ -78,7 +82,7 @@ export function createListingNamespace(
       return { txHash, receipt };
     },
 
-    async buy(params): ReturnType<RareClient['listing']['buy']> {
+    async buy(params): ReturnType<ListingMarketplaceNamespace['buy']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const plan = planListingBuy(params);
 
@@ -101,7 +105,7 @@ export function createListingNamespace(
       return { txHash, receipt };
     },
 
-    async getStatus(params): ReturnType<RareClient['listing']['getStatus']> {
+    async getStatus(params): ReturnType<ListingMarketplaceNamespace['getStatus']> {
       const plan = planListingStatus(params);
 
       const result = await publicClient.readContract({

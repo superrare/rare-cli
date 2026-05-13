@@ -32,6 +32,11 @@ export function createRareClient(config: RareClientConfig): RareClient {
   const chain = resolveChainFromPublicClient(publicClient);
   const chainId = chainIds[chain];
   const addresses = getContractAddresses(chain);
+  const release = createReleaseNamespace(publicClient, config, addresses);
+  const listing = {
+    ...createListingNamespace(publicClient, config, addresses),
+    release,
+  };
 
   return {
     chain,
@@ -57,7 +62,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
     swap: createSwapNamespace(config, chain, chainId, addresses),
     auction: createAuctionNamespace(publicClient, config, addresses),
     offer: createOfferNamespace(publicClient, config, addresses),
-    listing: createListingNamespace(publicClient, config, addresses),
+    listing,
     batchListing: createBatchListingNamespace(publicClient, config, {
       get batchListing() {
         if (!addresses.batchListing) {
@@ -92,7 +97,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
         return addresses.erc721ApprovalManager;
       },
     }),
-    release: createReleaseNamespace(publicClient, config, addresses),
+    release,
     token: createTokenNamespace(publicClient, chain),
     search: {
       async nfts(params = {}): ReturnType<RareClient['search']['nfts']> {
