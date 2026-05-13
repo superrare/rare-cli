@@ -18,7 +18,8 @@ import type {
   ReleaseStatus,
   TimestampInput,
 } from './types.js';
-import { ETH_ADDRESS, toInteger, toNonNegativeInteger } from './helpers.js';
+import { ETH_ADDRESS } from '../contracts/addresses.js';
+import { toInteger, toNonNegativeInteger } from './helpers.js';
 
 export const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 export const RELEASE_ALLOWLIST_ARTIFACT_KIND = 'rare-release-allowlist-v1' as const;

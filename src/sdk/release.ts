@@ -9,7 +9,8 @@ import type {
   RareClient,
   RareClientConfig,
 } from './types.js';
-import { ETH_ADDRESS, requireWallet } from './helpers.js';
+import { ETH_ADDRESS } from '../contracts/addresses.js';
+import { requireWallet } from './helpers.js';
 import {
   assertReleaseContractOwner,
   assertReleaseAllowlistConfigMatches,
