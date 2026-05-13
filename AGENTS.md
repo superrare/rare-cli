@@ -102,6 +102,8 @@ Test the built CLI as a user would. Assert observable behavior: exit codes, stdo
 E2E tests should target the CLI as a user would.
 E2E-live tests should cover all on-chain write commands against the CLI.
 
+Tip: Running full E2E live test flight can take 30+ minutes. Move faster by only running the individual tests relevant to your code changes.
+
 ## Review Checklist
 
 - Business rules live in pure functions.
