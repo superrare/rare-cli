@@ -162,30 +162,6 @@ export type CollectionContractPlan = {
   contract: Address;
 }
 
-export type PlanCreateRareSpaceCollectionParams = {
-  name: string;
-  symbol: string;
-}
-
-export type CreateRareSpaceCollectionPlan = {
-  name: string;
-  symbol: string;
-}
-
-export type PlanMintRareSpaceTokenParams = {
-  contract: Address;
-  tokenUri: string;
-  to?: Address;
-  royaltyReceiver?: Address;
-}
-
-export type MintRareSpaceTokenPlan = {
-  contract: Address;
-  tokenUri: string;
-  to: Address;
-  royaltyReceiver: Address;
-}
-
 export function normalizeSovereignCollectionContractType(
   input: string | undefined,
 ): SovereignCollectionContractType | undefined {
@@ -435,27 +411,6 @@ export function planCollectionContract(
 ): CollectionContractPlan {
   return {
     contract: params.contract,
-  };
-}
-
-export function planCreateRareSpaceCollection(
-  params: PlanCreateRareSpaceCollectionParams,
-): CreateRareSpaceCollectionPlan {
-  return {
-    name: params.name,
-    symbol: params.symbol,
-  };
-}
-
-export function planMintRareSpaceToken(
-  params: PlanMintRareSpaceTokenParams,
-  accountAddress: Address,
-): MintRareSpaceTokenPlan {
-  return {
-    contract: params.contract,
-    tokenUri: params.tokenUri,
-    to: params.to ?? accountAddress,
-    royaltyReceiver: params.royaltyReceiver ?? accountAddress,
   };
 }
 

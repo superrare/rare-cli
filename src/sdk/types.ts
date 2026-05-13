@@ -211,32 +211,6 @@ export type CollectionLockBaseUriResult = {
   baseUri: string;
 } & TransactionResult
 
-export type CreateRareSpaceCollectionParams = {
-  name: string;
-  symbol: string;
-}
-
-export type CreateRareSpaceCollectionResult = {
-  contract: Address;
-  factory: Address;
-  operator: Address;
-} & TransactionResult
-
-export type MintRareSpaceTokenParams = {
-  contract: Address;
-  tokenUri: string;
-  to?: Address;
-  royaltyReceiver?: Address;
-}
-
-export type MintRareSpaceTokenResult = {
-  contract: Address;
-  tokenId: bigint;
-  tokenUri: string;
-  to: Address;
-  royaltyReceiver: Address;
-} & TransactionResult
-
 export type MintToParams = {
   contract: Address;
   tokenUri: string;
@@ -1164,7 +1138,6 @@ export type RareClient = {
     auction: Address;
     sovereignFactory?: Address;
     lazySovereignFactory?: Address;
-    spaceFactory?: Address;
     rareMinter?: Address;
     lazyBatchMintFactory?: Address;
     batchListing?: Address;
@@ -1278,8 +1251,6 @@ export type RareClient = {
     updateBaseUri: (params: CollectionUpdateBaseUriParams) => Promise<CollectionUpdateBaseUriResult>;
     updateTokenUri: (params: CollectionUpdateTokenUriParams) => Promise<CollectionUpdateTokenUriResult>;
     lockBaseUri: (params: CollectionLockBaseUriParams) => Promise<CollectionLockBaseUriResult>;
-    createSpace: (params: CreateRareSpaceCollectionParams) => Promise<CreateRareSpaceCollectionResult>;
-    mintSpace: (params: MintRareSpaceTokenParams) => Promise<MintRareSpaceTokenResult>;
   };
   user: {
     get: (address: string) => Promise<UserProfile>;
