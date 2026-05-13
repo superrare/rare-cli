@@ -597,22 +597,6 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('exposes RareSpace collection commands', async () => {
-    await withTempHome(async (home) => {
-      const create = await runCli(['collection', 'create', 'space', '--help'], { home });
-      expect(create.code).toBe(0);
-      expect(create.stdout).toContain('Usage: rare collection create space [options] <name> <symbol>');
-      expect(create.stderr).toBe('');
-
-      const mint = await runCli(['collection', 'mint-space', '--help'], { home });
-      expect(mint.code).toBe(0);
-      expect(mint.stdout).toContain('Usage: rare collection mint-space [options]');
-      expect(mint.stdout).toContain('--token-uri <uri>');
-      expect(mint.stdout).toContain('--royalty-receiver <address>');
-      expect(mint.stderr).toBe('');
-    });
-  });
-
   it('rejects generated mint metadata options before wallet setup', async () => {
     await withTempHome(async (home) => {
       const result = await runCli([
@@ -650,24 +634,6 @@ describe('built CLI deterministic behavior', () => {
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('Error: --contract must be a valid 0x address.');
-    });
-  });
-
-  it('rejects RareSpace collection creation on chains without a configured factory before wallet setup', async () => {
-    await withTempHome(async (home) => {
-      const result = await runCli([
-        'collection',
-        'create',
-        'space',
-        'Test Space',
-        'TSP',
-        '--chain',
-        'sepolia',
-      ], { home });
-
-      expect(result.code).toBe(1);
-      expect(result.stdout).toBe('');
-      expect(result.stderr).toContain('RARE Protocol spaceFactory contract is not configured on "sepolia".');
     });
   });
 

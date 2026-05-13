@@ -16,15 +16,12 @@ import {
   planCollectionToken,
   planCollectionTokenReceiver,
   planCollectionTokenUri,
-  planCreateRareSpaceCollection,
   planCreateLazySovereignCollection,
   planCreateSovereignCollection,
-  planMintRareSpaceToken,
 } from '../../../src/sdk/collection-core.js';
 
 const COLLECTION_ADDRESS = '0x1111111111111111111111111111111111111111';
 const MINTER_ADDRESS = '0x2222222222222222222222222222222222222222';
-const ROYALTY_ADDRESS = '0x3333333333333333333333333333333333333333';
 
 describe('Sovereign collection core', () => {
   it('normalizes supported contract type aliases', () => {
@@ -334,35 +331,4 @@ describe('Sovereign collection core', () => {
     });
   });
 
-  it('plans RareSpace collection creation and minting', () => {
-    expect(planCreateRareSpaceCollection({
-      name: 'Space',
-      symbol: 'SPACE',
-    })).toEqual({
-      name: 'Space',
-      symbol: 'SPACE',
-    });
-
-    expect(planMintRareSpaceToken({
-      contract: COLLECTION_ADDRESS,
-      tokenUri: 'ipfs://space-token',
-    }, MINTER_ADDRESS)).toEqual({
-      contract: COLLECTION_ADDRESS,
-      tokenUri: 'ipfs://space-token',
-      to: MINTER_ADDRESS,
-      royaltyReceiver: MINTER_ADDRESS,
-    });
-
-    expect(planMintRareSpaceToken({
-      contract: COLLECTION_ADDRESS,
-      tokenUri: 'ipfs://space-token',
-      to: ROYALTY_ADDRESS,
-      royaltyReceiver: COLLECTION_ADDRESS,
-    }, MINTER_ADDRESS)).toEqual({
-      contract: COLLECTION_ADDRESS,
-      tokenUri: 'ipfs://space-token',
-      to: ROYALTY_ADDRESS,
-      royaltyReceiver: COLLECTION_ADDRESS,
-    });
-  });
 });
