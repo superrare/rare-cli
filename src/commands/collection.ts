@@ -2,7 +2,6 @@ import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
-import { printError } from '../errors.js';
 import { output, log } from '../output.js';
 
 function lazyBatchMintCmd(): Command {
@@ -34,27 +33,23 @@ function lazyBatchMintCmd(): Command {
         else log(`  Max tokens: uncapped`);
         log('Waiting for confirmation...');
 
-        try {
-          const result = await rare.deploy.lazyBatchMint({
-            name,
-            symbol,
-            maxTokens: opts.maxTokens,
-          });
+        const result = await rare.deploy.lazyBatchMint({
+          name,
+          symbol,
+          maxTokens: opts.maxTokens,
+        });
 
-          output(
-            {
-              txHash: result.txHash,
-              blockNumber: result.receipt.blockNumber.toString(),
-              contract: result.contract,
-            },
-            () => {
-              console.log(`Transaction sent: ${result.txHash}`);
-              console.log(`\nLazy Batch Mint collection deployed at: ${result.contract}`);
-            },
-          );
-        } catch (error) {
-          printError(error);
-        }
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            contract: result.contract,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`\nLazy Batch Mint collection deployed at: ${result.contract}`);
+          },
+        );
       },
     );
 

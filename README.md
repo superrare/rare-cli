@@ -68,7 +68,7 @@ Private keys are masked in the output.
 
 ## Usage
 
-All commands accept `--chain` to select a network. Commands that support explicit chain selection also accept `--chain-id`. Defaults to `sepolia`.
+All commands accept `--chain` to select a network. Batch listing and lazy batch mint commands also accept `--chain-id`. Defaults to `sepolia`.
 
 Supported chains: `mainnet`, `sepolia`, `base`, `base-sepolia`
 
