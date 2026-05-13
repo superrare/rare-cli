@@ -2,18 +2,23 @@ import {
   type Address,
   type Hash,
   type PublicClient,
+  type WalletClient,
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
-import type { RareClientConfig, RareClient } from './types.js';
+import type { RareClientConfig, RareClient, WalletAccount } from './types.js';
 import {
-  ETH_ADDRESS,
   approvalAbi,
   preparePayment,
   requireWallet,
-  toInteger,
-  toWei,
   waitForApproval,
 } from './helpers.js';
+import {
+  planListingBuy,
+  planListingCancel,
+  planListingCreate,
+  planListingStatus,
+  shapeListingStatus,
+} from './marketplace-core.js';
 
 export function createListingNamespace(
   publicClient: PublicClient,
@@ -21,45 +26,33 @@ export function createListingNamespace(
   addresses: { auction: Address },
 ): RareClient['listing'] {
   return {
-    async create(params) {
+    async create(params): ReturnType<RareClient['listing']['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-
-      const currency = params.currency ?? ETH_ADDRESS;
-      const price = toWei(params.price);
-      const target = params.target ?? ETH_ADDRESS;
-      const splitAddresses = params.splitAddresses ?? [accountAddress];
-      const splitRatios = params.splitRatios ?? [100];
-      const nftAddress = params.contract;
-
-      let approvalTxHash: Hash | undefined;
-      if (params.autoApprove !== false) {
-        const isApproved = await publicClient.readContract({
-          address: nftAddress,
-          abi: approvalAbi,
-          functionName: 'isApprovedForAll',
-          args: [accountAddress, addresses.auction],
+      const plan = planListingCreate(params, accountAddress);
+      const approvalTxHash = params.autoApprove === false
+        ? undefined
+        : await approveMarketplaceIfNeeded({
+          publicClient,
+          walletClient,
+          account,
+          accountAddress,
+          nftAddress: plan.nftAddress,
+          operator: addresses.auction,
         });
-
-        if (!isApproved) {
-          approvalTxHash = await walletClient.writeContract({
-            address: nftAddress,
-            abi: approvalAbi,
-            functionName: 'setApprovalForAll',
-            args: [addresses.auction, true],
-            account,
-            chain: undefined,
-          });
-
-          await publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
-          await waitForApproval(publicClient, nftAddress, accountAddress, addresses.auction);
-        }
-      }
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'setSalePrice',
-        args: [nftAddress, toInteger(params.tokenId, 'tokenId'), currency, price, target, splitAddresses, splitRatios],
+        args: [
+          plan.nftAddress,
+          plan.tokenId,
+          plan.currency,
+          plan.price,
+          plan.target,
+          plan.splitAddresses,
+          plan.splitRatios,
+        ],
         account,
         chain: undefined,
       });
@@ -68,16 +61,15 @@ export function createListingNamespace(
       return { txHash, receipt, approvalTxHash };
     },
 
-    async cancel(params) {
+    async cancel(params): ReturnType<RareClient['listing']['cancel']> {
       const { walletClient, account } = requireWallet(config);
-
-      const target = params.target ?? ETH_ADDRESS;
+      const plan = planListingCancel(params);
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'removeSalePrice',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), target],
+        args: [params.contract, plan.tokenId, plan.target],
         account,
         chain: undefined,
       });
@@ -86,22 +78,20 @@ export function createListingNamespace(
       return { txHash, receipt };
     },
 
-    async buy(params) {
+    async buy(params): ReturnType<RareClient['listing']['buy']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-
-      const currency = params.currency ?? ETH_ADDRESS;
-      const amount = toWei(params.amount);
+      const plan = planListingBuy(params);
 
       const value = await preparePayment({
         publicClient, walletClient, account, accountAddress,
-        auctionAddress: addresses.auction, currency, amount,
+        auctionAddress: addresses.auction, currency: plan.currency, amount: plan.amount,
       });
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'buy',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), currency, amount],
+        args: [params.contract, plan.tokenId, plan.currency, plan.amount],
         account,
         chain: undefined,
         value,
@@ -111,20 +101,52 @@ export function createListingNamespace(
       return { txHash, receipt };
     },
 
-    async getStatus(params) {
-      const target = params.target ?? ETH_ADDRESS;
+    async getStatus(params): ReturnType<RareClient['listing']['getStatus']> {
+      const plan = planListingStatus(params);
 
-      const [seller, currencyAddress, amount] = await publicClient.readContract({
+      const result = await publicClient.readContract({
         address: addresses.auction,
         abi: auctionAbi,
-        functionName: 'tokenSalePrices',
-        args: [params.contract, toInteger(params.tokenId, 'tokenId'), target],
+        functionName: 'getSalePrice',
+        args: [params.contract, plan.tokenId, plan.target],
       });
 
-      const hasListing = amount > 0n;
-      const isEth = currencyAddress === ETH_ADDRESS;
-
-      return { seller, currencyAddress, amount, hasListing, isEth };
+      const wallet = config.account ?? config.walletClient?.account?.address ?? null;
+      return shapeListingStatus(result, { target: plan.target, wallet });
     },
   };
+}
+
+async function approveMarketplaceIfNeeded(opts: {
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  account: Address | WalletAccount;
+  accountAddress: Address;
+  nftAddress: Address;
+  operator: Address;
+}): Promise<Hash | undefined> {
+  const isApproved = await opts.publicClient.readContract({
+    address: opts.nftAddress,
+    abi: approvalAbi,
+    functionName: 'isApprovedForAll',
+    args: [opts.accountAddress, opts.operator],
+  });
+
+  if (isApproved) {
+    return undefined;
+  }
+
+  const approvalTxHash = await opts.walletClient.writeContract({
+    address: opts.nftAddress,
+    abi: approvalAbi,
+    functionName: 'setApprovalForAll',
+    args: [opts.operator, true],
+    account: opts.account,
+    chain: undefined,
+  });
+
+  await opts.publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
+  await waitForApproval(opts.publicClient, opts.nftAddress, opts.accountAddress, opts.operator);
+
+  return approvalTxHash;
 }

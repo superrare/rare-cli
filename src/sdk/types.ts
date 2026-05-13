@@ -1,5 +1,7 @@
 import type { Address, Hash, PublicClient, TransactionReceipt, WalletClient } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
+import type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
+import type { LiquidFactoryConfig } from '../liquid/factory-config.js';
 import type {
   CollectionSearchParams,
   ImportErc721Params,
@@ -10,6 +12,8 @@ import type {
   Nft,
   Collection,
   NftEvent,
+  NftEventOptions,
+  CollectionEventOptions,
   UserProfile,
 } from './api.js';
 
@@ -17,49 +21,49 @@ export type IntegerInput = bigint | number | string;
 export type AmountInput = bigint | number | string;
 export type WalletAccount = NonNullable<WalletClient['account']>;
 
-export interface RareClientConfig {
+export type RareClientConfig = {
   publicClient: PublicClient;
   walletClient?: WalletClient;
   account?: Address;
 }
 
-export interface TransactionResult {
+export type TransactionResult = {
   txHash: Hash;
   receipt: TransactionReceipt;
 }
 
-export interface DeployErc721Params {
+export type DeployErc721Params = {
   name: string;
   symbol: string;
   maxTokens?: IntegerInput;
 }
 
-export interface DeployErc721Result extends TransactionResult {
+export type DeployErc721Result = {
   contract: Address;
-}
+} & TransactionResult
 
-export interface DeployLazyBatchMintParams {
+export type DeployLazyBatchMintParams = {
   name: string;
   symbol: string;
   maxTokens?: IntegerInput;
 }
 
-export interface DeployLazyBatchMintResult extends TransactionResult {
+export type DeployLazyBatchMintResult = {
   contract: Address;
-}
+} & TransactionResult
 
-export interface MintToParams {
+export type MintToParams = {
   contract: Address;
   tokenUri: string;
   to?: Address;
   royaltyReceiver?: Address;
 }
 
-export interface MintToResult extends TransactionResult {
+export type MintToResult = {
   tokenId: bigint;
-}
+} & TransactionResult
 
-export interface AuctionCreateParams {
+export type AuctionCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
   startingPrice: AmountInput;
@@ -70,29 +74,29 @@ export interface AuctionCreateParams {
   autoApprove?: boolean;
 }
 
-export interface AuctionBidParams {
+export type AuctionBidParams = {
   contract: Address;
   tokenId: IntegerInput;
   amount: AmountInput;
   currency?: Address;
 }
 
-export interface AuctionSettleParams {
+export type AuctionSettleParams = {
   contract: Address;
   tokenId: IntegerInput;
 }
 
-export interface AuctionCancelParams {
+export type AuctionCancelParams = {
   contract: Address;
   tokenId: IntegerInput;
 }
 
-export interface AuctionStatusParams {
+export type AuctionStatusParams = {
   contract: Address;
   tokenId: IntegerInput;
 }
 
-export interface AuctionStatus {
+export type AuctionStatus = {
   seller: Address;
   creationBlock: bigint;
   startingTime: bigint;
@@ -108,21 +112,20 @@ export interface AuctionStatus {
   status: 'PENDING' | 'RUNNING' | 'ENDED';
 }
 
-export interface OfferCreateParams {
+export type OfferCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
   amount: AmountInput;
-  convertible?: boolean;
 }
 
-export interface OfferCancelParams {
+export type OfferCancelParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
 }
 
-export interface OfferAcceptParams {
+export type OfferAcceptParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
@@ -131,22 +134,26 @@ export interface OfferAcceptParams {
   splitRatios?: number[];
 }
 
-export interface OfferStatusParams {
+export type OfferStatusParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
 }
 
-export interface OfferStatus {
+export type OfferStatus = {
   buyer: Address;
   amount: bigint;
   timestamp: bigint;
   marketplaceFee: number;
-  convertible: boolean;
   hasOffer: boolean;
+  currency: Address;
+  tokenOwner: Address | null;
+  cancellableAfter: bigint | null;
+  canAccept: boolean | null;
+  canCancel: boolean | null;
 }
 
-export interface ListingCreateParams {
+export type ListingCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
@@ -157,34 +164,111 @@ export interface ListingCreateParams {
   autoApprove?: boolean;
 }
 
-export interface ListingCancelParams {
+export type ListingCancelParams = {
   contract: Address;
   tokenId: IntegerInput;
   target?: Address;
 }
 
-export interface ListingBuyParams {
+export type ListingBuyParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
   amount: AmountInput;
 }
 
-export interface ListingStatusParams {
+export type ListingStatusParams = {
   contract: Address;
   tokenId: IntegerInput;
   target?: Address;
 }
 
-export interface ListingStatus {
+export type ListingStatus = {
   seller: Address;
   currencyAddress: Address;
   amount: bigint;
   hasListing: boolean;
   isEth: boolean;
+  target: Address;
+  splitAddresses: Address[];
+  splitRatios: number[];
+  canBuy: boolean | null;
 }
 
-export interface TokenContractInfo {
+export type BatchListingTokenEntry = {
+  contract: Address;
+  tokenId: IntegerInput;
+}
+
+export type BatchListingRootArtifact = {
+  root: `0x${string}`;
+  currency: Address;
+  amount: string;
+  splitAddresses: Address[];
+  splitRatios: number[];
+  tokens: { contract: Address; tokenId: string }[];
+  allowList?: { root: `0x${string}`; addresses: Address[]; endTimestamp?: string };
+}
+
+export type BatchListingProofArtifact = {
+  root: `0x${string}`;
+  contract: Address;
+  tokenId: string;
+  proof: `0x${string}`[];
+  allowListProof?: `0x${string}`[];
+  allowListAddress?: Address;
+}
+
+export type BatchListingCreateParams = {
+  artifact: BatchListingRootArtifact;
+  autoApprove?: boolean;
+}
+
+export type BatchListingCreateResult = {
+  approvalTxHashes?: Hash[];
+} & TransactionResult
+
+export type BatchListingCancelParams = {
+  root: `0x${string}`;
+}
+
+export type BatchListingBuyParams = {
+  proofArtifact: BatchListingProofArtifact;
+  creator: Address;
+  currency: Address;
+  amount: AmountInput;
+}
+
+export type BatchListingSetAllowListParams = {
+  root: `0x${string}`;
+  allowListRoot: `0x${string}`;
+  endTimestamp: IntegerInput;
+}
+
+export type BatchListingStatusParams = {
+  root: `0x${string}`;
+  creator: Address;
+  contract?: Address;
+  tokenId?: IntegerInput;
+  proof?: `0x${string}`[];
+}
+
+export type BatchListingStatus = {
+  root: `0x${string}`;
+  seller: Address;
+  currencyAddress: Address;
+  amount: bigint;
+  splitRecipients: Address[];
+  splitRatios: number[];
+  nonce: bigint;
+  isEth: boolean;
+  hasListing: boolean;
+  allowList?: { root: `0x${string}`; endTimestamp: bigint };
+  tokenInRoot?: boolean;
+  tokenNonce?: bigint;
+}
+
+export type TokenContractInfo = {
   contract: Address;
   chain: SupportedChain;
   name: string;
@@ -192,71 +276,246 @@ export interface TokenContractInfo {
   totalSupply: bigint;
 }
 
-export interface TokenInfo {
+export type TokenInfo = {
   contract: Address;
   tokenId: bigint;
   owner: Address;
   tokenUri: string;
 }
 
-export interface RareClient {
+export type GeneratePresetCurvesParams = {
+  preset: CurvePresetKey;
+}
+
+export type GeneratePresetCurvesResult = {
+  preset: CurvePresetKey;
+  rarePriceUsd: number;
+  curves: LiquidCurveSegment[];
+  preview: LiquidCurvePreview;
+}
+
+export type ValidateLiquidCurvesParams = {
+  curves: LiquidCurveSegment[];
+}
+
+export type DeployLiquidEditionParams = {
+  name: string;
+  symbol: string;
+  tokenUri: string;
+  initialRareLiquidity?: AmountInput;
+  curves: LiquidCurveSegment[];
+}
+
+export type DeployLiquidEditionResult = {
+  contract: Address;
+  tokenUri: string;
+  curves: LiquidCurveSegment[];
+} & TransactionResult
+
+export type RouterBuyParams = {
+  token: Address;
+  ethAmount: AmountInput;
+  minTokensOut: AmountInput;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export type RouterSellParams = {
+  token: Address;
+  tokenAmount: AmountInput;
+  minEthOut: AmountInput;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export type RouterSwapParams = {
+  tokenIn: Address;
+  amountIn: AmountInput;
+  tokenOut: Address;
+  minAmountOut: AmountInput;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export type BuyRareParams = {
+  ethAmount: AmountInput;
+  minRareOut?: AmountInput;
+  slippageBps?: IntegerInput;
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export type BuyTokenParams = {
+  token: Address;
+  ethAmount: AmountInput;
+  minTokensOut?: AmountInput;
+  slippageBps?: IntegerInput;
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export type SellTokenParams = {
+  token: Address;
+  tokenAmount: AmountInput;
+  minEthOut?: AmountInput;
+  slippageBps?: IntegerInput;
+  recipient?: Address;
+  deadline?: IntegerInput;
+}
+
+export type TokenTradeRouteSource = 'liquid-edition' | 'known-pool' | 'uniswap-api';
+export type TokenTradeExecution = 'liquid-router' | 'uniswap-api';
+
+export type TokenTradeQuoteBase = {
+  amountIn: bigint;
+  estimatedAmountOut: bigint;
+  minAmountOut: bigint;
+  tokenIn: Address;
+  tokenOut: Address;
+  inputDecimals: number;
+  outputDecimals: number;
+  slippageBps: number;
+  routeDescription: string;
+}
+
+export type LiquidRouterTokenTradeQuote = {
+  routeSource: Extract<TokenTradeRouteSource, 'liquid-edition' | 'known-pool'>;
+  execution: 'liquid-router';
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+} & TokenTradeQuoteBase
+
+export type UniswapApiTokenTradeQuote = {
+  routeSource: 'uniswap-api';
+  execution: 'uniswap-api';
+} & TokenTradeQuoteBase
+
+export type TokenTradeQuote = LiquidRouterTokenTradeQuote | UniswapApiTokenTradeQuote;
+
+export type TokenTradeResult = {
+  estimatedAmountOut: bigint;
+  minAmountOut: bigint;
+  routeSource: TokenTradeRouteSource;
+  execution: TokenTradeExecution;
+  commands?: `0x${string}`;
+  inputs?: readonly `0x${string}`[];
+  approvalTxHash?: Hash;
+  approvalResetTxHash?: Hash;
+} & TransactionResult
+
+export type BuyRareQuote = {
+  ethAmount: bigint;
+  rareAddress: Address;
+  estimatedRareOut: bigint;
+  minRareOut: bigint;
+  slippageBps: number;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+}
+
+export type BuyRareResult = {
+  estimatedRareOut: bigint;
+  minRareOut: bigint;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+} & TransactionResult
+
+export type RareClient = {
   chain: SupportedChain;
   chainId: number;
   contracts: {
     factory: Address;
     auction: Address;
+    lazyBatchMintFactory?: Address;
+    batchListing?: Address;
+    marketplaceSettings?: Address;
+    erc20ApprovalManager?: Address;
+    erc721ApprovalManager?: Address;
+    liquidFactory?: Address;
+    swapRouter?: Address;
+    v4Quoter?: Address;
   };
   deploy: {
-    erc721(params: DeployErc721Params): Promise<DeployErc721Result>;
-    lazyBatchMint(params: DeployLazyBatchMintParams): Promise<DeployLazyBatchMintResult>;
+    erc721: (params: DeployErc721Params) => Promise<DeployErc721Result>;
+    lazyBatchMint: (params: DeployLazyBatchMintParams) => Promise<DeployLazyBatchMintResult>;
+  };
+  liquid: {
+    getFactoryConfig: () => Promise<LiquidFactoryConfig>;
+    generatePresetCurves: (params: GeneratePresetCurvesParams) => Promise<GeneratePresetCurvesResult>;
+    validateCurves: (params: ValidateLiquidCurvesParams) => Promise<LiquidCurvePreview>;
+    deployMultiCurve: (params: DeployLiquidEditionParams) => Promise<DeployLiquidEditionResult>;
   };
   mint: {
-    mintTo(params: MintToParams): Promise<MintToResult>;
+    mintTo: (params: MintToParams) => Promise<MintToResult>;
+  };
+  swap: {
+    buy: (params: RouterBuyParams) => Promise<TransactionResult>;
+    sell: (params: RouterSellParams) => Promise<TransactionResult>;
+    swap: (params: RouterSwapParams) => Promise<TransactionResult>;
+    quoteBuyToken: (params: BuyTokenParams) => Promise<TokenTradeQuote>;
+    buyToken: (params: BuyTokenParams) => Promise<TokenTradeResult>;
+    quoteSellToken: (params: SellTokenParams) => Promise<TokenTradeQuote>;
+    sellToken: (params: SellTokenParams) => Promise<TokenTradeResult>;
+    quoteBuyRare: (params: BuyRareParams) => Promise<BuyRareQuote>;
+    buyRare: (params: BuyRareParams) => Promise<BuyRareResult>;
   };
   auction: {
-    create(params: AuctionCreateParams): Promise<TransactionResult & { approvalTxHash?: Hash }>;
-    bid(params: AuctionBidParams): Promise<TransactionResult>;
-    settle(params: AuctionSettleParams): Promise<TransactionResult>;
-    cancel(params: AuctionCancelParams): Promise<TransactionResult>;
-    getStatus(params: AuctionStatusParams): Promise<AuctionStatus>;
+    create: (params: AuctionCreateParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
+    bid: (params: AuctionBidParams) => Promise<TransactionResult>;
+    settle: (params: AuctionSettleParams) => Promise<TransactionResult>;
+    cancel: (params: AuctionCancelParams) => Promise<TransactionResult>;
+    getStatus: (params: AuctionStatusParams) => Promise<AuctionStatus>;
   };
   offer: {
-    create(params: OfferCreateParams): Promise<TransactionResult>;
-    cancel(params: OfferCancelParams): Promise<TransactionResult>;
-    accept(params: OfferAcceptParams): Promise<TransactionResult>;
-    getStatus(params: OfferStatusParams): Promise<OfferStatus>;
+    create: (params: OfferCreateParams) => Promise<TransactionResult>;
+    cancel: (params: OfferCancelParams) => Promise<TransactionResult>;
+    accept: (params: OfferAcceptParams) => Promise<TransactionResult>;
+    getStatus: (params: OfferStatusParams) => Promise<OfferStatus>;
   };
   listing: {
-    create(params: ListingCreateParams): Promise<TransactionResult & { approvalTxHash?: Hash }>;
-    cancel(params: ListingCancelParams): Promise<TransactionResult>;
-    buy(params: ListingBuyParams): Promise<TransactionResult>;
-    getStatus(params: ListingStatusParams): Promise<ListingStatus>;
+    create: (params: ListingCreateParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
+    cancel: (params: ListingCancelParams) => Promise<TransactionResult>;
+    buy: (params: ListingBuyParams) => Promise<TransactionResult>;
+    getStatus: (params: ListingStatusParams) => Promise<ListingStatus>;
+  };
+  batchListing: {
+    create: (params: BatchListingCreateParams) => Promise<BatchListingCreateResult>;
+    cancel: (params: BatchListingCancelParams) => Promise<TransactionResult>;
+    buy: (params: BatchListingBuyParams) => Promise<TransactionResult>;
+    setAllowList: (params: BatchListingSetAllowListParams) => Promise<TransactionResult>;
+    getStatus: (params: BatchListingStatusParams) => Promise<BatchListingStatus>;
   };
   search: {
-    nfts(params?: NftSearchParams): Promise<SearchPageResponse<Nft>>;
-    collections(params?: CollectionSearchParams): Promise<SearchPageResponse<Collection>>;
+    nfts: (params?: NftSearchParams) => Promise<SearchPageResponse<Nft>>;
+    collections: (params?: CollectionSearchParams) => Promise<SearchPageResponse<Collection>>;
   };
   nft: {
-    get(universalTokenId: string): Promise<Nft>;
-    events(universalTokenId: string, opts?: { page?: number; perPage?: number; eventType?: string | string[]; sortBy?: 'newest' | 'oldest' }): Promise<SearchPageResponse<NftEvent>>;
+    get: (universalTokenId: string) => Promise<Nft>;
+    events: (universalTokenId: string, opts?: NftEventOptions) => Promise<SearchPageResponse<NftEvent>>;
   };
   collection: {
-    get(id: string): Promise<Collection>;
-    events(id: string, opts?: { page?: number; perPage?: number; eventType?: string | string[]; sortBy?: 'newest' | 'oldest' }): Promise<SearchPageResponse<NftEvent>>;
+    get: (id: string) => Promise<Collection>;
+    events: (id: string, opts?: CollectionEventOptions) => Promise<SearchPageResponse<NftEvent>>;
   };
   user: {
-    get(address: string): Promise<UserProfile>;
+    get: (address: string) => Promise<UserProfile>;
   };
   media: {
-    upload(buffer: Uint8Array, filename: string): Promise<NftMediaEntry>;
-    pinMetadata(opts: PinMetadataParams): Promise<string>;
+    upload: (buffer: Uint8Array, filename: string) => Promise<NftMediaEntry>;
+    pinMetadata: (opts: PinMetadataParams) => Promise<string>;
   };
   import: {
-    erc721(params: ImportErc721Params): Promise<void>;
+    erc721: (params: ImportErc721Params) => Promise<void>;
   };
   token: {
-    getContractInfo(params: { contract: Address }): Promise<TokenContractInfo>;
-    getTokenInfo(params: { contract: Address; tokenId: IntegerInput }): Promise<TokenInfo>;
-    getPrice(symbol: string): Promise<{ symbol: string; priceUsd: number; decimals: number; chainId: number; address: string }>;
+    getContractInfo: (params: { contract: Address }) => Promise<TokenContractInfo>;
+    getTokenInfo: (params: { contract: Address; tokenId: IntegerInput }) => Promise<TokenInfo>;
+    getPrice: (symbol: string) => Promise<{ symbol: string; priceUsd: number; decimals: number; chainId: number; address: string }>;
   };
 }
