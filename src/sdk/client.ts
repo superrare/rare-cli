@@ -23,6 +23,7 @@ import { createTokenNamespace } from './token.js';
 import { createLiquidNamespace } from './liquid.js';
 import { createSwapNamespace } from './swap.js';
 import { createReleaseNamespace } from './release.js';
+import { createCollectionNamespace } from './collection.js';
 
 export type { RareClientConfig, RareClient } from './types.js';
 
@@ -38,6 +39,8 @@ export function createRareClient(config: RareClientConfig): RareClient {
     contracts: {
       factory: addresses.factory,
       auction: addresses.auction,
+      sovereignFactory: addresses.sovereignFactory,
+      lazySovereignFactory: addresses.lazySovereignFactory,
       rareMinter: addresses.rareMinter,
       lazyBatchMintFactory: addresses.lazyBatchMintFactory,
       batchListing: addresses.batchListing,
@@ -109,14 +112,14 @@ export function createRareClient(config: RareClientConfig): RareClient {
         return getNftEventsApi(universalTokenId, opts);
       },
     },
-    collection: {
-      async get(id): ReturnType<RareClient['collection']['get']> {
+    collection: createCollectionNamespace(publicClient, config, chain, {
+      async get(id) {
         return getCollectionApi(id);
       },
       async events(id, opts): ReturnType<RareClient['collection']['events']> {
         return getCollectionEventsApi(id, opts);
       },
-    },
+    }),
     user: {
       async get(address): ReturnType<RareClient['user']['get']> {
         return getUserApi(address);

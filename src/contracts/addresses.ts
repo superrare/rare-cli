@@ -43,6 +43,8 @@ export type CanonicalV4Pool = {
 export type ContractAddresses = {
   factory: Address;
   auction: Address;
+  sovereignFactory?: Address;
+  lazySovereignFactory?: Address;
   rareMinter?: Address;
   lazyBatchMintFactory?: Address;
   batchListing?: Address;
@@ -63,6 +65,8 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
   sepolia: {
     factory: getAddress('0x3c7526a0975156299ceef369b8ff3c01cc670523'),
     auction: getAddress('0xC8Edc7049b233641ad3723D6C60019D1c8771612'),
+    sovereignFactory: getAddress('0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf'),
+    lazySovereignFactory: getAddress('0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA'),
     rareMinter: getAddress('0xd28Dc0B89104d7BBd902F338a0193fF063617ccE'),
     lazyBatchMintFactory: getAddress('0xE5efBA88D556aDA98124654fE505465b8d494858'),
     batchListing: getAddress('0xF2bE72d4343beD375Cb6d0E799a3c003163860e0'),
@@ -76,6 +80,8 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
   mainnet: {
     factory: getAddress('0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1'),
     auction: getAddress('0x6D7c44773C52D396F43c2D511B81aa168E9a7a42'),
+    sovereignFactory: getAddress('0xe980ec62378529d95ba446433f4deb6324129c59'),
+    lazySovereignFactory: getAddress('0xba798BD606d86D207ca2751510173532899117a1'),
     rareMinter: getAddress('0x5fa112EFeD8297bec0010b312208d223E0cE891E'),
     lazyBatchMintFactory: getAddress('0x40F9E4b420D5A8fF5aED32B5F72A37013c0739B6'),
     batchListing: getAddress('0x6a190885A806D39A0A8C348bfA1ac762D72E608d'),
@@ -280,4 +286,15 @@ export function getCanonicalUsdcEthPool(chain: SupportedChain): CanonicalV4Pool 
     throw new Error(`Canonical USDC/ETH pool is not configured for "${chain}". Supported chains: mainnet, sepolia`);
   }
   return pool;
+}
+
+export function requireContractAddress(
+  chain: SupportedChain,
+  contractName: keyof ContractAddresses,
+): Address {
+  const address = getContractAddresses(chain)[contractName];
+  if (!address) {
+    throw new Error(`RARE Protocol ${contractName} contract is not configured on "${chain}".`);
+  }
+  return address;
 }

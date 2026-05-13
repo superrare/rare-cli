@@ -12,6 +12,10 @@ export type {
   ValidateLiquidCurvesParams,
   DeployLiquidEditionParams,
   DeployLiquidEditionResult,
+  CreateSovereignCollectionParams,
+  CreateSovereignCollectionResult,
+  CreateLazySovereignCollectionParams,
+  CreateLazySovereignCollectionResult,
   ReleaseAllowlistArtifact,
   ReleaseAllowlistConfig,
   ReleaseAllowlistWalletProof,
@@ -30,6 +34,17 @@ export type {
 } from './types.js';
 export type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
 export type { LiquidFactoryConfig } from '../liquid/factory-config.js';
+
+export {
+  lazySovereignCollectionContractTypes,
+  normalizeLazySovereignCollectionContractType,
+  normalizeSovereignCollectionContractType,
+  sovereignCollectionContractTypes,
+} from './collection-core.js';
+export type {
+  LazySovereignCollectionContractType,
+  SovereignCollectionContractType,
+} from './collection-core.js';
 
 export {
   buildReleaseAllowlistArtifact,
@@ -73,9 +88,12 @@ export {
   getErc721ApprovalManagerAddress,
   getRareMinterAddress,
   isSupportedChain,
+  requireContractAddress,
 } from '../contracts/addresses.js';
 export type { CanonicalV4Pool, CanonicalV4Pools, ContractAddresses, SupportedChain } from '../contracts/addresses.js';
 export { factoryAbi } from '../contracts/abis/factory.js';
+export { sovereignFactoryAbi } from '../contracts/abis/sovereign-factory.js';
+export { lazySovereignFactoryAbi } from '../contracts/abis/lazy-sovereign-factory.js';
 export { auctionAbi } from '../contracts/abis/auction.js';
 export { liquidFactoryAbi } from '../contracts/abis/liquid-factory.js';
 export { liquidRouterAbi } from '../contracts/abis/liquid-router.js';

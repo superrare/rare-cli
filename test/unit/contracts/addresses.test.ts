@@ -9,6 +9,7 @@ import {
   getErc721ApprovalManagerAddress,
   getRareMinterAddress,
   isSupportedChain,
+  requireContractAddress,
   resolveCurrency,
 } from '../../../src/contracts/addresses.js';
 
@@ -24,6 +25,8 @@ describe('chain and currency helpers', () => {
     expect(getContractAddresses('sepolia')).toEqual({
       factory: getAddress('0x3c7526a0975156299ceef369b8ff3c01cc670523'),
       auction: getAddress('0xC8Edc7049b233641ad3723D6C60019D1c8771612'),
+      sovereignFactory: getAddress('0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf'),
+      lazySovereignFactory: getAddress('0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA'),
       rareMinter: getAddress('0xd28Dc0B89104d7BBd902F338a0193fF063617ccE'),
       lazyBatchMintFactory: getAddress('0xE5efBA88D556aDA98124654fE505465b8d494858'),
       batchListing: getAddress('0xF2bE72d4343beD375Cb6d0E799a3c003163860e0'),
@@ -56,6 +59,17 @@ describe('chain and currency helpers', () => {
   it('resolves the ERC721 approval manager for supported chains', () => {
     expect(getErc721ApprovalManagerAddress('sepolia')).toBe(
       '0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E',
+    );
+  });
+
+  it('requires optional contract addresses only where configured', () => {
+    expect(requireContractAddress('sepolia', 'sovereignFactory')).toBe('0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf');
+    expect(requireContractAddress('sepolia', 'lazySovereignFactory')).toBe('0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA');
+    expect(() => requireContractAddress('base', 'sovereignFactory')).toThrow(
+      'RARE Protocol sovereignFactory contract is not configured on "base".',
+    );
+    expect(() => requireContractAddress('base', 'lazySovereignFactory')).toThrow(
+      'RARE Protocol lazySovereignFactory contract is not configured on "base".',
     );
   });
 

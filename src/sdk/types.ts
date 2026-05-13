@@ -3,6 +3,10 @@ import type { SupportedChain } from '../contracts/addresses.js';
 import type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
 import type { LiquidFactoryConfig } from '../liquid/factory-config.js';
 import type {
+  LazySovereignCollectionContractType,
+  SovereignCollectionContractType,
+} from './collection-core.js';
+import type {
   CollectionSearchParams,
   ImportErc721Params,
   NftMediaEntry,
@@ -51,6 +55,33 @@ export type DeployLazyBatchMintParams = {
 
 export type DeployLazyBatchMintResult = {
   contract: Address;
+} & TransactionResult
+
+export type CreateSovereignCollectionParams = {
+  name: string;
+  symbol: string;
+  maxTokens?: IntegerInput;
+  contractType?: SovereignCollectionContractType;
+}
+
+export type CreateSovereignCollectionResult = {
+  contract: Address;
+  factory: Address;
+  contractType: SovereignCollectionContractType;
+} & TransactionResult
+
+export type CreateLazySovereignCollectionParams = {
+  name: string;
+  symbol: string;
+  maxTokens: IntegerInput;
+  contractType?: LazySovereignCollectionContractType;
+}
+
+export type CreateLazySovereignCollectionResult = {
+  contract: Address;
+  factory: Address;
+  contractType: LazySovereignCollectionContractType;
+  nextStep: string;
 } & TransactionResult
 
 export type MintToParams = {
@@ -563,6 +594,8 @@ export type RareClient = {
   contracts: {
     factory: Address;
     auction: Address;
+    sovereignFactory?: Address;
+    lazySovereignFactory?: Address;
     rareMinter?: Address;
     lazyBatchMintFactory?: Address;
     batchListing?: Address;
@@ -650,6 +683,8 @@ export type RareClient = {
   collection: {
     get: (id: string) => Promise<Collection>;
     events: (id: string, opts?: CollectionEventOptions) => Promise<SearchPageResponse<NftEvent>>;
+    createSovereign: (params: CreateSovereignCollectionParams) => Promise<CreateSovereignCollectionResult>;
+    createLazySovereign: (params: CreateLazySovereignCollectionParams) => Promise<CreateLazySovereignCollectionResult>;
   };
   user: {
     get: (address: string) => Promise<UserProfile>;

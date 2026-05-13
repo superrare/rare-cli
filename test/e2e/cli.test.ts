@@ -232,6 +232,68 @@ describe('built CLI deterministic behavior', () => {
       expect(proof.proof).toEqual(expect.any(Array));
     });
   });
+
+  it('exposes the Sovereign collection create command help', async () => {
+    await withTempHome(async (home) => {
+      const result = await runCli(['collection', 'create', 'sovereign', '--help'], { home });
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('Usage: rare collection create sovereign [options] <name> <symbol>');
+      expect(result.stdout).toContain('--contract-type <type>');
+      expect(result.stdout).toContain('--max-tokens <number>');
+      expect(result.stderr).toBe('');
+    });
+  });
+
+  it('exposes the Lazy Sovereign collection create command help', async () => {
+    await withTempHome(async (home) => {
+      const result = await runCli(['collection', 'create', 'lazy-sovereign', '--help'], { home });
+
+      expect(result.code).toBe(0);
+      expect(result.stdout).toContain('Usage: rare collection create lazy-sovereign [options] <name> <symbol>');
+      expect(result.stdout).toContain('--contract-type <type>');
+      expect(result.stdout).toContain('--max-tokens <number>');
+      expect(result.stderr).toBe('');
+    });
+  });
+
+  it('rejects Sovereign collection creation on chains without a configured factory before wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const result = await runCli([
+        'collection',
+        'create',
+        'sovereign',
+        'Test',
+        'TST',
+        '--chain',
+        'base',
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('RARE Protocol sovereignFactory contract is not configured on "base".');
+    });
+  });
+
+  it('rejects Lazy Sovereign collection creation on chains without a configured factory before wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const result = await runCli([
+        'collection',
+        'create',
+        'lazy-sovereign',
+        'Test',
+        'TST',
+        '--max-tokens',
+        '10',
+        '--chain',
+        'base',
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('RARE Protocol lazySovereignFactory contract is not configured on "base".');
+    });
+  });
 });
 
 function isConfigWithSepoliaPrivateKey(value: unknown): value is {
