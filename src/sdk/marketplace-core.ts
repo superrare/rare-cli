@@ -1,4 +1,4 @@
-import type { Address, Hex } from 'viem';
+import { hexToBigInt, isAddressEqual, type Address, type Hex } from 'viem';
 import type {
   AuctionBidParams,
   AuctionCancelParams,
@@ -16,13 +16,14 @@ import type {
   OfferStatusParams,
   AuctionStatus,
 } from './types.js';
+import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '../contracts/addresses.js';
 import {
-  ETH_ADDRESS,
   toNonNegativeInteger,
   toNonNegativeWei,
   toPositiveInteger,
   toPositiveWei,
 } from './helpers.js';
+import { parseAddress } from './validation.js';
 
 export type ListingCreatePlan = {
   nftAddress: Address;
@@ -44,7 +45,6 @@ export type OfferCreatePlan = {
   tokenId: bigint;
   currency: Address;
   amount: bigint;
-  convertible: boolean;
 };
 
 export type OfferAcceptPlan = {
@@ -88,21 +88,23 @@ export type AuctionTypeIds = {
 const zeroBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
 export function planListingCreate(params: ListingCreateParams, accountAddress: Address): ListingCreatePlan {
+  const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
+
   return {
     nftAddress: params.contract,
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
     price: toNonNegativeWei(params.price, 'price'),
-    target: params.target ?? ETH_ADDRESS,
-    splitAddresses: params.splitAddresses ?? [accountAddress],
-    splitRatios: params.splitRatios ?? [100],
+    target: params.target ?? PUBLIC_LISTING_TARGET,
+    splitAddresses: splits.addresses,
+    splitRatios: splits.ratios,
   };
 }
 
 export function planListingCancel(params: ListingCancelParams): { tokenId: bigint; target: Address } {
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
-    target: params.target ?? ETH_ADDRESS,
+    target: params.target ?? PUBLIC_LISTING_TARGET,
   };
 }
 
@@ -117,21 +119,48 @@ export function planListingBuy(params: ListingBuyParams): ListingBuyPlan {
 export function planListingStatus(params: ListingStatusParams): { tokenId: bigint; target: Address } {
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
-    target: params.target ?? ETH_ADDRESS,
+    target: params.target ?? PUBLIC_LISTING_TARGET,
   };
 }
 
-export function shapeListingStatus([seller, currencyAddress, amount]: readonly [
-  Address,
-  Address,
-  bigint,
-]): ListingStatus {
+export function shapeListingStatus(
+  [
+    seller,
+    currencyAddress,
+    amount,
+    splitAddresses,
+    splitRatios,
+  ]: readonly [
+    Address,
+    Address,
+    bigint,
+    readonly Address[],
+    readonly number[],
+  ],
+  opts: {
+    target: Address;
+    wallet?: Address | null;
+  },
+): ListingStatus {
+  const hasListing = amount > 0n;
+  const wallet = opts.wallet ?? null;
+  const canBuy =
+    wallet === null
+      ? null
+      : hasListing &&
+        !isAddressEqual(wallet, seller) &&
+        (isAddressEqual(opts.target, PUBLIC_LISTING_TARGET) || isAddressEqual(opts.target, wallet));
+
   return {
     seller,
     currencyAddress,
     amount,
-    hasListing: amount > 0n,
-    isEth: currencyAddress === ETH_ADDRESS,
+    hasListing,
+    isEth: isAddressEqual(currencyAddress, ETH_ADDRESS),
+    target: opts.target,
+    splitAddresses: [...splitAddresses],
+    splitRatios: [...splitRatios],
+    canBuy,
   };
 }
 
@@ -140,7 +169,6 @@ export function planOfferCreate(params: OfferCreateParams): OfferCreatePlan {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
     amount: toPositiveWei(params.amount, 'amount'),
-    convertible: params.convertible ?? false,
   };
 }
 
@@ -152,12 +180,14 @@ export function planOfferCancel(params: OfferCancelParams): { tokenId: bigint; c
 }
 
 export function planOfferAccept(params: OfferAcceptParams, accountAddress: Address): OfferAcceptPlan {
+  const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
+
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
     amount: toPositiveWei(params.amount, 'amount'),
-    splitAddresses: params.splitAddresses ?? [accountAddress],
-    splitRatios: params.splitRatios ?? [100],
+    splitAddresses: splits.addresses,
+    splitRatios: splits.ratios,
   };
 }
 
@@ -168,25 +198,110 @@ export function planOfferStatus(params: OfferStatusParams): { tokenId: bigint; c
   };
 }
 
-export function shapeOfferStatus([buyer, amount, timestamp, marketplaceFee, convertible]: readonly [
-  Address,
-  bigint,
-  bigint,
-  number,
-  boolean,
-]): OfferStatus {
+export function shapeOfferStatus(
+  [buyer, amount, timestamp, marketplaceFee]: readonly [
+    Address,
+    bigint,
+    bigint,
+    number,
+    boolean,
+  ],
+  opts: {
+    currency?: Address;
+    tokenOwner?: Address | null;
+    cancellationDelay?: bigint | null;
+    wallet?: Address | null;
+    nowSeconds: bigint;
+  },
+): OfferStatus {
+  const hasOffer = amount > 0n;
+  const tokenOwner = opts.tokenOwner ?? null;
+  const cancellableAfter =
+    hasOffer && opts.cancellationDelay != null ? timestamp + opts.cancellationDelay + 1n : null;
+  const wallet = opts.wallet ?? null;
+  const canAccept =
+    wallet == null ? null : hasOffer && tokenOwner !== null && isAddressEqual(wallet, tokenOwner);
+  const canCancel =
+    wallet == null
+      ? null
+      : hasOffer &&
+        isAddressEqual(wallet, buyer) &&
+        (cancellableAfter === null || opts.nowSeconds >= cancellableAfter);
+
   return {
     buyer,
     amount,
     timestamp,
     marketplaceFee,
-    convertible,
-    hasOffer: amount > 0n,
+    hasOffer,
+    currency: opts.currency ?? ETH_ADDRESS,
+    tokenOwner,
+    cancellableAfter,
+    canAccept,
+    canCancel,
   };
+}
+
+export function planSplits(
+  splitAddresses: Address[] | undefined,
+  splitRatios: number[] | undefined,
+  accountAddress: Address,
+): { addresses: Address[]; ratios: number[] } {
+  if (splitAddresses === undefined && splitRatios === undefined) {
+    return { addresses: [accountAddress], ratios: [100] };
+  }
+
+  if (splitAddresses === undefined || splitRatios === undefined) {
+    throw new Error('splitAddresses and splitRatios must both be provided.');
+  }
+
+  return planProvidedSplits(splitAddresses, splitRatios);
+}
+
+export function planProvidedSplits(
+  splitAddresses: Address[],
+  splitRatios: number[],
+): { addresses: Address[]; ratios: number[] } {
+  if (splitAddresses.length === 0) {
+    throw new Error('splitAddresses must include at least 1 address.');
+  }
+
+  if (splitAddresses.length > 5) {
+    throw new Error('splitAddresses cannot include more than 5 addresses.');
+  }
+
+  if (splitAddresses.length !== splitRatios.length) {
+    throw new Error('splitAddresses and splitRatios must have the same length.');
+  }
+
+  const normalizedAddresses = splitAddresses.map((address) => parseAddress(address, 'splitAddress'));
+
+  const duplicateAddress = normalizedAddresses.find((address, index) =>
+    normalizedAddresses.some((otherAddress, otherIndex) =>
+      otherIndex < index && isAddressEqual(address, otherAddress),
+    ),
+  );
+  if (duplicateAddress !== undefined) {
+    throw new Error(`Duplicate split address: "${duplicateAddress}".`);
+  }
+
+  const totalRatio = splitRatios.reduce((total, ratio) => {
+    if (!Number.isInteger(ratio) || ratio < 1 || ratio > 100) {
+      throw new Error(`Invalid split ratio: "${String(ratio)}". Must be an integer between 1 and 100.`);
+    }
+    return total + ratio;
+  }, 0);
+
+  if (totalRatio !== 100) {
+    throw new Error(`splitRatios must sum to 100 (got ${totalRatio}).`);
+  }
+
+  return { addresses: normalizedAddresses, ratios: [...splitRatios] };
 }
 
 export function planAuctionCreate(params: AuctionCreateParams, accountAddress: Address): AuctionCreatePlan {
   const auctionType = normalizeAuctionType(params);
+  const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
 
   return {
     nftAddress: params.contract,
@@ -197,10 +312,9 @@ export function planAuctionCreate(params: AuctionCreateParams, accountAddress: A
       : toPositiveWei(params.startingPrice, 'startingPrice'),
     duration: toPositiveInteger(params.duration, 'duration'),
     auctionType,
-    startTime: auctionType === 'scheduled'
-      ? toPositiveInteger(params.startTime ?? 0, 'startTime')
-      : 0n,
-    ...planSplitRecipients(params.splitAddresses, params.splitRatios, accountAddress),
+    startTime: auctionType === 'scheduled' ? toPositiveInteger(params.startTime ?? 0, 'startTime') : 0n,
+    splitAddresses: splits.addresses,
+    splitRatios: splits.ratios,
   };
 }
 
@@ -247,25 +361,29 @@ export function shapeAuctionStatus(
     auctionTypeIds?: AuctionTypeIds;
   } = {},
 ): AuctionStatus {
-  const hasAuction = auctionType.toLowerCase() !== zeroBytes32;
+  const hasAuction = !isSameHex(auctionType, zeroBytes32);
   const auctionTypeName = resolveAuctionTypeName(auctionType, opts.auctionTypeIds);
   const started = hasAuction && startingTime > 0n && nowSeconds >= startingTime;
   const endTime = started ? startingTime + lengthOfAuction : null;
-  let status: AuctionStatus['status'] = 'PENDING';
-  if (started) {
-    status = endTime !== null && nowSeconds >= endTime ? 'ENDED' : 'RUNNING';
-  }
+  const status: AuctionStatus['status'] = !started
+    ? 'PENDING'
+    : endTime !== null && nowSeconds >= endTime
+      ? 'ENDED'
+      : 'RUNNING';
   const currentBid = opts.currentBid?.amount ?? 0n;
-  const currentBidder = currentBid === 0n || opts.currentBid === undefined || opts.currentBid.bidder === ETH_ADDRESS
-    ? null
-    : opts.currentBid.bidder;
-  const currentBidCurrency = currentBid > 0n && opts.currentBid !== undefined
-    ? opts.currentBid.currencyAddress
-    : currency;
+  const currentBidder =
+    currentBid === 0n ||
+    opts.currentBid === undefined ||
+    isAddressEqual(opts.currentBid.bidder, ETH_ADDRESS)
+      ? null
+      : opts.currentBid.bidder;
+  const currentBidCurrency =
+    currentBid > 0n && opts.currentBid !== undefined ? opts.currentBid.currencyAddress : currency;
   const currentBidMarketplaceFee = opts.currentBid?.marketplaceFee ?? 0;
-  const minimumNextBid = currentBid > 0n
-    ? currentBid + ((currentBid * BigInt(opts.minimumBidIncreasePercentage ?? 0)) / 100n)
-    : minimumBid;
+  const minimumNextBid =
+    currentBid > 0n
+      ? currentBid + (currentBid * BigInt(opts.minimumBidIncreasePercentage ?? 0)) / 100n
+      : minimumBid;
   const settlementEligible = started && endTime !== null && nowSeconds >= endTime;
 
   return {
@@ -279,7 +397,7 @@ export function shapeAuctionStatus(
     auctionTypeName,
     splitAddresses: [...splitAddresses],
     splitRatios: [...splitRatios],
-    isEth: currency === ETH_ADDRESS,
+    isEth: isAddressEqual(currency, ETH_ADDRESS),
     hasAuction,
     started,
     endTime,
@@ -297,7 +415,7 @@ export function shapeAuctionStatus(
 export function shapeAuctionBidRead(
   bid: readonly [Address, Address, bigint, number] | AuctionBidRead,
 ): AuctionBidRead {
-  if (Array.isArray(bid)) {
+  if (isRawAuctionBidRead(bid)) {
     const [bidder, currencyAddress, amount, marketplaceFee] = bid;
     return {
       bidder,
@@ -310,64 +428,44 @@ export function shapeAuctionBidRead(
   return bid;
 }
 
+function isRawAuctionBidRead(
+  bid: readonly [Address, Address, bigint, number] | AuctionBidRead,
+): bid is readonly [Address, Address, bigint, number] {
+  return Array.isArray(bid);
+}
+
 function normalizeAuctionType(params: AuctionCreateParams): 'reserve' | 'scheduled' {
-  if (params.auctionType !== undefined) {
-    if (params.auctionType !== 'reserve' && params.auctionType !== 'scheduled') {
+  const auctionType: unknown = params.auctionType;
+  if (auctionType !== undefined) {
+    if (auctionType !== 'reserve' && auctionType !== 'scheduled') {
       throw new Error('auctionType must be "reserve" or "scheduled".');
     }
-    return params.auctionType;
+    if (auctionType === 'reserve' && params.startTime !== undefined) {
+      throw new Error('startTime can only be set for scheduled auctions.');
+    }
+    return auctionType;
   }
 
   return params.startTime === undefined ? 'reserve' : 'scheduled';
 }
 
-function planSplitRecipients(
-  splitAddresses: Address[] | undefined,
-  splitRatios: number[] | undefined,
-  accountAddress: Address,
-): Pick<AuctionCreatePlan, 'splitAddresses' | 'splitRatios'> {
-  const addresses = splitAddresses ?? [accountAddress];
-  const ratios = splitRatios ?? [100];
-
-  if (addresses.length === 0) {
-    throw new Error('splitAddresses must include at least one address.');
-  }
-  if (addresses.length > 5) {
-    throw new Error('splitAddresses cannot include more than 5 addresses.');
-  }
-  if (addresses.length !== ratios.length) {
-    throw new Error('splitAddresses and splitRatios must have the same length.');
-  }
-  const total = ratios.reduce((sum, ratio, index) => {
-    if (!Number.isInteger(ratio) || ratio < 0 || ratio > 100) {
-      throw new Error(`splitRatios[${index}] must be an integer from 0 to 100.`);
-    }
-    return sum + ratio;
-  }, 0);
-  if (total !== 100) {
-    throw new Error('splitRatios must sum to 100.');
-  }
-
-  return {
-    splitAddresses: addresses,
-    splitRatios: ratios,
-  };
-}
-
 function resolveAuctionTypeName(auctionType: Hex, ids: AuctionTypeIds | undefined): AuctionStatus['auctionTypeName'] {
-  const normalized = auctionType.toLowerCase();
-  if (normalized === zeroBytes32) {
+  if (isSameHex(auctionType, zeroBytes32)) {
     return 'none';
   }
   if (ids !== undefined) {
-    if (normalized === ids.reserve.toLowerCase()) {
+    if (isSameHex(auctionType, ids.reserve)) {
       return 'reserve';
     }
-    if (normalized === ids.scheduled.toLowerCase()) {
+    if (isSameHex(auctionType, ids.scheduled)) {
       return 'scheduled';
     }
   }
   return 'unknown';
+}
+
+function isSameHex(left: Hex, right: Hex): boolean {
+  return hexToBigInt(left) === hexToBigInt(right);
 }
 
 function auctionState(params: {

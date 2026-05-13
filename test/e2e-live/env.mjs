@@ -36,21 +36,21 @@ export function missingLiveEnv(env = process.env) {
 }
 
 function parseDotEnvValue(rawValue) {
-  let value = rawValue.trim();
+  const value = rawValue.trim();
   if (!value) return '';
 
   const quote = value[0];
   if ((quote === '"' || quote === "'") && value.endsWith(quote)) {
-    value = value.slice(1, -1);
+    const unquoted = value.slice(1, -1);
     if (quote === '"') {
-      value = value
+      return unquoted
         .replace(/\\n/g, '\n')
         .replace(/\\r/g, '\r')
         .replace(/\\t/g, '\t')
         .replace(/\\"/g, '"')
         .replace(/\\\\/g, '\\');
     }
-    return value;
+    return unquoted;
   }
 
   const hashIndex = value.indexOf(' #');

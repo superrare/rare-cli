@@ -1,13 +1,33 @@
 import { Command } from 'commander';
 import { formatEther } from 'viem';
 import { getActiveChain } from '../config.js';
-import { getPublicClient, getWalletClient } from '../client.js';
+import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
 import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
-import { resolveCurrency } from '../contracts/addresses.js';
+import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
+import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
+import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 
-const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+type OfferCreateOptions = {
+  contract: string;
+  tokenId: string;
+  amount: string;
+  currency?: string;
+  chain?: string;
+};
+
+type OfferTokenOptions = {
+  contract: string;
+  tokenId: string;
+  currency?: string;
+  chain?: string;
+};
+
+type OfferAcceptOptions = OfferTokenOptions & {
+  amount: string;
+  split?: SplitAccumulator;
+};
 
 export function offerCommand(): Command {
   const cmd = new Command('offer');
@@ -21,30 +41,28 @@ export function offerCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID')
     .requiredOption('--amount <amount>', 'offer amount in ETH (or token units)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
-    .option('--convertible', 'mark offer as convertible')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: OfferCreateOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
+      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Creating offer on ${chain}...`);
       log(`  Marketplace contract: ${rare.contracts.auction}`);
-      log(`  NFT contract: ${opts.contract}`);
+      log(`  NFT contract: ${contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
-      log(`  Convertible: ${opts.convertible ? 'yes' : 'no'}`);
 
       try {
         const result = await rare.offer.create({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
           amount: opts.amount,
           currency,
-          convertible: opts.convertible ?? false,
         });
 
         output(
@@ -67,18 +85,19 @@ export function offerCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: OfferTokenOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
+      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Cancelling offer on ${chain}...`);
 
       try {
         const result = await rare.offer.cancel({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
           currency,
         });
@@ -103,26 +122,41 @@ export function offerCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID')
     .requiredOption('--amount <amount>', 'offer amount to accept in ETH (or token units)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
+    .option(
+      '--split <addr=ratio>',
+      'payout split recipient (repeatable). Format: 0xADDR=RATIO. Ratios must sum to 100. If omitted, 100% goes to the connected wallet.',
+      collectSplit,
+    )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: OfferAcceptOptions): Promise<void> => {
+      const splits = finalizeSplits(opts.split);
       const chain = getActiveChain(opts.chain);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
+      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Accepting offer on ${chain}...`);
-      log(`  NFT contract: ${opts.contract}`);
+      log(`  NFT contract: ${contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
+      if (splits) {
+        log(`  Splits:`);
+        formatSplitLines(splits).forEach((line) => {
+          log(line);
+        });
+      }
 
       try {
         const result = await rare.offer.accept({
-          contract: opts.contract as `0x${string}`,
+          contract,
           tokenId: opts.tokenId,
           amount: opts.amount,
           currency,
+          splitAddresses: splits?.addresses,
+          splitRatios: splits?.ratios,
         });
 
         output(
@@ -145,15 +179,20 @@ export function offerCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (opts) => {
+    .action(async (opts: OfferTokenOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain);
       const publicClient = getPublicClient(chain);
-      const rare = createRareClient({ publicClient });
+      const wallet = tryGetWalletClient(chain);
+      const rare = createRareClient({
+        publicClient,
+        walletClient: wallet?.client,
+      });
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
+      const contract = parseAddress(opts.contract, '--contract');
 
       const result = await rare.offer.getStatus({
-        contract: opts.contract as `0x${string}`,
+        contract,
         tokenId: opts.tokenId,
         currency,
       });
@@ -162,12 +201,28 @@ export function offerCommand(): Command {
         console.log('\nOffer Details:');
         if (!result.hasOffer) {
           console.log('  No active offer found.');
+          if (result.tokenOwner) {
+            console.log(`  Token owner:       ${result.tokenOwner}`);
+          }
         } else {
-          console.log(`  Buyer:           ${result.buyer}`);
-          console.log(`  Amount:          ${formatEther(result.amount)} ${isEth ? 'ETH' : currency}`);
-          console.log(`  Timestamp:       ${new Date(Number(result.timestamp) * 1000).toISOString()}`);
-          console.log(`  Marketplace fee: ${result.marketplaceFee}%`);
-          console.log(`  Convertible:     ${result.convertible ? 'yes' : 'no'}`);
+          console.log(`  Buyer:             ${result.buyer}`);
+          if (result.tokenOwner) {
+            console.log(`  Token owner:       ${result.tokenOwner}`);
+          }
+          console.log(`  Amount:            ${formatEther(result.amount)} ${isEth ? 'ETH' : currency}`);
+          console.log(`  Currency:          ${result.currency}`);
+          console.log(`  Placed at:         ${new Date(Number(result.timestamp) * 1000).toISOString()}`);
+          if (result.cancellableAfter !== null) {
+            console.log(
+              `  Cancellable after: ${new Date(Number(result.cancellableAfter) * 1000).toISOString()}`,
+            );
+          }
+          console.log(`  Marketplace fee:   ${result.marketplaceFee}%`);
+          if (result.canAccept !== null || result.canCancel !== null) {
+            console.log('  For your wallet:');
+            console.log(`    Can accept:      ${result.canAccept ? 'yes' : 'no'}`);
+            console.log(`    Can cancel:      ${result.canCancel ? 'yes' : 'no'}`);
+          }
         }
       });
     });

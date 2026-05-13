@@ -1,27 +1,6 @@
 export const rareMinterAbi = [
   {
     inputs: [{ name: '_contractAddress', type: 'address' }],
-    name: 'getDirectSaleConfig',
-    outputs: [
-      {
-        components: [
-          { name: 'seller', type: 'address' },
-          { name: 'currencyAddress', type: 'address' },
-          { name: 'price', type: 'uint256' },
-          { name: 'startTime', type: 'uint256' },
-          { name: 'maxMints', type: 'uint256' },
-          { name: 'splitRecipients', type: 'address[]' },
-          { name: 'splitRatios', type: 'uint8[]' },
-        ],
-        name: '',
-        type: 'tuple',
-      },
-    ],
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [{ name: '_contractAddress', type: 'address' }],
     name: 'getContractAllowListConfig',
     outputs: [
       {
@@ -55,6 +34,22 @@ export const rareMinterAbi = [
   },
   {
     inputs: [{ name: '_contractAddress', type: 'address' }],
+    name: 'getContractSellerStakingMinimum',
+    outputs: [
+      {
+        components: [
+          { name: 'amount', type: 'uint256' },
+          { name: 'endTimestamp', type: 'uint256' },
+        ],
+        name: '',
+        type: 'tuple',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ name: '_contractAddress', type: 'address' }],
     name: 'getContractTxLimit',
     outputs: [{ name: '', type: 'uint256' }],
     stateMutability: 'view',
@@ -72,60 +67,23 @@ export const rareMinterAbi = [
   },
   {
     inputs: [{ name: '_contractAddress', type: 'address' }],
-    name: 'getContractSellerStakingMinimum',
+    name: 'getDirectSaleConfig',
     outputs: [
       {
         components: [
-          { name: 'amount', type: 'uint256' },
-          { name: 'endTimestamp', type: 'uint256' },
+          { name: 'seller', type: 'address' },
+          { name: 'currencyAddress', type: 'address' },
+          { name: 'price', type: 'uint256' },
+          { name: 'startTime', type: 'uint256' },
+          { name: 'maxMints', type: 'uint256' },
+          { name: 'splitRecipients', type: 'address[]' },
+          { name: 'splitRatios', type: 'uint8[]' },
         ],
         name: '',
         type: 'tuple',
       },
     ],
     stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { name: '_root', type: 'bytes32' },
-      { name: '_endTimestamp', type: 'uint256' },
-      { name: '_contractAddress', type: 'address' },
-    ],
-    name: 'setContractAllowListConfig',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { name: '_contractAddress', type: 'address' },
-      { name: '_limit', type: 'uint256' },
-    ],
-    name: 'setContractMintLimit',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { name: '_contractAddress', type: 'address' },
-      { name: '_limit', type: 'uint256' },
-    ],
-    name: 'setContractTxLimit',
-    outputs: [],
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    inputs: [
-      { name: '_contractAddress', type: 'address' },
-      { name: '_minimum', type: 'uint256' },
-      { name: '_endTimestamp', type: 'uint256' },
-    ],
-    name: 'setContractSellerStakingMinimum',
-    outputs: [],
-    stateMutability: 'nonpayable',
     type: 'function',
   },
   {
@@ -169,5 +127,47 @@ export const rareMinterAbi = [
     ],
     name: 'MintDirectSale',
     type: 'event',
+  },
+  {
+    inputs: [
+      { name: '_root', type: 'bytes32' },
+      { name: '_endTimestamp', type: 'uint256' },
+      { name: '_contractAddress', type: 'address' },
+    ],
+    name: 'setContractAllowListConfig',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: '_contractAddress', type: 'address' },
+      { name: '_limit', type: 'uint256' },
+    ],
+    name: 'setContractMintLimit',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: '_contractAddress', type: 'address' },
+      { name: '_minimum', type: 'uint256' },
+      { name: '_endTimestamp', type: 'uint256' },
+    ],
+    name: 'setContractSellerStakingMinimum',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { name: '_contractAddress', type: 'address' },
+      { name: '_limit', type: 'uint256' },
+    ],
+    name: 'setContractTxLimit',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
   },
 ] as const;

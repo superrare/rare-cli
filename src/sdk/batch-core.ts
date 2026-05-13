@@ -2,7 +2,9 @@ import {
   concatHex,
   encodePacked,
   getAddress,
+  hexToBigInt,
   isAddress,
+  isAddressEqual,
   isHex,
   keccak256,
   maxUint256,
@@ -113,12 +115,18 @@ export function buildBatchTokenTreeArtifact(
   params: BuildBatchTokenTreeParams,
 ): BatchTokenListArtifact {
   const tokens = parseBatchTokenList(params);
+  if (tokens.length < 2) {
+    throw new Error(
+      'Batch token list must include at least two tokens; the batch listing contract rejects empty token proofs.',
+    );
+  }
+
   const leaves = tokens.map((token) => hashBatchToken(token.contractAddress, token.tokenId));
   const levels = buildMerkleLevels(leaves);
-  const [root] = levels[levels.length - 1];
+  const root = levels[levels.length - 1]?.[0];
 
   if (root === undefined) {
-    throw new Error('Batch token list must include at least one token.');
+    throw new Error('Batch token tree root could not be calculated.');
   }
 
   const chainId = inferArtifactChainId(tokens);
@@ -129,11 +137,17 @@ export function buildBatchTokenTreeArtifact(
     count: tokens.length,
     ...(chainId === undefined ? {} : { chainId }),
     tokens,
-    entries: tokens.map((token, index) => ({
-      ...token,
-      leaf: leaves[index],
-      proof: buildMerkleProof(levels, index),
-    })),
+    entries: tokens.map((token, index) => {
+      const leaf = leaves[index];
+      if (leaf === undefined) {
+        throw new Error(`Batch token at index ${index} is missing a Merkle leaf.`);
+      }
+      return {
+        ...token,
+        leaf,
+        proof: buildMerkleProof(levels, index),
+      };
+    }),
   };
 }
 
@@ -176,7 +190,7 @@ export function parseBatchTokenListArtifact(content: string): BatchTokenListArti
   if (typeof parsed.count === 'number' && parsed.count !== artifact.count) {
     throw new Error('Batch token artifact count does not match its token list.');
   }
-  if (artifact.root.toLowerCase() !== root.toLowerCase()) {
+  if (!isSameHex(artifact.root, root)) {
     throw new Error('Batch token artifact root does not match its token list.');
   }
 
@@ -212,7 +226,7 @@ export function getBatchTokenProof(params: BatchTokenProofParams): BatchTokenPro
   }
 
   const entry = params.artifact.entries.find((candidate) => (
-    candidate.contractAddress.toLowerCase() === contractAddress.toLowerCase() &&
+    isAddressEqual(candidate.contractAddress, contractAddress) &&
     candidate.tokenId === tokenId
   ));
 
@@ -241,12 +255,17 @@ export function getBatchTokenProof(params: BatchTokenProofParams): BatchTokenPro
 export function verifyBatchTokenProof(params: BatchTokenProofVerifyParams): boolean {
   const root = normalizeBytes32(params.root, 'root');
   const proof = params.proof.map((entry, index) => normalizeBytes32(entry, `proof[${index}]`));
+  if (proof.length === 0) {
+    throw new Error(
+      'Batch token proof must include at least one proof entry; the batch listing contract rejects empty token proofs.',
+    );
+  }
   const computedRoot = proof.reduce(
     (hash, proofItem) => parentHash(hash, proofItem),
     hashBatchToken(params.contractAddress, params.tokenId),
   );
 
-  return computedRoot.toLowerCase() === root.toLowerCase();
+  return isSameHex(computedRoot, root);
 }
 
 export function parseBatchTokenProofArtifact(content: string): BatchTokenProofArtifact {
@@ -290,7 +309,7 @@ export function parseBatchTokenProofArtifact(content: string): BatchTokenProofAr
       throw new Error('Batch token proof artifact leaf must be a bytes32 hex string.');
     }
     const parsedLeaf = normalizeBytes32(parsed.leaf, 'proof leaf');
-    if (parsedLeaf.toLowerCase() !== leaf.toLowerCase()) {
+    if (!isSameHex(parsedLeaf, leaf)) {
       throw new Error('Batch token proof artifact leaf does not match its contractAddress and tokenId.');
     }
   }
@@ -373,20 +392,20 @@ export function validateBatchTokenProofInputMatchesTarget(
   if (
     proofInput.root !== undefined &&
     !target.allowRootOverride &&
-    proofInput.root.toLowerCase() !== target.artifact.root.toLowerCase()
+    !isSameHex(proofInput.root, target.artifact.root)
   ) {
     throw new Error('Proof root does not match the input token list root.');
   }
   if (
     proofInput.root !== undefined &&
     target.allowRootOverride &&
-    proofInput.root.toLowerCase() !== target.root.toLowerCase()
+    !isSameHex(proofInput.root, target.root)
   ) {
     throw new Error('Proof root does not match --root.');
   }
   if (
     proofInput.contractAddress !== undefined &&
-    proofInput.contractAddress.toLowerCase() !== target.contractAddress.toLowerCase()
+    !isAddressEqual(proofInput.contractAddress, target.contractAddress)
   ) {
     throw new Error('Proof artifact contractAddress does not match --contract.');
   }
@@ -409,11 +428,11 @@ export function hashBatchToken(contractAddress: Address, tokenId: IntegerInput):
 }
 
 export function normalizeBytes32(value: string, field: string): Hex {
-  if (!isHex(value, { strict: true }) || value.length !== 66) {
+  const normalized = value.toLocaleLowerCase();
+  if (!isHex(normalized, { strict: true }) || normalized.length !== 66) {
     throw new Error(`${field} must be a bytes32 hex string.`);
   }
-
-  return value.toLowerCase() as Hex;
+  return normalized;
 }
 
 function detectBatchTokenInputFormat(
@@ -474,7 +493,8 @@ function parseCsvBatchTokens(content: string): RawBatchToken[] {
     }));
   }
 
-  if (firstRow.length >= 2 && isAddress(firstRow[0])) {
+  const firstCell = firstRow[0];
+  if (firstRow.length >= 2 && firstCell !== undefined && isAddress(firstCell)) {
     return rows.map((row, index) => extractCsvBatchToken(row, {
       rowNumber: index + 1,
       contractIndex: 0,
@@ -570,17 +590,19 @@ function normalizeBatchTokens(
   }
 
   const chainId = explicitChainId ?? uniqueRowChainIds[0];
-  const seen = new Set<string>();
 
-  return rawTokens.map((rawToken, index) => {
+  return rawTokens.reduce<BatchToken[]>((tokens, rawToken, index) => {
     const token = normalizeBatchToken(rawToken, index, chainId);
-    const key = `${token.chainId ?? 'none'}:${token.contractAddress.toLowerCase()}:${token.tokenId}`;
-    if (seen.has(key)) {
+    const duplicate = tokens.some((candidate) => (
+      candidate.chainId === token.chainId &&
+      isAddressEqual(candidate.contractAddress, token.contractAddress) &&
+      candidate.tokenId === token.tokenId
+    ));
+    if (duplicate) {
       throw new Error(`Duplicate batch token: ${token.contractAddress} #${token.tokenId}.`);
     }
-    seen.add(key);
-    return token;
-  }).sort(compareBatchTokens);
+    return [...tokens, token];
+  }, []).sort(compareBatchTokens);
 }
 
 function normalizeBatchToken(
@@ -706,7 +728,8 @@ function buildMerkleLevels(leaves: readonly Hex[]): Hex[][] {
     return [];
   }
   if (leaves.length === 1) {
-    return [[leaves[0]]];
+    const leaf = leaves[0];
+    return leaf === undefined ? [] : [[leaf]];
   }
 
   const level = [...leaves];
@@ -739,6 +762,10 @@ function buildMerkleProof(levels: readonly Hex[][], leafIndex: number): Hex[] {
 function parentHash(a: Hex, b: Hex): Hex {
   const [left, right] = a <= b ? [a, b] : [b, a];
   return keccak256(concatHex([left, right]));
+}
+
+function isSameHex(left: Hex, right: Hex): boolean {
+  return hexToBigInt(left) === hexToBigInt(right);
 }
 
 function parseJson(content: string, label: string): unknown {

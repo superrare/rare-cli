@@ -10,6 +10,8 @@ import {
   validateBatchTokenProofInputMatchesTarget,
   verifyBatchTokenProof,
 } from '../../../src/sdk/batch-core.js';
+import { buildProofArtifact } from '../../../src/sdk/merkle.js';
+import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 
 const CONTRACT_A = '0x1111111111111111111111111111111111111111';
 const CONTRACT_B = '0x2222222222222222222222222222222222222222';
@@ -123,6 +125,42 @@ describe('batch marketplace token tree core', () => {
       tokenId: '3',
       proof: proof.proof,
     })).toBe(false);
+    expect(() => verifyBatchTokenProof({
+      root: EXPECTED_TOKEN_1_LEAF,
+      contractAddress: CONTRACT_A,
+      tokenId: '1',
+      proof: [],
+    })).toThrow('Batch token proof must include at least one proof entry');
+  });
+
+  it('matches the batch listing Merkle helper used by contract write flows', () => {
+    const artifact = buildBatchTokenTreeArtifact({
+      content: JSON.stringify([
+        { contractAddress: CONTRACT_B, tokenId: '2' },
+        { contractAddress: CONTRACT_A, tokenId: '10' },
+        { contractAddress: CONTRACT_A, tokenId: '1' },
+      ]),
+      format: 'json',
+    });
+    const proof = getBatchTokenProof({
+      artifact,
+      contractAddress: CONTRACT_B,
+      tokenId: '2',
+    });
+    const listingProof = buildProofArtifact({
+      root: artifact.root,
+      currency: ETH_ADDRESS,
+      amount: '1',
+      splitAddresses: [],
+      splitRatios: [],
+      tokens: artifact.tokens.map((token) => ({
+        contract: token.contractAddress,
+        tokenId: token.tokenId,
+      })),
+    }, CONTRACT_B, '2');
+
+    expect(proof.root).toBe(listingProof.root);
+    expect(proof.proof).toEqual(listingProof.proof);
   });
 
   it('parses artifacts and rejects mismatched roots', () => {
@@ -139,6 +177,15 @@ describe('batch marketplace token tree core', () => {
       ...artifact,
       root: EXPECTED_ROOT,
     }))).toThrow('Batch token artifact root does not match its token list.');
+  });
+
+  it('rejects single-token artifacts that would generate empty contract proofs', () => {
+    expect(() => buildBatchTokenTreeArtifact({
+      content: JSON.stringify([
+        { contractAddress: CONTRACT_A, tokenId: '1' },
+      ]),
+      format: 'json',
+    })).toThrow('Batch token list must include at least two tokens');
   });
 
   it('parses proof artifacts and rejects mismatched leaves', () => {
