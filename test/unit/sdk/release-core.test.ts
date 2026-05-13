@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseEther, parseUnits } from 'viem';
+import { parseEther, parseUnits, zeroAddress } from 'viem';
 import {
   ZERO_BYTES32,
   assertReleaseAllowlistConfigMatches,
@@ -27,7 +27,7 @@ import {
   verifyReleaseAllowlistProof,
 } from '../../../src/sdk/release-core.js';
 
-const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+const ETH_ADDRESS = zeroAddress;
 const accountAddress = '0x0000000000000000000000000000000000000001' as const;
 const recipientAddress = '0x0000000000000000000000000000000000000002' as const;
 const erc20Currency = '0x3000000000000000000000000000000000000000' as const;

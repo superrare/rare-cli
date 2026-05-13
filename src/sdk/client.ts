@@ -98,7 +98,6 @@ export function createRareClient(config: RareClientConfig): RareClient {
         return addresses.erc721ApprovalManager;
       },
     }),
-    release,
     token: createTokenNamespace(publicClient, chain),
     search: {
       async nfts(params = {}): ReturnType<RareClient['search']['nfts']> {

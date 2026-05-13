@@ -113,24 +113,24 @@ export type CollectionPrepareLazyMintResult = {
   minter?: Address;
 } & TransactionResult
 
-export interface CollectionTokenCreatorParams {
+export type CollectionTokenCreatorParams = {
   contract: Address;
   tokenId: IntegerInput;
 }
 
-export interface CollectionTokenCreatorResult {
+export type CollectionTokenCreatorResult = {
   contract: Address;
   tokenId: bigint;
   creator: Address;
 }
 
-export interface CollectionRoyaltyInfoParams {
+export type CollectionRoyaltyInfoParams = {
   contract: Address;
   tokenId: IntegerInput;
   salePrice?: IntegerInput;
 }
 
-export interface CollectionRoyaltyInfoResult {
+export type CollectionRoyaltyInfoResult = {
   contract: Address;
   tokenId: bigint;
   salePrice: bigint;
@@ -140,95 +140,95 @@ export interface CollectionRoyaltyInfoResult {
   defaultPercentage?: bigint;
 }
 
-export interface CollectionSetDefaultRoyaltyReceiverParams {
+export type CollectionSetDefaultRoyaltyReceiverParams = {
   contract: Address;
   receiver: Address;
 }
 
-export interface CollectionSetDefaultRoyaltyReceiverResult extends TransactionResult {
+export type CollectionSetDefaultRoyaltyReceiverResult = {
   contract: Address;
   receiver: Address;
-}
+} & TransactionResult
 
-export interface CollectionSetTokenRoyaltyReceiverParams {
+export type CollectionSetTokenRoyaltyReceiverParams = {
   contract: Address;
   tokenId: IntegerInput;
   receiver: Address;
 }
 
-export interface CollectionSetTokenRoyaltyReceiverResult extends TransactionResult {
+export type CollectionSetTokenRoyaltyReceiverResult = {
   contract: Address;
   tokenId: bigint;
   receiver: Address;
-}
+} & TransactionResult
 
-export interface CollectionMintConfigParams {
+export type CollectionMintConfigParams = {
   contract: Address;
 }
 
-export interface CollectionMintConfigResult {
+export type CollectionMintConfigResult = {
   contract: Address;
   tokenCount: bigint;
   baseUri: string;
   lockedMetadata: boolean;
 }
 
-export interface CollectionUpdateBaseUriParams {
+export type CollectionUpdateBaseUriParams = {
   contract: Address;
   baseUri: string;
 }
 
-export interface CollectionUpdateBaseUriResult extends TransactionResult {
+export type CollectionUpdateBaseUriResult = {
   contract: Address;
   baseUri: string;
-}
+} & TransactionResult
 
-export interface CollectionUpdateTokenUriParams {
+export type CollectionUpdateTokenUriParams = {
   contract: Address;
   tokenId: IntegerInput;
   tokenUri: string;
 }
 
-export interface CollectionUpdateTokenUriResult extends TransactionResult {
+export type CollectionUpdateTokenUriResult = {
   contract: Address;
   tokenId: bigint;
   tokenUri: string;
-}
+} & TransactionResult
 
-export interface CollectionLockBaseUriParams {
+export type CollectionLockBaseUriParams = {
   contract: Address;
 }
 
-export interface CollectionLockBaseUriResult extends TransactionResult {
+export type CollectionLockBaseUriResult = {
   contract: Address;
   baseUri: string;
-}
+} & TransactionResult
 
-export interface CreateRareSpaceCollectionParams {
+export type CreateRareSpaceCollectionParams = {
   name: string;
   symbol: string;
 }
 
-export interface CreateRareSpaceCollectionResult extends TransactionResult {
+export type CreateRareSpaceCollectionResult = {
   contract: Address;
   factory: Address;
   operator: Address;
-}
+} & TransactionResult
 
-export interface MintRareSpaceTokenParams {
+export type MintRareSpaceTokenParams = {
   contract: Address;
   tokenUri: string;
   to?: Address;
   royaltyReceiver?: Address;
 }
 
-export interface MintRareSpaceTokenResult extends TransactionResult {
+export type MintRareSpaceTokenResult = {
   contract: Address;
   tokenId: bigint;
   tokenUri: string;
   to: Address;
   royaltyReceiver: Address;
-}
+} & TransactionResult
 
 export type MintToParams = {
   contract: Address;
@@ -826,7 +826,6 @@ export type RareClient = {
     setAllowList: (params: BatchListingSetAllowListParams) => Promise<TransactionResult>;
     getStatus: (params: BatchListingStatusParams) => Promise<BatchListingStatus>;
   };
-  release: ReleaseNamespace;
   search: {
     nfts: (params?: NftSearchParams) => Promise<SearchPageResponse<Nft>>;
     collections: (params?: CollectionSearchParams) => Promise<SearchPageResponse<Collection>>;

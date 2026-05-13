@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { extname } from 'node:path';
 import { Command } from 'commander';
-import { formatUnits, isAddress, type Address, type Hex } from 'viem';
+import { formatUnits, isAddress, zeroAddress, type Address, type Hex } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { printError } from '../errors.js';
@@ -12,6 +12,7 @@ import {
   finalizeReleaseSplitAccumulator,
   getReleaseAllowlistProof,
   parseReleaseAllowlistArtifactJson,
+  type RareClient,
   type ReleaseAllowlistArtifact,
   type ReleaseAllowlistInputFormat,
   type ReleaseSplitAccumulator,
@@ -19,7 +20,58 @@ import {
 import { resolveCurrency } from '../contracts/addresses.js';
 import { output, log } from '../output.js';
 
-const ETH_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
+const ETH_ADDRESS = zeroAddress;
+
+type ReleaseConfigureOptions = {
+  contract: string;
+  price: string;
+  maxMints: string;
+  currency?: string;
+  start?: string;
+  split?: ReleaseSplitAccumulator;
+  chain?: string;
+  chainId?: string;
+};
+
+type AllowlistBuildOptions = {
+  input: string;
+  format?: string;
+  output?: string;
+};
+
+type AllowlistProofOptions = {
+  input: string;
+  account: string;
+  output?: string;
+};
+
+type AllowlistSetOptions = {
+  contract: string;
+  endTimestamp: string;
+  input?: string;
+  root?: string;
+  chain?: string;
+  chainId?: string;
+};
+
+type ReleaseContractOptions = {
+  contract: string;
+  chain?: string;
+  chainId?: string;
+};
+
+type ReleaseLimitOptions = ReleaseContractOptions & {
+  limit: string;
+};
+
+type ReleaseStakingOptions = ReleaseContractOptions & {
+  minimum: string;
+  endTimestamp?: string;
+};
+
+type ReleaseStatusOptions = ReleaseContractOptions & {
+  account?: string;
+};
 
 function formatTokenAmount(amount: bigint, decimals: number | null): string {
   if (decimals === null) {
@@ -47,7 +99,7 @@ function readTextFile(filePath: string, label: string): string {
   try {
     return readFileSync(filePath, 'utf8');
   } catch (error) {
-    throw new Error(`Unable to read ${label} "${filePath}": ${(error as Error).message}`);
+    throw new Error(`Unable to read ${label} "${filePath}": ${errorMessage(error)}`);
   }
 }
 
@@ -55,8 +107,12 @@ function writeJsonFile(filePath: string, data: unknown): void {
   try {
     writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
   } catch (error) {
-    throw new Error(`Unable to write allowlist artifact "${filePath}": ${(error as Error).message}`);
+    throw new Error(`Unable to write allowlist artifact "${filePath}": ${errorMessage(error)}`);
   }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function detectAllowlistFormat(filePath: string, format?: string): ReleaseAllowlistInputFormat {
@@ -79,11 +135,17 @@ function assertAddressOption(value: string, label: string): asserts value is Add
   }
 }
 
+function assertBytes32Option(value: string, label: string): asserts value is Hex {
+  if (!/^0x[0-9a-fA-F]{64}$/.test(value)) {
+    throw new Error(`Invalid ${label} bytes32 value: "${value}".`);
+  }
+}
+
 function loadAllowlistArtifact(filePath: string): ReleaseAllowlistArtifact {
   return parseReleaseAllowlistArtifactJson(readTextFile(filePath, 'allowlist artifact'));
 }
 
-function releaseWriteClient(chain: ReturnType<typeof getActiveChain>) {
+function releaseWriteClient(chain: ReturnType<typeof getActiveChain>): RareClient {
   const { client } = getWalletClient(chain);
   const publicClient = getPublicClient(chain);
   return createRareClient({ publicClient, walletClient: client });
@@ -108,43 +170,35 @@ export function releaseCommand(): Command {
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
-    .action(async (opts) => {
-      let splits: { addresses: Address[]; ratios: number[] } | undefined;
+    .action(async (opts: ReleaseConfigureOptions): Promise<void> => {
       try {
-        splits = finalizeReleaseSplitAccumulator(opts.split as ReleaseSplitAccumulator | undefined);
-      } catch (error) {
-        printError(error);
-        return;
-      }
+        const splits = finalizeReleaseSplitAccumulator(opts.split);
+        assertAddressOption(opts.contract, 'contract');
 
-      if (!isAddress(opts.contract)) {
-        printError(new Error(`Invalid contract address: "${opts.contract}".`));
-        return;
-      }
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const { client, account } = getWalletClient(chain);
+        const publicClient = getPublicClient(chain);
+        const rare = createRareClient({ publicClient, walletClient: client });
+        const currency = opts.currency === undefined ? ETH_ADDRESS : resolveCurrency(opts.currency, chain);
+        const isEth = currency === ETH_ADDRESS;
 
-      const chain = getActiveChain(opts.chain, opts.chainId);
-      const { client, account } = getWalletClient(chain);
-      const publicClient = getPublicClient(chain);
-      const rare = createRareClient({ publicClient, walletClient: client });
-      const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
-      const isEth = currency === ETH_ADDRESS;
+        log(`Configuring direct sale release on ${chain}...`);
+        log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
+        log(`  Collection: ${opts.contract}`);
+        log(`  Price:      ${opts.price} ${isEth ? 'ETH' : currency}`);
+        log(`  Max mints:  ${opts.maxMints}`);
+        log(`  Start:      ${opts.start ?? 'now'}`);
+        if (splits !== undefined) {
+          log('  Splits:');
+          splits.addresses.forEach((address, index) => {
+            log(`    ${address} = ${splits.ratios[index]}%`);
+          });
+        } else {
+          log(`  Splits:     ${account.address} = 100%`);
+        }
 
-      log(`Configuring direct sale release on ${chain}...`);
-      log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
-      log(`  Collection: ${opts.contract}`);
-      log(`  Price:      ${opts.price} ${isEth ? 'ETH' : currency}`);
-      log(`  Max mints:  ${opts.maxMints}`);
-      log(`  Start:      ${opts.start ?? 'now'}`);
-      if (splits) {
-        log('  Splits:');
-        splits.addresses.forEach((address, index) => log(`    ${address} = ${splits!.ratios[index]}%`));
-      } else {
-        log(`  Splits:     ${account.address} = 100%`);
-      }
-
-      try {
         const result = await rare.listing.release.configure({
-          contract: opts.contract as Address,
+          contract: opts.contract,
           currency,
           price: opts.price,
           startTime: opts.start,
@@ -185,18 +239,18 @@ export function releaseCommand(): Command {
     .requiredOption('--input <file>', 'CSV or JSON wallet allowlist input')
     .option('--format <format>', 'input format: csv or json (defaults from file extension)')
     .option('--output <file>', 'write the proof artifact JSON to a file')
-    .action((opts) => {
+    .action((opts: AllowlistBuildOptions): void => {
       try {
         const format = detectAllowlistFormat(opts.input, opts.format);
         const raw = readTextFile(opts.input, 'allowlist input');
         const artifact = buildReleaseAllowlistArtifactFromInput(raw, format);
 
-        if (opts.output) {
+        if (opts.output !== undefined) {
           writeJsonFile(opts.output, artifact);
         }
 
         output({ artifact, outputPath: opts.output ?? null }, () => {
-          if (opts.output) {
+          if (opts.output !== undefined) {
             console.log('\nAllowlist artifact written:');
             console.log(`  File:    ${opts.output}`);
             console.log(`  Root:    ${artifact.root}`);
@@ -216,16 +270,16 @@ export function releaseCommand(): Command {
     .requiredOption('--input <file>', 'allowlist proof artifact JSON')
     .requiredOption('--account <address>', 'account address to prove')
     .option('--output <file>', 'write the proof JSON to a file')
-    .action((opts) => {
+    .action((opts: AllowlistProofOptions): void => {
       try {
         assertAddressOption(opts.account, 'account');
         const artifact = loadAllowlistArtifact(opts.input);
         const proof = getReleaseAllowlistProof({ artifact, address: opts.account });
-        if (!proof) {
+        if (proof === null) {
           throw new Error(`Account ${opts.account} is not present in allowlist artifact ${opts.input}.`);
         }
 
-        if (opts.output) {
+        if (opts.output !== undefined) {
           writeJsonFile(opts.output, proof);
         }
 
@@ -235,7 +289,7 @@ export function releaseCommand(): Command {
           console.log(`  Account: ${proof.address}`);
           console.log(`  Leaf:   ${proof.leaf}`);
           console.log(`  Proof:  ${proof.proof.length === 0 ? '[]' : proof.proof.join(', ')}`);
-          if (opts.output) {
+          if (opts.output !== undefined) {
             console.log(`  File:   ${opts.output}`);
           }
         });
@@ -253,20 +307,23 @@ export function releaseCommand(): Command {
     .option('--root <bytes32>', 'allowlist Merkle root to set when no input is provided')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
-    .action(async (opts) => {
+    .action(async (opts: AllowlistSetOptions): Promise<void> => {
       try {
         assertAddressOption(opts.contract, 'contract');
-        if (!opts.input && !opts.root) {
+        if (opts.input === undefined && opts.root === undefined) {
           throw new Error('Pass --input or --root to set a release allowlist.');
         }
-        if (opts.input && opts.root) {
+        if (opts.input !== undefined && opts.root !== undefined) {
           throw new Error('Pass either --input or --root, not both.');
         }
 
         const chain = getActiveChain(opts.chain, opts.chainId);
         const rare = releaseWriteClient(chain);
-        const artifact = opts.input ? loadAllowlistArtifact(opts.input) : undefined;
-        const root = opts.root as Hex | undefined;
+        const artifact = opts.input === undefined ? undefined : loadAllowlistArtifact(opts.input);
+        if (opts.root !== undefined) {
+          assertBytes32Option(opts.root, '--root');
+        }
+        const root = opts.root;
 
         log(`Configuring release allowlist on ${chain}...`);
         log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
@@ -306,7 +363,7 @@ export function releaseCommand(): Command {
     .requiredOption('--contract <address>', 'collection contract address')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
-    .action(async (opts) => {
+    .action(async (opts: ReleaseContractOptions): Promise<void> => {
       try {
         assertAddressOption(opts.contract, 'contract');
         const chain = getActiveChain(opts.chain, opts.chainId);
@@ -351,7 +408,7 @@ export function releaseCommand(): Command {
     .requiredOption('--limit <number>', 'per-wallet mint limit; 0 disables the limit')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
-    .action(async (opts) => {
+    .action(async (opts: ReleaseLimitOptions): Promise<void> => {
       try {
         assertAddressOption(opts.contract, 'contract');
         const chain = getActiveChain(opts.chain, opts.chainId);
@@ -392,7 +449,7 @@ export function releaseCommand(): Command {
     .requiredOption('--limit <number>', 'per-wallet mint transaction limit; 0 disables the limit')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
-    .action(async (opts) => {
+    .action(async (opts: ReleaseLimitOptions): Promise<void> => {
       try {
         assertAddressOption(opts.contract, 'contract');
         const chain = getActiveChain(opts.chain, opts.chainId);
@@ -439,7 +496,7 @@ export function releaseCommand(): Command {
     .option('--end-timestamp <time>', 'staking minimum end time as unix seconds or an ISO date; required unless minimum is 0')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
-    .action(async (opts) => {
+    .action(async (opts: ReleaseStakingOptions): Promise<void> => {
       try {
         assertAddressOption(opts.contract, 'contract');
         const chain = getActiveChain(opts.chain, opts.chainId);
@@ -485,24 +542,19 @@ export function releaseCommand(): Command {
     .option('--account <address>', 'account address to include mint and transaction usage')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
-    .action(async (opts) => {
-      if (!isAddress(opts.contract)) {
-        printError(new Error(`Invalid contract address: "${opts.contract}".`));
-        return;
-      }
-      if (opts.account && !isAddress(opts.account)) {
-        printError(new Error(`Invalid account address: "${opts.account}".`));
-        return;
-      }
-
-      const chain = getActiveChain(opts.chain, opts.chainId);
-      const publicClient = getPublicClient(chain);
-      const rare = createRareClient({ publicClient });
-
+    .action(async (opts: ReleaseStatusOptions): Promise<void> => {
       try {
+        assertAddressOption(opts.contract, 'contract');
+        if (opts.account !== undefined) {
+          assertAddressOption(opts.account, 'account');
+        }
+
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const publicClient = getPublicClient(chain);
+        const rare = createRareClient({ publicClient });
         const result = await rare.listing.release.getStatus({
-          contract: opts.contract as Address,
-          account: opts.account as Address | undefined,
+          contract: opts.contract,
+          account: opts.account,
         });
         const currencyLabel = result.isEth ? 'ETH' : result.currencyAddress;
         const price = `${formatTokenAmount(result.price, result.currencyDecimals)} ${currencyLabel}`;

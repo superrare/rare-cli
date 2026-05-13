@@ -1,6 +1,7 @@
 import {
   getAddress,
   isAddress,
+  isAddressEqual,
   isHex,
   keccak256,
   parseEther,
@@ -108,7 +109,7 @@ export function assertReleaseContractOwner(opts: {
   owner: Address;
 }): void {
   const { contract, accountAddress, owner } = opts;
-  if (owner.toLowerCase() !== accountAddress.toLowerCase()) {
+  if (!isAddressEqual(owner, accountAddress)) {
     throw new Error(
       `Connected wallet ${accountAddress} is not the owner of collection ${contract}. ` +
         `Contract owner is ${owner}.`,
@@ -121,38 +122,45 @@ export function normalizeReleaseTimestamp(
   field: string,
   opts: { defaultValue?: bigint } = {},
 ): bigint {
-  let timestamp: bigint;
-
-  if (value === undefined) {
-    if (opts.defaultValue === undefined) {
-      throw new Error(`${field} is required.`);
-    }
-    timestamp = opts.defaultValue;
-  } else if (value instanceof Date) {
-    const milliseconds = value.getTime();
-    if (!Number.isFinite(milliseconds)) {
-      throw new Error(`${field} must be a valid date.`);
-    }
-    timestamp = BigInt(Math.floor(milliseconds / 1000));
-  } else if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (/^-?\d+$/.test(trimmed)) {
-      timestamp = BigInt(trimmed);
-    } else {
-      const milliseconds = Date.parse(trimmed);
-      if (Number.isNaN(milliseconds)) {
-        throw new Error(`${field} must be a unix timestamp or ISO date string.`);
-      }
-      timestamp = BigInt(Math.floor(milliseconds / 1000));
-    }
-  } else {
-    timestamp = toInteger(value, field);
-  }
+  const timestamp = value === undefined
+    ? requiredDefaultTimestamp(field, opts.defaultValue)
+    : normalizeDefinedReleaseTimestamp(value, field);
 
   if (timestamp < 0n) {
     throw new Error(`${field} must be greater than or equal to 0.`);
   }
   return timestamp;
+}
+
+function requiredDefaultTimestamp(field: string, defaultValue: bigint | undefined): bigint {
+  if (defaultValue === undefined) {
+    throw new Error(`${field} is required.`);
+  }
+  return defaultValue;
+}
+
+function normalizeDefinedReleaseTimestamp(value: TimestampInput, field: string): bigint {
+  if (value instanceof Date) {
+    const milliseconds = value.getTime();
+    if (!Number.isFinite(milliseconds)) {
+      throw new Error(`${field} must be a valid date.`);
+    }
+    return BigInt(Math.floor(milliseconds / 1000));
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^-?\d+$/.test(trimmed)) {
+      return BigInt(trimmed);
+    }
+    const milliseconds = Date.parse(trimmed);
+    if (Number.isNaN(milliseconds)) {
+      throw new Error(`${field} must be a unix timestamp or ISO date string.`);
+    }
+    return BigInt(Math.floor(milliseconds / 1000));
+  }
+
+  return toInteger(value, field);
 }
 
 export function normalizeReleaseStartTime(
@@ -214,23 +222,22 @@ export function resolveReleaseSplits(opts: {
     throw new Error('splitAddresses and splitRatios must have the same length.');
   }
 
-  const seen = new Set<string>();
-  let sum = 0;
-
-  for (let i = 0; i < splitAddresses.length; i++) {
-    const address = splitAddresses[i]!;
-    const lower = address.toLowerCase();
-    if (seen.has(lower)) {
+  const { sum } = splitAddresses.reduce<{ seen: Address[]; sum: number }>((state, address, index) => {
+    const ratio = splitRatios[index];
+    if (ratio === undefined) {
+      throw new Error('splitAddresses and splitRatios must have the same length.');
+    }
+    if (state.seen.some((seenAddress) => isAddressEqual(seenAddress, address))) {
       throw new Error(`Duplicate split recipient: "${address}".`);
     }
-    seen.add(lower);
-
-    const ratio = splitRatios[i]!;
     if (!Number.isInteger(ratio) || ratio < 1 || ratio > 100) {
       throw new Error(`Invalid split ratio "${ratio}". Ratios must be integers between 1 and 100.`);
     }
-    sum += ratio;
-  }
+    return {
+      seen: [...state.seen, address],
+      sum: state.sum + ratio,
+    };
+  }, { seen: [], sum: 0 });
 
   if (sum !== 100) {
     throw new Error(`Split ratios must sum to 100 (got ${sum}).`);
@@ -358,9 +365,9 @@ export function collectReleaseSplit(
     throw new Error(`Invalid address in --split: "${address}".`);
   }
 
-  const addresses = previous ? [...previous.addresses] : [];
-  const ratios = previous ? [...previous.ratios] : [];
-  if (addresses.some((candidate) => candidate.toLowerCase() === address.toLowerCase())) {
+  const addresses = previous === undefined ? [] : [...previous.addresses];
+  const ratios = previous === undefined ? [] : [...previous.ratios];
+  if (addresses.some((candidate) => isAddressEqual(candidate, address))) {
     throw new Error(`Duplicate address in --split: "${address}".`);
   }
 
@@ -370,7 +377,7 @@ export function collectReleaseSplit(
   }
 
   return {
-    addresses: [...addresses, address as Address],
+    addresses: [...addresses, address],
     ratios: [...ratios, ratio],
   };
 }
@@ -402,12 +409,7 @@ export function buildReleaseAllowlistArtifactFromInput(
 }
 
 export function parseReleaseAllowlistArtifactJson(input: string): ReleaseAllowlistArtifact {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(input);
-  } catch (error) {
-    throw new Error(`Malformed allowlist artifact JSON: ${(error as Error).message}`);
-  }
+  const parsed = parseJsonUnknown(input, 'Malformed allowlist artifact JSON');
   return parseReleaseAllowlistArtifact(parsed);
 }
 
@@ -452,16 +454,17 @@ export function parseReleaseAllowlistCsv(input: string): Address[] {
     throw new Error('CSV allowlist is empty.');
   }
 
-  const headerColumn = findAllowlistAddressColumn(rows[0]!.fields);
-  let addressColumn = 0;
-  let dataRows = rows;
+  const firstRow = rows[0];
+  if (firstRow === undefined) {
+    throw new Error('CSV allowlist is empty.');
+  }
 
-  if (headerColumn !== -1) {
-    addressColumn = headerColumn;
-    dataRows = rows.slice(1);
-  } else if (!isAddress(rows[0]!.fields[0]?.trim() ?? '')) {
+  const headerColumn = findAllowlistAddressColumn(firstRow.fields);
+  if (headerColumn === -1 && !isAddress(firstRow.fields[0]?.trim() ?? '')) {
     throw new Error('CSV allowlist must put wallet addresses in the first column or include an address/wallet header.');
   }
+  const addressColumn = headerColumn === -1 ? 0 : headerColumn;
+  const dataRows = headerColumn === -1 ? rows : rows.slice(1);
 
   if (dataRows.length === 0) {
     throw new Error('CSV allowlist does not contain any wallet rows.');
@@ -474,12 +477,7 @@ export function parseReleaseAllowlistCsv(input: string): Address[] {
 }
 
 export function parseReleaseAllowlistJson(input: string): Address[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(input);
-  } catch (error) {
-    throw new Error(`Malformed JSON allowlist: ${(error as Error).message}`);
-  }
+  const parsed = parseJsonUnknown(input, 'Malformed JSON allowlist');
 
   if (isRecord(parsed) && parsed.kind === RELEASE_ALLOWLIST_ARTIFACT_KIND) {
     return parseReleaseAllowlistArtifact(parsed).wallets.map((wallet) => wallet.address);
@@ -515,9 +513,13 @@ export function buildReleaseAllowlistArtifact(wallets: readonly Address[]): Rele
   }
 
   const sortedAddresses = [...addresses].sort(compareAddress);
-  const leaves = sortedAddresses.map(hashAllowlistAddress);
+  const walletsWithLeaves = sortedAddresses.map((address) => ({
+    address,
+    leaf: hashAllowlistAddress(address),
+  }));
+  const leaves = walletsWithLeaves.map((wallet) => wallet.leaf);
   const layers = buildMerkleLayers(leaves);
-  const root = layers[layers.length - 1]![0]!;
+  const root = getMerkleRoot(layers);
 
   return {
     kind: RELEASE_ALLOWLIST_ARTIFACT_KIND,
@@ -525,9 +527,9 @@ export function buildReleaseAllowlistArtifact(wallets: readonly Address[]): Rele
     leafEncoding: RELEASE_ALLOWLIST_LEAF_ENCODING,
     tree: RELEASE_ALLOWLIST_TREE,
     root,
-    wallets: sortedAddresses.map((address, index) => ({
-      address,
-      leaf: leaves[index]!,
+    wallets: walletsWithLeaves.map((wallet, index) => ({
+      address: wallet.address,
+      leaf: wallet.leaf,
       proof: getMerkleProof(layers, index),
     })),
   };
@@ -547,10 +549,10 @@ export function verifyReleaseAllowlistProof(opts: {
   proof: readonly Hex[];
 }): boolean {
   const root = normalizeBytes32(opts.root, 'allowlist root');
-  let hash = hashAllowlistAddress(getAddress(opts.address));
-  for (const sibling of opts.proof) {
-    hash = hashMerklePair(hash, normalizeBytes32(sibling, 'allowlist proof item'));
-  }
+  const hash = opts.proof.reduce(
+    (current, sibling) => hashMerklePair(current, normalizeBytes32(sibling, 'allowlist proof item')),
+    hashAllowlistAddress(getAddress(opts.address)),
+  );
   return hexEquals(hash, root);
 }
 
@@ -604,7 +606,7 @@ export function assertReleaseAllowlistConfigMatches(expected: {
   endTimestamp: bigint;
 }, actual: RawAllowlistConfig): void {
   if (
-    actual.root.toLowerCase() !== expected.root.toLowerCase() ||
+    !hexEquals(actual.root, expected.root) ||
     actual.endTimestamp !== expected.endTimestamp
   ) {
     throw new Error(
@@ -729,9 +731,14 @@ function normalizeBytes32(value: unknown, field: string): Hex {
   if (typeof value !== 'string' || !isHex(value) || value.length !== 66) {
     throw new Error(`${field} must be a 32-byte hex string.`);
   }
-  return value.toLowerCase() as Hex;
+  const normalized = value.toLocaleLowerCase();
+  if (!isHex(normalized) || normalized.length !== 66) {
+    throw new Error(`${field} must be a 32-byte hex string.`);
+  }
+  return normalized;
 }
 
+/* eslint-disable functional/no-let, functional/immutable-data, @typescript-eslint/no-non-null-assertion */
 function parseCsvRows(input: string): Array<{ fields: string[]; number: number }> {
   const rows: Array<{ fields: string[]; number: number }> = [];
   let row: string[] = [];
@@ -791,6 +798,7 @@ function parseCsvRows(input: string): Array<{ fields: string[]; number: number }
   rows.push({ fields: row, number: rowNumber });
   return rows;
 }
+/* eslint-enable functional/no-let, functional/immutable-data, @typescript-eslint/no-non-null-assertion */
 
 function findAllowlistAddressColumn(fields: string[]): number {
   return fields.findIndex((field) => {
@@ -802,8 +810,7 @@ function findAllowlistAddressColumn(fields: string[]): number {
 }
 
 function normalizeAllowlistRows(rows: Array<{ value: unknown; label: string }>): Address[] {
-  const seen = new Map<string, string>();
-  return rows.map((row) => {
+  return rows.reduce<{ addresses: Address[]; seen: Array<{ address: Address; label: string }> }>((state, row) => {
     if (typeof row.value !== 'string') {
       throw new Error(`Invalid allowlist address at ${row.label}: expected a string.`);
     }
@@ -813,14 +820,15 @@ function normalizeAllowlistRows(rows: Array<{ value: unknown; label: string }>):
       throw new Error(`Invalid allowlist address at ${row.label}: "${raw}".`);
     }
     const address = getAddress(raw);
-    const lower = address.toLowerCase();
-    const firstLabel = seen.get(lower);
-    if (firstLabel) {
-      throw new Error(`Duplicate allowlist address at ${row.label}: "${address}" duplicates ${firstLabel}.`);
+    const duplicate = state.seen.find((seen) => isAddressEqual(seen.address, address));
+    if (duplicate !== undefined) {
+      throw new Error(`Duplicate allowlist address at ${row.label}: "${address}" duplicates ${duplicate.label}.`);
     }
-    seen.set(lower, row.label);
-    return address;
-  });
+    return {
+      addresses: [...state.addresses, address],
+      seen: [...state.seen, { address, label: row.label }],
+    };
+  }, { addresses: [], seen: [] }).addresses;
 }
 
 function getAddressFromJsonAllowlistEntry(entry: unknown, label: string): unknown {
@@ -838,36 +846,38 @@ function getAddressFromJsonAllowlistEntry(entry: unknown, label: string): unknow
 }
 
 function buildMerkleLayers(leaves: Hex[]): Hex[][] {
-  const layers: Hex[][] = [leaves];
-  let current = leaves;
-  while (current.length > 1) {
-    const next: Hex[] = [];
-    for (let i = 0; i < current.length; i += 2) {
-      const left = current[i]!;
-      const right = current[i + 1];
-      next.push(right ? hashMerklePair(left, right) : left);
-    }
-    layers.push(next);
-    current = next;
+  if (leaves.length <= 1) {
+    return [leaves];
   }
-  return layers;
+  const next = Array.from({ length: Math.ceil(leaves.length / 2) }, (_, pairIndex) => {
+    const left = leaves[pairIndex * 2];
+    if (left === undefined) {
+      throw new Error('unreachable: missing Merkle leaf');
+    }
+    const right = leaves[pairIndex * 2 + 1];
+    return right === undefined ? left : hashMerklePair(left, right);
+  });
+  return [leaves, ...buildMerkleLayers(next)];
 }
 
 function getMerkleProof(layers: Hex[][], leafIndex: number): Hex[] {
-  const proof: Hex[] = [];
-  let index = leafIndex;
-
-  for (let layerIndex = 0; layerIndex < layers.length - 1; layerIndex++) {
-    const layer = layers[layerIndex]!;
-    const siblingIndex = index % 2 === 0 ? index + 1 : index - 1;
+  return layers.slice(0, -1).reduce<{ proof: Hex[]; index: number }>((state, layer) => {
+    const siblingIndex = state.index % 2 === 0 ? state.index + 1 : state.index - 1;
     const sibling = layer[siblingIndex];
-    if (sibling) {
-      proof.push(sibling);
-    }
-    index = Math.floor(index / 2);
-  }
+    return {
+      proof: sibling === undefined ? state.proof : [...state.proof, sibling],
+      index: Math.floor(state.index / 2),
+    };
+  }, { proof: [], index: leafIndex }).proof;
+}
 
-  return proof;
+function getMerkleRoot(layers: Hex[][]): Hex {
+  const rootLayer = layers[layers.length - 1];
+  const root = rootLayer?.[0];
+  if (root === undefined) {
+    throw new Error('unreachable: missing Merkle root');
+  }
+  return root;
 }
 
 function hashAllowlistAddress(address: Address): Hex {
@@ -876,25 +886,37 @@ function hashAllowlistAddress(address: Address): Hex {
 
 function hashMerklePair(a: Hex, b: Hex): Hex {
   const [left, right] = compareHex(a, b) <= 0 ? [a, b] : [b, a];
-  return keccak256(`0x${left.slice(2)}${right.slice(2)}` as Hex);
+  return keccak256(`0x${left.slice(2)}${right.slice(2)}`);
 }
 
 function compareAddress(a: Address, b: Address): number {
-  return a.toLowerCase().localeCompare(b.toLowerCase());
+  return a.toLocaleLowerCase().localeCompare(b.toLocaleLowerCase());
 }
 
 function compareHex(a: Hex, b: Hex): number {
-  return a.toLowerCase().localeCompare(b.toLowerCase());
+  return a.toLocaleLowerCase().localeCompare(b.toLocaleLowerCase());
 }
 
 function addressesEqual(a: Address, b: Address): boolean {
-  return a.toLowerCase() === b.toLowerCase();
+  return isAddressEqual(a, b);
 }
 
 function hexEquals(a: Hex, b: Hex): boolean {
-  return a.toLowerCase() === b.toLowerCase();
+  return a.toLocaleLowerCase() === b.toLocaleLowerCase();
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseJsonUnknown(input: string, label: string): unknown {
+  try {
+    return JSON.parse(input);
+  } catch (error) {
+    throw new Error(`${label}: ${errorMessage(error)}`);
+  }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
