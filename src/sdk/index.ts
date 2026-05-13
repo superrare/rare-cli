@@ -4,6 +4,30 @@ export type {
   CreateSovereignCollectionResult,
   CreateLazySovereignCollectionParams,
   CreateLazySovereignCollectionResult,
+  BatchOfferAcceptParams,
+  BatchOfferAcceptResult,
+  BatchOfferCreateParams,
+  BatchOfferCreateResult,
+  BatchOfferRevokeParams,
+  BatchOfferRevokeResult,
+  BatchOfferStatus,
+  BatchOfferStatusParams,
+  CollectionMarketListingBuyParams,
+  CollectionMarketListingBuyResult,
+  CollectionMarketListingCancelParams,
+  CollectionMarketListingCancelResult,
+  CollectionMarketListingSetParams,
+  CollectionMarketListingSetResult,
+  CollectionMarketListingStatus,
+  CollectionMarketListingStatusParams,
+  CollectionMarketOfferAcceptParams,
+  CollectionMarketOfferAcceptResult,
+  CollectionMarketOfferCreateParams,
+  CollectionMarketOfferCreateResult,
+  CollectionMarketOfferCancelParams,
+  CollectionMarketOfferCancelResult,
+  CollectionMarketOfferStatus,
+  CollectionMarketOfferStatusParams,
   RareClient,
   RareClientConfig,
 } from './types.js';
@@ -13,6 +37,26 @@ export {
   normalizeSovereignCollectionContractType,
   sovereignCollectionContractTypes,
 } from './collection-core.js';
+export {
+  calculateCollectionOfferTopUp,
+  planCollectionMarketListingBuy,
+  planCollectionMarketListingCancel,
+  planCollectionMarketListingSet,
+  planCollectionMarketListingStatus,
+  planCollectionMarketOfferAccept,
+  planCollectionMarketOfferCancel,
+  planCollectionMarketOfferCreate,
+  planCollectionMarketOfferStatus,
+  shapeCollectionMarketListingStatus,
+  shapeCollectionMarketOfferStatus,
+} from './collection-market-core.js';
+export {
+  planBatchOfferAccept,
+  planBatchOfferCreate,
+  planBatchOfferRoot,
+  resolveBatchOfferRoot,
+  shapeBatchOfferStatus,
+} from './batch-offer-core.js';
 export {
   buildBatchTokenTreeArtifact,
   getBatchTokenProof,
@@ -37,6 +81,21 @@ export {
   planReleaseTxLimit,
   verifyReleaseAllowlistProof,
 } from './release-core.js';
+export {
+  buildMintPinMetadataParams,
+  isMintMetadataOptionsError,
+  parseMintAttribute,
+  planMintTokenUri,
+} from './mint-core.js';
+export {
+  maskSecret,
+  mcpReadToolNames,
+  mcpWriteToolNames,
+  resolveMcpChain,
+  selectMcpToolNames,
+  serializeForMcp,
+  shapeMcpConfigSummary,
+} from './mcp-core.js';
 export type {
   BatchToken,
   BatchTokenListArtifact,
@@ -48,6 +107,21 @@ export type {
   BuildBatchTokenTreeParams,
 } from './batch-core.js';
 export type {
+  CollectionMarketListingBuyPlan,
+  CollectionMarketListingSetPlan,
+  CollectionMarketListingStatusPlan,
+  CollectionMarketOfferAcceptPlan,
+  CollectionMarketOfferCreatePlan,
+  CollectionMarketOfferRead,
+  CollectionMarketSalePriceRead,
+  CollectionMarketOfferStatusPlan,
+} from './collection-market-core.js';
+export type {
+  BatchOfferAcceptPlan,
+  BatchOfferCreatePlan,
+  BatchOfferRootPlan,
+} from './batch-offer-core.js';
+export type {
   LazySovereignCollectionContractType,
   SovereignCollectionContractType,
 } from './collection-core.js';
@@ -58,6 +132,20 @@ export type {
   ReleaseAllowlistInputFormat,
   ReleaseAllowlistProof,
 } from './release-core.js';
+export type {
+  MintGeneratedMetadataPlan,
+  MintMetadataMedia,
+  MintMetadataUploadPlan,
+  MintMetadataUploadRole,
+  MintTokenUriPlan,
+  MintTokenUriPlanParams,
+} from './mint-core.js';
+export type {
+  McpConfigSummary,
+  McpReadToolName,
+  McpToolName,
+  McpWriteToolName,
+} from './mcp-core.js';
 export type {
   CollectionSearchParams,
   ImportErc721Params,
@@ -87,4 +175,6 @@ export { sovereignFactoryAbi } from '../contracts/abis/sovereign-factory.js';
 export { lazySovereignFactoryAbi } from '../contracts/abis/lazy-sovereign-factory.js';
 export { rareMinterAbi } from '../contracts/abis/rare-minter.js';
 export { auctionAbi } from '../contracts/abis/auction.js';
+export { batchOfferAbi } from '../contracts/abis/batch-offer.js';
+export { collectionMarketAbi } from '../contracts/abis/collection-market.js';
 export { tokenAbi } from '../contracts/abis/token.js';
