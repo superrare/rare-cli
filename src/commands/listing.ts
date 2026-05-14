@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { formatEther, isAddressEqual, type Address } from 'viem';
+import { formatUnits, isAddressEqual, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { getActiveChain, readConfig } from '../config.js';
 import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
@@ -8,6 +8,7 @@ import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '../contracts/addresses.js';
 import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
+import { resolveCurrencyDecimals } from '../sdk/helpers.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 import { batchCommand } from './batch.js';
 import { releaseCommand } from './release.js';
@@ -412,16 +413,24 @@ export function listingCommand(): Command {
             tokenId: opts.tokenId,
             account,
           });
+          const amount = formatUnits(
+            result.amount,
+            await resolveCurrencyDecimals(publicClient, chain, result.currency),
+          );
+          const requiredPayment = formatUnits(
+            result.requiredPayment,
+            await resolveCurrencyDecimals(publicClient, chain, result.currency),
+          );
 
           output(result, () => {
             console.log('\nCollection Listing Details:');
             console.log(`  State:            ${result.state}`);
             console.log(`  Seller:           ${result.seller}`);
             console.log(`  Collection:       ${result.originCollection}`);
-            console.log(`  Amount:           ${formatEther(result.amount)} ${result.isEth ? 'ETH' : result.currency}`);
+            console.log(`  Amount:           ${amount} ${result.isEth ? 'ETH' : result.currency}`);
             console.log(`  Currency:         ${result.isEth ? 'ETH' : result.currency}`);
             console.log(`  Marketplace fee:  ${result.marketplaceFee}%`);
-            console.log(`  Required payment: ${formatEther(result.requiredPayment)} ${result.isEth ? 'ETH' : result.currency}`);
+            console.log(`  Required payment: ${requiredPayment} ${result.isEth ? 'ETH' : result.currency}`);
             console.log(`  Can cancel:       ${result.canCancel ? 'yes' : 'no'}`);
             console.log(`  Can buy:          ${result.canBuy ? 'yes' : 'no'}`);
             if (result.currentWallet) {
@@ -456,6 +465,10 @@ export function listingCommand(): Command {
           tokenId: opts.tokenId,
           target,
         });
+        const amount = formatUnits(
+          result.amount,
+          await resolveCurrencyDecimals(publicClient, chain, result.currencyAddress),
+        );
 
         output(result, () => {
           console.log('\nListing Details:');
@@ -463,7 +476,7 @@ export function listingCommand(): Command {
             console.log('  No active listing found.');
           } else {
             console.log(`  Seller:   ${result.seller}`);
-            console.log(`  Amount:   ${formatEther(result.amount)} ${result.isEth ? 'ETH' : result.currencyAddress}`);
+            console.log(`  Amount:   ${amount} ${result.isEth ? 'ETH' : result.currencyAddress}`);
             console.log(`  Currency: ${result.isEth ? 'ETH' : result.currencyAddress}`);
             console.log(`  Target:   ${isAddressEqual(result.target, PUBLIC_LISTING_TARGET) ? 'public' : result.target}`);
             if (result.splitAddresses.length > 0) {

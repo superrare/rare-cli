@@ -1,15 +1,19 @@
 import {
+  parseUnits,
   type Address,
   type Hash,
   type PublicClient,
   type WalletClient,
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
+import { ETH_ADDRESS, type SupportedChain } from '../contracts/addresses.js';
 import type { RareClientConfig, RareClient, WalletAccount } from './types.js';
 import {
   approvalAbi,
   preparePayment,
   requireWallet,
+  resolveCurrencyDecimals,
+  stringifyAmountInput,
   waitForApproval,
 } from './helpers.js';
 import {
@@ -23,12 +27,17 @@ import {
 export function createAuctionNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
+  chain: SupportedChain,
   addresses: { auction: Address },
 ): RareClient['auction'] {
   return {
     async create(params): ReturnType<RareClient['auction']['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const plan = planAuctionCreate(params, accountAddress);
+      const currency = params.currency ?? ETH_ADDRESS;
+      const startingPrice = typeof params.startingPrice === 'bigint'
+        ? params.startingPrice
+        : parseUnits(stringifyAmountInput(params.startingPrice, 'startingPrice'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const plan = planAuctionCreate({ ...params, currency, startingPrice }, accountAddress);
       const approvalTxHash = params.autoApprove === false
         ? undefined
         : await approveMarketplaceIfNeeded({
@@ -78,7 +87,11 @@ export function createAuctionNamespace(
 
     async bid(params): ReturnType<RareClient['auction']['bid']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const plan = planAuctionBid(params);
+      const currency = params.currency ?? ETH_ADDRESS;
+      const amount = typeof params.amount === 'bigint'
+        ? params.amount
+        : parseUnits(stringifyAmountInput(params.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const plan = planAuctionBid({ ...params, currency, amount });
 
       const value = await preparePayment({
         publicClient, walletClient, account, accountAddress,
