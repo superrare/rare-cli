@@ -176,6 +176,75 @@ export type CollectionSetTokenRoyaltyReceiverResult = {
   receiver: Address;
 } & TransactionResult
 
+export type CollectionRoyaltyRegistryStatusParams = {
+  registry?: Address;
+  contract: Address;
+  tokenId: IntegerInput;
+  salePrice?: IntegerInput;
+}
+
+export type CollectionRoyaltyRegistryStatusResult = {
+  registry: Address;
+  contract: Address;
+  tokenId: bigint;
+  salePrice: bigint;
+  creatorRegistry: Address;
+  receiver: Address;
+  royaltyPercentage: number;
+  royaltyAmount: bigint;
+  configuredContractPercentage?: number;
+  contractReceiver?: Address;
+  tokenReceiver?: Address;
+}
+
+export type CollectionRoyaltyRegistryReceiverOverrideParams = {
+  registry?: Address;
+  receiver: Address;
+}
+
+export type CollectionRoyaltyRegistryReceiverOverrideResult = {
+  registry: Address;
+  receiver: Address;
+} & TransactionResult
+
+export type CollectionRoyaltyRegistryContractReceiverParams = {
+  registry?: Address;
+  contract: Address;
+  receiver: Address;
+}
+
+export type CollectionRoyaltyRegistryContractReceiverResult = {
+  registry: Address;
+  contract: Address;
+  receiver: Address;
+} & TransactionResult
+
+export type CollectionRoyaltyRegistryTokenReceiverParams = {
+  registry?: Address;
+  contract: Address;
+  tokenId: IntegerInput;
+  receiver: Address;
+}
+
+export type CollectionRoyaltyRegistryTokenReceiverResult = {
+  registry: Address;
+  contract: Address;
+  tokenId: bigint;
+  receiver: Address;
+} & TransactionResult
+
+export type CollectionRoyaltyRegistryContractPercentageParams = {
+  registry?: Address;
+  contract: Address;
+  percentage: IntegerInput;
+}
+
+export type CollectionRoyaltyRegistryContractPercentageResult = {
+  registry: Address;
+  contract: Address;
+  percentage: number;
+} & TransactionResult
+
 export type CollectionMintConfigParams = {
   contract: Address;
 }
@@ -1279,6 +1348,11 @@ export type RareClient = {
     getRoyaltyInfo: (params: CollectionRoyaltyInfoParams) => Promise<CollectionRoyaltyInfoResult>;
     setDefaultRoyaltyReceiver: (params: CollectionSetDefaultRoyaltyReceiverParams) => Promise<CollectionSetDefaultRoyaltyReceiverResult>;
     setTokenRoyaltyReceiver: (params: CollectionSetTokenRoyaltyReceiverParams) => Promise<CollectionSetTokenRoyaltyReceiverResult>;
+    getRoyaltyRegistryStatus: (params: CollectionRoyaltyRegistryStatusParams) => Promise<CollectionRoyaltyRegistryStatusResult>;
+    setRoyaltyRegistryReceiverOverride: (params: CollectionRoyaltyRegistryReceiverOverrideParams) => Promise<CollectionRoyaltyRegistryReceiverOverrideResult>;
+    setRoyaltyRegistryContractReceiver: (params: CollectionRoyaltyRegistryContractReceiverParams) => Promise<CollectionRoyaltyRegistryContractReceiverResult>;
+    setRoyaltyRegistryTokenReceiver: (params: CollectionRoyaltyRegistryTokenReceiverParams) => Promise<CollectionRoyaltyRegistryTokenReceiverResult>;
+    setRoyaltyRegistryContractPercentage: (params: CollectionRoyaltyRegistryContractPercentageParams) => Promise<CollectionRoyaltyRegistryContractPercentageResult>;
     getMintConfig: (params: CollectionMintConfigParams) => Promise<CollectionMintConfigResult>;
     updateBaseUri: (params: CollectionUpdateBaseUriParams) => Promise<CollectionUpdateBaseUriResult>;
     updateTokenUri: (params: CollectionUpdateTokenUriParams) => Promise<CollectionUpdateTokenUriResult>;

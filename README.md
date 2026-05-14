@@ -163,6 +163,16 @@ rare collection royalty set-default-receiver --contract 0x... --receiver 0x...
 rare collection royalty set-token-receiver --contract 0x... --token-id 1 --receiver 0x...
 ```
 
+The legacy protocol `RoyaltyRegistry` is also available under `collection royalty registry`. By default, the CLI reads the registry address from the configured Rare marketplace contract; pass `--registry 0x...` to target a specific registry.
+
+```bash
+rare collection royalty registry status --contract 0x... --token-id 1
+rare collection royalty registry set-receiver-override --receiver 0x...
+rare collection royalty registry set-contract-receiver --contract 0x... --receiver 0x...
+rare collection royalty registry set-token-receiver --contract 0x... --token-id 1 --receiver 0x...
+rare collection royalty registry set-contract-percentage --contract 0x... --percentage 10
+```
+
 Lazy Sovereign collections support mutable prepared metadata until the owner locks it:
 
 ```bash

@@ -740,6 +740,25 @@ describe('built CLI deterministic behavior', () => {
       expect(royalty.stdout).toContain('--sale-price <raw>');
       expect(royalty.stderr).toBe('');
 
+      const registry = await runCli(['collection', 'royalty', 'registry', 'status', '--help'], { home });
+      expect(registry.code).toBe(0);
+      expect(registry.stdout).toContain('Usage: rare collection royalty registry status [options]');
+      expect(registry.stdout).toContain('--registry <address>');
+      expect(registry.stdout).toContain('--sale-price <raw>');
+      expect(registry.stderr).toBe('');
+
+      const registrySet = await runCli([
+        'collection',
+        'royalty',
+        'registry',
+        'set-contract-percentage',
+        '--help',
+      ], { home });
+      expect(registrySet.code).toBe(0);
+      expect(registrySet.stdout).toContain('Usage: rare collection royalty registry set-contract-percentage [options]');
+      expect(registrySet.stdout).toContain('--percentage <number>');
+      expect(registrySet.stderr).toBe('');
+
       const metadata = await runCli(['collection', 'metadata', 'update-base-uri', '--help'], { home });
       expect(metadata.code).toBe(0);
       expect(metadata.stdout).toContain('Usage: rare collection metadata update-base-uri [options]');
@@ -763,6 +782,21 @@ describe('built CLI deterministic behavior', () => {
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('Error: --contract must be a valid 0x address.');
+
+      const registryResult = await runCli([
+        'collection',
+        'royalty',
+        'registry',
+        'set-contract-receiver',
+        '--contract',
+        'not-an-address',
+        '--receiver',
+        '0x2222222222222222222222222222222222222222',
+      ], { home });
+
+      expect(registryResult.code).toBe(1);
+      expect(registryResult.stdout).toBe('');
+      expect(registryResult.stderr).toContain('Error: --contract must be a valid 0x address.');
     });
   });
 

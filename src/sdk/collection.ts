@@ -3,12 +3,17 @@ import { sovereignFactoryAbi } from '../contracts/abis/sovereign-factory.js';
 import { lazySovereignFactoryAbi } from '../contracts/abis/lazy-sovereign-factory.js';
 import { collectionMintAbi } from '../contracts/abis/collection-mint.js';
 import { collectionOwnerAbi } from '../contracts/abis/collection-owner.js';
+import { royaltyRegistryAbi, royaltyRegistryResolverAbi } from '../contracts/abis/royalty-registry.js';
 import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
 import type { RareClientConfig, RareClient } from './types.js';
 import { requireWallet } from './helpers.js';
 import {
+  buildCollectionRoyaltyRegistryContractPercentageWrite,
+  buildCollectionRoyaltyRegistryContractReceiverWrite,
   buildCollectionMintBatchWrite,
   buildCollectionPrepareLazyMintWrite,
+  buildCollectionRoyaltyRegistryReceiverOverrideWrite,
+  buildCollectionRoyaltyRegistryTokenReceiverWrite,
   buildCreateLazySovereignCollectionWrite,
   buildCreateSovereignCollectionWrite,
   planCollectionBaseUri,
@@ -16,12 +21,19 @@ import {
   planCollectionMintBatch,
   planCollectionPrepareLazyMint,
   planCollectionReceiver,
+  planCollectionRoyaltyRegistryContractPercentage,
+  planCollectionRoyaltyRegistryContractReceiver,
+  planCollectionRoyaltyRegistryReceiverOverride,
+  planCollectionRoyaltyRegistryStatus,
+  planCollectionRoyaltyRegistryTokenReceiver,
   planCollectionRoyaltyInfo,
   planCollectionToken,
   planCollectionTokenReceiver,
   planCollectionTokenUri,
   planCreateLazySovereignCollection,
   planCreateSovereignCollection,
+  shapeCollectionRoyaltyRegistryStatus,
+  type CollectionRoyaltyRegistryStatusRead,
 } from './collection-core.js';
 
 export function createCollectionNamespace(
@@ -245,6 +257,110 @@ export function createCollectionNamespace(
         contract: plan.contract,
         tokenId: plan.tokenId,
         receiver: plan.receiver,
+      };
+    },
+
+    async getRoyaltyRegistryStatus(params): ReturnType<RareClient['collection']['getRoyaltyRegistryStatus']> {
+      const plan = planCollectionRoyaltyRegistryStatus(params);
+      const registry = await resolveRoyaltyRegistryAddress(publicClient, chain, plan.registry);
+      const read = await readRoyaltyRegistryStatus(publicClient, registry, plan);
+
+      return shapeCollectionRoyaltyRegistryStatus({ ...plan, registry }, read);
+    },
+
+    async setRoyaltyRegistryReceiverOverride(
+      params,
+    ): ReturnType<RareClient['collection']['setRoyaltyRegistryReceiverOverride']> {
+      const plan = planCollectionRoyaltyRegistryReceiverOverride(params);
+      const registry = await resolveRoyaltyRegistryAddress(publicClient, chain, plan.registry);
+      const { walletClient, account } = requireWallet(config);
+      const txHash = await writeRoyaltyRegistryReceiverOverride({
+        publicClient,
+        walletClient,
+        account,
+        registry,
+        plan,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+      return {
+        txHash,
+        receipt,
+        registry,
+        receiver: plan.receiver,
+      };
+    },
+
+    async setRoyaltyRegistryContractReceiver(
+      params,
+    ): ReturnType<RareClient['collection']['setRoyaltyRegistryContractReceiver']> {
+      const plan = planCollectionRoyaltyRegistryContractReceiver(params);
+      const registry = await resolveRoyaltyRegistryAddress(publicClient, chain, plan.registry);
+      const { walletClient, account } = requireWallet(config);
+      const txHash = await writeRoyaltyRegistryContractReceiver({
+        publicClient,
+        walletClient,
+        account,
+        registry,
+        plan,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+      return {
+        txHash,
+        receipt,
+        registry,
+        contract: plan.contract,
+        receiver: plan.receiver,
+      };
+    },
+
+    async setRoyaltyRegistryTokenReceiver(
+      params,
+    ): ReturnType<RareClient['collection']['setRoyaltyRegistryTokenReceiver']> {
+      const plan = planCollectionRoyaltyRegistryTokenReceiver(params);
+      const registry = await resolveRoyaltyRegistryAddress(publicClient, chain, plan.registry);
+      const { walletClient, account } = requireWallet(config);
+      const txHash = await writeRoyaltyRegistryTokenReceiver({
+        publicClient,
+        walletClient,
+        account,
+        registry,
+        plan,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+      return {
+        txHash,
+        receipt,
+        registry,
+        contract: plan.contract,
+        tokenId: plan.tokenId,
+        receiver: plan.receiver,
+      };
+    },
+
+    async setRoyaltyRegistryContractPercentage(
+      params,
+    ): ReturnType<RareClient['collection']['setRoyaltyRegistryContractPercentage']> {
+      const plan = planCollectionRoyaltyRegistryContractPercentage(params);
+      const registry = await resolveRoyaltyRegistryAddress(publicClient, chain, plan.registry);
+      const { walletClient, account } = requireWallet(config);
+      const txHash = await writeRoyaltyRegistryContractPercentage({
+        publicClient,
+        walletClient,
+        account,
+        registry,
+        plan,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+      return {
+        txHash,
+        receipt,
+        registry,
+        contract: plan.contract,
+        percentage: plan.percentage,
       };
     },
 
@@ -519,6 +635,110 @@ async function readOptionalDefaultRoyaltyPercentage(
   }
 }
 
+async function resolveRoyaltyRegistryAddress(
+  publicClient: PublicClient,
+  chain: SupportedChain,
+  registry: Address | undefined,
+): Promise<Address> {
+  if (registry !== undefined) {
+    return registry;
+  }
+
+  const bazaar = requireContractAddress(chain, 'auction');
+  try {
+    return await publicClient.readContract({
+      address: bazaar,
+      abi: royaltyRegistryResolverAbi,
+      functionName: 'royaltyRegistry',
+    });
+  } catch (error) {
+    throw new Error(
+      `Unable to resolve royalty registry from RARE Protocol marketplace ${bazaar} on "${chain}". Pass --registry to use a registry address directly.`,
+      { cause: error },
+    );
+  }
+}
+
+async function readRoyaltyRegistryStatus(
+  publicClient: PublicClient,
+  registry: Address,
+  plan: ReturnType<typeof planCollectionRoyaltyRegistryStatus>,
+): Promise<CollectionRoyaltyRegistryStatusRead> {
+  try {
+    const [
+      creatorRegistry,
+      receiver,
+      royaltyPercentage,
+      royaltyAmount,
+      contractPercentageSet,
+      contractPercentage,
+      contractReceiver,
+      tokenReceiver,
+    ] = await Promise.all([
+      publicClient.readContract({
+        address: registry,
+        abi: royaltyRegistryAbi,
+        functionName: 'iERC721TokenCreator',
+      }),
+      publicClient.readContract({
+        address: registry,
+        abi: royaltyRegistryAbi,
+        functionName: 'tokenCreator',
+        args: [plan.contract, plan.tokenId],
+      }),
+      publicClient.readContract({
+        address: registry,
+        abi: royaltyRegistryAbi,
+        functionName: 'getERC721TokenRoyaltyPercentage',
+        args: [plan.contract, plan.tokenId],
+      }),
+      publicClient.readContract({
+        address: registry,
+        abi: royaltyRegistryAbi,
+        functionName: 'calculateRoyaltyFee',
+        args: [plan.contract, plan.tokenId, plan.salePrice],
+      }),
+      publicClient.readContract({
+        address: registry,
+        abi: royaltyRegistryAbi,
+        functionName: 'contractRoyaltyPercentageSet',
+        args: [plan.contract],
+      }),
+      publicClient.readContract({
+        address: registry,
+        abi: royaltyRegistryAbi,
+        functionName: 'contractRoyaltyPercentage',
+        args: [plan.contract],
+      }),
+      publicClient.readContract({
+        address: registry,
+        abi: royaltyRegistryAbi,
+        functionName: 'contractRoyaltyReceiver',
+        args: [plan.contract],
+      }),
+      publicClient.readContract({
+        address: registry,
+        abi: royaltyRegistryAbi,
+        functionName: 'tokenRoyaltyReceiver',
+        args: [plan.contract, plan.tokenId],
+      }),
+    ]);
+
+    return {
+      creatorRegistry,
+      receiver,
+      royaltyPercentage,
+      royaltyAmount,
+      contractPercentageSet,
+      contractPercentage,
+      contractReceiver,
+      tokenReceiver,
+    };
+  } catch (error) {
+    throw royaltyRegistrySupportError('read status', registry, error);
+  }
+}
+
 async function readMintConfig(
   publicClient: PublicClient,
   contract: Address,
@@ -589,6 +809,134 @@ async function writeSetTokenRoyaltyReceiver(
     abi: collectionOwnerAbi,
     functionName: 'setRoyaltyReceiverForToken',
     args: [opts.plan.receiver, opts.plan.tokenId],
+    account: opts.account,
+    chain: undefined,
+  });
+}
+
+async function writeRoyaltyRegistryReceiverOverride(
+  opts: {
+    publicClient: PublicClient;
+    walletClient: NonNullable<RareClientConfig['walletClient']>;
+    account: ReturnType<typeof requireWallet>['account'];
+    registry: Address;
+    plan: ReturnType<typeof planCollectionRoyaltyRegistryReceiverOverride>;
+  },
+): Promise<Hash> {
+  const write = buildCollectionRoyaltyRegistryReceiverOverrideWrite(opts.plan);
+  try {
+    await opts.publicClient.simulateContract({
+      address: opts.registry,
+      abi: royaltyRegistryAbi,
+      functionName: write.functionName,
+      args: write.args,
+      account: opts.account,
+    });
+  } catch (error) {
+    throw royaltyRegistrySupportError(write.functionName, opts.registry, error);
+  }
+
+  return opts.walletClient.writeContract({
+    address: opts.registry,
+    abi: royaltyRegistryAbi,
+    functionName: write.functionName,
+    args: write.args,
+    account: opts.account,
+    chain: undefined,
+  });
+}
+
+async function writeRoyaltyRegistryContractReceiver(
+  opts: {
+    publicClient: PublicClient;
+    walletClient: NonNullable<RareClientConfig['walletClient']>;
+    account: ReturnType<typeof requireWallet>['account'];
+    registry: Address;
+    plan: ReturnType<typeof planCollectionRoyaltyRegistryContractReceiver>;
+  },
+): Promise<Hash> {
+  const write = buildCollectionRoyaltyRegistryContractReceiverWrite(opts.plan);
+  try {
+    await opts.publicClient.simulateContract({
+      address: opts.registry,
+      abi: royaltyRegistryAbi,
+      functionName: write.functionName,
+      args: write.args,
+      account: opts.account,
+    });
+  } catch (error) {
+    throw royaltyRegistrySupportError(write.functionName, opts.registry, error);
+  }
+
+  return opts.walletClient.writeContract({
+    address: opts.registry,
+    abi: royaltyRegistryAbi,
+    functionName: write.functionName,
+    args: write.args,
+    account: opts.account,
+    chain: undefined,
+  });
+}
+
+async function writeRoyaltyRegistryTokenReceiver(
+  opts: {
+    publicClient: PublicClient;
+    walletClient: NonNullable<RareClientConfig['walletClient']>;
+    account: ReturnType<typeof requireWallet>['account'];
+    registry: Address;
+    plan: ReturnType<typeof planCollectionRoyaltyRegistryTokenReceiver>;
+  },
+): Promise<Hash> {
+  const write = buildCollectionRoyaltyRegistryTokenReceiverWrite(opts.plan);
+  try {
+    await opts.publicClient.simulateContract({
+      address: opts.registry,
+      abi: royaltyRegistryAbi,
+      functionName: write.functionName,
+      args: write.args,
+      account: opts.account,
+    });
+  } catch (error) {
+    throw royaltyRegistrySupportError(write.functionName, opts.registry, error);
+  }
+
+  return opts.walletClient.writeContract({
+    address: opts.registry,
+    abi: royaltyRegistryAbi,
+    functionName: write.functionName,
+    args: write.args,
+    account: opts.account,
+    chain: undefined,
+  });
+}
+
+async function writeRoyaltyRegistryContractPercentage(
+  opts: {
+    publicClient: PublicClient;
+    walletClient: NonNullable<RareClientConfig['walletClient']>;
+    account: ReturnType<typeof requireWallet>['account'];
+    registry: Address;
+    plan: ReturnType<typeof planCollectionRoyaltyRegistryContractPercentage>;
+  },
+): Promise<Hash> {
+  const write = buildCollectionRoyaltyRegistryContractPercentageWrite(opts.plan);
+  try {
+    await opts.publicClient.simulateContract({
+      address: opts.registry,
+      abi: royaltyRegistryAbi,
+      functionName: write.functionName,
+      args: write.args,
+      account: opts.account,
+    });
+  } catch (error) {
+    throw royaltyRegistrySupportError(write.functionName, opts.registry, error);
+  }
+
+  return opts.walletClient.writeContract({
+    address: opts.registry,
+    abi: royaltyRegistryAbi,
+    functionName: write.functionName,
+    args: write.args,
     account: opts.account,
     chain: undefined,
   });
@@ -685,6 +1033,13 @@ async function writeLockBaseUri(
 function contractSupportError(operation: string, contract: Address, cause: unknown): Error {
   return new Error(
     `Collection ${contract} does not support ${operation}, or the ${operation} preflight failed.`,
+    { cause },
+  );
+}
+
+function royaltyRegistrySupportError(operation: string, registry: Address, cause: unknown): Error {
+  return new Error(
+    `Royalty registry ${registry} does not support ${operation}, or the ${operation} preflight failed.`,
     { cause },
   );
 }

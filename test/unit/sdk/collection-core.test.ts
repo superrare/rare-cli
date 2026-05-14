@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { zeroAddress } from 'viem';
 import {
   buildCollectionMintBatchWrite,
   buildCollectionPrepareLazyMintWrite,
+  buildCollectionRoyaltyRegistryContractPercentageWrite,
+  buildCollectionRoyaltyRegistryContractReceiverWrite,
+  buildCollectionRoyaltyRegistryReceiverOverrideWrite,
+  buildCollectionRoyaltyRegistryTokenReceiverWrite,
   buildCreateLazySovereignCollectionWrite,
   buildCreateSovereignCollectionWrite,
   defaultRoyaltyInfoSalePrice,
@@ -12,16 +17,24 @@ import {
   planCollectionMintBatch,
   planCollectionPrepareLazyMint,
   planCollectionReceiver,
+  planCollectionRoyaltyRegistryContractPercentage,
+  planCollectionRoyaltyRegistryContractReceiver,
+  planCollectionRoyaltyRegistryReceiverOverride,
+  planCollectionRoyaltyRegistryStatus,
+  planCollectionRoyaltyRegistryTokenReceiver,
   planCollectionRoyaltyInfo,
   planCollectionToken,
   planCollectionTokenReceiver,
   planCollectionTokenUri,
   planCreateLazySovereignCollection,
   planCreateSovereignCollection,
+  shapeCollectionRoyaltyRegistryStatus,
 } from '../../../src/sdk/collection-core.js';
 
 const COLLECTION_ADDRESS = '0x1111111111111111111111111111111111111111';
 const MINTER_ADDRESS = '0x2222222222222222222222222222222222222222';
+const REGISTRY_ADDRESS = '0x3333333333333333333333333333333333333333';
+const CREATOR_REGISTRY_ADDRESS = '0x4444444444444444444444444444444444444444';
 
 describe('Sovereign collection core', () => {
   it('normalizes supported contract type aliases', () => {
@@ -305,6 +318,133 @@ describe('Sovereign collection core', () => {
       tokenId: 2n,
       receiver: MINTER_ADDRESS,
     });
+  });
+
+  it('plans royalty registry status reads and omits unset receiver mappings', () => {
+    const plan = planCollectionRoyaltyRegistryStatus({
+      registry: REGISTRY_ADDRESS,
+      contract: COLLECTION_ADDRESS,
+      tokenId: '2',
+    });
+
+    expect(plan).toEqual({
+      registry: REGISTRY_ADDRESS,
+      contract: COLLECTION_ADDRESS,
+      tokenId: 2n,
+      salePrice: defaultRoyaltyInfoSalePrice,
+    });
+
+    expect(shapeCollectionRoyaltyRegistryStatus(
+      { ...plan, registry: REGISTRY_ADDRESS },
+      {
+        creatorRegistry: CREATOR_REGISTRY_ADDRESS,
+        receiver: MINTER_ADDRESS,
+        royaltyPercentage: 10,
+        royaltyAmount: 1000n,
+        contractPercentageSet: false,
+        contractPercentage: 0,
+        contractReceiver: zeroAddress,
+        tokenReceiver: zeroAddress,
+      },
+    )).toEqual({
+      registry: REGISTRY_ADDRESS,
+      contract: COLLECTION_ADDRESS,
+      tokenId: 2n,
+      salePrice: defaultRoyaltyInfoSalePrice,
+      creatorRegistry: CREATOR_REGISTRY_ADDRESS,
+      receiver: MINTER_ADDRESS,
+      royaltyPercentage: 10,
+      royaltyAmount: 1000n,
+    });
+  });
+
+  it('shapes configured royalty registry overrides', () => {
+    const plan = planCollectionRoyaltyRegistryStatus({
+      registry: REGISTRY_ADDRESS,
+      contract: COLLECTION_ADDRESS,
+      tokenId: '2',
+      salePrice: '500',
+    });
+
+    expect(shapeCollectionRoyaltyRegistryStatus(
+      { ...plan, registry: REGISTRY_ADDRESS },
+      {
+        creatorRegistry: CREATOR_REGISTRY_ADDRESS,
+        receiver: MINTER_ADDRESS,
+        royaltyPercentage: 15,
+        royaltyAmount: 75n,
+        contractPercentageSet: true,
+        contractPercentage: 15,
+        contractReceiver: MINTER_ADDRESS,
+        tokenReceiver: COLLECTION_ADDRESS,
+      },
+    )).toEqual({
+      registry: REGISTRY_ADDRESS,
+      contract: COLLECTION_ADDRESS,
+      tokenId: 2n,
+      salePrice: 500n,
+      creatorRegistry: CREATOR_REGISTRY_ADDRESS,
+      receiver: MINTER_ADDRESS,
+      royaltyPercentage: 15,
+      royaltyAmount: 75n,
+      configuredContractPercentage: 15,
+      contractReceiver: MINTER_ADDRESS,
+      tokenReceiver: COLLECTION_ADDRESS,
+    });
+  });
+
+  it('plans and builds royalty registry writes', () => {
+    const overridePlan = planCollectionRoyaltyRegistryReceiverOverride({
+      registry: REGISTRY_ADDRESS,
+      receiver: MINTER_ADDRESS,
+    });
+    expect(buildCollectionRoyaltyRegistryReceiverOverrideWrite(overridePlan)).toEqual({
+      functionName: 'setRoyaltyReceiverOverride',
+      args: [MINTER_ADDRESS],
+    });
+
+    const contractReceiverPlan = planCollectionRoyaltyRegistryContractReceiver({
+      registry: REGISTRY_ADDRESS,
+      contract: COLLECTION_ADDRESS,
+      receiver: MINTER_ADDRESS,
+    });
+    expect(buildCollectionRoyaltyRegistryContractReceiverWrite(contractReceiverPlan)).toEqual({
+      functionName: 'setRoyaltyReceiverForContract',
+      args: [MINTER_ADDRESS, COLLECTION_ADDRESS],
+    });
+
+    const tokenReceiverPlan = planCollectionRoyaltyRegistryTokenReceiver({
+      registry: REGISTRY_ADDRESS,
+      contract: COLLECTION_ADDRESS,
+      tokenId: '2',
+      receiver: MINTER_ADDRESS,
+    });
+    expect(buildCollectionRoyaltyRegistryTokenReceiverWrite(tokenReceiverPlan)).toEqual({
+      functionName: 'setRoyaltyReceiverForToken',
+      args: [MINTER_ADDRESS, COLLECTION_ADDRESS, 2n],
+    });
+
+    const percentagePlan = planCollectionRoyaltyRegistryContractPercentage({
+      registry: REGISTRY_ADDRESS,
+      contract: COLLECTION_ADDRESS,
+      percentage: '15',
+    });
+    expect(buildCollectionRoyaltyRegistryContractPercentageWrite(percentagePlan)).toEqual({
+      functionName: 'setPercentageForSetERC721ContractRoyalty',
+      args: [COLLECTION_ADDRESS, 15],
+    });
+  });
+
+  it('rejects royalty registry percentages outside the contract range', () => {
+    expect(() => planCollectionRoyaltyRegistryContractPercentage({
+      contract: COLLECTION_ADDRESS,
+      percentage: '-1',
+    })).toThrow('percentage must be between 0 and 100.');
+
+    expect(() => planCollectionRoyaltyRegistryContractPercentage({
+      contract: COLLECTION_ADDRESS,
+      percentage: '101',
+    })).toThrow('percentage must be between 0 and 100.');
   });
 
   it('plans Lazy Sovereign metadata operations', () => {

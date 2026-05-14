@@ -2,10 +2,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Address } from 'viem';
+import { createPublicClient, http, type Address, type PublicClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { getContractAddresses, type SupportedChain } from '../../src/contracts/addresses.js';
-import { parseHexString } from '../../src/sdk/validation.js';
+import { royaltyRegistryAbi, royaltyRegistryResolverAbi } from '../../src/contracts/abis/royalty-registry.js';
+import { getContractAddresses, viemChains, type SupportedChain } from '../../src/contracts/addresses.js';
+import { parseAddress, parseHexString } from '../../src/sdk/validation.js';
 import { parseJsonStdout, runCli } from '../helpers/cli.js';
 import { loadDotEnv } from '../helpers/env.js';
 import { detectLiveChain } from './live-helpers.js';
@@ -25,6 +26,10 @@ const E2E_BATCH_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehy
 const E2E_LAZY_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy';
 const E2E_LAZY_UPDATED_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy-updated';
 const E2E_LAZY_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy-token-1.json';
+const hasRoyaltyRegistryStatusFixture =
+  process.env.E2E_ROYALTY_REGISTRY_CONTRACT !== undefined &&
+  process.env.E2E_ROYALTY_REGISTRY_TOKEN_ID !== undefined;
+const itRoyaltyRegistryStatus = hasRoyaltyRegistryStatusFixture ? it : it.skip;
 
 type DeployResult = {
   txHash: string;
@@ -78,6 +83,32 @@ type CollectionRoyaltyInfoResult = {
   defaultReceiver?: string;
   defaultPercentage?: string;
 };
+
+type CollectionRoyaltyRegistryStatusResult = {
+  chain: string;
+  registry: string;
+  contract: string;
+  tokenId: string;
+  salePrice: string;
+  creatorRegistry: string;
+  receiver: string;
+  royaltyPercentage: number;
+  royaltyAmount: string;
+  configuredContractPercentage?: number;
+  contractReceiver?: string;
+  tokenReceiver?: string;
+};
+
+type CollectionRoyaltyRegistryReceiverOverrideResult = {
+  registry: string;
+  receiver: string;
+} & TxResult
+
+type CollectionRoyaltyRegistryContractReceiverResult = {
+  registry: string;
+  contract: string;
+  receiver: string;
+} & TxResult
 
 type CollectionMetadataStatusResult = {
   chain: string;
@@ -221,6 +252,59 @@ describeLive('live CLI write commands', () => {
     }
   });
 
+  itRoyaltyRegistryStatus('reads legacy royalty registry status for the configured token fixture', async () => {
+    const fixture = royaltyRegistryStatusFixture();
+    const registry = await readProtocolRoyaltyRegistry();
+    const status = await step('read legacy royalty registry status', () =>
+      jsonCommand<CollectionRoyaltyRegistryStatusResult>(live.value.sellerHome, [
+        'collection',
+        'royalty',
+        'registry',
+        'status',
+        '--contract',
+        fixture.contract,
+        '--token-id',
+        fixture.tokenId,
+        '--chain',
+        live.value.chain,
+      ]),
+    );
+
+    expect(status.chain).toBe(live.value.chain);
+    expect(status.registry.toLowerCase()).toBe(registry.toLowerCase());
+    expect(status.contract.toLowerCase()).toBe(fixture.contract.toLowerCase());
+    expect(status.tokenId).toBe(fixture.tokenId);
+    expect(status.salePrice).toBe('10000');
+    expect(status.creatorRegistry).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(status.receiver).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(status.royaltyPercentage).toBeGreaterThanOrEqual(0);
+    expect(status.royaltyPercentage).toBeLessThanOrEqual(100);
+    expect(status.royaltyAmount).toMatch(/^\d+$/);
+  });
+
+  it('sets a legacy royalty registry receiver override for the connected wallet', async () => {
+    const registry = await readProtocolRoyaltyRegistry();
+    const result = await step('set royalty registry receiver override', () =>
+      jsonCommand<CollectionRoyaltyRegistryReceiverOverrideResult>(live.value.sellerHome, [
+        'collection',
+        'royalty',
+        'registry',
+        'set-receiver-override',
+        '--receiver',
+        live.value.buyerAddress,
+        '--chain',
+        live.value.chain,
+      ]),
+    );
+
+    expectTx(result);
+    expect(result.registry.toLowerCase()).toBe(registry.toLowerCase());
+    expect(result.receiver.toLowerCase()).toBe(live.value.buyerAddress.toLowerCase());
+
+    const receiverOverride = await readRoyaltyRegistryReceiverOverride(registry, live.value.sellerAddress);
+    expect(receiverOverride.toLowerCase()).toBe(live.value.buyerAddress.toLowerCase());
+  });
+
   it('creates a standard Sovereign collection through the newer factory', async () => {
     const suffix = Date.now().toString(36);
     const created = await step('create standard Sovereign collection', () =>
@@ -324,6 +408,30 @@ describeLive('live CLI write commands', () => {
     const tokenReceiverRoyalty = await readCollectionRoyalty(live.value.sellerHome, created.contract, '1');
     expect(tokenReceiverRoyalty.receiver.toLowerCase()).toBe(live.value.sellerAddress.toLowerCase());
     expect(tokenReceiverRoyalty.defaultReceiver?.toLowerCase()).toBe(live.value.buyerAddress.toLowerCase());
+
+    const registry = await readProtocolRoyaltyRegistry();
+    const registryReceiver = await step('set royalty registry contract receiver', () =>
+      jsonCommand<CollectionRoyaltyRegistryContractReceiverResult>(live.value.sellerHome, [
+        'collection',
+        'royalty',
+        'registry',
+        'set-contract-receiver',
+        '--contract',
+        created.contract,
+        '--receiver',
+        live.value.buyerAddress,
+        '--chain',
+        live.value.chain,
+      ]),
+    );
+
+    expectTx(registryReceiver);
+    expect(registryReceiver.registry.toLowerCase()).toBe(registry.toLowerCase());
+    expect(registryReceiver.contract.toLowerCase()).toBe(created.contract.toLowerCase());
+    expect(registryReceiver.receiver.toLowerCase()).toBe(live.value.buyerAddress.toLowerCase());
+
+    const contractReceiver = await readRoyaltyRegistryContractReceiver(registry, created.contract);
+    expect(contractReceiver.toLowerCase()).toBe(live.value.buyerAddress.toLowerCase());
   });
 
   it('creates a Lazy Sovereign release collection through the lazy factory', async () => {
@@ -632,6 +740,39 @@ async function readCollectionRoyalty(
   ]);
 }
 
+async function readProtocolRoyaltyRegistry(): Promise<Address> {
+  const auction = getContractAddresses(live.value.chain).auction;
+  return createLivePublicClient().readContract({
+    address: auction,
+    abi: royaltyRegistryResolverAbi,
+    functionName: 'royaltyRegistry',
+  });
+}
+
+async function readRoyaltyRegistryReceiverOverride(
+  registry: Address,
+  wallet: Address,
+): Promise<Address> {
+  return createLivePublicClient().readContract({
+    address: registry,
+    abi: royaltyRegistryAbi,
+    functionName: 'royaltyReceiverOverride',
+    args: [wallet],
+  });
+}
+
+async function readRoyaltyRegistryContractReceiver(
+  registry: Address,
+  contract: string,
+): Promise<Address> {
+  return createLivePublicClient().readContract({
+    address: registry,
+    abi: royaltyRegistryAbi,
+    functionName: 'contractRoyaltyReceiver',
+    args: [parseAddress(contract, 'contract')],
+  });
+}
+
 async function readCollectionMetadata(
   home: string,
   contract: string,
@@ -676,6 +817,28 @@ async function expectTokenOwner(home: string, contract: string, tokenId: string,
   }
   expect(token.owner.toLowerCase()).toBe(owner.toLowerCase());
   expect(token.tokenUri).toBe(E2E_TOKEN_URI);
+}
+
+function royaltyRegistryStatusFixture(): { contract: Address; tokenId: string } {
+  const contract = process.env.E2E_ROYALTY_REGISTRY_CONTRACT;
+  const tokenId = process.env.E2E_ROYALTY_REGISTRY_TOKEN_ID;
+  if (contract === undefined || tokenId === undefined) {
+    throw new Error(
+      'E2E_ROYALTY_REGISTRY_CONTRACT and E2E_ROYALTY_REGISTRY_TOKEN_ID are required for royalty registry status live coverage.',
+    );
+  }
+
+  return {
+    contract: parseAddress(contract, 'E2E_ROYALTY_REGISTRY_CONTRACT'),
+    tokenId,
+  };
+}
+
+function createLivePublicClient(): PublicClient {
+  return createPublicClient({
+    chain: viemChains[live.value.chain],
+    transport: http(testRpcUrl()),
+  });
 }
 
 function livePrivateKey(name: 'E2E_SELLER_PRIVATE_KEY' | 'E2E_BUYER_PRIVATE_KEY'): `0x${string}` {
