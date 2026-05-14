@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
+  getActiveChain,
   parsePrivateKeyReference,
   readConfig,
   setChainConfig,
@@ -8,12 +9,13 @@ import {
   writeConfig,
   type ChainConfig,
 } from '../config.js';
-import { isSupportedChain, supportedChains } from '../contracts/addresses.js';
+import { chainIds, isSupportedChain, supportedChains } from '../contracts/addresses.js';
 import { parseHexString } from '../sdk/validation.js';
 import { readOnePasswordPrivateKey } from '../one-password.js';
 
 type ConfigureOptions = {
   chain?: string;
+  chainId?: string;
   privateKey?: string;
   privateKeyRef?: string;
   rpcUrl?: string;
@@ -28,6 +30,7 @@ export function configureCommand(): Command {
 
   cmd
     .option('--chain <chain>', `chain to configure (${supportedChainsText})`)
+    .option('--chain-id <id>', `chain ID to use (${Object.entries(chainIds).map(([chain, id]) => `${id} (${chain})`).join(', ')})`)
     .option('--private-key <key>', 'private key for the specified chain')
     .option('--private-key-ref <ref>', '1Password secret reference for the specified chain private key')
     .option('--rpc-url <url>', 'custom RPC URL for the specified chain')
@@ -35,6 +38,9 @@ export function configureCommand(): Command {
     .option('--show', 'display current configuration')
     .action(async (opts: ConfigureOptions): Promise<void> => {
       const config = readConfig();
+      const selectedChain = opts.chain !== undefined || opts.chainId !== undefined
+        ? getActiveChain(opts.chain, opts.chainId)
+        : undefined;
 
       if (opts.show) {
         const display = {
@@ -70,25 +76,22 @@ export function configureCommand(): Command {
         console.log(`Default chain set to: ${opts.defaultChain}`);
       }
 
-      if (opts.chain) {
-        if (!isSupportedChain(opts.chain)) {
-          throw new Error(`--chain must be one of: ${supportedChainsText}`);
-        }
+      if (selectedChain !== undefined) {
         if (opts.privateKey !== undefined && opts.privateKeyRef !== undefined) {
           throw new Error('--private-key and --private-key-ref cannot be used together.');
         }
 
         const keySourceUpdates = await getKeySourceUpdates(opts);
-        const nextConfig = setChainConfig(configWithDefaultChain, opts.chain, {
+        const nextConfig = setChainConfig(configWithDefaultChain, selectedChain, {
           ...keySourceUpdates,
           ...(opts.rpcUrl === undefined ? {} : { rpcUrl: opts.rpcUrl }),
         });
 
         writeConfig(nextConfig);
-        console.log(`Configuration updated for chain: ${opts.chain}`);
+        console.log(`Configuration updated for chain: ${selectedChain}`);
       }
 
-      if (opts.defaultChain === undefined && opts.chain === undefined) {
+      if (opts.defaultChain === undefined && selectedChain === undefined) {
         cmd.help();
       }
     });

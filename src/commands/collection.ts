@@ -26,12 +26,14 @@ type CreateSovereignOptions = {
   maxTokens?: string;
   contractType?: string;
   chain?: string;
+  chainId?: string;
 };
 
 type CreateLazySovereignOptions = {
   maxTokens: string;
   contractType?: string;
   chain?: string;
+  chainId?: string;
 };
 
 type CollectionMintBatchOptions = {
@@ -39,6 +41,7 @@ type CollectionMintBatchOptions = {
   baseUri: string;
   tokenCount: string;
   chain?: string;
+  chainId?: string;
 };
 
 type CollectionPrepareLazyMintOptions = {
@@ -47,12 +50,14 @@ type CollectionPrepareLazyMintOptions = {
   tokenCount: string;
   minter?: string;
   chain?: string;
+  chainId?: string;
 };
 
 type CollectionTokenOptions = {
   contract: string;
   tokenId: string;
   chain?: string;
+  chainId?: string;
 };
 
 type CollectionRoyaltyStatusOptions = CollectionTokenOptions & {
@@ -63,6 +68,7 @@ type CollectionRoyaltyReceiverOptions = {
   contract: string;
   receiver: string;
   chain?: string;
+  chainId?: string;
 };
 
 type CollectionTokenRoyaltyReceiverOptions = CollectionRoyaltyReceiverOptions & {
@@ -72,6 +78,7 @@ type CollectionTokenRoyaltyReceiverOptions = CollectionRoyaltyReceiverOptions & 
 type CollectionRoyaltyRegistryOptions = {
   registry?: string;
   chain?: string;
+  chainId?: string;
 };
 
 type CollectionRoyaltyRegistryStatusOptions = CollectionTokenOptions & CollectionRoyaltyRegistryOptions & {
@@ -99,6 +106,7 @@ type CollectionRoyaltyRegistryContractPercentageOptions = CollectionRoyaltyRegis
 type CollectionContractOptions = {
   contract: string;
   chain?: string;
+  chainId?: string;
 };
 
 type CollectionUpdateBaseUriOptions = CollectionContractOptions & {
@@ -174,9 +182,10 @@ function createSovereignCollectionCommand(): Command {
       'standard',
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (name: string, symbol: string, opts: CreateSovereignOptions): Promise<void> => {
       const contractType = normalizeSovereignCollectionContractType(opts.contractType);
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const factoryAddress = requireContractAddress(chain, 'sovereignFactory');
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
@@ -233,9 +242,10 @@ function createLazySovereignCollectionCommand(): Command {
       'lazy',
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (name: string, symbol: string, opts: CreateLazySovereignOptions): Promise<void> => {
       const contractType = normalizeLazySovereignCollectionContractType(opts.contractType);
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const factoryAddress = requireContractAddress(chain, 'lazySovereignFactory');
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
@@ -289,10 +299,11 @@ function createMintBatchCommand(): Command {
     .requiredOption('--base-uri <uri>', 'base URI for token metadata')
     .requiredOption('--token-count <number>', 'number of tokens to mint')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionMintBatchOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
-        const chain = getActiveChain(opts.chain);
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
@@ -343,13 +354,14 @@ function createPrepareLazyMintCommand(): Command {
     .requiredOption('--token-count <number>', 'number of tokens to prepare')
     .option('--minter <address>', 'optional approved minter address')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionPrepareLazyMintOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
         const minter = opts.minter === undefined
           ? undefined
           : parseAddressOption(opts.minter, '--minter');
-        const chain = getActiveChain(opts.chain);
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
@@ -401,10 +413,11 @@ function createTokenCreatorCommand(): Command {
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--token-id <id>', 'token ID to inspect')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionTokenOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
-        const { chain, rare } = createReadCollectionClient(opts.chain);
+        const { chain, rare } = createReadCollectionClient(opts.chain, opts.chainId);
         const result = await rare.collection.getTokenCreator({
           contract,
           tokenId: opts.tokenId,
@@ -438,10 +451,11 @@ function createRoyaltyStatusCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID to inspect')
     .option('--sale-price <raw>', 'raw sale price units used for the royalty quote')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionRoyaltyStatusOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
-        const { chain, rare } = createReadCollectionClient(opts.chain);
+        const { chain, rare } = createReadCollectionClient(opts.chain, opts.chainId);
         const result = await rare.collection.getRoyaltyInfo({
           contract,
           tokenId: opts.tokenId,
@@ -486,11 +500,12 @@ function createSetDefaultRoyaltyReceiverCommand(): Command {
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--receiver <address>', 'new default royalty receiver')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionRoyaltyReceiverOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
         const receiver = parseAddressOption(opts.receiver, '--receiver');
-        const { chain, rare } = createWriteCollectionClient(opts.chain);
+        const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
         log(`Setting default royalty receiver on ${chain}...`);
         log(`  Contract: ${contract}`);
@@ -528,11 +543,12 @@ function createSetTokenRoyaltyReceiverCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID to update')
     .requiredOption('--receiver <address>', 'new token royalty receiver')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionTokenRoyaltyReceiverOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
         const receiver = parseAddressOption(opts.receiver, '--receiver');
-        const { chain, rare } = createWriteCollectionClient(opts.chain);
+        const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
         log(`Setting token royalty receiver on ${chain}...`);
         log(`  Contract: ${contract}`);
@@ -577,10 +593,11 @@ function createRoyaltyRegistryStatusCommand(): Command {
     .option('--sale-price <raw>', 'raw sale price units used for the royalty quote')
     .option('--registry <address>', 'royalty registry address (defaults to the protocol registry)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionRoyaltyRegistryStatusOptions) => {
       const contract = parseAddressOption(opts.contract, '--contract');
       const registry = parseOptionalAddressOption(opts.registry, '--registry');
-      const { chain, rare } = createReadCollectionClient(opts.chain);
+      const { chain, rare } = createReadCollectionClient(opts.chain, opts.chainId);
       const result = await rare.collection.getRoyaltyRegistryStatus({
         registry,
         contract,
@@ -633,10 +650,11 @@ function createRoyaltyRegistrySetReceiverOverrideCommand(): Command {
     .requiredOption('--receiver <address>', 'new royalty receiver for the connected wallet')
     .option('--registry <address>', 'royalty registry address (defaults to the protocol registry)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionRoyaltyRegistryReceiverOverrideOptions) => {
       const receiver = parseAddressOption(opts.receiver, '--receiver');
       const registry = parseOptionalAddressOption(opts.registry, '--registry');
-      const { chain, rare } = createWriteCollectionClient(opts.chain);
+      const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
       log(`Setting royalty registry receiver override on ${chain}...`);
       if (registry !== undefined) log(`  Registry: ${registry}`);
@@ -671,11 +689,12 @@ function createRoyaltyRegistrySetContractReceiverCommand(): Command {
     .requiredOption('--receiver <address>', 'new collection royalty receiver')
     .option('--registry <address>', 'royalty registry address (defaults to the protocol registry)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionRoyaltyRegistryReceiverOptions) => {
       const contract = parseAddressOption(opts.contract, '--contract');
       const receiver = parseAddressOption(opts.receiver, '--receiver');
       const registry = parseOptionalAddressOption(opts.registry, '--registry');
-      const { chain, rare } = createWriteCollectionClient(opts.chain);
+      const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
       log(`Setting royalty registry contract receiver on ${chain}...`);
       if (registry !== undefined) log(`  Registry: ${registry}`);
@@ -717,11 +736,12 @@ function createRoyaltyRegistrySetTokenReceiverCommand(): Command {
     .requiredOption('--receiver <address>', 'new token royalty receiver')
     .option('--registry <address>', 'royalty registry address (defaults to the protocol registry)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionRoyaltyRegistryTokenReceiverOptions) => {
       const contract = parseAddressOption(opts.contract, '--contract');
       const receiver = parseAddressOption(opts.receiver, '--receiver');
       const registry = parseOptionalAddressOption(opts.registry, '--registry');
-      const { chain, rare } = createWriteCollectionClient(opts.chain);
+      const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
       log(`Setting royalty registry token receiver on ${chain}...`);
       if (registry !== undefined) log(`  Registry: ${registry}`);
@@ -765,10 +785,11 @@ function createRoyaltyRegistrySetContractPercentageCommand(): Command {
     .requiredOption('--percentage <number>', 'royalty percentage, from 0 to 100')
     .option('--registry <address>', 'royalty registry address (defaults to the protocol registry)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionRoyaltyRegistryContractPercentageOptions) => {
       const contract = parseAddressOption(opts.contract, '--contract');
       const registry = parseOptionalAddressOption(opts.registry, '--registry');
-      const { chain, rare } = createWriteCollectionClient(opts.chain);
+      const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
       log(`Setting royalty registry contract percentage on ${chain}...`);
       if (registry !== undefined) log(`  Registry: ${registry}`);
@@ -828,10 +849,11 @@ function createMetadataStatusCommand(): Command {
   cmd
     .requiredOption('--contract <address>', 'collection contract address')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionContractOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
-        const { chain, rare } = createReadCollectionClient(opts.chain);
+        const { chain, rare } = createReadCollectionClient(opts.chain, opts.chainId);
         const result = await rare.collection.getMintConfig({ contract });
 
         output(
@@ -864,10 +886,11 @@ function createUpdateBaseUriCommand(): Command {
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--base-uri <uri>', 'new base URI')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionUpdateBaseUriOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
-        const { chain, rare } = createWriteCollectionClient(opts.chain);
+        const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
         log(`Updating collection base URI on ${chain}...`);
         log(`  Contract: ${contract}`);
@@ -908,10 +931,11 @@ function createUpdateTokenUriCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID to update')
     .requiredOption('--token-uri <uri>', 'new token metadata URI')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionUpdateTokenUriOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
-        const { chain, rare } = createWriteCollectionClient(opts.chain);
+        const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
         log(`Updating token metadata URI on ${chain}...`);
         log(`  Contract: ${contract}`);
@@ -953,10 +977,11 @@ function createLockBaseUriCommand(): Command {
   cmd
     .requiredOption('--contract <address>', 'collection contract address')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionContractOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
-        const { chain, rare } = createWriteCollectionClient(opts.chain);
+        const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
         log(`Locking collection base URI on ${chain}...`);
         log(`  Contract: ${contract}`);
@@ -1017,8 +1042,8 @@ export function collectionCommand(): Command {
   return cmd;
 }
 
-function createReadCollectionClient(chainInput: string | undefined): CollectionCommandClient {
-  const chain = getActiveChain(chainInput);
+function createReadCollectionClient(chainInput: string | undefined, chainIdInput: string | undefined): CollectionCommandClient {
+  const chain = getActiveChain(chainInput, chainIdInput);
   const publicClient = getPublicClient(chain);
   return {
     chain,
@@ -1026,8 +1051,8 @@ function createReadCollectionClient(chainInput: string | undefined): CollectionC
   };
 }
 
-function createWriteCollectionClient(chainInput: string | undefined): CollectionCommandClient {
-  const chain = getActiveChain(chainInput);
+function createWriteCollectionClient(chainInput: string | undefined, chainIdInput: string | undefined): CollectionCommandClient {
+  const chain = getActiveChain(chainInput, chainIdInput);
   const { client } = getWalletClient(chain);
   const publicClient = getPublicClient(chain);
   return {

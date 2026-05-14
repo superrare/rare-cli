@@ -9,6 +9,7 @@ import { output, log, printCollection } from '../output.js';
 
 type ListCollectionsOptions = {
   chain?: string;
+  chainId?: string;
   query: string;
 };
 
@@ -17,9 +18,10 @@ export function listCollectionsCommand(): Command {
   cmd
     .description('List all collections')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .option('--query <text>', 'text search filter', '')
     .action(async (opts: ListCollectionsOptions): Promise<void> => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const rare = createRareClient({ publicClient: getPublicClient(chain) });
 
       log(`Fetching collections on ${chain}...`);

@@ -2,16 +2,18 @@ import { Command } from 'commander';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { readConfig, setChainConfig, writeConfig, getActiveChain } from '../config.js';
 import { getConfiguredWalletAddress, getWalletClient } from '../client.js';
-import { isSupportedChain, supportedChains } from '../contracts/addresses.js';
+import { chainIds, supportedChains } from '../contracts/addresses.js';
 import { output } from '../output.js';
 
 type WalletGenerateOptions = {
   chain?: string;
+  chainId?: string;
   save?: boolean;
 };
 
 type WalletAddressOptions = {
   chain?: string;
+  chainId?: string;
 };
 
 export function walletCommand(): Command {
@@ -23,8 +25,12 @@ export function walletCommand(): Command {
     .command('generate')
     .description('Generate a new Ethereum wallet and optionally save it to config')
     .option('--chain <chain>', `chain to save the key to (${supportedChainsText})`)
+    .option('--chain-id <id>', `chain ID to use (${Object.entries(chainIds).map(([chain, id]) => `${id} (${chain})`).join(', ')})`)
     .option('--save', 'save the generated key to config for the specified chain')
     .action((opts: WalletGenerateOptions): void => {
+      const selectedChain = opts.chain === undefined && opts.chainId === undefined
+        ? 'sepolia'
+        : getActiveChain(opts.chain, opts.chainId);
       const privateKey = generatePrivateKey();
       const account = privateKeyToAccount(privateKey);
 
@@ -37,10 +43,6 @@ export function walletCommand(): Command {
       });
 
       if (opts.save) {
-        const selectedChain = opts.chain ?? 'sepolia';
-        if (!isSupportedChain(selectedChain)) {
-          throw new Error(`--chain must be one of: ${supportedChainsText}`);
-        }
         writeConfig(setChainConfig(readConfig(), selectedChain, {
           privateKey,
           privateKeyRef: undefined,
@@ -54,8 +56,9 @@ export function walletCommand(): Command {
     .command('address')
     .description('Show the Ethereum address of the configured wallet')
     .option('--chain <chain>', `chain to use (${supportedChainsText})`)
+    .option('--chain-id <id>', `chain ID to use (${Object.entries(chainIds).map(([chain, id]) => `${id} (${chain})`).join(', ')})`)
     .action((opts: WalletAddressOptions): void => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       console.log(getConfiguredWalletAddress(chain) ?? getWalletClient(chain).account.address);
     });
 

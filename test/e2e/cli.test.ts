@@ -125,6 +125,67 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('accepts chain name or chain ID and rejects mismatched chain selectors', async () => {
+    await withTempHome(async (home) => {
+      const configureByChainId = await runCli([
+        'configure',
+        '--chain-id',
+        '84532',
+        '--rpc-url',
+        'http://127.0.0.1:8545',
+      ], { home });
+      expect(configureByChainId.code).toBe(0);
+      expect(configureByChainId.stdout).toContain('Configuration updated for chain: base-sepolia');
+
+      const configureMatchingPair = await runCli([
+        'configure',
+        '--chain',
+        'sepolia',
+        '--chain-id',
+        '11155111',
+        '--rpc-url',
+        'http://127.0.0.1:9545',
+      ], { home });
+      expect(configureMatchingPair.code).toBe(0);
+      expect(configureMatchingPair.stdout).toContain('Configuration updated for chain: sepolia');
+
+      const config: unknown = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
+      expect(config).toEqual({
+        chains: {
+          'base-sepolia': {
+            rpcUrl: 'http://127.0.0.1:8545',
+          },
+          sepolia: {
+            rpcUrl: 'http://127.0.0.1:9545',
+          },
+        },
+      });
+
+      const mismatch = await runCli([
+        'configure',
+        '--chain',
+        'sepolia',
+        '--chain-id',
+        '1',
+        '--rpc-url',
+        'http://127.0.0.1:7545',
+      ], { home });
+      expect(mismatch.code).toBe(1);
+      expect(mismatch.stdout).toBe('');
+      expect(mismatch.stderr).toContain('--chain "sepolia" does not match --chain-id "1"');
+
+      const deployHelp = await runCli(['deploy', 'erc721', '--help'], { home });
+      expect(deployHelp.code).toBe(0);
+      expect(deployHelp.stdout).toContain('--chain <chain>');
+      expect(deployHelp.stdout).toContain('--chain-id <id>');
+
+      const treeHelp = await runCli(['utils', 'tree', 'build', '--help'], { home });
+      expect(treeHelp.code).toBe(0);
+      expect(treeHelp.stdout).toContain('--chain <chain>');
+      expect(treeHelp.stdout).toContain('--chain-id <id>');
+    });
+  });
+
   it('surfaces 1Password CLI failures through JSON error output', async () => {
     await withTempHome(async (home) => {
       const result = await runCli([

@@ -24,6 +24,7 @@ type ListingCreateOptions = {
   split?: SplitAccumulator;
   autoApprove?: boolean;
   chain?: string;
+  chainId?: string;
 };
 
 type ListingCancelOptions = {
@@ -32,6 +33,7 @@ type ListingCancelOptions = {
   collection?: string;
   target?: string;
   chain?: string;
+  chainId?: string;
 };
 
 type ListingBuyOptions = {
@@ -43,6 +45,7 @@ type ListingBuyOptions = {
   currency?: string;
   autoApprove?: boolean;
   chain?: string;
+  chainId?: string;
 };
 
 type ListingStatusOptions = {
@@ -53,6 +56,7 @@ type ListingStatusOptions = {
   account?: string;
   target?: string;
   chain?: string;
+  chainId?: string;
 };
 
 export function listingCommand(): Command {
@@ -79,9 +83,10 @@ export function listingCommand(): Command {
     )
     .option('--no-auto-approve', 'do not auto-approve required NFT transfer permissions')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ListingCreateOptions): Promise<void> => {
       try {
-        const chain = getActiveChain(opts.chain);
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
@@ -207,9 +212,10 @@ export function listingCommand(): Command {
     .option('--collection <address>', 'origin collection contract address for a collection-wide listing')
     .option('--target <address>', 'target buyer address for token-specific listings (defaults to public listing)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ListingCancelOptions): Promise<void> => {
       try {
-        const chain = getActiveChain(opts.chain);
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
@@ -282,9 +288,10 @@ export function listingCommand(): Command {
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--no-auto-approve', 'do not auto-approve ERC20 allowance when needed for collection-wide listings')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ListingBuyOptions): Promise<void> => {
       try {
-        const chain = getActiveChain(opts.chain);
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
@@ -385,9 +392,10 @@ export function listingCommand(): Command {
     .option('--account <address>', 'account address for collection-wide can-buy/can-cancel checks')
     .option('--target <address>', 'target buyer address for token-specific listings (defaults to public listing)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ListingStatusOptions): Promise<void> => {
       try {
-        const chain = getActiveChain(opts.chain);
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const publicClient = getPublicClient(chain);
 
         if (hasOption(opts.collection)) {

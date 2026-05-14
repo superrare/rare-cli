@@ -10,6 +10,7 @@ import { output, log, printNftRow, printCollectionRow, printPagination } from '.
 
 type SearchPageOptions = {
   chain?: string;
+  chainId?: string;
   query: string;
   perPage: string;
   page: string;
@@ -57,13 +58,14 @@ export function searchCommand(): Command {
     .command('tokens')
     .description('Search NFTs')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .option('--query <text>', 'text search query', '')
     .option('--owner <address>', 'filter by owner address')
     .option('--mine', 'filter by your configured wallet address')
     .option('--per-page <n>', 'number of results per page', '24')
     .option('--page <n>', 'page number', '1')
     .action(async (opts: SearchTokensOptions): Promise<void> => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const rare = createRareClient({ publicClient: getPublicClient(chain) });
 
       const ownerAddress = opts.mine
@@ -105,13 +107,14 @@ export function searchCommand(): Command {
     .command('auctions')
     .description('List NFTs with active or configured auctions')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .option('--state <state>', 'auction state to filter (PENDING, RUNNING, UNSETTLED)', 'RUNNING')
     .option('--owner <address>', 'filter by owner address (optional)')
     .option('--query <text>', 'text search query', '')
     .option('--per-page <n>', 'number of results per page', '24')
     .option('--page <n>', 'page number', '1')
     .action(async (opts: SearchAuctionsOptions): Promise<void> => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const rare = createRareClient({ publicClient: getPublicClient(chain) });
       const auctionState = parseAuctionState(opts.state);
       const ownerAddress = parseOptionalAddress(opts.owner, '--owner');
@@ -149,11 +152,12 @@ export function searchCommand(): Command {
     .command('collections')
     .description('List collections')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .option('--query <text>', 'text search query', '')
     .option('--per-page <n>', 'number of results per page', '24')
     .option('--page <n>', 'page number', '1')
     .action(async (opts: SearchCollectionsOptions): Promise<void> => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const rare = createRareClient({ publicClient: getPublicClient(chain) });
 
       log(`Searching collections on ${chain}...`);
