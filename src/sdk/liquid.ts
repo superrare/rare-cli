@@ -1,5 +1,6 @@
 import { type Address, type Hash, type PublicClient, type TransactionReceipt, parseEventLogs, parseUnits } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
+import { liquidEditionAbi } from '../contracts/abis/liquid-edition.js';
 import { liquidFactoryAbi } from '../contracts/abis/liquid-factory.js';
 import { buildCurvePreview, generatePresetCurves, validateCurves, type LiquidCurvePreview } from '../liquid/curve-config.js';
 import { fetchLiquidFactoryConfig, type LiquidFactoryConfig } from '../liquid/factory-config.js';
@@ -11,7 +12,18 @@ import {
   requireWallet,
   toTokenAmount,
 } from './helpers.js';
-import type { DeployLiquidEditionResult, GeneratePresetCurvesResult, RareClient, RareClientConfig } from './types.js';
+import type {
+  DeployLiquidEditionResult,
+  GeneratePresetCurvesResult,
+  LiquidEditionMarketState,
+  LiquidEditionPoolKey,
+  LiquidEditionPoolInfo,
+  LiquidEditionCurrentPrice,
+  LiquidEditionTelemetry,
+  RareClient,
+  RareClientConfig,
+  SetLiquidEditionRenderContractResult,
+} from './types.js';
 
 const LIQUID_EDITION_ADDRESS_LOG_RETRY_ATTEMPTS = 3;
 const LIQUID_EDITION_ADDRESS_LOG_RETRY_DELAY_MS = 1_000;
@@ -54,6 +66,31 @@ function getLiquidEditionAddressFromReceipt(receipt: TransactionReceipt): Addres
     eventName: 'LiquidTokenCreated',
   });
   return logs[0]?.args.token;
+}
+
+function toLiquidEditionPoolKey(poolKey: readonly [Address, Address, number, number, Address]): LiquidEditionPoolKey {
+  const [currency0, currency1, fee, tickSpacing, hooks] = poolKey;
+  return {
+    currency0,
+    currency1,
+    fee: Number(fee),
+    tickSpacing: Number(tickSpacing),
+    hooks,
+  };
+}
+
+function toLiquidEditionMarketState(
+  state: readonly [bigint, bigint, bigint, number, bigint, bigint],
+): LiquidEditionMarketState {
+  const [rarePerToken, tokenPerRare, sqrtPriceX96, currentTick, liquidity, currentSupply] = state;
+  return {
+    rarePerToken,
+    tokenPerRare,
+    sqrtPriceX96,
+    currentTick: Number(currentTick),
+    liquidity,
+    currentSupply,
+  };
 }
 
 function missingLiquidEditionAddressError(txHash: Hash, receipt: TransactionReceipt, cause?: unknown): Error {
@@ -231,6 +268,146 @@ export function createLiquidNamespace(
         contract,
         tokenUri: params.tokenUri,
         curves: validation.curves,
+      };
+    },
+
+    async getTokenUri(params): Promise<string> {
+      return publicClient.readContract({
+        address: params.contract,
+        abi: liquidEditionAbi,
+        functionName: 'tokenURI',
+      });
+    },
+
+    async getRenderContract(params): Promise<Address> {
+      return publicClient.readContract({
+        address: params.contract,
+        abi: liquidEditionAbi,
+        functionName: 'renderContract',
+      });
+    },
+
+    async setRenderContract(params): Promise<SetLiquidEditionRenderContractResult> {
+      const { walletClient, account } = requireWallet(config);
+      const txHash = await walletClient.writeContract({
+        address: params.contract,
+        abi: liquidEditionAbi,
+        functionName: 'setRenderContract',
+        args: [params.renderContract],
+        account,
+        chain: undefined,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+
+      return {
+        txHash,
+        receipt,
+        contract: params.contract,
+        renderContract: params.renderContract,
+      };
+    },
+
+    async getPoolInfo(params): Promise<LiquidEditionPoolInfo> {
+      const [poolId, rawPoolKey] = await Promise.all([
+        publicClient.readContract({
+          address: params.contract,
+          abi: liquidEditionAbi,
+          functionName: 'poolId',
+        }),
+        publicClient.readContract({
+          address: params.contract,
+          abi: liquidEditionAbi,
+          functionName: 'poolKey',
+        }),
+      ]);
+
+      return {
+        contract: params.contract,
+        poolId,
+        poolKey: toLiquidEditionPoolKey(rawPoolKey),
+      };
+    },
+
+    async getMarketState(params): Promise<LiquidEditionMarketState> {
+      const state = await publicClient.readContract({
+        address: params.contract,
+        abi: liquidEditionAbi,
+        functionName: 'getMarketState',
+      });
+
+      return toLiquidEditionMarketState(state);
+    },
+
+    async getCurrentPrice(params): Promise<LiquidEditionCurrentPrice> {
+      const [rarePerToken, tokenPerRare] = await publicClient.readContract({
+        address: params.contract,
+        abi: liquidEditionAbi,
+        functionName: 'getCurrentPrice',
+      });
+
+      return {
+        contract: params.contract,
+        rarePerToken,
+        tokenPerRare,
+      };
+    },
+
+    async getTelemetry(params): Promise<LiquidEditionTelemetry> {
+      const contract = { address: params.contract, abi: liquidEditionAbi } as const;
+      const name = await publicClient.readContract({ ...contract, functionName: 'name' });
+      const symbol = await publicClient.readContract({ ...contract, functionName: 'symbol' });
+      const decimals = await publicClient.readContract({ ...contract, functionName: 'decimals' });
+      const totalSupply = await publicClient.readContract({ ...contract, functionName: 'totalSupply' });
+      const maxTotalSupply = await publicClient.readContract({ ...contract, functionName: 'maxTotalSupply' });
+      const poolLaunchSupply = await publicClient.readContract({ ...contract, functionName: 'poolLaunchSupply' });
+      const creatorLaunchReward = await publicClient.readContract({ ...contract, functionName: 'creatorLaunchReward' });
+      const baseToken = await publicClient.readContract({ ...contract, functionName: 'baseToken' });
+      const tokenCreator = await publicClient.readContract({ ...contract, functionName: 'tokenCreator' });
+      const initialTokenUri = await publicClient.readContract({ ...contract, functionName: 'initialTokenUri' });
+      const tokenUri = await publicClient.readContract({ ...contract, functionName: 'tokenURI' });
+      const renderContract = await publicClient.readContract({ ...contract, functionName: 'renderContract' });
+      const poolManager = await publicClient.readContract({ ...contract, functionName: 'poolManager' });
+      const poolId = await publicClient.readContract({ ...contract, functionName: 'poolId' });
+      const rawPoolKey = await publicClient.readContract({ ...contract, functionName: 'poolKey' });
+      const lpTickLower = await publicClient.readContract({ ...contract, functionName: 'lpTickLower' });
+      const lpTickUpper = await publicClient.readContract({ ...contract, functionName: 'lpTickUpper' });
+      const lpLiquidity = await publicClient.readContract({ ...contract, functionName: 'lpLiquidity' });
+      const totalLiquidity = await publicClient.readContract({ ...contract, functionName: 'totalLiquidity' });
+      const rawMarketState = await publicClient.readContract({ ...contract, functionName: 'getMarketState' });
+      const [rarePerToken, tokenPerRare] = await publicClient.readContract({ ...contract, functionName: 'getCurrentPrice' });
+      const poolKey = toLiquidEditionPoolKey(rawPoolKey);
+      const marketState = toLiquidEditionMarketState(rawMarketState);
+
+      return {
+        contract: params.contract,
+        name,
+        symbol,
+        decimals: Number(decimals),
+        totalSupply,
+        maxTotalSupply,
+        poolLaunchSupply,
+        creatorLaunchReward,
+        baseToken,
+        tokenCreator,
+        initialTokenUri,
+        tokenUri,
+        renderContract,
+        poolManager,
+        pool: {
+          contract: params.contract,
+          poolId,
+          poolKey,
+        },
+        lpTickLower: Number(lpTickLower),
+        lpTickUpper: Number(lpTickUpper),
+        lpLiquidity,
+        totalLiquidity,
+        marketState,
+        currentPrice: {
+          contract: params.contract,
+          rarePerToken,
+          tokenPerRare,
+        },
       };
     },
   };
