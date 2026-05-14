@@ -7,8 +7,8 @@ import { ETH_ADDRESS } from '../src/contracts/addresses.js';
 import {
   buildMerkleProofArtifact,
   loadMerkleRootArtifact,
-  validateMerkleProofArtifact,
-  validateMerkleRootArtifact,
+  validateProofArtifact,
+  validateRootArtifact,
 } from '../src/sdk/merkle.js';
 import type { BatchListingRootArtifact } from '../src/sdk/types.js';
 
@@ -60,7 +60,7 @@ describe('merkle artifact utilities', () => {
 
   it('catches structural errors and root mismatches', () => {
     expect(() =>
-      validateMerkleRootArtifact({
+      validateRootArtifact({
         root: `0x${'11'.repeat(32)}`,
         currency: '0x1111111111111111111111111111111111111111',
         amount: '1',
@@ -71,7 +71,7 @@ describe('merkle artifact utilities', () => {
     ).toThrow(/tokens must contain at least two entries/);
 
     expect(() =>
-      validateMerkleProofArtifact({
+      validateProofArtifact({
         root: `0x${'11'.repeat(32)}`,
         contract: '0x1111111111111111111111111111111111111111',
         tokenId: '1',
@@ -98,7 +98,7 @@ describe('merkle artifact utilities', () => {
       expect(loaded.allowList?.root).toBe(allowListedRootArtifact.allowList.root);
 
       const parsed = JSON.parse(await readFile(path, 'utf8')) as unknown;
-      expect(() => validateMerkleRootArtifact(parsed)).not.toThrow();
+      expect(() => validateRootArtifact(parsed)).not.toThrow();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
