@@ -177,6 +177,21 @@ function isLiveWriteCommand(args: string[]): boolean {
     return subcommand === 'create' || subcommand === 'cancel' || subcommand === 'bid' || subcommand === 'settle';
   }
   if (command === 'offer') return subcommand === 'create' || subcommand === 'cancel' || subcommand === 'accept';
+  if (command === 'collection') {
+    if (subcommand === 'create' || subcommand === 'mint-batch' || subcommand === 'prepare-lazy-mint') return true;
+    if (subcommand === 'metadata') {
+      const metadataSubcommand = args[2];
+      return metadataSubcommand === 'update-base-uri' ||
+        metadataSubcommand === 'update-token-uri' ||
+        metadataSubcommand === 'lock-base-uri';
+    }
+    if (subcommand === 'royalty') {
+      const royaltySubcommand = args[2];
+      if (royaltySubcommand === 'set-default-receiver' || royaltySubcommand === 'set-token-receiver') return true;
+      if (royaltySubcommand === 'registry') return args[3]?.startsWith('set-') === true;
+    }
+    return false;
+  }
   return false;
 }
 
