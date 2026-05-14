@@ -253,8 +253,6 @@ export function validateRootArtifact(value: unknown): asserts value is BatchList
   }
 }
 
-export const validateMerkleRootArtifact = validateRootArtifact;
-
 export function validateProofArtifact(value: unknown): asserts value is BatchListingProofArtifact {
   assertRecord(value, 'Proof artifact');
   assertHexRoot(value.root, 'root');
@@ -270,13 +268,9 @@ export function validateProofArtifact(value: unknown): asserts value is BatchLis
   }
 }
 
-export const validateMerkleProofArtifact = validateProofArtifact;
-
 function parseJson(text: string): unknown {
   return JSON.parse(text) as unknown;
 }
-
-export const buildProofArtifact = buildMerkleProofArtifact;
 
 export async function loadMerkleRootArtifact(path: string): Promise<BatchListingRootArtifact> {
   const parsed = parseJson(await readFile(path, 'utf8'));
@@ -293,7 +287,3 @@ export async function loadMerkleProofArtifact(path: string): Promise<BatchListin
 export async function writeMerkleArtifact(path: string, data: unknown): Promise<void> {
   await writeFile(path, `${JSON.stringify(data, null, 2)}\n`);
 }
-
-export const loadRootArtifact = loadMerkleRootArtifact;
-export const loadProofArtifact = loadMerkleProofArtifact;
-export const writeArtifact = writeMerkleArtifact;

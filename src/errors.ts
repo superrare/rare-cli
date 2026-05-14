@@ -130,8 +130,3 @@ export function printError(error: unknown): never {
 
   process.exit(1);
 }
-
-/**
- * @deprecated Use printError instead. Kept as an alias for backward compatibility.
- */
-export const printContractError = printError;

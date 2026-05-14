@@ -263,17 +263,11 @@ export { rareMinterAbi } from '../contracts/abis/rare-minter.js';
 
 export {
   buildMerkleProofArtifact,
-  buildProofArtifact,
   loadMerkleRootArtifact,
-  loadRootArtifact,
   loadMerkleProofArtifact,
-  loadProofArtifact,
-  validateMerkleRootArtifact,
   validateRootArtifact,
-  validateMerkleProofArtifact,
   validateProofArtifact,
   writeMerkleArtifact,
-  writeArtifact,
 } from './merkle.js';
 export type {
   BatchListingTokenEntry,

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "test/**/*.test.ts"
+  ],
+  "project": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "test/**/*.mjs",
+    "eslint-local-rules/**/*.js",
+    "eslint-local-rules/**/*.d.ts",
+    "*.config.{js,ts}"
+  ],
+  "ignoreFiles": [
+    "eslint-local-rules/*.d.ts",
+    "src/commands/options.ts",
+    "test/e2e-live/check-env.mjs",
+    "test/types/mjs.d.ts"
+  ],
+  "rules": {
+    "exports": "off",
+    "types": "off"
+  }
+}
