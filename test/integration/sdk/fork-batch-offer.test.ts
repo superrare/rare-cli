@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createPublicClient,
   createWalletClient,
+  parseEther,
   http,
   isAddressEqual,
   type Address,
@@ -13,12 +14,18 @@ import {
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   chainIds,
+  getContractAddresses,
   supportedChains,
   viemChains,
   type SupportedChain,
 } from '../../../src/contracts/addresses.js';
 import { createRareClient } from '../../../src/sdk/client.js';
-import type { RareClient } from '../../../src/sdk/types.js';
+import type {
+  BatchAuctionStatus,
+  CollectionMarketListingStatus,
+  CollectionMarketOfferStatus,
+  RareClient,
+} from '../../../src/sdk/types.js';
 import {
   releaseLiveWallets,
   reserveLiveWalletPair,
@@ -34,8 +41,10 @@ const localForkHost = '127.0.0.1';
 const localForkPort = '8545';
 const localForkStartupTimeoutMs = 30_000;
 const tokenUri = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/fork-sdk.json';
+const releaseFixtureRuntimePrefix = '60003560e01c80638da5cb5b14601f578063755edd1714603d5760006000fd5b73';
+const releaseFixtureRuntimeSuffix = '60005260206000f35b600160005260206000f3';
 
-describeFork('SDK fork integration: batch offers', () => {
+describeFork('SDK fork integration write paths', () => {
   it('creates, reads, revokes, and accepts batch offers through the SDK directly', async (ctx) => {
     const fork = await startLocalFork();
     if ('skipReason' in fork) {
@@ -143,6 +152,394 @@ describeFork('SDK fork integration: batch offers', () => {
       await fork.stop();
     }
   }, 240_000);
+
+  it('sets, cancels, buys, creates, cancels, and accepts collection market orders through the SDK directly', async (ctx) => {
+    const fork = await startLocalFork();
+    if ('skipReason' in fork) {
+      ctx.skip(fork.skipReason);
+      return;
+    }
+
+    const publicClient = createForkPublicClient();
+    const snapshotId = await createForkSnapshot(publicClient);
+    let walletPair: LiveWalletPairLease | undefined;
+
+    try {
+      const chain = await detectForkChain(publicClient);
+      if (getContractAddresses(chain).collectionMarket === undefined) {
+        ctx.skip(`collectionMarket is not configured on ${chain}.`);
+        return;
+      }
+      walletPair = await reserveLiveWalletPair(chain);
+      const seller = createForkRareClient(chain, walletPair.sellerWallet.privateKey);
+      const buyer = createForkRareClient(chain, walletPair.buyerWallet.privateKey);
+
+      const collection = await seller.rare.deploy.erc721({
+        name: `Rare SDK Fork Collection Market ${Date.now().toString(36)}`,
+        symbol: 'RSFCM',
+        maxTokens: 4,
+      });
+      const [listingCancelToken, listingBuyToken, offerAcceptToken] = [
+        await mintToken(seller.rare, collection.contract),
+        await mintToken(seller.rare, collection.contract),
+        await mintToken(seller.rare, collection.contract),
+      ] as const;
+
+      const listingAmount = '0.000001';
+      const setListing = await seller.rare.collectionMarket.listing.set({
+        originCollection: collection.contract,
+        amount: listingAmount,
+      });
+      expect(setListing.seller).toBe(seller.account);
+      expect(setListing.originCollection).toBe(collection.contract);
+      expect(setListing.amount).toBe(parseEther(listingAmount));
+
+      const activeListing = await buyer.rare.collectionMarket.listing.getStatus({
+        originCollection: collection.contract,
+        seller: seller.account,
+        tokenId: listingCancelToken,
+        account: buyer.account,
+      });
+      expectActiveCollectionListing(activeListing, seller.account, collection.contract);
+      expect(activeListing.canBuy).toBe(true);
+
+      const cancelledListing = await seller.rare.collectionMarket.listing.cancel({
+        originCollection: collection.contract,
+      });
+      expect(cancelledListing.hadListing).toBe(true);
+      expect(cancelledListing.amount).toBe(parseEther(listingAmount));
+
+      await seller.rare.collectionMarket.listing.set({
+        originCollection: collection.contract,
+        amount: listingAmount,
+      });
+      const bought = await buyer.rare.collectionMarket.listing.buy({
+        originCollection: collection.contract,
+        seller: seller.account,
+        tokenId: listingBuyToken,
+        amount: listingAmount,
+      });
+      expect(bought.seller).toBe(seller.account);
+      expect(bought.buyer).toBe(buyer.account);
+      expect(bought.tokenId).toBe(BigInt(listingBuyToken));
+
+      await expectTokenOwner(buyer.rare, collection.contract, listingBuyToken, buyer.account);
+
+      const offerAmount = '0.000001';
+      const createdOffer = await buyer.rare.collectionMarket.offer.create({
+        originCollection: collection.contract,
+        amount: offerAmount,
+      });
+      expect(createdOffer.buyer).toBe(buyer.account);
+      expect(createdOffer.amount).toBe(parseEther(offerAmount));
+
+      const activeOffer = await seller.rare.collectionMarket.offer.getStatus({
+        originCollection: collection.contract,
+        buyer: buyer.account,
+        tokenId: offerAcceptToken,
+        account: seller.account,
+      });
+      expectActiveCollectionOffer(activeOffer, buyer.account, collection.contract);
+      expect(activeOffer.canAccept).toBe(true);
+
+      const cancelledOffer = await buyer.rare.collectionMarket.offer.cancel({
+        originCollection: collection.contract,
+      });
+      expect(cancelledOffer.hadOffer).toBe(true);
+      expect(cancelledOffer.amount).toBe(parseEther(offerAmount));
+
+      await buyer.rare.collectionMarket.offer.create({
+        originCollection: collection.contract,
+        amount: offerAmount,
+      });
+      const accepted = await seller.rare.collectionMarket.offer.accept({
+        buyer: buyer.account,
+        originCollection: collection.contract,
+        tokenId: offerAcceptToken,
+        amount: offerAmount,
+      });
+      expect(accepted.seller).toBe(seller.account);
+      expect(accepted.buyer).toBe(buyer.account);
+      expect(accepted.tokenId).toBe(BigInt(offerAcceptToken));
+
+      await expectTokenOwner(buyer.rare, collection.contract, offerAcceptToken, buyer.account);
+    } finally {
+      await releaseLiveWallets([walletPair?.sellerWallet, walletPair?.buyerWallet]);
+      await revertForkSnapshot(publicClient, snapshotId);
+      await fork.stop();
+    }
+  }, 300_000);
+
+  it('creates, reads, cancels, bids, and settles batch auctions through the SDK directly', async (ctx) => {
+    const fork = await startLocalFork();
+    if ('skipReason' in fork) {
+      ctx.skip(fork.skipReason);
+      return;
+    }
+
+    const publicClient = createForkPublicClient();
+    const snapshotId = await createForkSnapshot(publicClient);
+    let walletPair: LiveWalletPairLease | undefined;
+
+    try {
+      const chain = await detectForkChain(publicClient);
+      walletPair = await reserveLiveWalletPair(chain);
+      const seller = createForkRareClient(chain, walletPair.sellerWallet.privateKey);
+      const buyer = createForkRareClient(chain, walletPair.buyerWallet.privateKey);
+
+      const collection = await seller.rare.deploy.erc721({
+        name: `Rare SDK Fork Batch Auction ${Date.now().toString(36)}`,
+        symbol: 'RSFBA',
+        maxTokens: 4,
+      });
+      const tokens = [
+        await mintToken(seller.rare, collection.contract),
+        await mintToken(seller.rare, collection.contract),
+        await mintToken(seller.rare, collection.contract),
+        await mintToken(seller.rare, collection.contract),
+      ] as const;
+
+      const cancelTree = seller.rare.batch.buildTree({
+        content: JSON.stringify([
+          { contractAddress: collection.contract, tokenId: tokens[0] },
+          { contractAddress: collection.contract, tokenId: tokens[1] },
+        ]),
+        format: 'json',
+        chainId: chainIds[chain],
+      });
+      const cancelProof = seller.rare.batch.getTreeProof({
+        artifact: cancelTree,
+        contractAddress: collection.contract,
+        tokenId: tokens[0],
+        chainId: chainIds[chain],
+      });
+
+      const createdForCancel = await seller.rare.batch.auction.create({
+        artifact: cancelTree,
+        reserveAmount: '0.000001',
+        duration: 60,
+      });
+      expect(createdForCancel.creator).toBe(seller.account);
+      expect(createdForCancel.root).toBe(cancelTree.root);
+
+      const configured = await seller.rare.batch.auction.getStatus({
+        creator: seller.account,
+        root: cancelTree.root,
+        proof: cancelProof.proof,
+        contract: collection.contract,
+        tokenId: tokens[0],
+      });
+      expectConfiguredBatchAuction(configured, seller.account, cancelTree.root);
+
+      const cancelled = await seller.rare.batch.auction.cancel({ root: cancelTree.root });
+      expect(cancelled.creator).toBe(seller.account);
+      expect(cancelled.root).toBe(cancelTree.root);
+
+      const settleTree = seller.rare.batch.buildTree({
+        content: JSON.stringify([
+          { contractAddress: collection.contract, tokenId: tokens[2] },
+          { contractAddress: collection.contract, tokenId: tokens[3] },
+        ]),
+        format: 'json',
+        chainId: chainIds[chain],
+      });
+      const settleProof = seller.rare.batch.getTreeProof({
+        artifact: settleTree,
+        contractAddress: collection.contract,
+        tokenId: tokens[2],
+        chainId: chainIds[chain],
+      });
+
+      await seller.rare.batch.auction.create({
+        artifact: settleTree,
+        reserveAmount: '0.000001',
+        duration: 1,
+      });
+      const bid = await buyer.rare.batch.auction.bid({
+        creator: seller.account,
+        root: settleProof.root,
+        proof: settleProof.proof,
+        contract: collection.contract,
+        tokenId: tokens[2],
+        amount: '0.000001',
+      });
+      expect(bid.bidder).toBe(buyer.account);
+      expect(bid.creator).toBe(seller.account);
+      expect(bid.root).toBe(settleTree.root);
+
+      await advanceForkTime(publicClient, 2);
+      const ended = await seller.rare.batch.auction.getStatus({
+        creator: seller.account,
+        root: settleTree.root,
+        proof: settleProof.proof,
+        contract: collection.contract,
+        tokenId: tokens[2],
+      });
+      expect(ended.state).toBe('ENDED');
+      expect(ended.settlementEligible).toBe(true);
+
+      const settled = await seller.rare.batch.auction.settle({
+        contract: collection.contract,
+        tokenId: tokens[2],
+      });
+      expect(settled.seller).toBe(seller.account);
+      expect(settled.bidder).toBe(buyer.account);
+      expect(settled.tokenId).toBe(BigInt(tokens[2]));
+
+      await expectTokenOwner(buyer.rare, collection.contract, tokens[2], buyer.account);
+    } finally {
+      await releaseLiveWallets([walletPair?.sellerWallet, walletPair?.buyerWallet]);
+      await revertForkSnapshot(publicClient, snapshotId);
+      await fork.stop();
+    }
+  }, 300_000);
+
+  it('creates collection contracts and writes owner metadata and royalty settings through the SDK directly', async (ctx) => {
+    const fork = await startLocalFork();
+    if ('skipReason' in fork) {
+      ctx.skip(fork.skipReason);
+      return;
+    }
+
+    const publicClient = createForkPublicClient();
+    const snapshotId = await createForkSnapshot(publicClient);
+    let walletPair: LiveWalletPairLease | undefined;
+
+    try {
+      const chain = await detectForkChain(publicClient);
+      walletPair = await reserveLiveWalletPair(chain);
+      const seller = createForkRareClient(chain, walletPair.sellerWallet.privateKey);
+      const buyer = createForkRareClient(chain, walletPair.buyerWallet.privateKey);
+
+      const collection = await seller.rare.collection.createSovereign({
+        name: `Rare SDK Fork Sovereign ${Date.now().toString(36)}`,
+        symbol: 'RSFS',
+        maxTokens: 8,
+      });
+      expect(collection.contract).toMatch(/^0x[0-9a-fA-F]{40}$/);
+
+      const batchMint = await seller.rare.collection.mintBatch({
+        contract: collection.contract,
+        baseUri: 'ipfs://rare-sdk-fork/batch/',
+        tokenCount: 2,
+      });
+      expect(batchMint.contract).toBe(collection.contract);
+      expect(batchMint.tokenCount).toBe(2n);
+      expect(batchMint.owner).toBe(seller.account);
+
+      const creator = await seller.rare.collection.getTokenCreator({
+        contract: collection.contract,
+        tokenId: batchMint.fromTokenId,
+      });
+      expect(creator.creator).toBe(seller.account);
+
+      const defaultRoyalty = await seller.rare.collection.setDefaultRoyaltyReceiver({
+        contract: collection.contract,
+        receiver: buyer.account,
+      });
+      expect(defaultRoyalty.receiver).toBe(buyer.account);
+
+      const tokenRoyalty = await seller.rare.collection.setTokenRoyaltyReceiver({
+        contract: collection.contract,
+        tokenId: batchMint.fromTokenId,
+        receiver: seller.account,
+      });
+      expect(tokenRoyalty.receiver).toBe(seller.account);
+
+      const royalty = await seller.rare.collection.getRoyaltyInfo({
+        contract: collection.contract,
+        tokenId: batchMint.fromTokenId,
+        salePrice: 10_000,
+      });
+      expect(royalty.receiver).toBe(seller.account);
+      expect(royalty.royaltyAmount).toBeGreaterThanOrEqual(0n);
+
+      const lazyCollection = await seller.rare.collection.createLazySovereign({
+        name: `Rare SDK Fork Lazy ${Date.now().toString(36)}`,
+        symbol: 'RSFL',
+        maxTokens: 4,
+      });
+      const prepared = await seller.rare.collection.prepareLazyMint({
+        contract: lazyCollection.contract,
+        baseUri: 'ipfs://rare-sdk-fork/lazy/',
+        tokenCount: 2,
+        minter: buyer.account,
+      });
+      expect(prepared.baseUri).toBe('ipfs://rare-sdk-fork/lazy/');
+      expect(prepared.minter).toBe(buyer.account);
+
+      const updatedBase = await seller.rare.collection.updateBaseUri({
+        contract: lazyCollection.contract,
+        baseUri: 'ipfs://rare-sdk-fork/updated/',
+      });
+      expect(updatedBase.baseUri).toBe('ipfs://rare-sdk-fork/updated/');
+
+      const updatedToken = await seller.rare.collection.updateTokenUri({
+        contract: lazyCollection.contract,
+        tokenId: 1,
+        tokenUri,
+      });
+      expect(updatedToken.tokenUri).toBe(tokenUri);
+    } finally {
+      await releaseLiveWallets([walletPair?.sellerWallet, walletPair?.buyerWallet]);
+      await revertForkSnapshot(publicClient, snapshotId);
+      await fork.stop();
+    }
+  }, 300_000);
+
+  it('configures and mints a RareMinter release through the SDK directly', async (ctx) => {
+    const fork = await startLocalFork();
+    if ('skipReason' in fork) {
+      ctx.skip(fork.skipReason);
+      return;
+    }
+
+    const publicClient = createForkPublicClient();
+    const snapshotId = await createForkSnapshot(publicClient);
+    let walletPair: LiveWalletPairLease | undefined;
+
+    try {
+      const chain = await detectForkChain(publicClient);
+      walletPair = await reserveLiveWalletPair(chain);
+      const seller = createForkRareClient(chain, walletPair.sellerWallet.privateKey);
+      const buyer = createForkRareClient(chain, walletPair.buyerWallet.privateKey);
+      const contract = await deployReleaseFixtureContract(chain, walletPair.sellerWallet.privateKey, seller.account);
+
+      const configured = await seller.rare.listing.release.configure({
+        contract,
+        price: 0,
+        startTime: 1,
+        maxMints: 2,
+        splitAddresses: [seller.account],
+        splitRatios: [100],
+      });
+      expect(configured.contract).toBe(contract);
+      expect(configured.price).toBe(0n);
+      expect(configured.maxMints).toBe(2n);
+
+      const status = await buyer.rare.listing.release.getStatus({
+        contract,
+        account: buyer.account,
+      });
+      expect(status.configured).toBe(true);
+      expect(status.currentlyMintable).toBe(true);
+      expect(status.account).toBe(buyer.account);
+
+      const minted = await buyer.rare.listing.release.mintDirectSale({
+        contract,
+        quantity: 2,
+      });
+      expect(minted.buyer).toBe(buyer.account);
+      expect(minted.recipient).toBe(buyer.account);
+      expect(minted.quantity).toBe(2);
+      expect(minted.price).toBe(0n);
+      expect(minted.tokenIds).toHaveLength(2);
+    } finally {
+      await releaseLiveWallets([walletPair?.sellerWallet, walletPair?.buyerWallet]);
+      await revertForkSnapshot(publicClient, snapshotId);
+      await fork.stop();
+    }
+  }, 300_000);
 });
 
 type ForkRareClient = {
@@ -197,6 +594,89 @@ async function detectForkChain(publicClient: PublicClient): Promise<SupportedCha
 async function mintToken(rare: RareClient, contract: Address): Promise<string> {
   const minted = await rare.mint.mintTo({ contract, tokenUri });
   return minted.tokenId.toString();
+}
+
+async function expectTokenOwner(
+  rare: RareClient,
+  contract: Address,
+  tokenId: string,
+  expectedOwner: Address,
+): Promise<void> {
+  const token = await rare.token.getTokenInfo({ contract, tokenId });
+  expect(isAddressEqual(token.owner, expectedOwner)).toBe(true);
+}
+
+function expectActiveCollectionListing(
+  status: CollectionMarketListingStatus,
+  seller: Address,
+  originCollection: Address,
+): void {
+  expect(status.seller).toBe(seller);
+  expect(status.originCollection).toBe(originCollection);
+  expect(status.state).toBe('ACTIVE');
+  expect(status.hasListing).toBe(true);
+}
+
+function expectActiveCollectionOffer(
+  status: CollectionMarketOfferStatus,
+  buyer: Address,
+  originCollection: Address,
+): void {
+  expect(status.buyer).toBe(buyer);
+  expect(status.originCollection).toBe(originCollection);
+  expect(status.state).toBe('ACTIVE');
+  expect(status.hasOffer).toBe(true);
+}
+
+function expectConfiguredBatchAuction(
+  status: BatchAuctionStatus,
+  seller: Address,
+  root: `0x${string}`,
+): void {
+  expect(status.seller).toBe(seller);
+  expect(status.root).toBe(root);
+  expect(status.hasRootConfig).toBe(true);
+  expect(status.state).toBe('RESERVE_NOT_MET');
+}
+
+async function advanceForkTime(publicClient: PublicClient, seconds: number): Promise<void> {
+  await publicClient.request({
+    method: 'evm_increaseTime',
+    params: [seconds],
+  });
+  await publicClient.request({
+    method: 'evm_mine',
+    params: [],
+  });
+}
+
+async function deployReleaseFixtureContract(
+  chain: SupportedChain,
+  privateKey: `0x${string}`,
+  owner: Address,
+): Promise<Address> {
+  const account = privateKeyToAccount(privateKey);
+  const publicClient = createForkPublicClient(chain);
+  const walletClient = createWalletClient({
+    account,
+    chain: viemChains[chain],
+    transport: http(localForkRpcUrl),
+  });
+  const txHash = await walletClient.sendTransaction({
+    account,
+    chain: viemChains[chain],
+    data: releaseFixtureBytecode(owner),
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+  if (!receipt.contractAddress) {
+    throw new Error('Release fixture deployment did not return a contract address.');
+  }
+  return receipt.contractAddress;
+}
+
+function releaseFixtureBytecode(owner: Address): `0x${string}` {
+  const ownerBytes = owner.slice(2).toLowerCase();
+  return `0x6048600c60003960486000f3${releaseFixtureRuntimePrefix}${ownerBytes}${releaseFixtureRuntimeSuffix}`;
 }
 
 type LocalFork = {
