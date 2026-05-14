@@ -4,10 +4,8 @@ rare wallet address [--chain <chain>] [--chain-id <id>]
 rare currencies [--chain <chain>] [--chain-id <id>]
 
 rare status --contract <address> [--token-id <id>] [--chain <chain>] [--chain-id <id>]
-rare search tokens [--chain <chain>] [--chain-id <id>] [--query <text>] [--owner <address>] [--mine] [--per-page <n>] [--page <n>]
-rare search auctions [--chain <chain>] [--chain-id <id>] [--state <state>] [--owner <address>] [--query <text>] [--per-page <n>] [--page <n>]
+rare search tokens [--chain <chain>] [--chain-id <id>] [--query <text>] [--owner <address>] [--mine] [--has-auction] [--auction-state <state>] [--auction-creator <address>] [--auction-bidder <address>] [--has-listing] [--listing-type <type>] [--has-offer] [--offer-buyer <address>] [--per-page <n>] [--page <n>]
 rare search collections [--chain <chain>] [--chain-id <id>] [--query <text>] [--per-page <n>] [--page <n>]
-rare list-collections [--chain <chain>] [--chain-id <id>] [--query <text>]
 
 rare collection list --account <address> [--chain <chain>] [--chain-id <id>] [--per-page <n>] [--page <n>]
 rare collection create lazy-batch-mint <name> <symbol> [--max-tokens <number>] [--chain <chain>] [--chain-id <id>]

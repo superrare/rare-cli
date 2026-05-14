@@ -494,25 +494,18 @@ rare search tokens --mine
 # Search NFTs by owner
 rare search tokens --owner 0x...
 
-# Find active auctions (defaults to PENDING + RUNNING)
-rare search auctions
+# Find NFTs with running auctions
+rare search tokens --auction-state RUNNING
 
-# Filter by auction state
-rare search auctions --state SETTLED
+# Find NFTs with listings or offers
+rare search tokens --has-listing
+rare search tokens --has-offer
 
-# Search your collections
+# Search collections
 rare search collections
 ```
 
-All search commands support `--take <n>` and `--cursor <n>` for pagination.
-
-### List All Collections
-
-Fetches every collection you own (auto-paginates):
-
-```bash
-rare list-collections
-```
+All search commands support `--per-page <n>` and `--page <n>` for pagination.
 
 ### Query On-Chain Status
 

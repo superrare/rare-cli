@@ -48,7 +48,7 @@ export function statusCommand(): Command {
             console.log(`  Chain:        ${contractInfo.chain}`);
             console.log(`  Name:         ${contractInfo.name}`);
             console.log(`  Symbol:       ${contractInfo.symbol}`);
-            console.log(`  Total Supply: ${contractInfo.totalSupply}`);
+            console.log(`  Total Supply: ${contractInfo.totalSupply?.toString() ?? 'unavailable'}`);
 
             if (opts.tokenId !== undefined) {
               if (tokenInfo) {

@@ -30,7 +30,7 @@ describeLive('SDK contract read integration', () => {
     expect(contractInfo.chain).toBe('sepolia');
     expect(contractInfo.name).toEqual(expect.any(String));
     expect(contractInfo.symbol).toEqual(expect.any(String));
-    expect(contractInfo.totalSupply).toBeGreaterThanOrEqual(1n);
+    expect(contractInfo.totalSupply === null || contractInfo.totalSupply >= 1n).toBe(true);
 
     const tokenInfo = await rare.token.getTokenInfo({
       contract: fixture.contract,

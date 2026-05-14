@@ -11,7 +11,7 @@ import {
   type PublicClient,
   type WalletClient,
 } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import {
   chainIds,
   getContractAddresses,
@@ -26,20 +26,18 @@ import type {
   CollectionMarketOfferStatus,
   RareClient,
 } from '../../../src/sdk/types.js';
-import {
-  releaseLiveWallets,
-  reserveLiveWalletPair,
-  type LiveWalletPairLease,
-} from '../../e2e-live/helpers/live-wallet-pool.js';
 import { loadDotEnv } from '../../helpers/env.js';
 
 loadDotEnv();
 
-const describeFork = hasForkEnv() ? describe.sequential : describe.skip;
+const describeFork = describe.sequential;
 const localForkRpcUrl = 'http://127.0.0.1:8545';
 const localForkHost = '127.0.0.1';
 const localForkPort = '8545';
 const localForkStartupTimeoutMs = 30_000;
+const forkSellerPrivateKey = generatePrivateKey();
+const forkBuyerPrivateKey = generatePrivateKey();
+const forkAccountBalance = '0x3635c9adc5dea00000';
 const tokenUri = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/fork-sdk.json';
 const releaseFixtureRuntimePrefix = '60003560e01c80638da5cb5b14601f578063755edd1714603d5760006000fd5b73';
 const releaseFixtureRuntimeSuffix = '60005260206000f35b600160005260206000f3';
@@ -53,14 +51,13 @@ describeFork('SDK fork integration write paths', () => {
     }
 
     const publicClient = createForkPublicClient();
+    await fundForkAccounts(publicClient);
     const snapshotId = await createForkSnapshot(publicClient);
-    let walletPair: LiveWalletPairLease | undefined;
 
     try {
       const chain = await detectForkChain(publicClient);
-      walletPair = await reserveLiveWalletPair(chain);
-      const seller = createForkRareClient(chain, walletPair.sellerWallet.privateKey);
-      const buyer = createForkRareClient(chain, walletPair.buyerWallet.privateKey);
+      const seller = createForkRareClient(chain, forkSellerPrivateKey);
+      const buyer = createForkRareClient(chain, forkBuyerPrivateKey);
 
       const collection = await seller.rare.deploy.erc721({
         name: `Rare SDK Fork Batch ${Date.now().toString(36)}`,
@@ -147,7 +144,6 @@ describeFork('SDK fork integration write paths', () => {
       });
       expect(isAddressEqual(token.owner, buyer.account)).toBe(true);
     } finally {
-      await releaseLiveWallets([walletPair?.sellerWallet, walletPair?.buyerWallet]);
       await revertForkSnapshot(publicClient, snapshotId);
       await fork.stop();
     }
@@ -161,8 +157,8 @@ describeFork('SDK fork integration write paths', () => {
     }
 
     const publicClient = createForkPublicClient();
+    await fundForkAccounts(publicClient);
     const snapshotId = await createForkSnapshot(publicClient);
-    let walletPair: LiveWalletPairLease | undefined;
 
     try {
       const chain = await detectForkChain(publicClient);
@@ -170,9 +166,8 @@ describeFork('SDK fork integration write paths', () => {
         ctx.skip(`collectionMarket is not configured on ${chain}.`);
         return;
       }
-      walletPair = await reserveLiveWalletPair(chain);
-      const seller = createForkRareClient(chain, walletPair.sellerWallet.privateKey);
-      const buyer = createForkRareClient(chain, walletPair.buyerWallet.privateKey);
+      const seller = createForkRareClient(chain, forkSellerPrivateKey);
+      const buyer = createForkRareClient(chain, forkBuyerPrivateKey);
 
       const collection = await seller.rare.deploy.erc721({
         name: `Rare SDK Fork Collection Market ${Date.now().toString(36)}`,
@@ -264,7 +259,6 @@ describeFork('SDK fork integration write paths', () => {
 
       await expectTokenOwner(buyer.rare, collection.contract, offerAcceptToken, buyer.account);
     } finally {
-      await releaseLiveWallets([walletPair?.sellerWallet, walletPair?.buyerWallet]);
       await revertForkSnapshot(publicClient, snapshotId);
       await fork.stop();
     }
@@ -278,14 +272,13 @@ describeFork('SDK fork integration write paths', () => {
     }
 
     const publicClient = createForkPublicClient();
+    await fundForkAccounts(publicClient);
     const snapshotId = await createForkSnapshot(publicClient);
-    let walletPair: LiveWalletPairLease | undefined;
 
     try {
       const chain = await detectForkChain(publicClient);
-      walletPair = await reserveLiveWalletPair(chain);
-      const seller = createForkRareClient(chain, walletPair.sellerWallet.privateKey);
-      const buyer = createForkRareClient(chain, walletPair.buyerWallet.privateKey);
+      const seller = createForkRareClient(chain, forkSellerPrivateKey);
+      const buyer = createForkRareClient(chain, forkBuyerPrivateKey);
 
       const collection = await seller.rare.deploy.erc721({
         name: `Rare SDK Fork Batch Auction ${Date.now().toString(36)}`,
@@ -388,7 +381,6 @@ describeFork('SDK fork integration write paths', () => {
 
       await expectTokenOwner(buyer.rare, collection.contract, tokens[2], buyer.account);
     } finally {
-      await releaseLiveWallets([walletPair?.sellerWallet, walletPair?.buyerWallet]);
       await revertForkSnapshot(publicClient, snapshotId);
       await fork.stop();
     }
@@ -402,14 +394,13 @@ describeFork('SDK fork integration write paths', () => {
     }
 
     const publicClient = createForkPublicClient();
+    await fundForkAccounts(publicClient);
     const snapshotId = await createForkSnapshot(publicClient);
-    let walletPair: LiveWalletPairLease | undefined;
 
     try {
       const chain = await detectForkChain(publicClient);
-      walletPair = await reserveLiveWalletPair(chain);
-      const seller = createForkRareClient(chain, walletPair.sellerWallet.privateKey);
-      const buyer = createForkRareClient(chain, walletPair.buyerWallet.privateKey);
+      const seller = createForkRareClient(chain, forkSellerPrivateKey);
+      const buyer = createForkRareClient(chain, forkBuyerPrivateKey);
 
       const collection = await seller.rare.collection.createSovereign({
         name: `Rare SDK Fork Sovereign ${Date.now().toString(36)}`,
@@ -481,7 +472,6 @@ describeFork('SDK fork integration write paths', () => {
       });
       expect(updatedToken.tokenUri).toBe(tokenUri);
     } finally {
-      await releaseLiveWallets([walletPair?.sellerWallet, walletPair?.buyerWallet]);
       await revertForkSnapshot(publicClient, snapshotId);
       await fork.stop();
     }
@@ -495,15 +485,14 @@ describeFork('SDK fork integration write paths', () => {
     }
 
     const publicClient = createForkPublicClient();
+    await fundForkAccounts(publicClient);
     const snapshotId = await createForkSnapshot(publicClient);
-    let walletPair: LiveWalletPairLease | undefined;
 
     try {
       const chain = await detectForkChain(publicClient);
-      walletPair = await reserveLiveWalletPair(chain);
-      const seller = createForkRareClient(chain, walletPair.sellerWallet.privateKey);
-      const buyer = createForkRareClient(chain, walletPair.buyerWallet.privateKey);
-      const contract = await deployReleaseFixtureContract(chain, walletPair.sellerWallet.privateKey, seller.account);
+      const seller = createForkRareClient(chain, forkSellerPrivateKey);
+      const buyer = createForkRareClient(chain, forkBuyerPrivateKey);
+      const contract = await deployReleaseFixtureContract(chain, forkSellerPrivateKey, seller.account);
 
       const configured = await seller.rare.listing.release.configure({
         contract,
@@ -535,7 +524,6 @@ describeFork('SDK fork integration write paths', () => {
       expect(minted.price).toBe(0n);
       expect(minted.tokenIds).toHaveLength(2);
     } finally {
-      await releaseLiveWallets([walletPair?.sellerWallet, walletPair?.buyerWallet]);
       await revertForkSnapshot(publicClient, snapshotId);
       await fork.stop();
     }
@@ -546,13 +534,6 @@ type ForkRareClient = {
   account: Address;
   rare: RareClient;
 };
-
-function hasForkEnv(): boolean {
-  return Boolean(
-    process.env.E2E_SELLER_PRIVATE_KEYS &&
-      process.env.E2E_BUYER_PRIVATE_KEYS,
-  );
-}
 
 function createForkPublicClient(chain?: SupportedChain): PublicClient {
   const transport = http(localForkRpcUrl, {
@@ -589,6 +570,22 @@ async function detectForkChain(publicClient: PublicClient): Promise<SupportedCha
     throw new Error(`Local fork RPC returned unsupported chain id ${chainId}.`);
   }
   return chain;
+}
+
+async function fundForkAccounts(publicClient: PublicClient): Promise<void> {
+  try {
+    await Promise.all([forkSellerPrivateKey, forkBuyerPrivateKey].map(async (privateKey) => {
+      await publicClient.request({
+        method: 'anvil_setBalance',
+        params: [privateKeyToAccount(privateKey).address, forkAccountBalance],
+      });
+    }));
+  } catch (error) {
+    throw new Error(
+      `SDK fork integration requires the local fork RPC at ${localForkRpcUrl} to support anvil_setBalance.`,
+      { cause: error },
+    );
+  }
 }
 
 async function mintToken(rare: RareClient, contract: Address): Promise<string> {

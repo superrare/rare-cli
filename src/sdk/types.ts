@@ -1017,7 +1017,7 @@ export type TokenContractInfo = {
   chain: SupportedChain;
   name: string;
   symbol: string;
-  totalSupply: bigint;
+  totalSupply: bigint | null;
 }
 
 export type TokenInfo = {

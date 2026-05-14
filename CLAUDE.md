@@ -126,14 +126,14 @@ rare currencies [--chain <chain>]
 ### Search
 
 ```bash
-# List NFTs owned by your wallet
-rare search tokens [--query <text>] [--take <n>] [--cursor <n>] [--chain <chain>]
+# Search NFTs
+rare search tokens [--query <text>] [--owner <address>] [--mine] [--per-page <n>] [--page <n>] [--chain <chain>]
 
-# List NFTs with auctions (defaults to PENDING, RUNNING; accepts PENDING, RUNNING, SETTLED, UNSETTLED)
-rare search auctions [--state <states...>] [--owner <address>] [--query <text>] [--take <n>] [--cursor <n>] [--chain <chain>]
+# Filter NFT search by auctions, listings, or offers
+rare search tokens [--has-auction] [--auction-state <state>] [--has-listing] [--listing-type <type>] [--has-offer]
 
-# List collections owned by your wallet
-rare search collections [--query <text>] [--take <n>] [--cursor <n>] [--chain <chain>]
+# Search collections
+rare search collections [--query <text>] [--per-page <n>] [--page <n>] [--chain <chain>]
 ```
 
 ### Query Status (read-only)

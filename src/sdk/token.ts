@@ -1,4 +1,9 @@
-import { type PublicClient } from 'viem';
+import {
+  ContractFunctionExecutionError,
+  ContractFunctionRevertedError,
+  ContractFunctionZeroDataError,
+  type PublicClient,
+} from 'viem';
 import { tokenAbi } from '../contracts/abis/token.js';
 import { type SupportedChain } from '../contracts/addresses.js';
 import { getTokenPrice as getTokenPriceApi } from './api.js';
@@ -22,11 +27,7 @@ export function createTokenNamespace(
           abi: tokenAbi,
           functionName: 'symbol',
         }),
-        publicClient.readContract({
-          address: params.contract,
-          abi: tokenAbi,
-          functionName: 'totalSupply',
-        }),
+        readOptionalTotalSupply(publicClient, params.contract),
       ]);
 
       return {
@@ -67,4 +68,34 @@ export function createTokenNamespace(
       return getTokenPriceApi(symbol);
     },
   };
+}
+
+async function readOptionalTotalSupply(
+  publicClient: PublicClient,
+  contract: `0x${string}`,
+): Promise<bigint | null> {
+  try {
+    return await publicClient.readContract({
+      address: contract,
+      abi: tokenAbi,
+      functionName: 'totalSupply',
+    });
+  } catch (error) {
+    if (isUnavailableContractFunction(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
+function isUnavailableContractFunction(error: unknown): boolean {
+  if (!(error instanceof ContractFunctionExecutionError)) {
+    return false;
+  }
+
+  return (
+    error.cause instanceof ContractFunctionRevertedError ||
+    error.cause instanceof ContractFunctionZeroDataError
+  );
 }

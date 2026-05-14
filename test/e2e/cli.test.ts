@@ -390,10 +390,10 @@ describe('built CLI deterministic behavior', () => {
         await runCli([
           '--json',
           'search',
-          'auctions',
+          'tokens',
           '--chain',
           'mainnet',
-          '--state',
+          '--auction-state',
           'RUNNING',
           '--per-page',
           '1',
@@ -402,13 +402,12 @@ describe('built CLI deterministic behavior', () => {
       expect(auctions.pagination).toMatchObject({ page: 1, perPage: 1 });
       expect(Array.isArray(auctions.data)).toBe(true);
 
-      const collections = parseJsonStdout<unknown[]>(
-        await runCli(['--json', 'list-collections', '--chain', 'mainnet', '--query', 'rare'], {
-          home,
-          timeoutMs: 30_000,
-        }),
-      );
-      expect(Array.isArray(collections)).toBe(true);
+      const searchHelp = await runCli(['search', 'tokens', '--help'], { home });
+      expect(searchHelp.code).toBe(0);
+      expect(searchHelp.stdout).toContain('--has-auction');
+      expect(searchHelp.stdout).toContain('--auction-state <state>');
+      expect(searchHelp.stdout).toContain('--has-listing');
+      expect(searchHelp.stdout).toContain('--has-offer');
 
       const configured = await runCli([
         'configure',
