@@ -161,8 +161,23 @@ function isLiveWriteCommand(args: string[]): boolean {
     const releaseSubcommand = args[2];
     if (releaseSubcommand === 'configure') return true;
     if (releaseSubcommand === 'mint') return true;
-    if (releaseSubcommand === 'allowlist') return args[3] === 'set';
+    if (releaseSubcommand === 'allowlist') return args[3] === 'set' || args[3] === 'clear';
     if (releaseSubcommand === 'limits') return args[3]?.startsWith('set-') === true;
+    if (releaseSubcommand === 'staking') return args[3] === 'set-minimum';
+    return false;
+  }
+  if (command === 'batch') {
+    if (subcommand === 'offer') {
+      const offerSubcommand = args[2];
+      return offerSubcommand === 'create' || offerSubcommand === 'revoke' || offerSubcommand === 'accept';
+    }
+    if (subcommand === 'auction') {
+      const auctionSubcommand = args[2];
+      return auctionSubcommand === 'create' ||
+        auctionSubcommand === 'cancel' ||
+        auctionSubcommand === 'bid' ||
+        auctionSubcommand === 'settle';
+    }
     return false;
   }
   if (command === 'auction') {

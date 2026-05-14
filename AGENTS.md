@@ -94,6 +94,7 @@ Cover:
 - Contract read flows.
 - Transaction preparation and write orchestration.
 - Realistic success and failure paths.
+- Coverage for on-chain writes with local fork. 
 
 ## CLI E2E Tests
 

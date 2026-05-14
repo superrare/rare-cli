@@ -1,7 +1,7 @@
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isAddress } from 'viem';
+import { isAddress, zeroAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { parseJsonStdout, runCli, withTempHome } from '../helpers/cli.js';
 
@@ -237,6 +237,97 @@ describe('built CLI deterministic behavior', () => {
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('Error: --default-chain must be one of: mainnet, sepolia, base, base-sepolia');
+    });
+  });
+
+  it('lists supported currencies as JSON without wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const currencies = parseJsonStdout<{ name: string; address: string }[]>(
+        await runCli(['--json', 'currencies', '--chain', 'sepolia'], { home }),
+      );
+
+      expect(currencies).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: 'ETH', address: zeroAddress }),
+        expect.objectContaining({ name: 'RARE' }),
+        expect.objectContaining({ name: 'USDC' }),
+      ]));
+    });
+  });
+
+  it('covers read/API CLI command wiring and validation', async () => {
+    await withTempHome(async (home) => {
+      const tokenSearch = parseJsonStdout<{ pagination: { page: number; perPage: number }; data: unknown[] }>(
+        await runCli(['--json', 'search', 'tokens', '--chain', 'mainnet', '--per-page', '1'], { home, timeoutMs: 30_000 }),
+      );
+      expect(tokenSearch.pagination).toMatchObject({ page: 1, perPage: 1 });
+      expect(Array.isArray(tokenSearch.data)).toBe(true);
+
+      const collectionSearch = parseJsonStdout<{ pagination: { page: number; perPage: number }; data: unknown[] }>(
+        await runCli(['--json', 'search', 'collections', '--chain', 'mainnet', '--per-page', '1'], {
+          home,
+          timeoutMs: 30_000,
+        }),
+      );
+      expect(collectionSearch.pagination).toMatchObject({ page: 1, perPage: 1 });
+      expect(Array.isArray(collectionSearch.data)).toBe(true);
+
+      const auctions = parseJsonStdout<{ pagination: { page: number; perPage: number }; data: unknown[] }>(
+        await runCli([
+          '--json',
+          'search',
+          'auctions',
+          '--chain',
+          'mainnet',
+          '--state',
+          'RUNNING',
+          '--per-page',
+          '1',
+        ], { home, timeoutMs: 30_000 }),
+      );
+      expect(auctions.pagination).toMatchObject({ page: 1, perPage: 1 });
+      expect(Array.isArray(auctions.data)).toBe(true);
+
+      const collections = parseJsonStdout<unknown[]>(
+        await runCli(['--json', 'list-collections', '--chain', 'mainnet', '--query', 'rare'], {
+          home,
+          timeoutMs: 30_000,
+        }),
+      );
+      expect(Array.isArray(collections)).toBe(true);
+
+      const configured = await runCli([
+        'configure',
+        '--chain',
+        'sepolia',
+        '--private-key',
+        '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        '--rpc-url',
+        'http://127.0.0.1:8545',
+      ], { home });
+      expect(configured.code).toBe(0);
+
+      const badImport = await runCli([
+        'import',
+        'erc721',
+        '--contract',
+        'not-an-address',
+        '--chain',
+        'sepolia',
+      ], { home });
+      expect(badImport.code).toBe(1);
+      expect(badImport.stdout).toBe('');
+      expect(badImport.stderr).toContain('Error: --contract must be a valid EVM address.');
+
+      const badStatus = await runCli([
+        'status',
+        '--contract',
+        'not-an-address',
+        '--chain',
+        'sepolia',
+      ], { home });
+      expect(badStatus.code).toBe(1);
+      expect(badStatus.stdout).toBe('');
+      expect(badStatus.stderr).toContain('Error: --contract must be a valid EVM address.');
     });
   });
 

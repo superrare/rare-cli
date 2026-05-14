@@ -193,6 +193,67 @@ describeLive('live collection CLI writes', () => {
 
     const contractReceiver = await readRoyaltyRegistryContractReceiver(fixture, registry, created.contract);
     expect(contractReceiver.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
+
+    const tokenReceiver = await step('set royalty registry token receiver', () =>
+      jsonCommand<TxResult & { registry: string; contract: string; tokenId: string; receiver: string }>(fixture.sellerHome, [
+        'collection',
+        'royalty',
+        'registry',
+        'set-token-receiver',
+        '--contract',
+        created.contract,
+        '--token-id',
+        '1',
+        '--receiver',
+        fixture.sellerAddress,
+        '--chain',
+        fixture.chain,
+      ]),
+    );
+    expectTx(tokenReceiver);
+    expect(tokenReceiver.registry.toLowerCase()).toBe(registry.toLowerCase());
+    expect(tokenReceiver.contract.toLowerCase()).toBe(created.contract.toLowerCase());
+    expect(tokenReceiver.tokenId).toBe('1');
+    expect(tokenReceiver.receiver.toLowerCase()).toBe(fixture.sellerAddress.toLowerCase());
+
+    const percentage = await step('set royalty registry contract percentage', () =>
+      jsonCommand<TxResult & { registry: string; contract: string; percentage: number }>(fixture.sellerHome, [
+        'collection',
+        'royalty',
+        'registry',
+        'set-contract-percentage',
+        '--contract',
+        created.contract,
+        '--percentage',
+        '7',
+        '--chain',
+        fixture.chain,
+      ]),
+    );
+    expectTx(percentage);
+    expect(percentage.registry.toLowerCase()).toBe(registry.toLowerCase());
+    expect(percentage.contract.toLowerCase()).toBe(created.contract.toLowerCase());
+    expect(percentage.percentage).toBe(7);
+
+    const registryStatus = await jsonCommand<{
+      configuredContractPercentage?: number;
+      contractReceiver?: string;
+      tokenReceiver?: string;
+    }>(fixture.sellerHome, [
+      'collection',
+      'royalty',
+      'registry',
+      'status',
+      '--contract',
+      created.contract,
+      '--token-id',
+      '1',
+      '--chain',
+      fixture.chain,
+    ]);
+    expect(registryStatus.configuredContractPercentage).toBe(7);
+    expect(registryStatus.contractReceiver?.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
+    expect(registryStatus.tokenReceiver?.toLowerCase()).toBe(fixture.sellerAddress.toLowerCase());
   });
 
   it('creates a Lazy Sovereign release collection through the lazy factory', async () => {
