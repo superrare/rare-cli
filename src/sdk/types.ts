@@ -1051,6 +1051,7 @@ export type TokenInfo = {
 
 export type GeneratePresetCurvesParams = {
   preset: CurvePresetKey;
+  totalSupply?: AmountInput;
 }
 
 export type GeneratePresetCurvesResult = {
@@ -1062,6 +1063,7 @@ export type GeneratePresetCurvesResult = {
 
 export type ValidateLiquidCurvesParams = {
   curves: LiquidCurveSegment[];
+  totalSupply?: AmountInput;
 }
 
 export type DeployLiquidEditionParams = {
@@ -1069,6 +1071,7 @@ export type DeployLiquidEditionParams = {
   symbol: string;
   tokenUri: string;
   initialRareLiquidity?: AmountInput;
+  totalSupply?: AmountInput;
   curves: LiquidCurveSegment[];
 }
 
