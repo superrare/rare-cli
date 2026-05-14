@@ -23,7 +23,7 @@ const errorMiddleware: Middleware = {
 
 export function createApiClient(baseUrl?: string): ReturnType<typeof createClient<paths>> {
   const client = createClient<paths>({
-    baseUrl: baseUrl ?? DEFAULT_BASE_URL,
+    baseUrl: baseUrl ?? process.env.RARE_API_BASE_URL ?? DEFAULT_BASE_URL,
   });
 
   client.use(errorMiddleware);

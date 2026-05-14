@@ -12,20 +12,23 @@ import {
   detectLiveChain,
   expectTx,
   jsonCommand,
-  livePrivateKey,
   liveRpcUrl,
   retryNonceConflict,
   step,
   withLiveTransactionLock,
   type TxResult,
 } from './live-helpers.js';
+import { hasLiveWalletEnv } from './env.mjs';
+import { releaseLiveWallets, reserveLiveWallet, type LiveWalletLease } from './helpers/live-wallet-pool.js';
 
 const requiredEnv = [
   'TEST_RPC_URL',
-  'E2E_SELLER_PRIVATE_KEY',
 ] as const;
 
-const missingEnv = requiredEnv.filter((name) => !process.env[name]);
+const missingEnv = [
+  ...requiredEnv.filter((name) => !process.env[name]),
+  ...(hasLiveWalletEnv('seller') ? [] : ['E2E_SELLER_PRIVATE_KEYS']),
+];
 const describeLive = missingEnv.length === 0 ? describe.sequential : describe.skip;
 
 // Runtime dispatches owner() and mintTo(address). Creation code injects the seller as owner.
@@ -54,6 +57,7 @@ type ReleaseLimitSetResult = TxResult & {
 type LiveState = {
   sellerHome: string;
   sellerAddress: Address;
+  sellerWallet: LiveWalletLease;
   releaseContract: Address;
   chain: SupportedChain;
 };
@@ -64,30 +68,34 @@ describeLive('live RareMinter release settings', () => {
   beforeAll(async () => {
     const sellerHome = await createTempHome();
     const chain = await detectLiveChain();
-    const sellerAddress = privateKeyToAccount(livePrivateKey('E2E_SELLER_PRIVATE_KEY')).address;
+    const sellerWallet = await reserveLiveWallet('seller', chain);
+    const sellerAddress = sellerWallet.address;
 
     try {
       await step('configure seller wallet', () =>
-        configureLiveHome(sellerHome, livePrivateKey('E2E_SELLER_PRIVATE_KEY'), chain),
+        configureLiveHome(sellerHome, sellerWallet.privateKey, chain),
       );
       const releaseContract = await step('deploy RareMinter release fixture contract', () =>
-        deployReleaseFixtureContract(chain, livePrivateKey('E2E_SELLER_PRIVATE_KEY'), sellerAddress),
+        deployReleaseFixtureContract(chain, sellerWallet.privateKey, sellerAddress),
       );
 
       live = {
         sellerHome,
         sellerAddress,
+        sellerWallet,
         releaseContract,
         chain,
       };
     } catch (error) {
       await cleanupTempHome(sellerHome);
+      await releaseLiveWallets([sellerWallet]);
       throw error;
     }
   });
 
   afterAll(async () => {
     await cleanupTempHome(live?.sellerHome);
+    await releaseLiveWallets([live?.sellerWallet]);
   });
 
   it('configures release allowlist', async () => {

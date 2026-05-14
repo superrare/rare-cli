@@ -1,6 +1,5 @@
 import { expect } from 'vitest';
 import type { Address, PublicClient } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
 import { royaltyRegistryAbi, royaltyRegistryResolverAbi } from '../../../src/contracts/abis/royalty-registry.js';
 import { getContractAddresses, type SupportedChain } from '../../../src/contracts/addresses.js';
 import { parseAddress } from '../../../src/sdk/validation.js';
@@ -12,10 +11,10 @@ import {
   detectLiveChain,
   expectTx,
   jsonCommand,
-  livePrivateKey,
   step,
   type TxResult,
 } from '../live-helpers.js';
+import { releaseLiveWallets, reserveLiveWalletPair, type LiveWalletLease } from './live-wallet-pool.js';
 
 export const E2E_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/metadata.json';
 export const E2E_BATCH_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/batch';
@@ -132,6 +131,8 @@ export type LiveCliFixture = {
   buyerHome: string;
   sellerAddress: Address;
   buyerAddress: Address;
+  sellerWallet: LiveWalletLease;
+  buyerWallet: LiveWalletLease;
   chain: SupportedChain;
   publicClient: PublicClient;
 };
@@ -162,36 +163,40 @@ export async function createLiveCliFixture(): Promise<LiveCliFixture> {
   const sellerHome = await createTempHome();
   const buyerHome = await createTempHome();
   const chain = await detectLiveChain();
-  const sellerAddress = privateKeyToAccountAddress('E2E_SELLER_PRIVATE_KEY');
-  const buyerAddress = privateKeyToAccountAddress('E2E_BUYER_PRIVATE_KEY');
+  let sellerWallet: LiveWalletLease | undefined;
+  let buyerWallet: LiveWalletLease | undefined;
 
   try {
+    ({ sellerWallet, buyerWallet } = await reserveLiveWalletPair(chain));
     await step(`configure seller wallet on ${chain}`, () =>
-      configureLiveHome(sellerHome, livePrivateKey('E2E_SELLER_PRIVATE_KEY'), chain),
+      configureLiveHome(sellerHome, sellerWallet.privateKey, chain),
     );
     await step(`configure buyer wallet on ${chain}`, () =>
-      configureLiveHome(buyerHome, livePrivateKey('E2E_BUYER_PRIVATE_KEY'), chain),
+      configureLiveHome(buyerHome, buyerWallet.privateKey, chain),
     );
 
     return {
       sellerHome,
       buyerHome,
-      sellerAddress,
-      buyerAddress,
+      sellerAddress: sellerWallet.address,
+      buyerAddress: buyerWallet.address,
+      sellerWallet,
+      buyerWallet,
       chain,
       publicClient: createLivePublicClient(chain),
     };
   } catch (error) {
-    await cleanupLiveCliFixture({ sellerHome, buyerHome });
+    await cleanupLiveCliFixture({ sellerHome, buyerHome, sellerWallet, buyerWallet });
     throw error;
   }
 }
 
 export async function cleanupLiveCliFixture(
-  fixture: Pick<LiveCliFixture, 'sellerHome' | 'buyerHome'> | undefined,
+  fixture: Pick<LiveCliFixture, 'sellerHome' | 'buyerHome'> & Partial<Pick<LiveCliFixture, 'sellerWallet' | 'buyerWallet'>> | undefined,
 ): Promise<void> {
   await cleanupTempHome(fixture?.sellerHome);
   await cleanupTempHome(fixture?.buyerHome);
+  await releaseLiveWallets([fixture?.sellerWallet, fixture?.buyerWallet]);
 }
 
 export async function deployErc721Collection(
@@ -223,6 +228,7 @@ export async function mintToken(
   opts: { to?: Address } = {},
 ): Promise<MintResult> {
   const baseArgs = [
+    'collection',
     'mint',
     '--contract',
     contract,
@@ -387,8 +393,4 @@ export function liveAuctionDurationSeconds(): number {
 export async function waitForAuctionToEnd(): Promise<void> {
   const duration = liveAuctionDurationSeconds();
   await new Promise((resolve) => setTimeout(resolve, (duration + 10) * 1000));
-}
-
-function privateKeyToAccountAddress(name: 'E2E_SELLER_PRIVATE_KEY' | 'E2E_BUYER_PRIVATE_KEY'): Address {
-  return privateKeyToAccount(livePrivateKey(name)).address;
 }

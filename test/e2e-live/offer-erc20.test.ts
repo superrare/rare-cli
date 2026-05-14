@@ -70,7 +70,7 @@ describeLive('live ERC20 offer CLI write command', () => {
     }
 
     await step('set buyer ERC20 allowance below required offer escrow', () =>
-      approveToken(fixture, currency, auctionAddress, amountWei, 'E2E_BUYER_PRIVATE_KEY'),
+      approveToken(fixture, currency, auctionAddress, amountWei, 'buyer'),
     );
     expect(await readTokenAllowance(fixture, currency, fixture.buyerAddress, auctionAddress)).toBe(amountWei);
 

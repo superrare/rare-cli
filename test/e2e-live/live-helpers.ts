@@ -10,7 +10,7 @@ import {
   viemChains,
   type SupportedChain,
 } from '../../src/contracts/addresses.js';
-import { parseAddress, parseHexString } from '../../src/sdk/validation.js';
+import { parseAddress } from '../../src/sdk/validation.js';
 import { parseJsonStdout, runCli } from '../helpers/cli.js';
 import { loadDotEnv, missingLiveEnv } from './env.mjs';
 
@@ -73,14 +73,6 @@ export function createLivePublicClient(chain: SupportedChain): PublicClient {
     chain: viemChains[chain],
     transport: http(liveRpcUrl()),
   });
-}
-
-export function livePrivateKey(name: 'E2E_SELLER_PRIVATE_KEY' | 'E2E_BUYER_PRIVATE_KEY'): `0x${string}` {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`${name} must be set to a 0x-prefixed private key.`);
-  }
-  return parseHexString(value, name);
 }
 
 export async function createTempHome(): Promise<string> {
@@ -162,7 +154,7 @@ function isNonceConflict(error: unknown): boolean {
 
 function isLiveWriteCommand(args: string[]): boolean {
   const [command, subcommand] = args;
-  if (command === 'deploy' || command === 'mint') return true;
+  if (command === 'deploy') return true;
   if (command === 'listing') {
     if (subcommand === 'create' || subcommand === 'cancel' || subcommand === 'buy') return true;
     if (subcommand !== 'release') return false;
@@ -178,7 +170,7 @@ function isLiveWriteCommand(args: string[]): boolean {
   }
   if (command === 'offer') return subcommand === 'create' || subcommand === 'cancel' || subcommand === 'accept';
   if (command === 'collection') {
-    if (subcommand === 'create' || subcommand === 'mint-batch' || subcommand === 'prepare-lazy-mint') return true;
+    if (subcommand === 'create' || subcommand === 'mint' || subcommand === 'mint-batch' || subcommand === 'prepare-lazy-mint') return true;
     if (subcommand === 'metadata') {
       const metadataSubcommand = args[2];
       return metadataSubcommand === 'update-base-uri' ||

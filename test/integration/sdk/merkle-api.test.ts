@@ -8,11 +8,11 @@ import {
 } from '../../../src/sdk/merkle-api.js';
 import { verifyBatchTokenProof } from '../../../src/sdk/batch-core.js';
 import { verifyReleaseAllowlistProof } from '../../../src/sdk/release-core.js';
+import { loadDotEnv } from '../../helpers/env.js';
 
-const rareApiBaseUrl =
-  process.env.RARE_API_TEST_BASE_URL ??
-  process.env.RARE_API_BASE_URL ??
-  'https://rare-api-2c35-784573620320.us-east1.run.app';
+loadDotEnv();
+
+const describeRareApiMerkle = process.env.RARE_API_BASE_URL ? describe : describe.skip;
 
 const publicClient = {
   chain: { id: 11155111 },
@@ -20,7 +20,6 @@ const publicClient = {
 
 const config = {
   publicClient,
-  apiBaseUrl: rareApiBaseUrl,
 };
 
 const testNfts = [
@@ -39,7 +38,7 @@ const testAddresses = [
   '0x2000000000000000000000000000000000000000',
 ] as const;
 
-describe('SDK rare-api Merkle integration', () => {
+describeRareApiMerkle('SDK rare-api Merkle integration', () => {
   it('generates an NFT root and resolves a proof from rare-api', async () => {
     const root = await generateApiNftMerkleRoot(config, testNfts);
     const proof = await resolveApiNftMerkleProof(config, {

@@ -3,8 +3,6 @@ import { resolve } from 'node:path';
 
 export const requiredLiveEnv = [
   'TEST_RPC_URL',
-  'E2E_SELLER_PRIVATE_KEY',
-  'E2E_BUYER_PRIVATE_KEY',
 ];
 
 export function loadDotEnv(file = '.env') {
@@ -32,7 +30,16 @@ export function loadDotEnv(file = '.env') {
 }
 
 export function missingLiveEnv(env = process.env) {
-  return requiredLiveEnv.filter((name) => !env[name]);
+  return [
+    ...requiredLiveEnv.filter((name) => !env[name]),
+    ...(hasLiveWalletEnv('seller', env) ? [] : ['E2E_SELLER_PRIVATE_KEYS']),
+    ...(hasLiveWalletEnv('buyer', env) ? [] : ['E2E_BUYER_PRIVATE_KEYS']),
+  ];
+}
+
+export function hasLiveWalletEnv(role, env = process.env) {
+  const plural = role === 'seller' ? 'E2E_SELLER_PRIVATE_KEYS' : 'E2E_BUYER_PRIVATE_KEYS';
+  return Boolean(env[plural]);
 }
 
 function parseDotEnvValue(rawValue) {

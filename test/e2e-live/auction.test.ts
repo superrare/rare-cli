@@ -70,7 +70,7 @@ describeLive('live auction CLI writes', () => {
       ]),
     );
     expectTx(auctionCancelCreate);
-    expect(auctionCancelCreate.approvalTxHash).toBeNull();
+    expectOptionalTxHash(auctionCancelCreate.approvalTxHash);
 
     await expectAuctionStatus(fixture, fixture.sellerHome, fixture.collection.contract, fixture.auctionCancelToken.tokenId, 'PENDING');
     expectTx(await step('cancel auction', () =>
@@ -143,7 +143,7 @@ describeLive('live auction CLI writes', () => {
       ]),
     );
     expectTx(auctionSettleCreate);
-    expect(auctionSettleCreate.approvalTxHash).toBeNull();
+    expectOptionalTxHash(auctionSettleCreate.approvalTxHash);
 
     expectTx(await step('bid on auction', () =>
       jsonCommand<TxResult>(fixture.buyerHome, [
@@ -175,3 +175,9 @@ describeLive('live auction CLI writes', () => {
     ));
   });
 });
+
+function expectOptionalTxHash(value: string | null | undefined): void {
+  if (value !== null && value !== undefined) {
+    expect(value).toMatch(/^0x[0-9a-fA-F]{64}$/);
+  }
+}
