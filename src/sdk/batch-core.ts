@@ -77,6 +77,14 @@ export type BatchTokenProofVerifyParams = {
   proof: readonly Hex[];
 };
 
+export type UtilsTreeToken = BatchToken;
+export type UtilsTreeArtifact = BatchTokenListArtifact;
+export type UtilsTreeEntry = BatchTokenTreeEntry;
+export type UtilsTreeProofArtifact = BatchTokenProofArtifact;
+export type BuildUtilsTreeParams = BuildBatchTokenTreeParams;
+export type UtilsTreeProofParams = BatchTokenProofParams;
+export type UtilsTreeProofVerifyParams = BatchTokenProofVerifyParams;
+
 type RawBatchToken = {
   contractAddress: string;
   tokenId: IntegerInput;

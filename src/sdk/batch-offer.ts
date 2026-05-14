@@ -8,7 +8,7 @@ import {
 } from 'viem';
 import { batchOfferAbi } from '../contracts/abis/batch-offer.js';
 import { tokenAbi } from '../contracts/abis/token.js';
-import { ETH_ADDRESS, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
+import { ETH_ADDRESS, chainIds, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
 import {
   approvalAbi,
   preparePaymentForSpender,
@@ -25,6 +25,10 @@ import {
   shapeBatchOfferRead,
   shapeBatchOfferStatus,
 } from './batch-offer-core.js';
+import {
+  generateApiNftMerkleRoot,
+  resolveApiNftMerkleProof,
+} from './merkle-api.js';
 
 export function createBatchOfferNamespace(
   publicClient: PublicClient,
@@ -37,11 +41,12 @@ export function createBatchOfferNamespace(
       const marketplaceSettingsSource = requireContractAddress(chain, 'auction');
       const { walletClient, account, accountAddress } = requireWallet(config);
       const block = await publicClient.getBlock();
-      const currency = params.currency ?? ETH_ADDRESS;
-      const amount = typeof params.amount === 'bigint'
-        ? params.amount
-        : parseUnits(stringifyAmountInput(params.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
-      const plan = planBatchOfferCreate({ ...params, currency, amount }, block.timestamp);
+      const resolvedParams = await resolveBatchOfferCreateParams(config, params);
+      const currency = resolvedParams.currency ?? ETH_ADDRESS;
+      const amount = typeof resolvedParams.amount === 'bigint'
+        ? resolvedParams.amount
+        : parseUnits(stringifyAmountInput(resolvedParams.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const plan = planBatchOfferCreate({ ...resolvedParams, currency, amount }, block.timestamp);
       const payment = await preparePaymentForSpender({
         publicClient,
         walletClient,
@@ -127,7 +132,8 @@ export function createBatchOfferNamespace(
     async accept(params): ReturnType<RareClient['batch']['offer']['accept']> {
       const batchOfferCreator = requireContractAddress(chain, 'batchOfferCreator');
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const plan = planBatchOfferAccept(params, accountAddress);
+      const resolvedParams = await resolveBatchOfferAcceptParams(config, chainIds[chain], params);
+      const plan = planBatchOfferAccept(resolvedParams, accountAddress);
       const owner = await publicClient.readContract({
         address: plan.contract,
         abi: tokenAbi,
@@ -212,6 +218,50 @@ export function createBatchOfferNamespace(
         root: plan.root,
       }, block.timestamp);
     },
+  };
+}
+
+async function resolveBatchOfferCreateParams(
+  config: RareClientConfig,
+  params: Parameters<RareClient['batch']['offer']['create']>[0],
+): Promise<Parameters<RareClient['batch']['offer']['create']>[0]> {
+  if (params.root !== undefined || params.artifact === undefined) {
+    return params;
+  }
+
+  const root = await generateApiNftMerkleRoot(config, params.artifact.tokens);
+  return {
+    ...params,
+    root,
+    artifact: undefined,
+  };
+}
+
+async function resolveBatchOfferAcceptParams(
+  config: RareClientConfig,
+  chainId: number,
+  params: Parameters<RareClient['batch']['offer']['accept']>[0],
+): Promise<Parameters<RareClient['batch']['offer']['accept']>[0]> {
+  if (
+    params.proofArtifact !== undefined ||
+    (params.root !== undefined && params.proof !== undefined)
+  ) {
+    return params;
+  }
+
+  const proof = await resolveApiNftMerkleProof(config, {
+    chainId,
+    contractAddress: params.contract,
+    tokenId: params.tokenId,
+    root: params.root,
+    context: 'batch-offer',
+    creator: params.creator,
+  });
+
+  return {
+    ...params,
+    root: proof.root,
+    proof: proof.proof,
   };
 }
 

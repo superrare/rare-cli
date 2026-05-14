@@ -139,12 +139,12 @@ rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token
 rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token-count 100 --minter 0x...
 ```
 
-Build batch marketplace token-list Merkle artifacts for later batch offer, batch listing, and batch auction flows. CSV files should include contract and token ID columns such as `contract_address,token_id`; JSON files can be an array of `{ "contractAddress": "0x...", "tokenId": "1" }` objects or a generated artifact. Pass `--chain-id` or include a `chain_id` column when the artifact should carry chain context.
+Build token-list Merkle artifacts for later batch offer, batch listing, and batch auction flows. CSV files should include contract and token ID columns such as `contract_address,token_id`; JSON files can be an array of `{ "contractAddress": "0x...", "tokenId": "1" }` objects or a generated artifact. Pass `--chain-id` or include a `chain_id` column when the artifact should carry chain context.
 
 ```bash
-rare batch tree build --input batch-tokens.csv --chain-id 11155111 --output batch-token-artifact.json
-rare batch tree proof --input batch-token-artifact.json --contract 0x... --token-id 1 --output proof.json
-rare batch tree verify --input batch-token-artifact.json --contract 0x... --token-id 1 --proof proof.json
+rare utils tree build --input batch-tokens.csv --chain-id 11155111 --output batch-token-artifact.json
+rare utils tree proof --input batch-token-artifact.json --contract 0x... --token-id 1 --output proof.json
+rare utils tree verify --input batch-token-artifact.json --contract 0x... --token-id 1 --proof proof.json
 ```
 
 Batch token artifacts use `type: "rare-batch-token-list"` and include `root`, `count`, optional `chainId`, canonical sorted `tokens`, and per-token `entries` with leaves and proofs. Proof artifacts use `type: "rare-batch-token-proof"` and include `root`, `contractAddress`, `tokenId`, optional `chainId`, `leaf`, `proof`, and `valid`.
@@ -412,14 +412,14 @@ Root artifacts are produced outside the CLI. Token sets and allowlists must each
 
 ```bash
 # Build a proof artifact for one token in the root
-rare listing batch merkle proof \
+rare utils merkle proof \
   --root ./root.json \
   --contract 0x... \
   --token-id 1 \
   --output ./proof.json
 
 # If the root has an allowlist, include the buyer when generating the proof
-rare listing batch merkle proof \
+rare utils merkle proof \
   --root ./root.json \
   --contract 0x... \
   --token-id 1 \
@@ -635,21 +635,21 @@ const prepared = await rare.collection.prepareLazyMint({
 console.log(prepared.tokenCount);
 ```
 
-### Build batch marketplace token trees
+### Build utility token Merkle trees
 
 ```ts
-const tree = rare.batch.buildTree({
+const tree = rare.utils.tree.build({
   content: 'contract_address,token_id,chain_id\n0x1111111111111111111111111111111111111111,1,11155111\n',
   format: 'csv',
 });
 
-const tokenProof = rare.batch.getTreeProof({
+const tokenProof = rare.utils.tree.proof({
   artifact: tree,
   contractAddress: '0x1111111111111111111111111111111111111111',
   tokenId: 1,
 });
 
-const proofValid = rare.batch.verifyTreeProof({
+const proofValid = rare.utils.tree.verify({
   root: tree.root,
   contractAddress: tokenProof.contractAddress,
   tokenId: tokenProof.tokenId,
@@ -715,6 +715,12 @@ rare configure --default-chain mainnet
 
 # View current config
 rare configure --show
+```
+
+Merkle root and proof flows use `https://api.superrare.com` by default. Set `RARE_API_BASE_URL` to point the SDK and CLI at another rare-api deployment.
+
+```bash
+RARE_API_BASE_URL=https://rare-api.example.com rare batch buy --contract 0x... --token-id 1 --creator 0x... --currency eth --amount 1
 ```
 
 ## Best Practices

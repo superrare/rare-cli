@@ -13,6 +13,7 @@ import { collectionCommand } from './commands/collection.js';
 import { currenciesCommand } from './commands/currencies.js';
 import { swapCommand } from './commands/swap.js';
 import { batchCommand } from './commands/batch.js';
+import { utilsCommand } from './commands/utils.js';
 import { printError } from './errors.js';
 
 const program = new Command();
@@ -37,6 +38,7 @@ program.addCommand(collectionCommand());
 program.addCommand(currenciesCommand());
 program.addCommand(swapCommand());
 program.addCommand(batchCommand());
+program.addCommand(utilsCommand());
 
 program.parseAsync(process.argv).catch((err: unknown) => {
   printError(err);
