@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
+import { erc20Abi, parseUnits } from 'viem';
+import { resolveCurrency } from '../../src/contracts/addresses.js';
 import { describeLive, expectTx, jsonCommand, step, type TxResult } from './live-helpers.js';
 import {
   cleanupLiveCliFixture,
@@ -18,6 +20,7 @@ type AuctionFixture = LiveCliFixture & {
   collection: DeployResult;
   auctionCancelToken: MintResult;
   auctionSettleToken: MintResult;
+  rareAuctionSettleToken: MintResult;
   buyerAuctionCancelToken: MintResult;
 };
 
@@ -27,7 +30,7 @@ describeLive('live auction CLI writes', () => {
   beforeAll(async () => {
     const fixture = await createLiveCliFixture();
     try {
-      const collection = await deployErc721Collection(fixture, '6');
+      const collection = await deployErc721Collection(fixture, '7');
       live.set({
         ...fixture,
         collection,
@@ -35,6 +38,9 @@ describeLive('live auction CLI writes', () => {
           mintToken(fixture, collection.contract),
         ),
         auctionSettleToken: await step('mint auction settle token', () =>
+          mintToken(fixture, collection.contract),
+        ),
+        rareAuctionSettleToken: await step('mint RARE auction settle token', () =>
           mintToken(fixture, collection.contract),
         ),
         buyerAuctionCancelToken: await step('mint buyer-owned auction token', () =>
@@ -174,10 +180,95 @@ describeLive('live auction CLI writes', () => {
       ]),
     ));
   });
+
+  it('creates, bids, and settles a RARE auction', async () => {
+    const fixture = live.value;
+    const currency = resolveCurrency('rare', fixture.chain);
+    const amount = '0.000001';
+    const amountWei = await parseErc20Amount(fixture, currency, amount);
+    const balance = await readErc20Balance(fixture, currency, fixture.buyerAddress);
+
+    if (balance < amountWei) {
+      throw new Error(
+        `E2E buyer has insufficient ${fixture.chain} RARE balance for live ERC20 auction test. ` +
+        `Required at least ${amountWei}, found ${balance}.`,
+      );
+    }
+
+    const rareAuctionCreate = await step('create RARE auction for settlement', () =>
+      jsonCommand<TxResult>(fixture.sellerHome, [
+        'auction',
+        'create',
+        '--contract',
+        fixture.collection.contract,
+        '--token-id',
+        fixture.rareAuctionSettleToken.tokenId,
+        '--starting-price',
+        amount,
+        '--currency',
+        'rare',
+        '--duration',
+        liveAuctionDurationSeconds().toString(),
+        '--chain',
+        fixture.chain,
+      ]),
+    );
+    expectTx(rareAuctionCreate);
+    expectOptionalTxHash(rareAuctionCreate.approvalTxHash);
+
+    expectTx(await step('bid on RARE auction', () =>
+      jsonCommand<TxResult>(fixture.buyerHome, [
+        'auction',
+        'bid',
+        '--contract',
+        fixture.collection.contract,
+        '--token-id',
+        fixture.rareAuctionSettleToken.tokenId,
+        '--amount',
+        amount,
+        '--currency',
+        'rare',
+        '--chain',
+        fixture.chain,
+      ]),
+    ));
+    await step('wait for RARE auction to end', waitForAuctionToEnd);
+    await expectAuctionStatus(fixture, fixture.sellerHome, fixture.collection.contract, fixture.rareAuctionSettleToken.tokenId, 'ENDED');
+    expectTx(await step('settle RARE auction', () =>
+      jsonCommand<TxResult>(fixture.sellerHome, [
+        'auction',
+        'settle',
+        '--contract',
+        fixture.collection.contract,
+        '--token-id',
+        fixture.rareAuctionSettleToken.tokenId,
+        '--chain',
+        fixture.chain,
+      ]),
+    ));
+  });
 });
 
 function expectOptionalTxHash(value: string | null | undefined): void {
   if (value !== null && value !== undefined) {
     expect(value).toMatch(/^0x[0-9a-fA-F]{64}$/);
   }
+}
+
+async function parseErc20Amount(fixture: LiveCliFixture, token: `0x${string}`, amount: string): Promise<bigint> {
+  const decimals = await fixture.publicClient.readContract({
+    address: token,
+    abi: erc20Abi,
+    functionName: 'decimals',
+  });
+  return parseUnits(amount, decimals);
+}
+
+async function readErc20Balance(fixture: LiveCliFixture, token: `0x${string}`, owner: `0x${string}`): Promise<bigint> {
+  return fixture.publicClient.readContract({
+    address: token,
+    abi: erc20Abi,
+    functionName: 'balanceOf',
+    args: [owner],
+  });
 }

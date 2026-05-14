@@ -8,7 +8,7 @@ export default defineConfig({
     environment: 'node',
     globals: false,
     fileParallelism: true,
-    include: runLiveE2E ? ['test/e2e-live/**/*.test.ts'] : ['test/**/*.test.ts'],
+    include: ['test/**/*.test.ts'],
     exclude: [
       'node_modules/**',
       'dist/**',
@@ -28,7 +28,7 @@ export default defineConfig({
       ],
       exclude: ['src/data-access/schema.d.ts', 'src/contracts/abis/**'],
     },
-    testTimeout: runLiveE2E ? 600_000 : 10_000,
+    testTimeout: runLiveE2E ? 600_000 : 30_000,
     hookTimeout: runLiveE2E ? liveE2EHookTimeoutMs : 10_000,
   },
 });

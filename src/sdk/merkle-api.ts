@@ -1,8 +1,7 @@
 import { getAddress, type Address, type Hex } from 'viem';
 import type { RareClientConfig } from './types.js';
 import { normalizeBytes32 } from './batch-core.js';
-
-const DEFAULT_RARE_API_BASE_URL = 'https://api.superrare.com';
+import { resolveRareApiBaseUrl as resolveConfiguredRareApiBaseUrl } from '../data-access/base-url.js';
 
 export type NftMerkleProofContext =
   | 'batch-listing'
@@ -157,7 +156,7 @@ async function postRareApiJson(
 }
 
 function resolveRareApiBaseUrl(config: RareClientConfig): string {
-  return config.apiBaseUrl ?? process.env.RARE_API_BASE_URL ?? DEFAULT_RARE_API_BASE_URL;
+  return resolveConfiguredRareApiBaseUrl(config.apiBaseUrl);
 }
 
 async function readRareApiErrorMessage(response: Response): Promise<string | undefined> {

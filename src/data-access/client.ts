@@ -1,8 +1,7 @@
 import createClient, { type Middleware } from 'openapi-fetch';
 import type { paths } from './schema.js';
 import { RareApiError } from './errors.js';
-
-const DEFAULT_BASE_URL = 'https://api.superrare.com';
+import { resolveRareApiBaseUrl } from './base-url.js';
 
 const errorMiddleware: Middleware = {
   async onResponse({ response, request }) {
@@ -23,7 +22,7 @@ const errorMiddleware: Middleware = {
 
 export function createApiClient(baseUrl?: string): ReturnType<typeof createClient<paths>> {
   const client = createClient<paths>({
-    baseUrl: baseUrl ?? process.env.RARE_API_BASE_URL ?? DEFAULT_BASE_URL,
+    baseUrl: resolveRareApiBaseUrl(baseUrl),
   });
 
   client.use(errorMiddleware);
