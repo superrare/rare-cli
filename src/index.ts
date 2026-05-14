@@ -14,7 +14,10 @@ import { currenciesCommand } from './commands/currencies.js';
 import { swapCommand } from './commands/swap.js';
 import { batchCommand } from './commands/batch.js';
 import { utilsCommand } from './commands/utils.js';
+import { loadDotEnv } from './env.js';
 import { printError } from './errors.js';
+
+loadDotEnv();
 
 const program = new Command();
 

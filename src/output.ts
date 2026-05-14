@@ -90,6 +90,31 @@ export function printNftRow(nft: Nft): void {
   console.log(`  ${nft.universalTokenId}  ${name}  (${owner})${market.length > 0 ? `  ${market}` : ''}`);
 }
 
+export function printListingMarketRow(nft: Nft, listing: Nft['market']['listings'][number]): void {
+  const name = nft.metadata.name ?? 'Untitled';
+  const root = listing.merkleRoot === undefined ? '' : ` root:${shortValue(listing.merkleRoot)}`;
+  console.log(
+    `  ${nft.universalTokenId}  ${name}  ${listing.type}  ${formatCryptoValue(listing.price)}  seller:${shortValue(listing.seller)}${root}`,
+  );
+}
+
+export function printOfferMarketRow(nft: Nft, offer: Nft['market']['offers'][number]): void {
+  const name = nft.metadata.name ?? 'Untitled';
+  const buyer = offer.buyer.username ?? shortValue(offer.buyerAddress);
+  console.log(
+    `  ${nft.universalTokenId}  ${name}  ${offer.type}  ${formatCryptoValue(offer.price)}  buyer:${buyer}`,
+  );
+}
+
+export function printAuctionMarketRow(nft: Nft, auction: Nft['market']['auctions'][number]): void {
+  const name = nft.metadata.name ?? 'Untitled';
+  const bidder = auction.highestBidder.username ?? shortValue(auction.highestBidder.address);
+  const root = auction.merkleRoot === undefined ? '' : ` root:${shortValue(auction.merkleRoot)}`;
+  console.log(
+    `  ${nft.universalTokenId}  ${name}  ${auction.type}/${auction.state}  bid:${formatCryptoValue(auction.currentBid)}  seller:${shortValue(auction.sellerAddress)}  bidder:${bidder}${root}`,
+  );
+}
+
 function nftMarketSummary(nft: Nft): string {
   const auction = nft.market.auctions[0];
   const listing = nft.market.listings[0];
@@ -146,10 +171,14 @@ export function printPagination(pagination: Pagination): void {
 
 // --- CryptoValue formatting ---
 
-function formatCryptoValue(cv: { cryptoAmount: string; currency: { symbol: string; decimals: number }; usdAmount: number | null }): string {
+export function formatCryptoValue(cv: { cryptoAmount: string; currency: { symbol: string; decimals: number }; usdAmount: number | null }): string {
   const amount = formatUnits(cv.cryptoAmount, cv.currency.decimals);
   const usd = cv.usdAmount != null ? ` ($${cv.usdAmount.toLocaleString()})` : '';
   return `${amount} ${cv.currency.symbol}${usd}`;
+}
+
+function shortValue(value: string): string {
+  return value.length <= 12 ? value : `${value.slice(0, 10)}...`;
 }
 
 function formatUnits(raw: string, decimals: number): string {

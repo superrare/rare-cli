@@ -7,6 +7,7 @@ import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '../contracts/addresses.js';
 import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
+import { createListingListCommand } from './account-market-list.js';
 import { resolveCurrencyDecimals } from '../sdk/helpers.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 import { batchCommand } from './batch.js';
@@ -56,7 +57,8 @@ type ListingStatusOptions = {
 
 export function listingCommand(): Command {
   const cmd = new Command('listing');
-  cmd.description('Listing subcommands (create, cancel, buy, status, batch, release)');
+  cmd.description('Listing subcommands (list, create, cancel, buy, status, batch, release)');
+  cmd.addCommand(createListingListCommand());
   cmd.addCommand(batchCommand());
   cmd.addCommand(releaseCommand());
 

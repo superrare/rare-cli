@@ -1,4 +1,4 @@
-import { createApiClient } from '../data-access/index.js';
+import { createApiClient, type ApiClient } from '../data-access/index.js';
 import type { components, paths } from '../data-access/schema.js';
 import {
   buildCollectionSearchQuery,
@@ -17,7 +17,24 @@ import {
   type PinMetadataParams,
 } from './api-core.js';
 
-const client = createApiClient();
+export type RareApiOptions = {
+  baseUrl?: string;
+  fetch?: typeof globalThis.fetch;
+};
+
+export type RareApi = {
+  uploadMedia: (buffer: Uint8Array, filename: string) => Promise<NftMediaEntry>;
+  pinMetadata: (opts: PinMetadataParams) => Promise<string>;
+  importErc721: (opts: ImportErc721RequestParams) => Promise<void>;
+  searchNfts: (params?: NftSearchParams) => Promise<SearchPageResponse<Nft>>;
+  searchCollections: (params?: CollectionSearchParams) => Promise<SearchPageResponse<Collection>>;
+  getNft: (universalTokenId: string) => Promise<Nft>;
+  getNftEvents: (universalTokenId: string, opts?: NftEventOptions) => Promise<SearchPageResponse<NftEvent>>;
+  getCollection: (id: string) => Promise<Collection>;
+  getCollectionEvents: (id: string, opts?: CollectionEventOptions) => Promise<SearchPageResponse<NftEvent>>;
+  getUser: (address: string) => Promise<UserProfile>;
+  getTokenPrice: (symbol: string) => Promise<{ symbol: string; priceUsd: number; decimals: number; chainId: number; address: string }>;
+};
 
 // --- Re-exported types from OpenAPI schema ---
 
@@ -52,13 +69,14 @@ async function uploadParts(
   fileBuffer: Uint8Array,
   partSize: number,
   presignedUrls: string[],
+  fetchImpl: typeof globalThis.fetch,
 ): Promise<MultipartUploadPart[]> {
   return Promise.all(presignedUrls.map(async (presignedUrl, index): Promise<MultipartUploadPart> => {
     const start = index * partSize;
     const end = start + partSize;
     const partBuffer = fileBuffer.subarray(start, end);
 
-    const response = await fetch(presignedUrl, {
+    const response = await fetchImpl(presignedUrl, {
       method: 'PUT',
       body: new Uint8Array(partBuffer),
     });
@@ -78,7 +96,39 @@ async function uploadParts(
 
 // --- Public API functions ---
 
+export function createRareApi(options: RareApiOptions = {}): RareApi {
+  const client = createApiClient(options.baseUrl, options.fetch);
+  const fetchImpl = options.fetch ?? globalThis.fetch;
+
+  return {
+    uploadMedia: async (buffer, filename) => uploadMediaWithClient(client, fetchImpl, buffer, filename),
+    pinMetadata: async (opts) => pinMetadataWithClient(client, opts),
+    importErc721: async (opts) => importErc721WithClient(client, opts),
+    searchNfts: async (params = {}) => searchNftsWithClient(client, params),
+    searchCollections: async (params = {}) => searchCollectionsWithClient(client, params),
+    getNft: async (universalTokenId) => getNftWithClient(client, universalTokenId),
+    getNftEvents: async (universalTokenId, opts) => getNftEventsWithClient(client, universalTokenId, opts),
+    getCollection: async (id) => getCollectionWithClient(client, id),
+    getCollectionEvents: async (id, opts) => getCollectionEventsWithClient(client, id, opts),
+    getUser: async (address) => getUserWithClient(client, address),
+    getTokenPrice: async (symbol) => getTokenPriceWithClient(client, symbol),
+  };
+}
+
+function createDefaultRareApi(): ReturnType<typeof createRareApi> {
+  return createRareApi();
+}
+
 export async function uploadMedia(buffer: Uint8Array, filename: string): Promise<NftMediaEntry> {
+  return createDefaultRareApi().uploadMedia(buffer, filename);
+}
+
+async function uploadMediaWithClient(
+  client: ApiClient,
+  fetchImpl: typeof globalThis.fetch,
+  buffer: Uint8Array,
+  filename: string,
+): Promise<NftMediaEntry> {
   const upload = buildMediaUploadPlan(buffer, filename);
 
   const { data: init } = await client.POST('/v1/nfts/metadata/media/uploads', {
@@ -86,7 +136,7 @@ export async function uploadMedia(buffer: Uint8Array, filename: string): Promise
   });
   if (!init) throw new Error('Failed to initiate media upload');
 
-  const parts = await uploadParts(buffer, init.partSize, init.presignedUrls);
+  const parts = await uploadParts(buffer, init.partSize, init.presignedUrls, fetchImpl);
 
   const { data: complete } = await client.POST('/v1/nfts/metadata/media/uploads/complete', {
     body: {
@@ -107,6 +157,10 @@ export async function uploadMedia(buffer: Uint8Array, filename: string): Promise
 }
 
 export async function pinMetadata(opts: PinMetadataParams): Promise<string> {
+  return createDefaultRareApi().pinMetadata(opts);
+}
+
+async function pinMetadataWithClient(client: ApiClient, opts: PinMetadataParams): Promise<string> {
   const { data: result } = await client.POST('/v1/nfts/metadata', {
     body: buildPinMetadataBody(opts),
   });
@@ -116,12 +170,20 @@ export async function pinMetadata(opts: PinMetadataParams): Promise<string> {
 }
 
 export async function importErc721(opts: ImportErc721RequestParams): Promise<void> {
+  return createDefaultRareApi().importErc721(opts);
+}
+
+async function importErc721WithClient(client: ApiClient, opts: ImportErc721RequestParams): Promise<void> {
   await client.POST('/v1/collections/import', {
     body: buildImportErc721Body(opts),
   });
 }
 
 export async function searchNfts(params: NftSearchParams = {}): Promise<SearchPageResponse<Nft>> {
+  return createDefaultRareApi().searchNfts(params);
+}
+
+async function searchNftsWithClient(client: ApiClient, params: NftSearchParams = {}): Promise<SearchPageResponse<Nft>> {
   const { data } = await client.GET('/v1/nfts', {
     params: {
       query: buildNftSearchQuery(params),
@@ -133,6 +195,13 @@ export async function searchNfts(params: NftSearchParams = {}): Promise<SearchPa
 }
 
 export async function searchCollections(params: CollectionSearchParams = {}): Promise<SearchPageResponse<Collection>> {
+  return createDefaultRareApi().searchCollections(params);
+}
+
+async function searchCollectionsWithClient(
+  client: ApiClient,
+  params: CollectionSearchParams = {},
+): Promise<SearchPageResponse<Collection>> {
   const { data } = await client.GET('/v1/collections', {
     params: {
       query: buildCollectionSearchQuery(params),
@@ -144,6 +213,10 @@ export async function searchCollections(params: CollectionSearchParams = {}): Pr
 }
 
 export async function getNft(universalTokenId: string): Promise<Nft> {
+  return createDefaultRareApi().getNft(universalTokenId);
+}
+
+async function getNftWithClient(client: ApiClient, universalTokenId: string): Promise<Nft> {
   const { data } = await client.GET('/v1/nfts/{universalTokenId}', {
     params: { path: { universalTokenId } },
   });
@@ -153,6 +226,14 @@ export async function getNft(universalTokenId: string): Promise<Nft> {
 }
 
 export async function getNftEvents(
+  universalTokenId: string,
+  opts?: NftEventOptions,
+): Promise<SearchPageResponse<NftEvent>> {
+  return createDefaultRareApi().getNftEvents(universalTokenId, opts);
+}
+
+async function getNftEventsWithClient(
+  client: ApiClient,
   universalTokenId: string,
   opts?: NftEventOptions,
 ): Promise<SearchPageResponse<NftEvent>> {
@@ -173,6 +254,10 @@ export async function getNftEvents(
 }
 
 export async function getCollection(id: string): Promise<Collection> {
+  return createDefaultRareApi().getCollection(id);
+}
+
+async function getCollectionWithClient(client: ApiClient, id: string): Promise<Collection> {
   const { data } = await client.GET('/v1/collections/{id}', {
     params: { path: { id } },
   });
@@ -182,6 +267,14 @@ export async function getCollection(id: string): Promise<Collection> {
 }
 
 export async function getCollectionEvents(
+  id: string,
+  opts?: CollectionEventOptions,
+): Promise<SearchPageResponse<NftEvent>> {
+  return createDefaultRareApi().getCollectionEvents(id, opts);
+}
+
+async function getCollectionEventsWithClient(
+  client: ApiClient,
   id: string,
   opts?: CollectionEventOptions,
 ): Promise<SearchPageResponse<NftEvent>> {
@@ -202,6 +295,10 @@ export async function getCollectionEvents(
 }
 
 export async function getUser(address: string): Promise<UserProfile> {
+  return createDefaultRareApi().getUser(address);
+}
+
+async function getUserWithClient(client: ApiClient, address: string): Promise<UserProfile> {
   const { data } = await client.GET('/v1/users/{address}', {
     params: { path: { address } },
   });
@@ -211,6 +308,13 @@ export async function getUser(address: string): Promise<UserProfile> {
 }
 
 export async function getTokenPrice(symbol: string): Promise<{ symbol: string; priceUsd: number; decimals: number; chainId: number; address: string }> {
+  return createDefaultRareApi().getTokenPrice(symbol);
+}
+
+async function getTokenPriceWithClient(
+  client: ApiClient,
+  symbol: string,
+): Promise<{ symbol: string; priceUsd: number; decimals: number; chainId: number; address: string }> {
   const { data } = await client.GET('/v1/tokens/price/{symbol}', {
     params: { path: { symbol } },
   });
