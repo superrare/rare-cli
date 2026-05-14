@@ -54,16 +54,6 @@ type ReleaseLimitSetResult = TxResult & {
   };
 };
 
-type ReleaseSellerStakingSetResult = TxResult & {
-  config: {
-    rareMinter: Address;
-    contract: Address;
-    amount: string;
-    endTimestamp: string;
-    active: boolean;
-  };
-};
-
 type LiveState = {
   sellerHome: string;
   sellerAddress: Address;
@@ -269,52 +259,6 @@ describeLive('live RareMinter release settings', () => {
     expect(status.txLimit).toBe('1');
   });
 
-  it('configures release seller staking minimum', async () => {
-    const contract = live.releaseContract;
-    const rareMinter = getContractAddresses(live.chain).rareMinter!;
-    const endTimestamp = Math.floor(Date.now() / 1000) + 3_600;
-
-    const staking = await step('set release seller staking minimum', () =>
-      jsonCommand<ReleaseSellerStakingSetResult>(live.sellerHome, [
-        'listing',
-        'release',
-        'staking',
-        'set-minimum',
-        '--contract',
-        contract,
-        '--minimum',
-        '1',
-        '--end-timestamp',
-        endTimestamp.toString(),
-        '--chain',
-        live.chain,
-      ], 240_000),
-    );
-    expectTx(staking);
-    expect(staking.config.rareMinter).toBe(rareMinter);
-    expect(staking.config.contract.toLowerCase()).toBe(contract.toLowerCase());
-    expect(staking.config.amount).toBe('1000000000000000000');
-    expect(staking.config.endTimestamp).toBe(endTimestamp.toString());
-    expect(staking.config.active).toBe(true);
-
-    const status = await jsonCommand<{
-      stakingMinimumAmount: string;
-      stakingMinimumEndTimestamp: string;
-      stakingMinimumActive: boolean;
-    }>(live.sellerHome, [
-      'listing',
-      'release',
-      'status',
-      '--contract',
-      contract,
-      '--chain',
-      live.chain,
-    ]);
-
-    expect(status.stakingMinimumAmount).toBe('1000000000000000000');
-    expect(status.stakingMinimumEndTimestamp).toBe(endTimestamp.toString());
-    expect(status.stakingMinimumActive).toBe(true);
-  });
 });
 
 async function deployReleaseFixtureContract(chain: SupportedChain, privateKey: `0x${string}`, owner: Address): Promise<Address> {

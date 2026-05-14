@@ -65,11 +65,6 @@ type ReleaseLimitOptions = ReleaseContractOptions & {
   limit: string;
 };
 
-type ReleaseStakingOptions = ReleaseContractOptions & {
-  minimum: string;
-  endTimestamp?: string;
-};
-
 type ReleaseStatusOptions = ReleaseContractOptions & {
   account?: string;
 };
@@ -99,10 +94,6 @@ function formatTimestamp(timestamp: bigint): string {
 
 function formatLimit(limit: bigint): string {
   return limit === 0n ? 'none' : limit.toString();
-}
-
-function formatStakingAmount(amount: bigint): string {
-  return `${formatUnits(amount, 18)} RARE`;
 }
 
 function readTextFile(filePath: string, label: string): string {
@@ -603,56 +594,6 @@ export function releaseCommand(): Command {
 
   cmd.addCommand(limits);
 
-  const staking = new Command('staking');
-  staking.description('Configure RareMinter seller staking requirements');
-
-  staking
-    .command('set-minimum')
-    .description('Set the RareMinter seller staking minimum for a release')
-    .requiredOption('--contract <address>', 'collection contract address')
-    .requiredOption('--minimum <rare>', 'minimum staked RARE amount; 0 disables the requirement')
-    .option('--end-timestamp <time>', 'staking minimum end time as unix seconds or an ISO date; required unless minimum is 0')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111)')
-    .action(async (opts: ReleaseStakingOptions): Promise<void> => {
-      try {
-        assertAddressOption(opts.contract, 'contract');
-        const chain = getActiveChain(opts.chain, opts.chainId);
-        const rare = releaseWriteClient(chain);
-
-        log(`Configuring release seller staking minimum on ${chain}...`);
-        log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
-        log(`  Collection: ${opts.contract}`);
-        log(`  Minimum:    ${opts.minimum} RARE`);
-        log(`  Ends:       ${opts.endTimestamp ?? '(not set)'}`);
-
-        const result = await rare.listing.release.setSellerStakingMinimum({
-          contract: opts.contract,
-          amount: opts.minimum,
-          endTimestamp: opts.endTimestamp,
-        });
-
-        output(
-          {
-            txHash: result.txHash,
-            blockNumber: result.receipt.blockNumber.toString(),
-            config: result.config,
-          },
-          () => {
-            console.log(`\nTransaction sent: ${result.txHash}`);
-            console.log(`Seller staking minimum configured! Block: ${result.receipt.blockNumber}`);
-            console.log(`  Amount: ${formatStakingAmount(result.config.amount)}`);
-            console.log(`  Ends:   ${formatTimestamp(result.config.endTimestamp)}`);
-            console.log(`  Active: ${result.config.active ? 'yes' : 'no'}`);
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
-    });
-
-  cmd.addCommand(staking);
-
   cmd
     .command('status')
     .description('Get RareMinter direct sale release details (read-only)')
@@ -701,10 +642,6 @@ export function releaseCommand(): Command {
           }
           console.log(`  Mint limit:         ${result.mintLimit === 0n ? 'none' : result.mintLimit.toString()}`);
           console.log(`  Transaction limit:  ${result.txLimit === 0n ? 'none' : result.txLimit.toString()}`);
-          if (result.stakingMinimumAmount > 0n) {
-            console.log(`  Staking minimum:    ${formatStakingAmount(result.stakingMinimumAmount)}`);
-            console.log(`  Staking ends:       ${formatTimestamp(result.stakingMinimumEndTimestamp)}`);
-          }
           if (result.totalSupply !== null || result.maxSupply !== null) {
             const total = result.totalSupply?.toString() ?? 'unknown';
             const max = result.maxSupply?.toString() ?? 'unknown';

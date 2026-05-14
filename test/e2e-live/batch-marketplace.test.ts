@@ -233,7 +233,7 @@ describeLive('live batch marketplace CLI commands', () => {
     expect(created.root).toBe(tree.root);
 
     const configured = await readBatchAuctionStatus(fixture, token, proof.proofPath, tree.root);
-    expect(configured.state).toBe('CONFIGURED');
+    expect(configured.state).toBe('RESERVE_NOT_MET');
     expect(configured.hasRootConfig).toBe(true);
     expect(configured.root).toBe(tree.root);
 

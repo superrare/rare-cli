@@ -163,7 +163,6 @@ function isLiveWriteCommand(args: string[]): boolean {
     if (releaseSubcommand === 'mint') return true;
     if (releaseSubcommand === 'allowlist') return args[3] === 'set' || args[3] === 'clear';
     if (releaseSubcommand === 'limits') return args[3]?.startsWith('set-') === true;
-    if (releaseSubcommand === 'staking') return args[3] === 'set-minimum';
     return false;
   }
   if (command === 'batch') {

@@ -765,15 +765,6 @@ export type ReleaseLimitConfig = {
   enabled: boolean;
 }
 
-export type ReleaseSellerStakingMinimum = {
-  rareMinter: Address;
-  contract: Address;
-  amount: bigint;
-  endTimestamp: bigint;
-  active: boolean;
-  now: bigint;
-}
-
 export type ReleaseSetAllowlistConfigParams = {
   contract: Address;
   root?: Hash;
@@ -792,16 +783,6 @@ export type ReleaseSetLimitParams = {
 
 export type ReleaseSetLimitResult = {
   config: ReleaseLimitConfig;
-} & TransactionResult
-
-export type ReleaseSetSellerStakingMinimumParams = {
-  contract: Address;
-  amount: AmountInput;
-  endTimestamp?: TimestampInput;
-}
-
-export type ReleaseSetSellerStakingMinimumResult = {
-  config: ReleaseSellerStakingMinimum;
 } & TransactionResult
 
 export type ReleaseStatusParams = {
@@ -830,9 +811,6 @@ export type ReleaseStatus = {
   account: Address | null;
   accountMints: bigint | null;
   accountTxs: bigint | null;
-  stakingMinimumAmount: bigint;
-  stakingMinimumEndTimestamp: bigint;
-  stakingMinimumActive: boolean;
   totalSupply: bigint | null;
   maxSupply: bigint | null;
   remainingSupply: bigint | null;
@@ -1204,8 +1182,6 @@ export type ReleaseNamespace = {
   setMintLimit: (params: ReleaseSetLimitParams) => Promise<ReleaseSetLimitResult>;
   getTxLimit: (params: { contract: Address }) => Promise<ReleaseLimitConfig>;
   setTxLimit: (params: ReleaseSetLimitParams) => Promise<ReleaseSetLimitResult>;
-  getSellerStakingMinimum: (params: { contract: Address }) => Promise<ReleaseSellerStakingMinimum>;
-  setSellerStakingMinimum: (params: ReleaseSetSellerStakingMinimumParams) => Promise<ReleaseSetSellerStakingMinimumResult>;
   mintDirectSale: (params: ReleaseMintDirectSaleParams) => Promise<ReleaseMintDirectSaleResult>;
   getStatus: (params: ReleaseStatusParams) => Promise<ReleaseStatus>;
 }

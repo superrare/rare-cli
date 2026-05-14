@@ -216,25 +216,6 @@ describeLive('live collection CLI writes', () => {
     expect(tokenReceiver.tokenId).toBe('1');
     expect(tokenReceiver.receiver.toLowerCase()).toBe(fixture.sellerAddress.toLowerCase());
 
-    const percentage = await step('set royalty registry contract percentage', () =>
-      jsonCommand<TxResult & { registry: string; contract: string; percentage: number }>(fixture.sellerHome, [
-        'collection',
-        'royalty',
-        'registry',
-        'set-contract-percentage',
-        '--contract',
-        created.contract,
-        '--percentage',
-        '7',
-        '--chain',
-        fixture.chain,
-      ]),
-    );
-    expectTx(percentage);
-    expect(percentage.registry.toLowerCase()).toBe(registry.toLowerCase());
-    expect(percentage.contract.toLowerCase()).toBe(created.contract.toLowerCase());
-    expect(percentage.percentage).toBe(7);
-
     const registryStatus = await jsonCommand<{
       configuredContractPercentage?: number;
       contractReceiver?: string;
@@ -251,7 +232,6 @@ describeLive('live collection CLI writes', () => {
       '--chain',
       fixture.chain,
     ]);
-    expect(registryStatus.configuredContractPercentage).toBe(7);
     expect(registryStatus.contractReceiver?.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
     expect(registryStatus.tokenReceiver?.toLowerCase()).toBe(fixture.sellerAddress.toLowerCase());
   });

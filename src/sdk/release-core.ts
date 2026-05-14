@@ -16,7 +16,6 @@ import type {
   ReleaseConfigureParams,
   ReleaseLimitConfig,
   ReleaseMintDirectSaleParams,
-  ReleaseSellerStakingMinimum,
   ReleaseStatus,
   TimestampInput,
 } from './types.js';
@@ -57,12 +56,6 @@ export type ReleaseLimitConfigPlan = {
   limit: bigint;
 };
 
-export type ReleaseSellerStakingMinimumPlan = {
-  contract: Address;
-  amount: bigint;
-  endTimestamp: bigint;
-};
-
 export type RawDirectSaleConfig = {
   seller: Address;
   currencyAddress: Address;
@@ -75,11 +68,6 @@ export type RawDirectSaleConfig = {
 
 export type RawAllowlistConfig = {
   root: `0x${string}`;
-  endTimestamp: bigint;
-};
-
-export type RawStakingMinimum = {
-  amount: bigint;
   endTimestamp: bigint;
 };
 
@@ -351,33 +339,6 @@ export function planReleaseLimitConfig(params: {
     contract: params.contract,
     limit: toNonNegativeInteger(params.limit, 'limit'),
   };
-}
-
-export function planReleaseSellerStakingMinimum(params: {
-  contract: Address;
-  amount: AmountInput;
-  endTimestamp?: TimestampInput;
-}): ReleaseSellerStakingMinimumPlan {
-  const amount = normalizeReleaseStakingAmount(params.amount);
-  const endTimestamp = params.endTimestamp === undefined && amount === 0n
-    ? 0n
-    : normalizeReleaseTimestamp(params.endTimestamp, 'endTimestamp');
-
-  return {
-    contract: params.contract,
-    amount,
-    endTimestamp,
-  };
-}
-
-export function normalizeReleaseStakingAmount(amount: AmountInput): bigint {
-  const normalized = typeof amount === 'bigint'
-    ? amount
-    : parseEther(String(amount));
-  if (normalized < 0n) {
-    throw new Error('amount must be greater than or equal to 0.');
-  }
-  return normalized;
 }
 
 export function planReleaseDirectSaleMint(params: ReleaseMintDirectSaleParams): ReleaseDirectSaleMintPlan {
@@ -742,22 +703,6 @@ export function shapeReleaseLimitConfig(opts: {
   };
 }
 
-export function shapeReleaseSellerStakingMinimum(opts: {
-  rareMinter: Address;
-  contract: Address;
-  stakingMinimum: RawStakingMinimum;
-  nowSeconds: bigint;
-}): ReleaseSellerStakingMinimum {
-  return {
-    rareMinter: opts.rareMinter,
-    contract: opts.contract,
-    amount: opts.stakingMinimum.amount,
-    endTimestamp: opts.stakingMinimum.endTimestamp,
-    active: opts.stakingMinimum.amount > 0n && opts.stakingMinimum.endTimestamp > opts.nowSeconds,
-    now: opts.nowSeconds,
-  };
-}
-
 export function assertReleaseAllowlistConfigMatches(expected: {
   root: `0x${string}`;
   endTimestamp: bigint;
@@ -779,18 +724,6 @@ export function assertReleaseLimitMatches(field: string, expected: bigint, actua
   }
 }
 
-export function assertReleaseSellerStakingMinimumMatches(expected: {
-  amount: bigint;
-  endTimestamp: bigint;
-}, actual: RawStakingMinimum): void {
-  if (actual.amount !== expected.amount || actual.endTimestamp !== expected.endTimestamp) {
-    throw new Error(
-      `RareMinter seller staking minimum verification failed. Expected amount ${expected.amount} ending ${expected.endTimestamp}, ` +
-        `read amount ${actual.amount} ending ${actual.endTimestamp}.`,
-    );
-  }
-}
-
 export function shapeReleaseStatus(opts: {
   rareMinter: Address;
   contract: Address;
@@ -801,7 +734,6 @@ export function shapeReleaseStatus(opts: {
   account: Address | null;
   accountMints: bigint | null;
   accountTxs: bigint | null;
-  stakingMinimum: RawStakingMinimum;
   totalSupply: bigint | null;
   maxSupply: bigint | null;
   currencyDecimals: number | null;
@@ -810,7 +742,6 @@ export function shapeReleaseStatus(opts: {
   const configured = opts.directSale.seller !== ETH_ADDRESS;
   const started = configured && opts.directSale.startTime <= opts.nowSeconds;
   const allowlistActive = opts.allowlist.root !== ZERO_BYTES32 && opts.allowlist.endTimestamp > opts.nowSeconds;
-  const stakingMinimumActive = opts.stakingMinimum.amount > 0n && opts.stakingMinimum.endTimestamp > opts.nowSeconds;
 
   const remainingSupply =
     opts.totalSupply !== null && opts.maxSupply !== null
@@ -860,9 +791,6 @@ export function shapeReleaseStatus(opts: {
     account: opts.account,
     accountMints: opts.accountMints,
     accountTxs: opts.accountTxs,
-    stakingMinimumAmount: opts.stakingMinimum.amount,
-    stakingMinimumEndTimestamp: opts.stakingMinimum.endTimestamp,
-    stakingMinimumActive,
     totalSupply: opts.totalSupply,
     maxSupply: opts.maxSupply,
     remainingSupply,

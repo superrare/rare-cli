@@ -686,7 +686,7 @@ describe('built CLI deterministic behavior', () => {
       expect(help.stdout).toContain('configure');
       expect(help.stdout).toContain('allowlist');
       expect(help.stdout).toContain('limits');
-      expect(help.stdout).toContain('staking');
+      expect(help.stdout).not.toContain('staking');
       expect(help.stdout).toContain('mint');
       expect(help.stdout).toContain('status');
 

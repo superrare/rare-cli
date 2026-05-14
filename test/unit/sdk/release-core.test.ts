@@ -5,7 +5,6 @@ import {
   assertReleaseAllowlistConfigMatches,
   assertReleaseContractOwner,
   assertReleaseLimitMatches,
-  assertReleaseSellerStakingMinimumMatches,
   buildReleaseAllowlistArtifact,
   buildReleaseAllowlistArtifactFromInput,
   collectReleaseSplit,
@@ -19,13 +18,11 @@ import {
   planReleaseConfigure,
   planReleaseDirectSaleMint,
   planReleaseLimitConfig,
-  planReleaseSellerStakingMinimum,
   preflightReleaseDirectSaleMint,
   resolveReleaseSplits,
   shapeReleaseAllowlistConfig,
   shapeReleaseLimitConfig,
   shapeReleaseMintTokenRange,
-  shapeReleaseSellerStakingMinimum,
   shapeReleaseStatus,
   verifyReleaseAllowlistProof,
 } from '../../../src/sdk/release-core.js';
@@ -251,39 +248,10 @@ describe('release allowlist and limit planning', () => {
     );
   });
 
-  it('plans seller staking minimum amounts in RARE units and allows zero to clear', () => {
-    expect(
-      planReleaseSellerStakingMinimum({
-        contract: collection,
-        amount: '12.5',
-        endTimestamp: 123n,
-      }),
-    ).toEqual({
-      contract: collection,
-      amount: parseEther('12.5'),
-      endTimestamp: 123n,
-    });
-    expect(
-      planReleaseSellerStakingMinimum({
-        contract: collection,
-        amount: '0',
-      }),
-    ).toEqual({
-      contract: collection,
-      amount: 0n,
-      endTimestamp: 0n,
-    });
-    expect(() =>
-      planReleaseSellerStakingMinimum({
-        contract: collection,
-        amount: '1',
-      }),
-    ).toThrow('endTimestamp is required.');
-  });
 });
 
 describe('release config result shaping and verification', () => {
-  it('shapes allowlist, limit, and staking config reads in the core', () => {
+  it('shapes allowlist and limit config reads in the core', () => {
     expect(shapeReleaseAllowlistConfig({
       rareMinter,
       contract: collection,
@@ -309,19 +277,6 @@ describe('release config result shaping and verification', () => {
       enabled: false,
     });
 
-    expect(shapeReleaseSellerStakingMinimum({
-      rareMinter,
-      contract: collection,
-      stakingMinimum: { amount: 1n, endTimestamp: 900n },
-      nowSeconds: 1_000n,
-    })).toEqual({
-      rareMinter,
-      contract: collection,
-      amount: 1n,
-      endTimestamp: 900n,
-      active: false,
-      now: 1_000n,
-    });
   });
 
   it('verifies RareMinter config readbacks without SDK shell logic', () => {
@@ -337,12 +292,6 @@ describe('release config result shaping and verification', () => {
       'RareMinter mint limit verification failed.',
     );
 
-    const staking = { amount: 5n, endTimestamp: 999n };
-    expect(() => assertReleaseSellerStakingMinimumMatches(staking, staking)).not.toThrow();
-    expect(() => assertReleaseSellerStakingMinimumMatches(staking, {
-      ...staking,
-      amount: 6n,
-    })).toThrow('RareMinter seller staking minimum verification failed.');
   });
 });
 
@@ -367,7 +316,6 @@ describe('release status shaping', () => {
         account: null,
         accountMints: null,
         accountTxs: null,
-        stakingMinimum: { amount: 0n, endTimestamp: 0n },
         totalSupply: 5n,
         maxSupply: 10n,
         currencyDecimals: 18,
@@ -377,7 +325,6 @@ describe('release status shaping', () => {
       configured: true,
       started: true,
       allowlistActive: false,
-      stakingMinimumActive: false,
       remainingSupply: 5n,
       soldOut: false,
       currentlyMintable: true,
@@ -404,7 +351,6 @@ describe('release status shaping', () => {
       account: recipientAddress,
       accountMints: 2n,
       accountTxs: 0n,
-      stakingMinimum: { amount: 10n, endTimestamp: 1_500n },
       totalSupply: 10n,
       maxSupply: 10n,
       currencyDecimals: 18,
@@ -414,7 +360,6 @@ describe('release status shaping', () => {
     expect(limited).toMatchObject({
       allowlistActive: true,
       requiresAllowlist: true,
-      stakingMinimumActive: true,
       remainingSupply: 0n,
       soldOut: true,
       currentlyMintable: false,
@@ -438,7 +383,6 @@ describe('release status shaping', () => {
       account: null,
       accountMints: null,
       accountTxs: null,
-      stakingMinimum: { amount: 0n, endTimestamp: 0n },
       totalSupply: null,
       maxSupply: null,
       currencyDecimals: 18,
@@ -504,7 +448,6 @@ describe('release direct sale mint planning', () => {
       account: accountAddress,
       accountMints: 1n,
       accountTxs: 0n,
-      stakingMinimum: { amount: 0n, endTimestamp: 0n },
       totalSupply: 1n,
       maxSupply: 3n,
       currencyDecimals: 18,
@@ -552,7 +495,6 @@ describe('release direct sale mint planning', () => {
       account: accountAddress,
       accountMints: 0n,
       accountTxs: 0n,
-      stakingMinimum: { amount: 0n, endTimestamp: 0n },
       totalSupply: 2n,
       maxSupply: 2n,
       currencyDecimals: 18,

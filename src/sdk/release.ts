@@ -18,7 +18,6 @@ import {
   assertReleaseContractOwner,
   assertReleaseAllowlistConfigMatches,
   assertReleaseLimitMatches,
-  assertReleaseSellerStakingMinimumMatches,
   buildReleaseAllowlistArtifactFromInput,
   getReleaseAllowlistProof,
   planReleaseConfigure,
@@ -26,18 +25,15 @@ import {
   planReleaseClearAllowlistConfig,
   planReleaseLimitConfig,
   planReleaseDirectSaleMint,
-  planReleaseSellerStakingMinimum,
   preflightReleaseDirectSaleMint,
   parseReleaseAllowlistArtifactJson,
   requireRareMinterAddress,
   shapeReleaseAllowlistConfig,
   shapeReleaseLimitConfig,
   shapeReleaseMintTokenRange,
-  shapeReleaseSellerStakingMinimum,
   shapeReleaseStatus,
   type RawAllowlistConfig,
   type RawDirectSaleConfig,
-  type RawStakingMinimum,
   type ReleaseMintTokenRange,
   ZERO_BYTES32,
 } from './release-core.js';
@@ -205,19 +201,6 @@ async function readTxLimit(opts: {
   });
 }
 
-async function readSellerStakingMinimum(opts: {
-  publicClient: PublicClient;
-  rareMinter: Address;
-  contract: Address;
-}): Promise<RawStakingMinimum> {
-  return opts.publicClient.readContract({
-    address: opts.rareMinter,
-    abi: rareMinterAbi,
-    functionName: 'getContractSellerStakingMinimum',
-    args: [opts.contract],
-  });
-}
-
 async function readReleaseStatus(opts: {
   publicClient: PublicClient;
   rareMinter: Address;
@@ -229,13 +212,11 @@ async function readReleaseStatus(opts: {
     allowlist,
     mintLimit,
     txLimit,
-    stakingMinimum,
   ] = await Promise.all([
     readDirectSaleConfig(opts),
     readAllowlistConfig(opts),
     readMintLimit(opts),
     readTxLimit(opts),
-    readSellerStakingMinimum(opts),
   ]);
 
   const [
@@ -284,7 +265,6 @@ async function readReleaseStatus(opts: {
     account: opts.account ?? null,
     accountMints,
     accountTxs,
-    stakingMinimum,
     totalSupply,
     maxSupply,
     currencyDecimals,
@@ -555,60 +535,6 @@ export function createReleaseNamespace(
         txHash,
         receipt,
         config: shapeReleaseLimitConfig({ rareMinter, contract: plan.contract, limit }),
-      };
-    },
-
-    async getSellerStakingMinimum(params): ReturnType<ReleaseNamespace['getSellerStakingMinimum']> {
-      const rareMinter = requireRareMinterAddress(addresses.rareMinter);
-      const stakingMinimum = await readSellerStakingMinimum({
-        publicClient,
-        rareMinter,
-        contract: params.contract,
-      });
-      return shapeReleaseSellerStakingMinimum({
-        rareMinter,
-        contract: params.contract,
-        stakingMinimum,
-        nowSeconds: currentUnixTimestamp(),
-      });
-    },
-
-    async setSellerStakingMinimum(params): ReturnType<ReleaseNamespace['setSellerStakingMinimum']> {
-      const rareMinter = requireRareMinterAddress(addresses.rareMinter);
-      const { walletClient, account, accountAddress } = requireWallet(config);
-      const plan = planReleaseSellerStakingMinimum(params);
-
-      await assertCollectionOwnerForReleaseWrite({
-        publicClient,
-        contract: plan.contract,
-        accountAddress,
-      });
-
-      const txHash = await walletClient.writeContract({
-        address: rareMinter,
-        abi: rareMinterAbi,
-        functionName: 'setContractSellerStakingMinimum',
-        args: [plan.contract, plan.amount, plan.endTimestamp],
-        account,
-        chain: undefined,
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const stakingMinimum = await readSellerStakingMinimum({
-        publicClient,
-        rareMinter,
-        contract: plan.contract,
-      });
-      assertReleaseSellerStakingMinimumMatches(plan, stakingMinimum);
-
-      return {
-        txHash,
-        receipt,
-        config: shapeReleaseSellerStakingMinimum({
-          rareMinter,
-          contract: plan.contract,
-          stakingMinimum,
-          nowSeconds: currentUnixTimestamp(),
-        }),
       };
     },
 
