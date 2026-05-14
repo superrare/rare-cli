@@ -22,7 +22,7 @@ type WalletResult = {
 type PlaintextWalletConfig = ChainConfig & { privateKey: `0x${string}` };
 type OnePasswordWalletConfig = ChainConfig & {
   privateKeyRef: PrivateKeyReference;
-  walletAddress: Address;
+  accountAddress: Address;
 };
 type WalletConfig = PlaintextWalletConfig | OnePasswordWalletConfig;
 
@@ -69,13 +69,13 @@ export function tryGetWalletClient(
   };
 }
 
-export function getConfiguredWalletAddress(chain: SupportedChain): Address | undefined {
+export function getConfiguredAccountAddress(chain: SupportedChain): Address | undefined {
   const chainConfig = getChainConfig(chain);
   if (chainConfig.privateKey) {
     return privateKeyToAccount(chainConfig.privateKey).address;
   }
 
-  return chainConfig.walletAddress;
+  return chainConfig.accountAddress;
 }
 
 function getWalletAccount(chainConfig: WalletConfig): WalletAccount {
@@ -84,7 +84,7 @@ function getWalletAccount(chainConfig: WalletConfig): WalletAccount {
   }
 
   return createOnePasswordAccount({
-    address: chainConfig.walletAddress,
+    address: chainConfig.accountAddress,
     privateKeyRef: chainConfig.privateKeyRef,
   });
 }
@@ -96,7 +96,7 @@ function getWalletConfig(chain: SupportedChain): WalletConfig {
 
   if (chainConfig.privateKeyRef !== undefined) {
     throw new Error(
-      `1Password private key reference configured for chain "${chain}" is missing walletAddress. ` +
+      `1Password private key reference configured for chain "${chain}" is missing accountAddress. ` +
         `Run: rare configure --chain ${chain} --private-key-ref ${chainConfig.privateKeyRef}`,
     );
   }
@@ -113,7 +113,7 @@ function getWalletConfig(chain: SupportedChain): WalletConfig {
   writeConfig(setChainConfig(readConfig(), chain, {
     privateKey,
     privateKeyRef: undefined,
-    walletAddress: undefined,
+    accountAddress: undefined,
   }));
   console.log(`Private key saved to config for chain: ${chain}\n`);
 
@@ -125,11 +125,11 @@ function getExistingWalletConfig(chainConfig: ChainConfig): WalletConfig | null 
     return { ...chainConfig, privateKey: chainConfig.privateKey };
   }
 
-  if (chainConfig.privateKeyRef !== undefined && chainConfig.walletAddress !== undefined) {
+  if (chainConfig.privateKeyRef !== undefined && chainConfig.accountAddress !== undefined) {
     return {
       ...chainConfig,
       privateKeyRef: chainConfig.privateKeyRef,
-      walletAddress: chainConfig.walletAddress,
+      accountAddress: chainConfig.accountAddress,
     };
   }
 

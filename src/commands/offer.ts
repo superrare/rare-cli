@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { formatUnits, type Address } from 'viem';
 import { getActiveChain } from '../config.js';
-import { getConfiguredWalletAddress, getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
+import { getConfiguredAccountAddress, getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
 import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
@@ -500,5 +500,5 @@ function rejectTokenScopeOptions(opts: { contract?: string; tokenId?: string }, 
 }
 
 function getConfiguredAccount(chain: ReturnType<typeof getActiveChain>): Address | undefined {
-  return getConfiguredWalletAddress(chain);
+  return getConfiguredAccountAddress(chain);
 }

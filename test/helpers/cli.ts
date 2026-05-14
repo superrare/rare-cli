@@ -27,6 +27,7 @@ export async function withTempHome<T>(fn: (home: string) => Promise<T>): Promise
 export async function runCli(args: string[], opts: {
   home?: string;
   env?: NodeJS.ProcessEnv;
+  input?: string;
   timeoutMs?: number;
 } = {}): Promise<CliResult> {
   const command = `rare ${redactArgs(args).join(' ')}`;
@@ -38,8 +39,11 @@ export async function runCli(args: string[], opts: {
       USERPROFILE: opts.home ?? process.env.USERPROFILE,
       ...opts.env,
     },
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: [opts.input === undefined ? 'ignore' : 'pipe', 'pipe', 'pipe'],
   });
+  if (opts.input !== undefined) {
+    child.stdin?.end(opts.input);
+  }
   const stdout = text(child.stdout);
   const stderr = text(child.stderr);
   const code = await waitForClose(child, opts.timeoutMs ?? 30_000, command);

@@ -10,7 +10,7 @@ export type PrivateKeyReference = `op://${string}`;
 export type ChainConfig = {
   privateKey?: `0x${string}`;
   privateKeyRef?: PrivateKeyReference;
-  walletAddress?: Address;
+  accountAddress?: Address;
   rpcUrl?: string;
 }
 
@@ -21,6 +21,14 @@ export type Config = {
 
 const CONFIG_DIR = path.join(os.homedir(), '.rare');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
+
+export function getConfigFilePath(): string {
+  return CONFIG_FILE;
+}
+
+export function configFileExists(): boolean {
+  return fs.existsSync(CONFIG_FILE);
+}
 
 export function readConfig(): Config {
   try {
@@ -35,6 +43,19 @@ export function readConfig(): Config {
 export function writeConfig(config: Config): void {
   fs.mkdirSync(CONFIG_DIR, { recursive: true });
   fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+}
+
+export function deleteConfig(): boolean {
+  try {
+    fs.unlinkSync(CONFIG_FILE);
+    return true;
+  } catch (error) {
+    if (isNodeFileNotFoundError(error)) {
+      return false;
+    }
+
+    throw error;
+  }
 }
 
 export function setDefaultChain(config: Config, defaultChain: SupportedChain): Config {
@@ -147,15 +168,13 @@ function parseChainConfig(value: unknown): ChainConfig | undefined {
   const privateKeyRef = typeof value.privateKeyRef === 'string' && isPrivateKeyReference(value.privateKeyRef)
     ? value.privateKeyRef
     : undefined;
-  const walletAddress = typeof value.walletAddress === 'string' && isAddress(value.walletAddress)
-    ? getAddress(value.walletAddress)
-    : undefined;
+  const accountAddress = parseAccountAddress(value);
   const rpcUrl = typeof value.rpcUrl === 'string' ? value.rpcUrl : undefined;
 
   if (
     privateKey === undefined &&
     privateKeyRef === undefined &&
-    walletAddress === undefined &&
+    accountAddress === undefined &&
     rpcUrl === undefined
   ) {
     return undefined;
@@ -164,11 +183,23 @@ function parseChainConfig(value: unknown): ChainConfig | undefined {
   return {
     ...(privateKey === undefined ? {} : { privateKey }),
     ...(privateKeyRef === undefined ? {} : { privateKeyRef }),
-    ...(walletAddress === undefined ? {} : { walletAddress }),
+    ...(accountAddress === undefined ? {} : { accountAddress }),
     ...(rpcUrl === undefined ? {} : { rpcUrl }),
   };
 }
 
+function parseAccountAddress(value: Record<string, unknown>): Address | undefined {
+  const accountAddress = typeof value.accountAddress === 'string' ? value.accountAddress : undefined;
+  const legacyWalletAddress = typeof value.walletAddress === 'string' ? value.walletAddress : undefined;
+  const candidate = accountAddress ?? legacyWalletAddress;
+
+  return candidate !== undefined && isAddress(candidate) ? getAddress(candidate) : undefined;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isNodeFileNotFoundError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }

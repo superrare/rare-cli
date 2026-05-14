@@ -24,7 +24,14 @@ Manages CLI configuration stored at `~/.rare/config.json`.
 | `--private-key-ref <op://ref>` | Set a 1Password secret reference for signing transactions |
 | `--rpc-url <url>` | Set custom RPC endpoint |
 | `--default-chain <chain>` | Set the default network |
-| `--show` | Display current config (keys masked, 1Password refs shown) |
+| `--show` | Display current config (keys masked, account addresses and 1Password refs shown) |
+
+Subcommands:
+
+| Command | Description |
+|---|---|
+| `delete` | Delete `~/.rare/config.json` after a y/N confirmation prompt |
+| `delete --yes` | Delete `~/.rare/config.json` without prompting |
 
 ---
 

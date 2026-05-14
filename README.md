@@ -74,7 +74,7 @@ rare configure --chain sepolia --private-key-ref op://Private/rare-sepolia/priva
 rare configure --show
 ```
 
-Private keys are masked in the output.
+Private keys are masked in the output. Configured account addresses are shown.
 
 ## Usage
 
@@ -704,7 +704,7 @@ await rare.import.erc721({
 
 ## Configuration
 
-Config is stored at `~/.rare/config.json`. Each chain has its own key source and RPC URL. A key source can be a plaintext `privateKey` or a 1Password `privateKeyRef` plus the derived public `walletAddress`.
+Config is stored at `~/.rare/config.json`. Each chain has its own key source and RPC URL. A key source can be a plaintext `privateKey` or a 1Password `privateKeyRef` plus a derived public address. `rare configure --show` prints the account address for configured key sources.
 
 ```bash
 # Set private key and RPC for a chain
@@ -720,8 +720,14 @@ rare configure --chain base-sepolia --private-key 0x... --rpc-url https://your-b
 # Change default network
 rare configure --default-chain mainnet
 
-# View current config
+# View current config, including derived account addresses
 rare configure --show
+
+# Delete local config (prompts for confirmation)
+rare configure delete
+
+# Delete local config without prompting
+rare configure delete --yes
 ```
 
 Merkle root and proof flows use `https://api.superrare.com` by default. Set `RARE_API_BASE_URL` to point the SDK and CLI at another rare-api deployment.

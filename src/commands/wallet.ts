@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { readConfig, setChainConfig, writeConfig, getActiveChain } from '../config.js';
-import { getConfiguredWalletAddress, getWalletClient } from '../client.js';
+import { getConfiguredAccountAddress, getWalletClient } from '../client.js';
 import { chainIds, supportedChains } from '../contracts/addresses.js';
 import { output } from '../output.js';
 
@@ -46,7 +46,7 @@ export function walletCommand(): Command {
         writeConfig(setChainConfig(readConfig(), selectedChain, {
           privateKey,
           privateKeyRef: undefined,
-          walletAddress: undefined,
+          accountAddress: undefined,
         }));
         console.log(`\nPrivate key saved to config for chain: ${selectedChain}`);
       }
@@ -59,7 +59,7 @@ export function walletCommand(): Command {
     .option('--chain-id <id>', `chain ID to use (${Object.entries(chainIds).map(([chain, id]) => `${id} (${chain})`).join(', ')})`)
     .action((opts: WalletAddressOptions): void => {
       const chain = getActiveChain(opts.chain, opts.chainId);
-      console.log(getConfiguredWalletAddress(chain) ?? getWalletClient(chain).account.address);
+      console.log(getConfiguredAccountAddress(chain) ?? getWalletClient(chain).account.address);
     });
 
   return cmd;

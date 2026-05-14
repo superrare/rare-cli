@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isAddress, zeroAddress } from 'viem';
@@ -23,6 +23,8 @@ describe('built CLI deterministic behavior', () => {
 
   it('writes and displays config without touching the real home directory', async () => {
     await withTempHome(async (home) => {
+      const privateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+      const expectedAddress = privateKeyToAccount(privateKey).address;
       const configure = await runCli([
         'configure',
         '--default-chain',
@@ -30,7 +32,7 @@ describe('built CLI deterministic behavior', () => {
         '--chain',
         'sepolia',
         '--private-key',
-        '0xabc123',
+        privateKey,
         '--rpc-url',
         'http://127.0.0.1:8545',
       ], { home });
@@ -43,7 +45,7 @@ describe('built CLI deterministic behavior', () => {
         defaultChain: 'base-sepolia',
         chains: {
           sepolia: {
-            privateKey: '0xabc123',
+            privateKey,
             rpcUrl: 'http://127.0.0.1:8545',
           },
         },
@@ -57,7 +59,8 @@ describe('built CLI deterministic behavior', () => {
         chains: {
           sepolia: {
             keySource: 'plaintext',
-            privateKey: '0xabc1...c123',
+            privateKey: '0x0123...cdef',
+            accountAddress: expectedAddress,
             rpcUrl: 'http://127.0.0.1:8545',
           },
         },
@@ -65,17 +68,68 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('configures a 1Password private key reference without storing plaintext', async () => {
+  it('deletes config only after confirmation', async () => {
     await withTempHome(async (home) => {
-      const privateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
-      const expectedAddress = privateKeyToAccount(privateKey).address;
-      const fakeOp = await createFakeOp(home);
-      const env = fakeOpEnv(fakeOp.binDir, privateKey);
-
+      const configPath = join(home, '.rare', 'config.json');
       const configure = await runCli([
         'configure',
         '--chain',
         'sepolia',
+        '--rpc-url',
+        'http://127.0.0.1:8545',
+      ], { home });
+      expect(configure.code).toBe(0);
+
+      const aborted = await runCli(['configure', 'delete'], { home, input: 'n\n' });
+      expect(aborted.code).toBe(0);
+      expect(aborted.stdout).toContain(`This will permanently delete rare config at ${configPath}.`);
+      expect(aborted.stdout).toContain('This cannot be undone.');
+      expect(aborted.stdout).toContain('Delete config? [y/N]');
+      expect(aborted.stdout).toContain('Aborted.');
+      expect(aborted.stderr).toBe('');
+      expect(JSON.parse(await readFile(configPath, 'utf8'))).toEqual({
+        chains: {
+          sepolia: {
+            rpcUrl: 'http://127.0.0.1:8545',
+          },
+        },
+      });
+
+      const deleted = await runCli(['configure', 'delete'], { home, input: 'yes\n' });
+      expect(deleted.code).toBe(0);
+      expect(deleted.stdout).toContain('This cannot be undone.');
+      expect(deleted.stdout).toContain(`Deleted rare config: ${configPath}`);
+      expect(deleted.stderr).toBe('');
+      await expect(access(configPath)).rejects.toMatchObject({ code: 'ENOENT' });
+
+      const missing = await runCli(['configure', 'delete', '--yes'], { home });
+      expect(missing.code).toBe(0);
+      expect(missing.stdout).toContain(`No rare config found at ${configPath}`);
+      expect(missing.stderr).toBe('');
+    });
+  });
+
+  it('configures a 1Password private key reference without storing plaintext', async () => {
+    await withTempHome(async (home) => {
+      const privateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+      const previousPrivateKey = '0x1111111111111111111111111111111111111111111111111111111111111111';
+      const expectedAddress = privateKeyToAccount(privateKey).address;
+      const fakeOp = await createFakeOp(home);
+      const env = fakeOpEnv(fakeOp.binDir, privateKey);
+
+      const configurePlaintext = await runCli([
+        'configure',
+        '--chain',
+        'sepolia',
+        '--private-key',
+        previousPrivateKey,
+        '--rpc-url',
+        'http://127.0.0.1:7545',
+      ], { home });
+      expect(configurePlaintext.code).toBe(0);
+
+      const configure = await runCli([
+        'configure',
         '--private-key-ref',
         'op://Private/rare-sepolia/private-key',
         '--rpc-url',
@@ -91,7 +145,7 @@ describe('built CLI deterministic behavior', () => {
         chains: {
           sepolia: {
             privateKeyRef: 'op://Private/rare-sepolia/private-key',
-            walletAddress: expectedAddress,
+            accountAddress: expectedAddress,
             rpcUrl: 'http://127.0.0.1:8545',
           },
         },
@@ -117,7 +171,7 @@ describe('built CLI deterministic behavior', () => {
           sepolia: {
             keySource: '1password',
             privateKeyRef: 'op://Private/rare-sepolia/private-key',
-            walletAddress: expectedAddress,
+            accountAddress: expectedAddress,
             rpcUrl: 'http://127.0.0.1:8545',
           },
         },
