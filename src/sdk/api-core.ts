@@ -1,4 +1,8 @@
 import { isAddress, type Address } from 'viem';
+import type { paths } from '../data-access/schema.js';
+
+type NftListQuery = NonNullable<paths['/v1/nfts']['get']['parameters']['query']>;
+type CollectionListQuery = NonNullable<paths['/v1/collections']['get']['parameters']['query']>;
 
 export type NftMediaEntry = {
   url: string;
@@ -38,25 +42,31 @@ export type NftSearchParams = {
   query?: string;
   page?: number;
   perPage?: number;
-  sortBy?: 'newest' | 'oldest' | 'priceAsc' | 'priceDesc' | 'recentlySold' | 'auctionEndingSoon' | 'recentActivity' | 'bidAsc' | 'bidDesc';
+  sortBy?: NftListQuery['sortBy'];
   ownerAddress?: string;
   creatorAddress?: string;
   contractAddress?: string;
   collectionId?: string;
   chainId?: number;
+  listingType?: NftListQuery['listingType'];
   hasAuction?: boolean;
-  auctionState?: 'PENDING' | 'RUNNING' | 'UNSETTLED';
+  auctionState?: NftListQuery['auctionState'];
+  auctionCreatorAddress?: string;
+  auctionBidderAddress?: string;
   hasListing?: boolean;
   hasOffer?: boolean;
+  offerBuyerAddress?: string;
   tags?: string[];
-  mediaType?: 'IMAGE' | 'VIDEO' | 'GIF' | '3D' | 'HTML' | 'AUDIO';
+  mediaType?: NftListQuery['mediaType'];
 };
 
 export type CollectionSearchParams = {
   query?: string;
   page?: number;
   perPage?: number;
-  sortBy?: 'newest' | 'oldest';
+  sortBy?: CollectionListQuery['sortBy'];
+  ownerAddress?: string;
+  chainId?: number;
 };
 
 export type MultipartUploadPart = {
@@ -176,10 +186,14 @@ export function buildNftSearchQuery(params: NftSearchParams = {}): {
   contractAddress?: string;
   collectionId?: string;
   chainId?: number;
+  listingType?: NftSearchParams['listingType'];
   hasAuction?: boolean;
   auctionState?: NftSearchParams['auctionState'];
+  auctionCreatorAddress?: string;
+  auctionBidderAddress?: string;
   hasListing?: boolean;
   hasOffer?: boolean;
+  offerBuyerAddress?: string;
   tags?: string[];
   mediaType?: NftSearchParams['mediaType'];
 } {
@@ -193,10 +207,14 @@ export function buildNftSearchQuery(params: NftSearchParams = {}): {
     contractAddress: params.contractAddress,
     collectionId: params.collectionId,
     chainId: params.chainId,
+    listingType: params.listingType,
     hasAuction: params.hasAuction,
     auctionState: params.auctionState,
+    auctionCreatorAddress: params.auctionCreatorAddress,
+    auctionBidderAddress: params.auctionBidderAddress,
     hasListing: params.hasListing,
     hasOffer: params.hasOffer,
+    offerBuyerAddress: params.offerBuyerAddress,
     tags: params.tags,
     mediaType: params.mediaType,
   };
@@ -207,12 +225,16 @@ export function buildCollectionSearchQuery(params: CollectionSearchParams = {}):
   page: number;
   perPage: number;
   sortBy: NonNullable<CollectionSearchParams['sortBy']>;
+  ownerAddress?: string;
+  chainId?: number;
 } {
   return {
     q: params.query,
     page: params.page ?? 1,
     perPage: params.perPage ?? 24,
     sortBy: params.sortBy ?? 'newest',
+    ownerAddress: params.ownerAddress,
+    chainId: params.chainId,
   };
 }
 

@@ -7,6 +7,7 @@ import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
 import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
+import { createOfferListCommand } from './account-market-list.js';
 import { resolveCurrencyDecimals } from '../sdk/helpers.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 
@@ -52,7 +53,8 @@ type OfferStatusOptions = {
 
 export function offerCommand(): Command {
   const cmd = new Command('offer');
-  cmd.description('Offer subcommands (create, cancel, accept, status)');
+  cmd.description('Offer subcommands (list, create, cancel, accept, status)');
+  cmd.addCommand(createOfferListCommand());
 
   cmd
     .command('create')

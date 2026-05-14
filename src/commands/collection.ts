@@ -13,6 +13,7 @@ import {
 } from '../sdk/collection-core.js';
 import { printError } from '../errors.js';
 import { output, log } from '../output.js';
+import { createCollectionListCommand } from './account-market-list.js';
 import { mintCommand } from './mint.js';
 
 type LazyBatchMintOptions = {
@@ -1005,6 +1006,7 @@ function createCollectionCreateCommand(): Command {
 export function collectionCommand(): Command {
   const cmd = new Command('collection');
   cmd.description('Create and manage NFT collections');
+  cmd.addCommand(createCollectionListCommand());
   cmd.addCommand(createCollectionCreateCommand());
   cmd.addCommand(mintCommand());
   cmd.addCommand(createMintBatchCommand());

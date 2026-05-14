@@ -31,18 +31,25 @@ export interface paths {
                     collectionId?: string;
                     /** @description Supported blockchain network id */
                     chainId?: components["schemas"]["ChainId"];
+                    listingType?: "SALE_PRICE" | "BATCH_SALE_PRICE";
                     hasAuction?: boolean | null;
                     auctionState?: "PENDING" | "RUNNING" | "UNSETTLED";
                     auctionType?: "RESERVE_AUCTION" | "BATCH_RESERVE_AUCTION" | "SCHEDULED_AUCTION";
+                    /** @description Checksummed Ethereum address */
+                    auctionCreatorAddress?: components["schemas"]["EthereumAddress"];
+                    /** @description Checksummed Ethereum address */
+                    auctionBidderAddress?: components["schemas"]["EthereumAddress"];
                     hasListing?: boolean | null;
                     hasOffer?: boolean | null;
+                    /** @description Checksummed Ethereum address */
+                    offerBuyerAddress?: components["schemas"]["EthereumAddress"];
                     isPrimarySale?: boolean | null;
                     isSecondarySale?: boolean | null;
                     priceMin?: number | null;
                     priceMax?: number | null;
                     /** @description Checksummed Ethereum address */
                     currency?: components["schemas"]["EthereumAddress"] & unknown;
-                    mediaType?: "IMAGE" | "VIDEO" | "GIF" | "3D" | "HTML" | "AUDIO";
+                    mediaType?: "AUDIO" | "HTML" | "IMAGE" | "THREE_D" | "VIDEO";
                     tags?: string[] | string;
                     sortBy?: "newest" | "oldest" | "priceAsc" | "priceDesc" | "recentlySold" | "auctionEndingSoon" | "recentActivity" | "bidAsc" | "bidDesc";
                 };
@@ -145,7 +152,7 @@ export interface paths {
                 query?: {
                     page?: number;
                     perPage?: number;
-                    eventType?: ("CANCEL_AUCTION" | "CANCEL_OFFER" | "CLOSE_AUCTION" | "CREATE_NFT" | "CREATE_NFT_SUPPLY" | "CREATE_RESERVE_AUCTION" | "CREATE_SCHEDULED_AUCTION" | "END_AUCTION" | "MAKE_AUCTION_BID" | "MAKE_LISTING" | "MAKE_OFFER" | "SETTLE_AUCTION" | "START_AUCTION" | "TAKE_LISTING" | "TAKE_OFFER" | "TRANSFER_NFT" | "TRANSFER_NFT_SUPPLY")[] | ("CANCEL_AUCTION" | "CANCEL_OFFER" | "CLOSE_AUCTION" | "CREATE_NFT" | "CREATE_NFT_SUPPLY" | "CREATE_RESERVE_AUCTION" | "CREATE_SCHEDULED_AUCTION" | "END_AUCTION" | "MAKE_AUCTION_BID" | "MAKE_LISTING" | "MAKE_OFFER" | "SETTLE_AUCTION" | "START_AUCTION" | "TAKE_LISTING" | "TAKE_OFFER" | "TRANSFER_NFT" | "TRANSFER_NFT_SUPPLY");
+                    eventType?: ("CANCEL_AUCTION" | "CANCEL_OFFER" | "CLOSE_AUCTION" | "CREATE_NFT" | "CREATE_NFT_SUPPLY" | "CREATE_RESERVE_AUCTION" | "CREATE_SCHEDULED_AUCTION" | "END_AUCTION" | "MAKE_AUCTION_BID" | "MAKE_LISTING" | "MAKE_OFFER" | "SETTLE_AUCTION" | "START_AUCTION" | "TAKE_LISTING" | "TAKE_OFFER" | "TRANSFER_NFT" | "TRANSFER_NFT_SUPPLY")[];
                     sortBy?: "newest" | "oldest";
                 };
                 header?: never;
@@ -413,6 +420,10 @@ export interface paths {
                     perPage?: number;
                     /** @description Full-text search */
                     q?: string;
+                    /** @description Checksummed Ethereum address */
+                    ownerAddress?: components["schemas"]["EthereumAddress"];
+                    /** @description Supported blockchain network id */
+                    chainId?: components["schemas"]["ChainId"];
                     sortBy?: "newest" | "oldest";
                 };
                 header?: never;
@@ -513,7 +524,7 @@ export interface paths {
                 query?: {
                     page?: number;
                     perPage?: number;
-                    eventType?: ("CANCEL_AUCTION" | "CANCEL_OFFER" | "CLOSE_AUCTION" | "CREATE_NFT" | "CREATE_NFT_SUPPLY" | "CREATE_RESERVE_AUCTION" | "CREATE_SCHEDULED_AUCTION" | "END_AUCTION" | "MAKE_AUCTION_BID" | "MAKE_LISTING" | "MAKE_OFFER" | "SETTLE_AUCTION" | "START_AUCTION" | "TAKE_LISTING" | "TAKE_OFFER" | "TRANSFER_NFT" | "TRANSFER_NFT_SUPPLY")[] | ("CANCEL_AUCTION" | "CANCEL_OFFER" | "CLOSE_AUCTION" | "CREATE_NFT" | "CREATE_NFT_SUPPLY" | "CREATE_RESERVE_AUCTION" | "CREATE_SCHEDULED_AUCTION" | "END_AUCTION" | "MAKE_AUCTION_BID" | "MAKE_LISTING" | "MAKE_OFFER" | "SETTLE_AUCTION" | "START_AUCTION" | "TAKE_LISTING" | "TAKE_OFFER" | "TRANSFER_NFT" | "TRANSFER_NFT_SUPPLY");
+                    eventType?: ("CANCEL_AUCTION" | "CANCEL_OFFER" | "CLOSE_AUCTION" | "CREATE_NFT" | "CREATE_NFT_SUPPLY" | "CREATE_RESERVE_AUCTION" | "CREATE_SCHEDULED_AUCTION" | "END_AUCTION" | "MAKE_AUCTION_BID" | "MAKE_LISTING" | "MAKE_OFFER" | "SETTLE_AUCTION" | "START_AUCTION" | "TAKE_LISTING" | "TAKE_OFFER" | "TRANSFER_NFT" | "TRANSFER_NFT_SUPPLY")[];
                     sortBy?: "newest" | "oldest";
                 };
                 header?: never;
@@ -721,6 +732,267 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/merkle-roots/nfts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate NFT Merkle Root
+         * @description Generate and store an NFT merkle root via the pipelines service
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["GenerateNftMerkleRootRequest"];
+                };
+            };
+            responses: {
+                /** @description NFT merkle root generated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GenerateNftMerkleRootResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Pipelines request failed */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/merkle-roots/addresses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Address Merkle Root
+         * @description Generate and store an address merkle root via the pipelines service
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["GenerateAddressMerkleRootJsonRequest"];
+                    "multipart/form-data": components["schemas"]["GenerateAddressMerkleRootFormRequest"];
+                };
+            };
+            responses: {
+                /** @description Address merkle root generated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GenerateAddressMerkleRootResponse"];
+                    };
+                };
+                /** @description Invalid request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Pipelines request failed */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/merkle-roots/nfts/proof": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate NFT Merkle Proof
+         * @description Resolve an NFT Merkle root and generate a token proof from the stored Merkle list
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["GenerateNftMerkleProofRequest"];
+                };
+            };
+            responses: {
+                /** @description NFT Merkle proof generated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GenerateNftMerkleProofResponse"];
+                    };
+                };
+                /** @description Merkle root or NFT entry not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Multiple matching roots were found */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/merkle-roots/addresses/proof": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate Address Merkle Proof
+         * @description Generate an address proof from a stored Merkle root list
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["GenerateAddressMerkleProofRequest"];
+                };
+            };
+            responses: {
+                /** @description Address Merkle proof generated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GenerateAddressMerkleProofResponse"];
+                    };
+                };
+                /** @description Merkle root or address entry not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+                /** @description Multiple matching roots were found */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -802,6 +1074,11 @@ export interface components {
             price: components["schemas"]["CryptoValue"];
             /** @example 0xba5BDe662c17e2aDFF1075610382B9B691296350 */
             seller: string;
+            /** @example 0xcf6398559ea0e93d7d7233ca93b09912da8ff57b45ebe7a3ede9c74d17a76f13 */
+            merkleRoot?: string;
+            allowlist?: {
+                root: string;
+            } | null;
         };
         CryptoValue: {
             /** @example 1000000000000000000 */
@@ -845,16 +1122,20 @@ export interface components {
              * @example RUNNING
              * @enum {string}
              */
-            state: "PENDING" | "RUNNING" | "SETTLED" | "UNSETTLED";
+            state: "PENDING" | "RUNNING" | "UNSETTLED";
             /** @example 2024-01-01T00:00:00.000Z */
             startTime: string | null;
             /** @example 2024-01-02T00:00:00.000Z */
             endTime: string | null;
             /** @example 0x0000000000000000000000000000000000000000 */
             currencyAddress: string;
+            /** @example 0xba5BDe662c17e2aDFF1075610382B9B691296350 */
+            sellerAddress: string;
             currentBid: components["schemas"]["CryptoValue"] & unknown;
             reservePrice: components["schemas"]["CryptoValue"] & unknown;
             highestBidder: components["schemas"]["User"] & unknown;
+            /** @example 0xcf6398559ea0e93d7d7233ca93b09912da8ff57b45ebe7a3ede9c74d17a76f13 */
+            merkleRoot?: string;
         };
         LastSale: {
             /** @example evt_123 */
@@ -1201,6 +1482,102 @@ export interface components {
          * @example rare
          */
         TokenSymbol: string;
+        GenerateNftMerkleRootResponse: {
+            /** @example 0xcf6398559ea0e93d7d7233ca93b09912da8ff57b45ebe7a3ede9c74d17a76f13 */
+            merkleRoot: string;
+            /** @example 0xcf6398559ea0e93d7d7233ca93b09912da8ff57b45ebe7a3ede9c74d17a76f13.json */
+            key: string;
+        };
+        GenerateNftMerkleRootRequest: {
+            nfts: components["schemas"]["NftMerkleRootEntry"][];
+        };
+        NftMerkleRootEntry: {
+            contractAddress: components["schemas"]["EthereumAddress"];
+            /** @example 12345 */
+            tokenId: string | number;
+        };
+        GenerateAddressMerkleRootResponse: {
+            /** @example 0xcf6398559ea0e93d7d7233ca93b09912da8ff57b45ebe7a3ede9c74d17a76f13 */
+            merkleRoot: string;
+            locations: components["schemas"]["MerkleRootLocation"][];
+        };
+        MerkleRootLocation: {
+            /** @enum {string} */
+            storageTarget: "batch-listing" | "collection-allowlist";
+            bucket: string;
+            key: string;
+            /** Format: uri */
+            publicUrl: string;
+        };
+        GenerateAddressMerkleRootJsonRequest: {
+            addresses: components["schemas"]["EthereumAddress"][];
+            storageTarget?: components["schemas"]["MerkleRootStorageTarget"];
+        };
+        /**
+         * @description Storage destination for address merkle roots
+         * @default both
+         * @example both
+         * @enum {string}
+         */
+        MerkleRootStorageTarget: "batch-listing" | "collection-allowlist" | "both";
+        GenerateAddressMerkleRootFormRequest: {
+            /**
+             * Format: binary
+             * @description CSV file with an address column
+             */
+            file?: string;
+            storageTarget?: components["schemas"]["MerkleRootStorageTarget"];
+        };
+        GenerateNftMerkleProofResponse: {
+            /** @example 0xcf6398559ea0e93d7d7233ca93b09912da8ff57b45ebe7a3ede9c74d17a76f13 */
+            root: string;
+            /** @example 0x8Db4B93Fa258E1c265d46f861ae9EbDE0B938670 */
+            contractAddress: string;
+            /** @example 12345 */
+            tokenId: string;
+            /** @example 0x83a68bd27e04afae4b40e8647019086ae8b4915bb243a4cf186f6271e1e65341 */
+            leaf: string;
+            proof: string[];
+        };
+        GenerateNftMerkleProofRequest: {
+            /** @example 1 */
+            chainId: number;
+            contractAddress: components["schemas"]["EthereumAddress"];
+            /** @example 12345 */
+            tokenId: string | number;
+            /** @example 0xcf6398559ea0e93d7d7233ca93b09912da8ff57b45ebe7a3ede9c74d17a76f13 */
+            root?: string;
+            context?: components["schemas"]["NftMerkleProofContext"];
+            creator?: components["schemas"]["EthereumAddress"];
+        };
+        /**
+         * @description Market state context used when resolving a root from Typesense
+         * @example batch-listing
+         * @enum {string}
+         */
+        NftMerkleProofContext: "batch-listing" | "batch-auction" | "batch-offer";
+        GenerateAddressMerkleProofResponse: {
+            /** @example 0xcf6398559ea0e93d7d7233ca93b09912da8ff57b45ebe7a3ede9c74d17a76f13 */
+            root: string;
+            /** @example 0x8Db4B93Fa258E1c265d46f861ae9EbDE0B938670 */
+            address: string;
+            /** @example 0x83a68bd27e04afae4b40e8647019086ae8b4915bb243a4cf186f6271e1e65341 */
+            leaf: string;
+            proof: string[];
+        };
+        GenerateAddressMerkleProofRequest: {
+            /** @example 0xcf6398559ea0e93d7d7233ca93b09912da8ff57b45ebe7a3ede9c74d17a76f13 */
+            root: string;
+            address: components["schemas"]["EthereumAddress"];
+            storageTarget?: components["schemas"]["MerkleRootProofStorageTarget"];
+        };
+        /**
+         * @description Storage source for address merkle proof generation
+         * @default collection-allowlist
+         * @example collection-allowlist
+         * @enum {string}
+         */
+        MerkleRootProofStorageTarget: "batch-listing" | "collection-allowlist";
     };
     responses: never;
     parameters: never;

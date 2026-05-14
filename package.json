@@ -50,7 +50,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "generate:types": "openapi-typescript https://api.superrare.com/doc -o src/data-access/schema.d.ts",
+    "generate:types": "set -a; [ -f .env ] && . ./.env; set +a; openapi-typescript ${RARE_API_BASE_URL:-https://api.superrare.com}/doc -o src/data-access/schema.d.ts",
     "knip": "knip",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

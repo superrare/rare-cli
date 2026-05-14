@@ -23,21 +23,64 @@ describe('SDK API request planning', () => {
       contractAddress: undefined,
       collectionId: undefined,
       chainId: 11_155_111,
+      listingType: undefined,
       hasAuction: undefined,
       auctionState: undefined,
+      auctionCreatorAddress: undefined,
+      auctionBidderAddress: undefined,
       hasListing: undefined,
       hasOffer: undefined,
+      offerBuyerAddress: undefined,
+      tags: undefined,
+      mediaType: undefined,
+    });
+  });
+
+  it('builds NFT account market search filters', () => {
+    expect(
+      buildNftSearchQuery({
+        page: 3,
+        perPage: 50,
+        ownerAddress,
+        listingType: 'BATCH_SALE_PRICE',
+        hasListing: true,
+        hasOffer: true,
+        offerBuyerAddress: ownerAddress,
+        hasAuction: true,
+        auctionCreatorAddress: ownerAddress,
+        auctionBidderAddress: ownerAddress,
+      }),
+    ).toEqual({
+      q: undefined,
+      page: 3,
+      perPage: 50,
+      sortBy: 'recentActivity',
+      ownerAddress,
+      creatorAddress: undefined,
+      contractAddress: undefined,
+      collectionId: undefined,
+      chainId: undefined,
+      listingType: 'BATCH_SALE_PRICE',
+      hasAuction: true,
+      auctionState: undefined,
+      auctionCreatorAddress: ownerAddress,
+      auctionBidderAddress: ownerAddress,
+      hasListing: true,
+      hasOffer: true,
+      offerBuyerAddress: ownerAddress,
       tags: undefined,
       mediaType: undefined,
     });
   });
 
   it('builds collection search query defaults', () => {
-    expect(buildCollectionSearchQuery({ query: 'rare', page: 2, perPage: 10 })).toEqual({
+    expect(buildCollectionSearchQuery({ query: 'rare', page: 2, perPage: 10, ownerAddress, chainId: 1 })).toEqual({
       q: 'rare',
       page: 2,
       perPage: 10,
       sortBy: 'newest',
+      ownerAddress,
+      chainId: 1,
     });
   });
 
