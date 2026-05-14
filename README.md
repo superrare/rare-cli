@@ -317,11 +317,8 @@ rare listing release limits set-mint --contract 0x... --limit 2
 # Per-wallet mint transaction count; 0 disables it.
 rare listing release limits set-tx --contract 0x... --limit 1
 
-# Minimum seller staking requirement in RARE; 0 disables it.
-rare listing release staking set-minimum \
-  --contract 0x... \
-  --minimum 100 \
-  --end-timestamp 2026-06-01T16:00:00Z
+# Verify release config, allowlist, and limits.
+rare listing release status --contract 0x... --account 0x...
 ```
 
 ### Auctions
