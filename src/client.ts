@@ -1,8 +1,30 @@
-import { createPublicClient, createWalletClient, http, type PublicClient, type WalletClient } from 'viem';
+import { createPublicClient, createWalletClient, http, type Address, type PublicClient, type WalletClient } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import type { PrivateKeyAccount } from 'viem/accounts';
+import type { LocalAccount, PrivateKeyAccount } from 'viem/accounts';
 import { viemChains, defaultRpcUrls, type SupportedChain } from './contracts/addresses.js';
-import { getChainConfig, readConfig, setChainConfig, writeConfig, type ChainConfig } from './config.js';
+import {
+  getChainConfig,
+  readConfig,
+  setChainConfig,
+  writeConfig,
+  type ChainConfig,
+  type PrivateKeyReference,
+} from './config.js';
+import { createOnePasswordAccount } from './one-password.js';
+
+export type WalletAccount = PrivateKeyAccount | LocalAccount;
+
+type WalletResult = {
+  client: WalletClient;
+  account: WalletAccount;
+};
+
+type PlaintextWalletConfig = ChainConfig & { privateKey: `0x${string}` };
+type OnePasswordWalletConfig = ChainConfig & {
+  privateKeyRef: PrivateKeyReference;
+  walletAddress: Address;
+};
+type WalletConfig = PlaintextWalletConfig | OnePasswordWalletConfig;
 
 export function getPublicClient(chain: SupportedChain): PublicClient {
   const chainConfig = getChainConfig(chain);
@@ -13,10 +35,10 @@ export function getPublicClient(chain: SupportedChain): PublicClient {
   });
 }
 
-export function getWalletClient(chain: SupportedChain): { client: WalletClient; account: PrivateKeyAccount } {
+export function getWalletClient(chain: SupportedChain): WalletResult {
   const chainConfig = getWalletConfig(chain);
   const rpcUrl = getRequiredRpcUrl(chain, chainConfig);
-  const account = privateKeyToAccount(chainConfig.privateKey);
+  const account = getWalletAccount(chainConfig);
 
   return {
     client: createWalletClient({
@@ -30,12 +52,13 @@ export function getWalletClient(chain: SupportedChain): { client: WalletClient; 
 
 export function tryGetWalletClient(
   chain: SupportedChain,
-): { client: WalletClient; account: PrivateKeyAccount } | null {
+): WalletResult | null {
   const chainConfig = getChainConfig(chain);
-  if (!chainConfig.privateKey) return null;
+  const walletConfig = getExistingWalletConfig(chainConfig);
+  if (walletConfig === null) return null;
   const rpcUrl = chainConfig.rpcUrl ?? defaultRpcUrls[chain];
   if (!rpcUrl) return null;
-  const account = privateKeyToAccount(chainConfig.privateKey);
+  const account = getWalletAccount(walletConfig);
   return {
     client: createWalletClient({
       chain: viemChains[chain],
@@ -46,10 +69,36 @@ export function tryGetWalletClient(
   };
 }
 
-function getWalletConfig(chain: SupportedChain): ChainConfig & { privateKey: `0x${string}` } {
+export function getConfiguredWalletAddress(chain: SupportedChain): Address | undefined {
   const chainConfig = getChainConfig(chain);
   if (chainConfig.privateKey) {
-    return { ...chainConfig, privateKey: chainConfig.privateKey };
+    return privateKeyToAccount(chainConfig.privateKey).address;
+  }
+
+  return chainConfig.walletAddress;
+}
+
+function getWalletAccount(chainConfig: WalletConfig): WalletAccount {
+  if (chainConfig.privateKey !== undefined) {
+    return privateKeyToAccount(chainConfig.privateKey);
+  }
+
+  return createOnePasswordAccount({
+    address: chainConfig.walletAddress,
+    privateKeyRef: chainConfig.privateKeyRef,
+  });
+}
+
+function getWalletConfig(chain: SupportedChain): WalletConfig {
+  const chainConfig = getChainConfig(chain);
+  const walletConfig = getExistingWalletConfig(chainConfig);
+  if (walletConfig !== null) return walletConfig;
+
+  if (chainConfig.privateKeyRef !== undefined) {
+    throw new Error(
+      `1Password private key reference configured for chain "${chain}" is missing walletAddress. ` +
+        `Run: rare configure --chain ${chain} --private-key-ref ${chainConfig.privateKeyRef}`,
+    );
   }
 
   console.log(`No private key configured for chain "${chain}". Generating a new wallet...`);
@@ -61,10 +110,30 @@ function getWalletConfig(chain: SupportedChain): ChainConfig & { privateKey: `0x
   console.log('Store your private key securely. It will not be shown again.');
   console.log('');
 
-  writeConfig(setChainConfig(readConfig(), chain, { privateKey }));
+  writeConfig(setChainConfig(readConfig(), chain, {
+    privateKey,
+    privateKeyRef: undefined,
+    walletAddress: undefined,
+  }));
   console.log(`Private key saved to config for chain: ${chain}\n`);
 
   return { ...chainConfig, privateKey };
+}
+
+function getExistingWalletConfig(chainConfig: ChainConfig): WalletConfig | null {
+  if (chainConfig.privateKey !== undefined) {
+    return { ...chainConfig, privateKey: chainConfig.privateKey };
+  }
+
+  if (chainConfig.privateKeyRef !== undefined && chainConfig.walletAddress !== undefined) {
+    return {
+      ...chainConfig,
+      privateKeyRef: chainConfig.privateKeyRef,
+      walletAddress: chainConfig.walletAddress,
+    };
+  }
+
+  return null;
 }
 
 function getRequiredRpcUrl(chain: SupportedChain, chainConfig: ChainConfig): string {

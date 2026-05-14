@@ -1,4 +1,4 @@
-rare configure [--chain <chain>] [--private-key <key>] [--rpc-url <url>] [--default-chain <chain>] [--show]
+rare [--json] configure [--chain <mainnet|sepolia|base|base-sepolia>] [--private-key <0xPRIVATE_KEY> | --private-key-ref <op://vault/item/field>] [--rpc-url <url>] [--default-chain <mainnet|sepolia|base|base-sepolia>] [--show]
 rare deploy erc721 <name> <symbol> [--max-tokens <number>] [--chain <chain>]
 rare deploy liquid-edition <name> <symbol> [--curves-file <path>] [--curve-preset <preset>] [--write-curves-file <path>] [--initial-rare-liquidity <amount>] [--preview] [--yes] [--token-uri <uri>] [--description <description>] [--image <path>] [--video <path>] [--tag <tag>] [--attribute <attr>] [--chain <chain>]
 rare auction create --contract <address> --token-id <id> --starting-price <amount> --duration <seconds> [--type <type>] [--start-time <seconds>] [--currency <currency>] [--split <addr=ratio>] [--chain <chain>]
