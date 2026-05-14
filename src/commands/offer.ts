@@ -1,13 +1,13 @@
 import { Command } from 'commander';
-import { formatEther, type Address } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { getActiveChain, readConfig } from '../config.js';
-import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
+import { formatUnits, type Address } from 'viem';
+import { getActiveChain } from '../config.js';
+import { getConfiguredWalletAddress, getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
 import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
 import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
+import { resolveCurrencyDecimals } from '../sdk/helpers.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 
 type OfferCreateOptions = {
@@ -375,16 +375,24 @@ export function offerCommand(): Command {
             tokenId: opts.tokenId,
             account,
           });
+          const amount = formatUnits(
+            result.amount,
+            await resolveCurrencyDecimals(publicClient, chain, result.currency),
+          );
+          const requiredPayment = formatUnits(
+            result.requiredPayment,
+            await resolveCurrencyDecimals(publicClient, chain, result.currency),
+          );
 
           output(result, () => {
             console.log('\nCollection Offer Details:');
             console.log(`  State:            ${result.state}`);
             console.log(`  Buyer:            ${result.buyer}`);
             console.log(`  Collection:       ${result.originCollection}`);
-            console.log(`  Amount:           ${formatEther(result.amount)} ${result.isEth ? 'ETH' : result.currency}`);
+            console.log(`  Amount:           ${amount} ${result.isEth ? 'ETH' : result.currency}`);
             console.log(`  Currency:         ${result.isEth ? 'ETH' : result.currency}`);
             console.log(`  Marketplace fee:  ${result.marketplaceFee}%`);
-            console.log(`  Required payment: ${formatEther(result.requiredPayment)} ${result.isEth ? 'ETH' : result.currency}`);
+            console.log(`  Required payment: ${requiredPayment} ${result.isEth ? 'ETH' : result.currency}`);
             console.log('  Expiry:           not supported by this contract');
             console.log(`  Can cancel:       ${result.canCancel ? 'yes' : 'no'}`);
             console.log(`  Can accept:       ${result.canAccept ? 'yes' : 'no'}`);
@@ -421,6 +429,10 @@ export function offerCommand(): Command {
           tokenId: opts.tokenId,
           currency,
         });
+        const amount = formatUnits(
+          result.amount,
+          await resolveCurrencyDecimals(publicClient, chain, result.currency),
+        );
 
         output(result, () => {
           console.log('\nOffer Details:');
@@ -434,7 +446,7 @@ export function offerCommand(): Command {
             if (result.tokenOwner) {
               console.log(`  Token owner:       ${result.tokenOwner}`);
             }
-            console.log(`  Amount:            ${formatEther(result.amount)} ${isEth ? 'ETH' : currency}`);
+            console.log(`  Amount:            ${amount} ${isEth ? 'ETH' : currency}`);
             console.log(`  Currency:          ${result.currency}`);
             console.log(`  Placed at:         ${new Date(Number(result.timestamp) * 1000).toISOString()}`);
             if (result.cancellableAfter !== null) {
@@ -478,6 +490,5 @@ function rejectTokenScopeOptions(opts: { contract?: string; tokenId?: string }, 
 }
 
 function getConfiguredAccount(chain: ReturnType<typeof getActiveChain>): Address | undefined {
-  const privateKey = readConfig().chains[chain]?.privateKey;
-  return privateKey ? privateKeyToAccount(privateKey).address : undefined;
+  return getConfiguredWalletAddress(chain);
 }

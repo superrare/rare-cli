@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
-import { getPublicClient, getWalletClient } from '../client.js';
+import { getConfiguredWalletAddress, getPublicClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
 import type { SupportedChain } from '../contracts/addresses.js';
 import type { NftSearchParams } from '../sdk/api.js';
@@ -38,8 +38,14 @@ function parseAuctionState(value: string): NftSearchParams['auctionState'] {
 }
 
 function getWalletAddress(chain: SupportedChain): string {
-  const { account } = getWalletClient(chain);
-  return account.address;
+  const address = getConfiguredWalletAddress(chain);
+  if (address === undefined) {
+    throw new Error(
+      `no wallet configured for "${chain}". ` +
+        `Run: rare configure --chain ${chain} --private-key <key> or --private-key-ref <op://...>`,
+    );
+  }
+  return address;
 }
 
 export function searchCommand(): Command {

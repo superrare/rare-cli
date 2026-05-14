@@ -1,4 +1,4 @@
-rare configure [--chain <chain>] [--private-key <key>] [--rpc-url <url>] [--default-chain <chain>] [--show]
+rare [--json] configure [--chain <mainnet|sepolia|base|base-sepolia>] [--private-key <0xPRIVATE_KEY> | --private-key-ref <op://vault/item/field>] [--rpc-url <url>] [--default-chain <mainnet|sepolia|base|base-sepolia>] [--show]
 rare status --contract <address> [--token-id <id>] [--chain <chain>]
 
 rare wallet generate [--chain <chain>] [--save]

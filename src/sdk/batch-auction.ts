@@ -1,5 +1,6 @@
 import {
   isAddressEqual,
+  parseUnits,
   parseEventLogs,
   type Address,
   type Hash,
@@ -12,6 +13,8 @@ import {
   approvalAbi,
   preparePaymentAmountForSpender,
   requireWallet,
+  resolveCurrencyDecimals,
+  stringifyAmountInput,
   waitForApproval,
 } from './helpers.js';
 import type { RareClient, RareClientConfig, WalletAccount } from './types.js';
@@ -42,7 +45,11 @@ export function createBatchAuctionNamespace(
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account, accountAddress } = requireWallet(config);
       const resolvedParams = await resolveBatchAuctionCreateParams(config, params);
-      const plan = planBatchAuctionCreate(resolvedParams, accountAddress);
+      const currency = resolvedParams.currency ?? ETH_ADDRESS;
+      const reserveAmount = typeof resolvedParams.reserveAmount === 'bigint'
+        ? resolvedParams.reserveAmount
+        : parseUnits(stringifyAmountInput(resolvedParams.reserveAmount, 'reserveAmount'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const plan = planBatchAuctionCreate({ ...resolvedParams, currency, reserveAmount }, accountAddress);
       const erc721ApprovalManager = plan.approvalContracts.length === 0
         ? undefined
         : requireContractAddress(chain, 'erc721ApprovalManager');
@@ -134,7 +141,11 @@ export function createBatchAuctionNamespace(
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account, accountAddress } = requireWallet(config);
       const resolvedParams = await resolveBatchAuctionBidParams(config, chainIds[chain], params);
-      const plan = planBatchAuctionBid(resolvedParams);
+      const currency = resolvedParams.currency ?? ETH_ADDRESS;
+      const amount = typeof resolvedParams.amount === 'bigint'
+        ? resolvedParams.amount
+        : parseUnits(stringifyAmountInput(resolvedParams.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const plan = planBatchAuctionBid({ ...resolvedParams, currency, amount });
       const erc20ApprovalManager = isAddressEqual(plan.currency, ETH_ADDRESS)
         ? batchAuctionHouse
         : requireContractAddress(chain, 'erc20ApprovalManager');

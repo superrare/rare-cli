@@ -1,15 +1,19 @@
 import {
+  parseUnits,
   type Address,
   type PublicClient,
   type WalletClient,
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
 import { tokenAbi } from '../contracts/abis/token.js';
+import { ETH_ADDRESS, type SupportedChain } from '../contracts/addresses.js';
 import type { RareClientConfig, RareClient, WalletAccount } from './types.js';
 import {
   approvalAbi,
   preparePayment,
   requireWallet,
+  resolveCurrencyDecimals,
+  stringifyAmountInput,
   waitForApproval,
 } from './helpers.js';
 import {
@@ -51,12 +55,17 @@ async function ensureNftApproved(
 export function createOfferNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
+  chain: SupportedChain,
   addresses: { auction: Address },
 ): RareClient['offer'] {
   return {
     async create(params): ReturnType<RareClient['offer']['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const plan = planOfferCreate(params);
+      const currency = params.currency ?? ETH_ADDRESS;
+      const amount = typeof params.amount === 'bigint'
+        ? params.amount
+        : parseUnits(stringifyAmountInput(params.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const plan = planOfferCreate({ ...params, currency, amount });
 
       const value = await preparePayment({
         publicClient, walletClient, account, accountAddress,
@@ -96,7 +105,11 @@ export function createOfferNamespace(
 
     async accept(params): ReturnType<RareClient['offer']['accept']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const plan = planOfferAccept(params, accountAddress);
+      const currency = params.currency ?? ETH_ADDRESS;
+      const amount = typeof params.amount === 'bigint'
+        ? params.amount
+        : parseUnits(stringifyAmountInput(params.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const plan = planOfferAccept({ ...params, currency, amount }, accountAddress);
 
       await ensureNftApproved(
         publicClient, walletClient, account, accountAddress,

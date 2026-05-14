@@ -88,7 +88,9 @@ export function parseJsonStdout(result: CliResult): unknown {
 function redactArgs(args: string[]): string[] {
   return args.map((arg, index) => {
     const previous = args[index - 1];
-    if (previous === '--private-key' || previous === '--rpc-url') return '[redacted]';
+    if (previous === '--private-key' || previous === '--private-key-ref' || previous === '--rpc-url') {
+      return '[redacted]';
+    }
     return arg;
   });
 }

@@ -24,6 +24,7 @@ All commands accept `--chain <sepolia|mainnet>` to override the default network.
 
 ```bash
 rare configure --chain sepolia --private-key 0x... --rpc-url https://...
+rare configure --chain sepolia --private-key-ref op://Private/rare-sepolia/private-key --rpc-url https://...
 rare configure --default-chain mainnet
 rare configure --show
 rare wallet generate          # display only

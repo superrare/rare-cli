@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { formatEther } from 'viem';
+import { formatUnits } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { printError } from '../errors.js';
@@ -7,6 +7,7 @@ import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
 import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
+import { resolveCurrencyDecimals } from '../sdk/helpers.js';
 import { parseAuctionTypeOption } from './auction-core.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 
@@ -251,16 +252,21 @@ export function auctionCommand(): Command {
       });
 
       const endDate = result.endTime ? new Date(Number(result.endTime) * 1000) : null;
+      const currencyDecimals = await resolveCurrencyDecimals(publicClient, chain, result.currency);
+      const currentBidDecimals = await resolveCurrencyDecimals(publicClient, chain, result.currentBidCurrency);
+      const minimumBid = formatUnits(result.minimumBid, currencyDecimals);
+      const currentBid = formatUnits(result.currentBid, currentBidDecimals);
+      const minimumNextBid = formatUnits(result.minimumNextBid, currencyDecimals);
 
       output(result, () => {
         console.log('\nAuction Details:');
         console.log(`  State:          ${result.state}`);
         console.log(`  Seller:         ${result.seller}`);
         console.log(`  Type:           ${result.auctionTypeName}`);
-        console.log(`  Reserve/min bid: ${formatEther(result.minimumBid)} ${result.isEth ? 'ETH' : result.currency}`);
-        console.log(`  Current bid:    ${formatEther(result.currentBid)} ${result.currentBidCurrency === ETH_ADDRESS ? 'ETH' : result.currentBidCurrency}`);
+        console.log(`  Reserve/min bid: ${minimumBid} ${result.isEth ? 'ETH' : result.currency}`);
+        console.log(`  Current bid:    ${currentBid} ${result.currentBidCurrency === ETH_ADDRESS ? 'ETH' : result.currentBidCurrency}`);
         console.log(`  Current bidder: ${result.currentBidder ?? 'none'}`);
-        console.log(`  Next minimum:   ${formatEther(result.minimumNextBid)} ${result.isEth ? 'ETH' : result.currency}`);
+        console.log(`  Next minimum:   ${minimumNextBid} ${result.isEth ? 'ETH' : result.currency}`);
         console.log(`  Currency:       ${result.isEth ? 'ETH' : result.currency}`);
         console.log(`  Duration:       ${result.lengthOfAuction}s`);
         console.log(`  Status:         ${result.status}`);

@@ -1,11 +1,21 @@
 import { Command } from 'commander';
-import { readConfig, setChainConfig, setDefaultChain, writeConfig } from '../config.js';
+import { privateKeyToAccount } from 'viem/accounts';
+import {
+  parsePrivateKeyReference,
+  readConfig,
+  setChainConfig,
+  setDefaultChain,
+  writeConfig,
+  type ChainConfig,
+} from '../config.js';
 import { isSupportedChain, supportedChains } from '../contracts/addresses.js';
 import { parseHexString } from '../sdk/validation.js';
+import { readOnePasswordPrivateKey } from '../one-password.js';
 
 type ConfigureOptions = {
   chain?: string;
   privateKey?: string;
+  privateKeyRef?: string;
   rpcUrl?: string;
   defaultChain?: string;
   show?: boolean;
@@ -19,10 +29,11 @@ export function configureCommand(): Command {
   cmd
     .option('--chain <chain>', `chain to configure (${supportedChainsText})`)
     .option('--private-key <key>', 'private key for the specified chain')
+    .option('--private-key-ref <ref>', '1Password secret reference for the specified chain private key')
     .option('--rpc-url <url>', 'custom RPC URL for the specified chain')
     .option('--default-chain <chain>', 'set the default chain')
     .option('--show', 'display current configuration')
-    .action((opts: ConfigureOptions): void => {
+    .action(async (opts: ConfigureOptions): Promise<void> => {
       const config = readConfig();
 
       if (opts.show) {
@@ -32,9 +43,12 @@ export function configureCommand(): Command {
             Object.entries(config.chains).map(([chain, chainCfg]) => [
               chain,
               {
+                keySource: getKeySourceLabel(chainCfg),
                 privateKey: chainCfg.privateKey !== undefined
                   ? `${chainCfg.privateKey.slice(0, 6)}...${chainCfg.privateKey.slice(-4)}`
                   : undefined,
+                privateKeyRef: chainCfg.privateKeyRef,
+                walletAddress: chainCfg.walletAddress,
                 rpcUrl: chainCfg.rpcUrl,
               },
             ])
@@ -60,9 +74,13 @@ export function configureCommand(): Command {
         if (!isSupportedChain(opts.chain)) {
           throw new Error(`--chain must be one of: ${supportedChainsText}`);
         }
-        const privateKey = opts.privateKey ? parseHexString(opts.privateKey, '--private-key') : undefined;
+        if (opts.privateKey !== undefined && opts.privateKeyRef !== undefined) {
+          throw new Error('--private-key and --private-key-ref cannot be used together.');
+        }
+
+        const keySourceUpdates = await getKeySourceUpdates(opts);
         const nextConfig = setChainConfig(configWithDefaultChain, opts.chain, {
-          ...(privateKey === undefined ? {} : { privateKey }),
+          ...keySourceUpdates,
           ...(opts.rpcUrl === undefined ? {} : { rpcUrl: opts.rpcUrl }),
         });
 
@@ -76,4 +94,32 @@ export function configureCommand(): Command {
     });
 
   return cmd;
+}
+
+function getKeySourceLabel(chainCfg: ChainConfig): string | undefined {
+  if (chainCfg.privateKey !== undefined) return 'plaintext';
+  if (chainCfg.privateKeyRef !== undefined) return '1password';
+  return undefined;
+}
+
+async function getKeySourceUpdates(opts: ConfigureOptions): Promise<ChainConfig> {
+  if (opts.privateKey !== undefined) {
+    return {
+      privateKey: parseHexString(opts.privateKey, '--private-key'),
+      privateKeyRef: undefined,
+      walletAddress: undefined,
+    };
+  }
+
+  if (opts.privateKeyRef !== undefined) {
+    const privateKeyRef = parsePrivateKeyReference(opts.privateKeyRef, '--private-key-ref');
+    const privateKey = await readOnePasswordPrivateKey(privateKeyRef);
+    return {
+      privateKey: undefined,
+      privateKeyRef,
+      walletAddress: privateKeyToAccount(privateKey).address,
+    };
+  }
+
+  return {};
 }

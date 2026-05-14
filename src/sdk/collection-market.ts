@@ -1,6 +1,7 @@
 import {
   isAddress,
   isAddressEqual,
+  parseUnits,
   parseEventLogs,
   type Address,
   type Hash,
@@ -8,13 +9,15 @@ import {
 } from 'viem';
 import { collectionMarketAbi } from '../contracts/abis/collection-market.js';
 import { tokenAbi } from '../contracts/abis/token.js';
-import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
+import { ETH_ADDRESS, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
 import {
   approvalAbi,
   calculateMarketplacePaymentAmountFromSettings,
   marketplaceSettingsAbi,
   preparePaymentAmountForSpender,
   requireWallet,
+  resolveCurrencyDecimals,
+  stringifyAmountInput,
   waitForApproval,
 } from './helpers.js';
 import type { RareClient, RareClientConfig, WalletAccount } from './types.js';
@@ -46,7 +49,11 @@ export function createCollectionMarketNamespace(
       async create(params): ReturnType<RareClient['collectionMarket']['offer']['create']> {
         const collectionMarket = requireContractAddress(chain, 'collectionMarket');
         const { walletClient, account, accountAddress } = requireWallet(config);
-        const plan = planCollectionMarketOfferCreate(params);
+        const currency = params.currency ?? ETH_ADDRESS;
+        const amount = typeof params.amount === 'bigint'
+          ? params.amount
+          : parseUnits(stringifyAmountInput(params.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
+        const plan = planCollectionMarketOfferCreate({ ...params, currency, amount });
         const [marketplaceSettings, existingOffer] = await Promise.all([
           readMarketplaceSettings(publicClient, collectionMarket),
           readCollectionOffer(publicClient, collectionMarket, plan.originCollection, accountAddress),
@@ -153,7 +160,11 @@ export function createCollectionMarketNamespace(
       async accept(params): ReturnType<RareClient['collectionMarket']['offer']['accept']> {
         const collectionMarket = requireContractAddress(chain, 'collectionMarket');
         const { walletClient, account, accountAddress } = requireWallet(config);
-        const plan = planCollectionMarketOfferAccept(params, accountAddress);
+        const currency = params.currency ?? ETH_ADDRESS;
+        const amount = typeof params.amount === 'bigint'
+          ? params.amount
+          : parseUnits(stringifyAmountInput(params.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
+        const plan = planCollectionMarketOfferAccept({ ...params, currency, amount }, accountAddress);
         const owner = await publicClient.readContract({
           address: plan.originCollection,
           abi: tokenAbi,
@@ -249,7 +260,11 @@ export function createCollectionMarketNamespace(
       async set(params): ReturnType<RareClient['collectionMarket']['listing']['set']> {
         const collectionMarket = requireContractAddress(chain, 'collectionMarket');
         const { walletClient, account, accountAddress } = requireWallet(config);
-        const plan = planCollectionMarketListingSet(params, accountAddress);
+        const currency = params.currency ?? ETH_ADDRESS;
+        const amount = typeof params.amount === 'bigint'
+          ? params.amount
+          : parseUnits(stringifyAmountInput(params.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
+        const plan = planCollectionMarketListingSet({ ...params, currency, amount }, accountAddress);
 
         const approvalTxHash = plan.autoApprove
           ? await approveNftContractIfNeeded({
@@ -344,7 +359,11 @@ export function createCollectionMarketNamespace(
       async buy(params): ReturnType<RareClient['collectionMarket']['listing']['buy']> {
         const collectionMarket = requireContractAddress(chain, 'collectionMarket');
         const { walletClient, account, accountAddress } = requireWallet(config);
-        const plan = planCollectionMarketListingBuy(params);
+        const currency = params.currency ?? ETH_ADDRESS;
+        const amount = typeof params.amount === 'bigint'
+          ? params.amount
+          : parseUnits(stringifyAmountInput(params.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
+        const plan = planCollectionMarketListingBuy({ ...params, currency, amount });
         const [tokenOwner, salePrice, marketplaceSettings] = await Promise.all([
           publicClient.readContract({
             address: plan.originCollection,
