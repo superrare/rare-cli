@@ -12,8 +12,12 @@ rare collection create lazy-batch-mint <name> <symbol> [--max-tokens <number>] [
 rare collection create sovereign <name> <symbol> [--max-tokens <number>] [--contract-type <type>] [--chain <chain>] [--chain-id <id>]
 rare collection create lazy-sovereign <name> <symbol> --max-tokens <number> [--contract-type <type>] [--chain <chain>] [--chain-id <id>]
 rare deploy erc721 <name> <symbol> [--max-tokens <number>] [--chain <chain>] [--chain-id <id>]
-rare deploy liquid-edition <name> <symbol> [--curves-file <path>] [--curve-preset <preset>] [--write-curves-file <path>] [--initial-rare-liquidity <amount>] [--preview] [--yes] [--token-uri <uri>] [--description <description>] [--image <path>] [--video <path>] [--tag <tag>] [--attribute <attr>] [--chain <chain>] [--chain-id <id>]
+rare deploy liquid-edition <name> <symbol> [--curves-file <path>] [--curve-preset <preset>] [--write-curves-file <path>] [--initial-rare-liquidity <amount>] [--total-supply <amount>] [--preview] [--yes] [--token-uri <uri>] [--description <description>] [--image <path>] [--video <path>] [--tag <tag>] [--attribute <attr>] [--chain <chain>] [--chain-id <id>]
 rare import erc721 --contract <address> [--chain <chain>] [--chain-id <id>]
+
+rare liquid-edition status --contract <address> [--chain <chain>] [--chain-id <id>]
+rare liquid-edition token-uri --contract <address> [--chain <chain>] [--chain-id <id>]
+rare liquid-edition set-render-contract --contract <address> --render-contract <address> [--chain <chain>] [--chain-id <id>]
 
 rare collection mint --contract <address> [--token-uri <uri>] [--name <name>] [--description <description>] [--image <path>] [--video <path>] [--tag <tag>] [--attribute <attr>] [--to <address>] [--royalty-receiver <address>] [--chain <chain>] [--chain-id <id>]
 rare collection mint-batch --contract <address> --base-uri <uri> --token-count <number> [--chain <chain>] [--chain-id <id>]

@@ -304,6 +304,28 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('exposes liquid edition management help', async () => {
+    await withTempHome(async (home) => {
+      const liquid = await runCli(['liquid-edition', '--help'], { home });
+      expect(liquid.code).toBe(0);
+      expect(liquid.stdout).toContain('status');
+      expect(liquid.stdout).toContain('token-uri');
+      expect(liquid.stdout).toContain('set-render-contract');
+      expect(liquid.stderr).toBe('');
+
+      const status = await runCli(['liquid-edition', 'status', '--help'], { home });
+      expect(status.code).toBe(0);
+      expect(status.stdout).toContain('Usage: rare liquid-edition status [options]');
+      expect(status.stdout).toContain('--contract <address>');
+      expect(status.stderr).toBe('');
+
+      const setRenderContract = await runCli(['liquid-edition', 'set-render-contract', '--help'], { home });
+      expect(setRenderContract.code).toBe(0);
+      expect(setRenderContract.stdout).toContain('--render-contract <address>');
+      expect(setRenderContract.stderr).toBe('');
+    });
+  });
+
   it('exposes lazy batch mint collection help', async () => {
     await withTempHome(async (home) => {
       const collection = await runCli(['collection', '--help'], { home });

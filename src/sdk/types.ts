@@ -902,6 +902,69 @@ export type DeployLiquidEditionResult = {
   curves: LiquidCurveSegment[];
 } & TransactionResult
 
+export type LiquidEditionPoolKey = {
+  currency0: Address;
+  currency1: Address;
+  fee: number;
+  tickSpacing: number;
+  hooks: Address;
+}
+
+export type LiquidEditionPoolInfo = {
+  contract: Address;
+  poolId: Hex;
+  poolKey: LiquidEditionPoolKey;
+}
+
+export type LiquidEditionMarketState = {
+  rarePerToken: bigint;
+  tokenPerRare: bigint;
+  sqrtPriceX96: bigint;
+  currentTick: number;
+  liquidity: bigint;
+  currentSupply: bigint;
+}
+
+export type LiquidEditionCurrentPrice = {
+  contract: Address;
+  rarePerToken: bigint;
+  tokenPerRare: bigint;
+}
+
+export type LiquidEditionTelemetry = {
+  contract: Address;
+  name: string;
+  symbol: string;
+  decimals: number;
+  totalSupply: bigint;
+  maxTotalSupply: bigint;
+  poolLaunchSupply: bigint;
+  creatorLaunchReward: bigint;
+  baseToken: Address;
+  tokenCreator: Address;
+  initialTokenUri: string;
+  tokenUri: string;
+  renderContract: Address;
+  poolManager: Address;
+  pool: LiquidEditionPoolInfo;
+  lpTickLower: number;
+  lpTickUpper: number;
+  lpLiquidity: bigint;
+  totalLiquidity: bigint;
+  marketState: LiquidEditionMarketState;
+  currentPrice: LiquidEditionCurrentPrice;
+}
+
+export type SetLiquidEditionRenderContractParams = {
+  contract: Address;
+  renderContract: Address;
+}
+
+export type SetLiquidEditionRenderContractResult = {
+  contract: Address;
+  renderContract: Address;
+} & TransactionResult
+
 export type RouterBuyParams = {
   token: Address;
   ethAmount: AmountInput;
@@ -1072,6 +1135,13 @@ export type RareClient = {
     generatePresetCurves: (params: GeneratePresetCurvesParams) => Promise<GeneratePresetCurvesResult>;
     validateCurves: (params: ValidateLiquidCurvesParams) => Promise<LiquidCurvePreview>;
     deployMultiCurve: (params: DeployLiquidEditionParams) => Promise<DeployLiquidEditionResult>;
+    getTokenUri: (params: { contract: Address }) => Promise<string>;
+    getRenderContract: (params: { contract: Address }) => Promise<Address>;
+    setRenderContract: (params: SetLiquidEditionRenderContractParams) => Promise<SetLiquidEditionRenderContractResult>;
+    getPoolInfo: (params: { contract: Address }) => Promise<LiquidEditionPoolInfo>;
+    getMarketState: (params: { contract: Address }) => Promise<LiquidEditionMarketState>;
+    getCurrentPrice: (params: { contract: Address }) => Promise<LiquidEditionCurrentPrice>;
+    getTelemetry: (params: { contract: Address }) => Promise<LiquidEditionTelemetry>;
   };
   mint: {
     mintTo: (params: MintToParams) => Promise<MintToResult>;

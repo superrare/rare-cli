@@ -25,7 +25,7 @@ export const chainIds: Record<SupportedChain, number> = {
 };
 
 export const defaultRpcUrls: Partial<Record<SupportedChain, string>> = {
-  mainnet: 'https://eth.llamarpc.com',
+  mainnet: 'https://ethereum-rpc.publicnode.com',
   sepolia: 'https://rpc.sepolia.org',
   base: 'https://mainnet.base.org',
   'base-sepolia': 'https://sepolia.base.org',
