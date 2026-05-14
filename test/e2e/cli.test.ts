@@ -574,58 +574,62 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('exposes collection-wide offer flags on the offer commands', async () => {
+  it('exposes token-specific offer flags on the offer commands', async () => {
     await withTempHome(async (home) => {
       const create = await runCli(['offer', 'create', '--help'], { home });
       expect(create.code).toBe(0);
       expect(create.stdout).toContain('Usage: rare offer create [options]');
       expect(create.stdout).toContain('--contract <address>');
       expect(create.stdout).toContain('--token-id <id>');
-      expect(create.stdout).toContain('--collection <address>');
       expect(create.stdout).toContain('--amount <amount>');
+      expect(create.stdout).not.toContain('--collection <address>');
       expect(create.stderr).toBe('');
 
       const accept = await runCli(['offer', 'accept', '--help'], { home });
       expect(accept.code).toBe(0);
       expect(accept.stdout).toContain('Usage: rare offer accept [options]');
-      expect(accept.stdout).toContain('--collection <address>');
-      expect(accept.stdout).toContain('--buyer <address>');
+      expect(accept.stdout).toContain('--contract <address>');
       expect(accept.stdout).toContain('--token-id <id>');
+      expect(accept.stdout).not.toContain('--collection <address>');
+      expect(accept.stdout).not.toContain('--buyer <address>');
       expect(accept.stderr).toBe('');
 
       const status = await runCli(['offer', 'status', '--help'], { home });
       expect(status.code).toBe(0);
       expect(status.stdout).toContain('Usage: rare offer status [options]');
-      expect(status.stdout).toContain('--collection <address>');
-      expect(status.stdout).toContain('--account <address>');
+      expect(status.stdout).toContain('--contract <address>');
+      expect(status.stdout).not.toContain('--collection <address>');
+      expect(status.stdout).not.toContain('--account <address>');
       expect(status.stderr).toBe('');
     });
   });
 
-  it('exposes collection-wide listing flags on the listing commands', async () => {
+  it('exposes token-specific listing flags on the listing commands', async () => {
     await withTempHome(async (home) => {
       const create = await runCli(['listing', 'create', '--help'], { home });
       expect(create.code).toBe(0);
       expect(create.stdout).toContain('Usage: rare listing create [options]');
       expect(create.stdout).toContain('--contract <address>');
       expect(create.stdout).toContain('--token-id <id>');
-      expect(create.stdout).toContain('--collection <address>');
-      expect(create.stdout).toContain('--amount <amount>');
+      expect(create.stdout).toContain('--price <amount>');
+      expect(create.stdout).not.toContain('--collection <address>');
       expect(create.stderr).toBe('');
 
       const buy = await runCli(['listing', 'buy', '--help'], { home });
       expect(buy.code).toBe(0);
       expect(buy.stdout).toContain('Usage: rare listing buy [options]');
-      expect(buy.stdout).toContain('--collection <address>');
-      expect(buy.stdout).toContain('--seller <address>');
+      expect(buy.stdout).toContain('--contract <address>');
       expect(buy.stdout).toContain('--token-id <id>');
+      expect(buy.stdout).not.toContain('--collection <address>');
+      expect(buy.stdout).not.toContain('--seller <address>');
       expect(buy.stderr).toBe('');
 
       const status = await runCli(['listing', 'status', '--help'], { home });
       expect(status.code).toBe(0);
       expect(status.stdout).toContain('Usage: rare listing status [options]');
-      expect(status.stdout).toContain('--collection <address>');
-      expect(status.stdout).toContain('--account <address>');
+      expect(status.stdout).toContain('--contract <address>');
+      expect(status.stdout).not.toContain('--collection <address>');
+      expect(status.stdout).not.toContain('--account <address>');
       expect(status.stderr).toBe('');
     });
   });

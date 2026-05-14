@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import {
   createPublicClient,
   createWalletClient,
-  parseEther,
   http,
   isAddressEqual,
   type Address,
@@ -14,7 +13,6 @@ import {
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import {
   chainIds,
-  getContractAddresses,
   supportedChains,
   viemChains,
   type SupportedChain,
@@ -22,8 +20,6 @@ import {
 import { createRareClient } from '../../../src/sdk/client.js';
 import type {
   BatchAuctionStatus,
-  CollectionMarketListingStatus,
-  CollectionMarketOfferStatus,
   RareClient,
 } from '../../../src/sdk/types.js';
 import { loadDotEnv } from '../../helpers/env.js';
@@ -149,121 +145,6 @@ describeFork('SDK fork integration write paths', () => {
     }
   }, 240_000);
 
-  it('sets, cancels, buys, creates, cancels, and accepts collection market orders through the SDK directly', async (ctx) => {
-    const fork = await startLocalFork();
-    if ('skipReason' in fork) {
-      ctx.skip(fork.skipReason);
-      return;
-    }
-
-    const publicClient = createForkPublicClient();
-    await fundForkAccounts(publicClient);
-    const snapshotId = await createForkSnapshot(publicClient);
-
-    try {
-      const chain = await detectForkChain(publicClient);
-      if (getContractAddresses(chain).collectionMarket === undefined) {
-        ctx.skip(`collectionMarket is not configured on ${chain}.`);
-        return;
-      }
-      const seller = createForkRareClient(chain, forkSellerPrivateKey);
-      const buyer = createForkRareClient(chain, forkBuyerPrivateKey);
-
-      const collection = await seller.rare.deploy.erc721({
-        name: `Rare SDK Fork Collection Market ${Date.now().toString(36)}`,
-        symbol: 'RSFCM',
-        maxTokens: 4,
-      });
-      const [listingCancelToken, listingBuyToken, offerAcceptToken] = [
-        await mintToken(seller.rare, collection.contract),
-        await mintToken(seller.rare, collection.contract),
-        await mintToken(seller.rare, collection.contract),
-      ] as const;
-
-      const listingAmount = '0.000001';
-      const setListing = await seller.rare.collectionMarket.listing.set({
-        originCollection: collection.contract,
-        amount: listingAmount,
-      });
-      expect(setListing.seller).toBe(seller.account);
-      expect(setListing.originCollection).toBe(collection.contract);
-      expect(setListing.amount).toBe(parseEther(listingAmount));
-
-      const activeListing = await buyer.rare.collectionMarket.listing.getStatus({
-        originCollection: collection.contract,
-        seller: seller.account,
-        tokenId: listingCancelToken,
-        account: buyer.account,
-      });
-      expectActiveCollectionListing(activeListing, seller.account, collection.contract);
-      expect(activeListing.canBuy).toBe(true);
-
-      const cancelledListing = await seller.rare.collectionMarket.listing.cancel({
-        originCollection: collection.contract,
-      });
-      expect(cancelledListing.hadListing).toBe(true);
-      expect(cancelledListing.amount).toBe(parseEther(listingAmount));
-
-      await seller.rare.collectionMarket.listing.set({
-        originCollection: collection.contract,
-        amount: listingAmount,
-      });
-      const bought = await buyer.rare.collectionMarket.listing.buy({
-        originCollection: collection.contract,
-        seller: seller.account,
-        tokenId: listingBuyToken,
-        amount: listingAmount,
-      });
-      expect(bought.seller).toBe(seller.account);
-      expect(bought.buyer).toBe(buyer.account);
-      expect(bought.tokenId).toBe(BigInt(listingBuyToken));
-
-      await expectTokenOwner(buyer.rare, collection.contract, listingBuyToken, buyer.account);
-
-      const offerAmount = '0.000001';
-      const createdOffer = await buyer.rare.collectionMarket.offer.create({
-        originCollection: collection.contract,
-        amount: offerAmount,
-      });
-      expect(createdOffer.buyer).toBe(buyer.account);
-      expect(createdOffer.amount).toBe(parseEther(offerAmount));
-
-      const activeOffer = await seller.rare.collectionMarket.offer.getStatus({
-        originCollection: collection.contract,
-        buyer: buyer.account,
-        tokenId: offerAcceptToken,
-        account: seller.account,
-      });
-      expectActiveCollectionOffer(activeOffer, buyer.account, collection.contract);
-      expect(activeOffer.canAccept).toBe(true);
-
-      const cancelledOffer = await buyer.rare.collectionMarket.offer.cancel({
-        originCollection: collection.contract,
-      });
-      expect(cancelledOffer.hadOffer).toBe(true);
-      expect(cancelledOffer.amount).toBe(parseEther(offerAmount));
-
-      await buyer.rare.collectionMarket.offer.create({
-        originCollection: collection.contract,
-        amount: offerAmount,
-      });
-      const accepted = await seller.rare.collectionMarket.offer.accept({
-        buyer: buyer.account,
-        originCollection: collection.contract,
-        tokenId: offerAcceptToken,
-        amount: offerAmount,
-      });
-      expect(accepted.seller).toBe(seller.account);
-      expect(accepted.buyer).toBe(buyer.account);
-      expect(accepted.tokenId).toBe(BigInt(offerAcceptToken));
-
-      await expectTokenOwner(buyer.rare, collection.contract, offerAcceptToken, buyer.account);
-    } finally {
-      await revertForkSnapshot(publicClient, snapshotId);
-      await fork.stop();
-    }
-  }, 300_000);
-
   it('creates, reads, cancels, bids, and settles batch auctions through the SDK directly', async (ctx) => {
     const fork = await startLocalFork();
     if ('skipReason' in fork) {
@@ -308,6 +189,7 @@ describeFork('SDK fork integration write paths', () => {
       });
 
       const createdForCancel = await seller.rare.batch.auction.create({
+        root: cancelTree.root,
         artifact: cancelTree,
         reserveAmount: '0.000001',
         duration: 60,
@@ -344,6 +226,7 @@ describeFork('SDK fork integration write paths', () => {
       });
 
       await seller.rare.batch.auction.create({
+        root: settleTree.root,
         artifact: settleTree,
         reserveAmount: '0.000001',
         duration: 1,
@@ -601,28 +484,6 @@ async function expectTokenOwner(
 ): Promise<void> {
   const token = await rare.token.getTokenInfo({ contract, tokenId });
   expect(isAddressEqual(token.owner, expectedOwner)).toBe(true);
-}
-
-function expectActiveCollectionListing(
-  status: CollectionMarketListingStatus,
-  seller: Address,
-  originCollection: Address,
-): void {
-  expect(status.seller).toBe(seller);
-  expect(status.originCollection).toBe(originCollection);
-  expect(status.state).toBe('ACTIVE');
-  expect(status.hasListing).toBe(true);
-}
-
-function expectActiveCollectionOffer(
-  status: CollectionMarketOfferStatus,
-  buyer: Address,
-  originCollection: Address,
-): void {
-  expect(status.buyer).toBe(buyer);
-  expect(status.originCollection).toBe(originCollection);
-  expect(status.state).toBe('ACTIVE');
-  expect(status.hasOffer).toBe(true);
 }
 
 function expectConfiguredBatchAuction(
