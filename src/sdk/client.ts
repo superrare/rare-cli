@@ -36,7 +36,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
   const addresses = getContractAddresses(chain);
   const release = createReleaseNamespace(publicClient, config, addresses);
   const listing = {
-    ...createListingNamespace(publicClient, config, addresses),
+    ...createListingNamespace(publicClient, config, chain, addresses),
     release,
   };
 
@@ -65,8 +65,8 @@ export function createRareClient(config: RareClientConfig): RareClient {
     liquid: createLiquidNamespace(config, chain, addresses),
     mint: createMintNamespace(publicClient, config),
     swap: createSwapNamespace(config, chain, chainId, addresses),
-    auction: createAuctionNamespace(publicClient, config, addresses),
-    offer: createOfferNamespace(publicClient, config, addresses),
+    auction: createAuctionNamespace(publicClient, config, chain, addresses),
+    offer: createOfferNamespace(publicClient, config, chain, addresses),
     collectionMarket: createCollectionMarketNamespace(publicClient, config, chain),
     listing,
     batchListing: createBatchListingNamespace(publicClient, config, {

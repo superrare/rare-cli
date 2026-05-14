@@ -10,7 +10,7 @@ import {
   parseUnits,
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
-import { chainIds, ETH_ADDRESS, supportedChains, type SupportedChain } from '../contracts/addresses.js';
+import { chainIds, ETH_ADDRESS, resolveCurrency, supportedChains, type SupportedChain } from '../contracts/addresses.js';
 import type { UniswapTransactionRequest } from '../swap/uniswap-api.js';
 import type { RareClientConfig, IntegerInput, AmountInput, WalletAccount, TransactionResult } from './types.js';
 
@@ -165,7 +165,7 @@ export function toSafeIntegerNumber(value: IntegerInput, field: string): number 
   return Number(integer);
 }
 
-function stringifyAmountInput(value: Exclude<AmountInput, bigint>, field: string): string {
+export function stringifyAmountInput(value: Exclude<AmountInput, bigint>, field: string): string {
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) {
       throw new Error(`${field} must be a valid finite decimal amount.`);
@@ -209,12 +209,36 @@ export function requireConfiguredAddress(address: Address | undefined, label: st
 }
 
 export async function getTokenDecimals(publicClient: PublicClient, token: Address): Promise<number> {
-  if (token === ETH_ADDRESS) {
+  if (isAddressEqual(token, ETH_ADDRESS)) {
     return 18;
   }
 
   const decimals = await publicClient.readContract({
     address: token,
+    abi: erc20Abi,
+    functionName: 'decimals',
+  });
+
+  return Number(decimals);
+}
+
+export function getKnownCurrencyDecimals(currency: Address, chain: SupportedChain): number | null {
+  if (isAddressEqual(currency, ETH_ADDRESS)) return 18;
+  if (isAddressEqual(currency, resolveCurrency('rare', chain))) return 18;
+  if (isAddressEqual(currency, resolveCurrency('usdc', chain))) return 6;
+  return null;
+}
+
+export async function resolveCurrencyDecimals(
+  publicClient: Pick<PublicClient, 'readContract'>,
+  chain: SupportedChain,
+  currency: Address,
+): Promise<number> {
+  const known = getKnownCurrencyDecimals(currency, chain);
+  if (known !== null) return known;
+
+  const decimals = await publicClient.readContract({
+    address: currency,
     abi: erc20Abi,
     functionName: 'decimals',
   });

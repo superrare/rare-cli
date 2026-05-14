@@ -3,7 +3,9 @@ import { createPublicClient, createWalletClient, http, type PublicClient, type W
 import { privateKeyToAccount } from 'viem/accounts';
 import { mainnet } from 'viem/chains';
 import {
+  getKnownCurrencyDecimals,
   requireWallet,
+  resolveCurrencyDecimals,
   resolveChainFromPublicClient,
   toInteger,
   toNonNegativeInteger,
@@ -13,6 +15,7 @@ import {
   toSafeIntegerNumber,
   toWei,
 } from '../../../src/sdk/helpers.js';
+import { resolveCurrency } from '../../../src/contracts/addresses.js';
 
 const sellerAccount = privateKeyToAccount(
   '0x0000000000000000000000000000000000000000000000000000000000000001',
@@ -83,6 +86,38 @@ describe('SDK helper normalization', () => {
     expect(toPositiveWei('1', 'amount')).toBe(1_000_000_000_000_000_000n);
     expect(() => toPositiveWei('0', 'amount')).toThrow('amount must be greater than 0.');
     expect(() => toPositiveWei('-0.1', 'amount')).toThrow('amount must be greater than 0.');
+  });
+});
+
+describe('currency decimal resolution', () => {
+  it('uses configured decimals for known currencies without an RPC read', async () => {
+    const client = {
+      async readContract(): Promise<number> {
+        throw new Error('unexpected decimals read');
+      },
+    } as const;
+    const eth = resolveCurrency('eth', 'sepolia');
+    const rare = resolveCurrency('rare', 'sepolia');
+    const usdc = resolveCurrency('usdc', 'sepolia');
+
+    expect(getKnownCurrencyDecimals(eth, 'sepolia')).toBe(18);
+    expect(getKnownCurrencyDecimals(rare, 'sepolia')).toBe(18);
+    expect(getKnownCurrencyDecimals(usdc, 'sepolia')).toBe(6);
+    expect(await resolveCurrencyDecimals(client, 'sepolia', usdc)).toBe(6);
+  });
+
+  it('reads decimals for arbitrary ERC20 currencies', async () => {
+    const currency = '0x9999999999999999999999999999999999999999';
+    const client = {
+      async readContract({ address, functionName }: { address: string; functionName: string }): Promise<number> {
+        expect(address).toBe(currency);
+        expect(functionName).toBe('decimals');
+        return 8;
+      },
+    } as const;
+
+    expect(getKnownCurrencyDecimals(currency, 'sepolia')).toBeNull();
+    expect(await resolveCurrencyDecimals(client, 'sepolia', currency)).toBe(8);
   });
 });
 

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import { formatEther, getAddress, isAddress, isAddressEqual, isHex, type Address, type Hex } from 'viem';
+import { getAddress, isAddress, isAddressEqual, isHex, type Address, type Hex, type PublicClient } from 'viem';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
 import { ETH_ADDRESS, resolveCurrency, type SupportedChain } from '../contracts/addresses.js';
@@ -36,6 +36,7 @@ type ChainOptions = {
 
 type BatchCommandClient = {
   chain: SupportedChain;
+  publicClient: PublicClient;
   rare: RareClient;
 };
 
@@ -566,16 +567,17 @@ function createOfferStatusCommand(): Command {
       try {
         const root = await resolveOfferRoot(opts);
         const creator = parseAddressOption(opts.creator, '--creator');
-        const { rare } = createReadBatchClient(opts.chain);
+        const { chain, publicClient, rare } = createReadBatchClient(opts.chain);
         const result = await rare.batch.offer.getStatus({ creator, root });
         const expiry = result.expiry > 0n ? new Date(Number(result.expiry) * 1000).toISOString() : 'none';
+        const amount = await formatBatchAmount(publicClient, chain, result.currency, result.amount);
 
         output(result, () => {
           console.log('\nBatch Offer Details:');
           console.log(`  State:     ${result.state}`);
           console.log(`  Creator:   ${result.creator}`);
           console.log(`  Root:      ${result.root}`);
-          console.log(`  Amount:    ${formatEther(result.amount)} ${result.isEth ? 'ETH' : result.currency}`);
+          console.log(`  Amount:    ${amount} ${result.isEth ? 'ETH' : result.currency}`);
           console.log(`  Currency:  ${result.isEth ? 'ETH' : result.currency}`);
           console.log(`  Expiry:    ${expiry}`);
           console.log(`  Fillable:  ${result.fillable ? 'yes' : 'no'}`);
@@ -870,7 +872,7 @@ function createAuctionStatusCommand(): Command {
           });
         }
         const creator = opts.creator === undefined ? undefined : parseAddressOption(opts.creator, '--creator');
-        const { rare } = createReadBatchClient(opts.chain);
+        const { chain, publicClient, rare } = createReadBatchClient(opts.chain);
         const result = await rare.batch.auction.getStatus({
           contract,
           tokenId: opts.tokenId,
@@ -881,14 +883,16 @@ function createAuctionStatusCommand(): Command {
         });
         const endTime = result.endTime === null ? 'none' : new Date(Number(result.endTime) * 1000).toISOString();
         const startTime = result.startingTime === 0n ? 'not started' : new Date(Number(result.startingTime) * 1000).toISOString();
+        const reserveAmount = await formatBatchAmount(publicClient, chain, result.currency, result.reserveAmount);
+        const currentBid = await formatBatchAmount(publicClient, chain, result.currentBidCurrency, result.currentBid);
 
         output(result, () => {
           console.log('\nBatch Auction Details:');
           console.log(`  State:       ${result.state}`);
           console.log(`  Seller:      ${result.seller}`);
           console.log(`  Root:        ${result.root ?? 'unknown'}`);
-          console.log(`  Reserve:     ${formatEther(result.reserveAmount)} ${result.isEth ? 'ETH' : result.currency}`);
-          console.log(`  Current bid: ${formatEther(result.currentBid)} ${result.currentBidCurrency === ETH_ADDRESS ? 'ETH' : result.currentBidCurrency}`);
+          console.log(`  Reserve:     ${reserveAmount} ${result.isEth ? 'ETH' : result.currency}`);
+          console.log(`  Current bid: ${currentBid} ${result.currentBidCurrency === ETH_ADDRESS ? 'ETH' : result.currentBidCurrency}`);
           console.log(`  Bidder:      ${result.currentBidder ?? 'none'}`);
           console.log(`  Starts:      ${startTime}`);
           console.log(`  Ends:        ${endTime}`);
@@ -1347,6 +1351,7 @@ function createReadBatchClient(chainInput: string | undefined): BatchCommandClie
   const publicClient = getPublicClient(chain);
   return {
     chain,
+    publicClient,
     rare: createRareClient({ publicClient }),
   };
 }
@@ -1357,6 +1362,7 @@ function createWriteBatchClient(chainInput: string | undefined): BatchCommandCli
   const publicClient = getPublicClient(chain);
   return {
     chain,
+    publicClient,
     rare: createRareClient({ publicClient, walletClient: client }),
   };
 }

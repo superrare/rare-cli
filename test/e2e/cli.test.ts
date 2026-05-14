@@ -1,7 +1,8 @@
-import { readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { delimiter, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isAddress } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
 import { parseJsonStdout, runCli, withTempHome } from '../helpers/cli.js';
 
 describe('built CLI deterministic behavior', () => {
@@ -55,11 +56,98 @@ describe('built CLI deterministic behavior', () => {
         defaultChain: 'base-sepolia',
         chains: {
           sepolia: {
+            keySource: 'plaintext',
             privateKey: '0xabc1...c123',
             rpcUrl: 'http://127.0.0.1:8545',
           },
         },
       });
+    });
+  });
+
+  it('configures a 1Password private key reference without storing plaintext', async () => {
+    await withTempHome(async (home) => {
+      const privateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+      const expectedAddress = privateKeyToAccount(privateKey).address;
+      const fakeOp = await createFakeOp(home);
+      const env = fakeOpEnv(fakeOp.binDir, privateKey);
+
+      const configure = await runCli([
+        'configure',
+        '--chain',
+        'sepolia',
+        '--private-key-ref',
+        'op://Private/rare-sepolia/private-key',
+        '--rpc-url',
+        'http://127.0.0.1:8545',
+      ], { home, env });
+
+      expect(configure.code).toBe(0);
+      expect(configure.stdout).toContain('Configuration updated for chain: sepolia');
+      expect(await readFile(fakeOp.logPath, 'utf8')).toBe('read op://Private/rare-sepolia/private-key\n');
+
+      const config: unknown = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
+      expect(config).toEqual({
+        chains: {
+          sepolia: {
+            privateKeyRef: 'op://Private/rare-sepolia/private-key',
+            walletAddress: expectedAddress,
+            rpcUrl: 'http://127.0.0.1:8545',
+          },
+        },
+      });
+
+      const address = await runCli(['wallet', 'address', '--chain', 'sepolia'], {
+        home,
+        env: {
+          ...env,
+          FAKE_OP_FAIL: '1',
+        },
+      });
+
+      expect(address.code).toBe(0);
+      expect(address.stdout.trim()).toBe(expectedAddress);
+      expect(await readFile(fakeOp.logPath, 'utf8')).toBe('read op://Private/rare-sepolia/private-key\n');
+
+      const show = await runCli(['configure', '--show'], { home });
+      expect(show.code).toBe(0);
+      expect(JSON.parse(show.stdout)).toEqual({
+        defaultChain: 'sepolia (default)',
+        chains: {
+          sepolia: {
+            keySource: '1password',
+            privateKeyRef: 'op://Private/rare-sepolia/private-key',
+            walletAddress: expectedAddress,
+            rpcUrl: 'http://127.0.0.1:8545',
+          },
+        },
+      });
+    });
+  });
+
+  it('surfaces 1Password CLI failures through JSON error output', async () => {
+    await withTempHome(async (home) => {
+      const result = await runCli([
+        '--json',
+        'configure',
+        '--chain',
+        'sepolia',
+        '--private-key-ref',
+        'op://Private/rare-sepolia/private-key',
+      ], {
+        home,
+        env: {
+          PATH: join(home, 'empty-bin'),
+        },
+      });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      const error: unknown = JSON.parse(result.stderr);
+      expect(error).toEqual(expect.objectContaining({
+        error: true,
+        message: 'failed to read 1Password secret reference op://Private/rare-sepolia/private-key with "op read"',
+      }));
     });
   });
 
@@ -765,4 +853,42 @@ function isConfigWithSepoliaPrivateKey(value: unknown): value is {
     'privateKey' in value.chains.sepolia &&
     typeof value.chains.sepolia.privateKey === 'string'
   );
+}
+
+async function createFakeOp(home: string): Promise<{ binDir: string; logPath: string }> {
+  const binDir = join(home, 'bin');
+  const logPath = join(home, 'op.log');
+  const opPath = join(binDir, 'op');
+  await mkdir(binDir, { recursive: true });
+  await writeFile(logPath, '', 'utf8');
+  await writeFile(opPath, [
+    '#!/usr/bin/env node',
+    "const { appendFileSync } = require('node:fs');",
+    "const args = process.argv.slice(2);",
+    "appendFileSync(process.env.FAKE_OP_LOG, `${args.join(' ')}\\n`);",
+    "if (process.env.FAKE_OP_FAIL === '1') {",
+    "  console.error('fake op failure');",
+    '  process.exit(42);',
+    '}',
+    "if (args[0] !== 'read') {",
+    "  console.error(`unexpected fake op command: ${args.join(' ')}`);",
+    '  process.exit(2);',
+    '}',
+    "if (process.env.FAKE_OP_PRIVATE_KEY === undefined) {",
+    "  console.error('missing fake private key');",
+    '  process.exit(3);',
+    '}',
+    'console.log(process.env.FAKE_OP_PRIVATE_KEY);',
+    '',
+  ].join('\n'), 'utf8');
+  await chmod(opPath, 0o755);
+  return { binDir, logPath };
+}
+
+function fakeOpEnv(binDir: string, privateKey: string): NodeJS.ProcessEnv {
+  return {
+    PATH: `${binDir}${delimiter}${process.env.PATH ?? ''}`,
+    FAKE_OP_LOG: join(binDir, '..', 'op.log'),
+    FAKE_OP_PRIVATE_KEY: privateKey,
+  };
 }

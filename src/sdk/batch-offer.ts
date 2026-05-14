@@ -1,5 +1,6 @@
 import {
   isAddressEqual,
+  parseUnits,
   parseEventLogs,
   type Address,
   type Hash,
@@ -7,11 +8,13 @@ import {
 } from 'viem';
 import { batchOfferAbi } from '../contracts/abis/batch-offer.js';
 import { tokenAbi } from '../contracts/abis/token.js';
-import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
+import { ETH_ADDRESS, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
 import {
   approvalAbi,
   preparePaymentForSpender,
   requireWallet,
+  resolveCurrencyDecimals,
+  stringifyAmountInput,
   waitForApproval,
 } from './helpers.js';
 import type { RareClient, RareClientConfig, WalletAccount } from './types.js';
@@ -34,7 +37,11 @@ export function createBatchOfferNamespace(
       const marketplaceSettingsSource = requireContractAddress(chain, 'auction');
       const { walletClient, account, accountAddress } = requireWallet(config);
       const block = await publicClient.getBlock();
-      const plan = planBatchOfferCreate(params, block.timestamp);
+      const currency = params.currency ?? ETH_ADDRESS;
+      const amount = typeof params.amount === 'bigint'
+        ? params.amount
+        : parseUnits(stringifyAmountInput(params.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const plan = planBatchOfferCreate({ ...params, currency, amount }, block.timestamp);
       const payment = await preparePaymentForSpender({
         publicClient,
         walletClient,
