@@ -1,6 +1,6 @@
-import type { Address, Hex } from 'viem';
+import { isAddressEqual, zeroAddress, type Address, type Hex } from 'viem';
 import type { IntegerInput } from './types.js';
-import { toNonNegativeInteger, toPositiveInteger } from './helpers.js';
+import { toNonNegativeInteger, toPositiveInteger, toSafeIntegerNumber } from './helpers.js';
 
 export const sovereignCollectionContractTypes = [
   'standard',
@@ -135,6 +135,99 @@ export type PlanCollectionTokenReceiverParams = {
 export type CollectionTokenReceiverPlan = {
   receiver: Address;
 } & CollectionTokenPlan
+
+export type PlanCollectionRoyaltyRegistryStatusParams = {
+  registry?: Address;
+  salePrice?: IntegerInput;
+} & PlanCollectionTokenParams
+
+export type CollectionRoyaltyRegistryStatusPlan = {
+  registry?: Address;
+  salePrice: bigint;
+} & CollectionTokenPlan
+
+export type CollectionRoyaltyRegistryStatusRead = {
+  creatorRegistry: Address;
+  receiver: Address;
+  royaltyPercentage: number;
+  royaltyAmount: bigint;
+  contractPercentageSet: boolean;
+  contractPercentage: number;
+  contractReceiver: Address;
+  tokenReceiver: Address;
+}
+
+export type CollectionRoyaltyRegistryStatus = {
+  registry: Address;
+  contract: Address;
+  tokenId: bigint;
+  salePrice: bigint;
+  creatorRegistry: Address;
+  receiver: Address;
+  royaltyPercentage: number;
+  royaltyAmount: bigint;
+  configuredContractPercentage?: number;
+  contractReceiver?: Address;
+  tokenReceiver?: Address;
+}
+
+export type PlanCollectionRoyaltyRegistryReceiverOverrideParams = {
+  registry?: Address;
+  receiver: Address;
+}
+
+export type CollectionRoyaltyRegistryReceiverOverridePlan = {
+  registry?: Address;
+  receiver: Address;
+}
+
+export type PlanCollectionRoyaltyRegistryContractReceiverParams = {
+  registry?: Address;
+} & PlanCollectionReceiverParams
+
+export type CollectionRoyaltyRegistryContractReceiverPlan = {
+  registry?: Address;
+} & CollectionReceiverPlan
+
+export type PlanCollectionRoyaltyRegistryTokenReceiverParams = {
+  registry?: Address;
+} & PlanCollectionTokenReceiverParams
+
+export type CollectionRoyaltyRegistryTokenReceiverPlan = {
+  registry?: Address;
+} & CollectionTokenReceiverPlan
+
+export type PlanCollectionRoyaltyRegistryContractPercentageParams = {
+  registry?: Address;
+  contract: Address;
+  percentage: IntegerInput;
+}
+
+export type CollectionRoyaltyRegistryContractPercentagePlan = {
+  registry?: Address;
+  contract: Address;
+  percentage: number;
+}
+
+export type CollectionRoyaltyRegistryReceiverOverrideWrite = {
+  functionName: 'setRoyaltyReceiverOverride';
+  args: [Address];
+};
+
+export type CollectionRoyaltyRegistryContractReceiverWrite = {
+  functionName: 'setRoyaltyReceiverForContract';
+  args: [Address, Address];
+};
+
+export type CollectionRoyaltyRegistryTokenReceiverWrite = {
+  functionName: 'setRoyaltyReceiverForToken';
+  args: [Address, Address, bigint];
+};
+
+export type CollectionRoyaltyRegistryContractPercentageWrite = {
+  functionName: 'setPercentageForSetERC721ContractRoyalty';
+  args: [Address, number];
+};
 
 export type PlanCollectionBaseUriParams = {
   contract: Address;
@@ -388,6 +481,110 @@ export function planCollectionTokenReceiver(
   };
 }
 
+export function planCollectionRoyaltyRegistryStatus(
+  params: PlanCollectionRoyaltyRegistryStatusParams,
+): CollectionRoyaltyRegistryStatusPlan {
+  return {
+    ...planCollectionToken(params),
+    registry: params.registry,
+    salePrice: params.salePrice === undefined
+      ? defaultRoyaltyInfoSalePrice
+      : toNonNegativeInteger(params.salePrice, 'salePrice'),
+  };
+}
+
+export function shapeCollectionRoyaltyRegistryStatus(
+  plan: CollectionRoyaltyRegistryStatusPlan & { registry: Address },
+  read: CollectionRoyaltyRegistryStatusRead,
+): CollectionRoyaltyRegistryStatus {
+  return {
+    registry: plan.registry,
+    contract: plan.contract,
+    tokenId: plan.tokenId,
+    salePrice: plan.salePrice,
+    creatorRegistry: read.creatorRegistry,
+    receiver: read.receiver,
+    royaltyPercentage: read.royaltyPercentage,
+    royaltyAmount: read.royaltyAmount,
+    ...(read.contractPercentageSet ? { configuredContractPercentage: read.contractPercentage } : {}),
+    ...optionalAddress('contractReceiver', read.contractReceiver),
+    ...optionalAddress('tokenReceiver', read.tokenReceiver),
+  };
+}
+
+export function planCollectionRoyaltyRegistryReceiverOverride(
+  params: PlanCollectionRoyaltyRegistryReceiverOverrideParams,
+): CollectionRoyaltyRegistryReceiverOverridePlan {
+  return {
+    registry: params.registry,
+    receiver: params.receiver,
+  };
+}
+
+export function planCollectionRoyaltyRegistryContractReceiver(
+  params: PlanCollectionRoyaltyRegistryContractReceiverParams,
+): CollectionRoyaltyRegistryContractReceiverPlan {
+  return {
+    ...planCollectionReceiver(params),
+    registry: params.registry,
+  };
+}
+
+export function planCollectionRoyaltyRegistryTokenReceiver(
+  params: PlanCollectionRoyaltyRegistryTokenReceiverParams,
+): CollectionRoyaltyRegistryTokenReceiverPlan {
+  return {
+    ...planCollectionTokenReceiver(params),
+    registry: params.registry,
+  };
+}
+
+export function planCollectionRoyaltyRegistryContractPercentage(
+  params: PlanCollectionRoyaltyRegistryContractPercentageParams,
+): CollectionRoyaltyRegistryContractPercentagePlan {
+  return {
+    registry: params.registry,
+    contract: params.contract,
+    percentage: toRoyaltyPercentage(params.percentage),
+  };
+}
+
+export function buildCollectionRoyaltyRegistryReceiverOverrideWrite(
+  plan: CollectionRoyaltyRegistryReceiverOverridePlan,
+): CollectionRoyaltyRegistryReceiverOverrideWrite {
+  return {
+    functionName: 'setRoyaltyReceiverOverride',
+    args: [plan.receiver],
+  };
+}
+
+export function buildCollectionRoyaltyRegistryContractReceiverWrite(
+  plan: CollectionRoyaltyRegistryContractReceiverPlan,
+): CollectionRoyaltyRegistryContractReceiverWrite {
+  return {
+    functionName: 'setRoyaltyReceiverForContract',
+    args: [plan.receiver, plan.contract],
+  };
+}
+
+export function buildCollectionRoyaltyRegistryTokenReceiverWrite(
+  plan: CollectionRoyaltyRegistryTokenReceiverPlan,
+): CollectionRoyaltyRegistryTokenReceiverWrite {
+  return {
+    functionName: 'setRoyaltyReceiverForToken',
+    args: [plan.receiver, plan.contract, plan.tokenId],
+  };
+}
+
+export function buildCollectionRoyaltyRegistryContractPercentageWrite(
+  plan: CollectionRoyaltyRegistryContractPercentagePlan,
+): CollectionRoyaltyRegistryContractPercentageWrite {
+  return {
+    functionName: 'setPercentageForSetERC721ContractRoyalty',
+    args: [plan.contract, plan.percentage],
+  };
+}
+
 export function planCollectionBaseUri(
   params: PlanCollectionBaseUriParams,
 ): CollectionBaseUriPlan {
@@ -436,4 +633,28 @@ function lazyContractTypeReadName(
     return 'LAZY_ROYALTY_GUARD_DEADMAN';
   }
   return 'LAZY_SOVEREIGN_NFT';
+}
+
+function toRoyaltyPercentage(value: IntegerInput): number {
+  const percentage = toSafeIntegerNumber(value, 'percentage');
+  if (percentage < 0 || percentage > 100) {
+    throw new Error('percentage must be between 0 and 100.');
+  }
+
+  return percentage;
+}
+
+function optionalAddress(
+  key: 'contractReceiver' | 'tokenReceiver',
+  address: Address,
+): { contractReceiver?: Address; tokenReceiver?: Address } {
+  if (isAddressEqual(address, zeroAddress)) {
+    return {};
+  }
+
+  if (key === 'contractReceiver') {
+    return { contractReceiver: address };
+  }
+
+  return { tokenReceiver: address };
 }
