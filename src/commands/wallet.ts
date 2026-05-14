@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { readConfig, setChainConfig, writeConfig, getActiveChain } from '../config.js';
-import { getWalletClient } from '../client.js';
+import { getConfiguredWalletAddress, getWalletClient } from '../client.js';
 import { isSupportedChain, supportedChains } from '../contracts/addresses.js';
 import { output } from '../output.js';
 
@@ -41,7 +41,11 @@ export function walletCommand(): Command {
         if (!isSupportedChain(selectedChain)) {
           throw new Error(`--chain must be one of: ${supportedChainsText}`);
         }
-        writeConfig(setChainConfig(readConfig(), selectedChain, { privateKey }));
+        writeConfig(setChainConfig(readConfig(), selectedChain, {
+          privateKey,
+          privateKeyRef: undefined,
+          walletAddress: undefined,
+        }));
         console.log(`\nPrivate key saved to config for chain: ${selectedChain}`);
       }
     });
@@ -52,8 +56,7 @@ export function walletCommand(): Command {
     .option('--chain <chain>', `chain to use (${supportedChainsText})`)
     .action((opts: WalletAddressOptions): void => {
       const chain = getActiveChain(opts.chain);
-      const { account } = getWalletClient(chain);
-      console.log(account.address);
+      console.log(getConfiguredWalletAddress(chain) ?? getWalletClient(chain).account.address);
     });
 
   return cmd;

@@ -23,3 +23,15 @@ export function parseHexString(input: string, field: string): `0x${string}` {
 
   return input;
 }
+
+export function isPrivateKeyString(value: string): value is `0x${string}` {
+  return /^0x[0-9a-fA-F]{64}$/.test(value);
+}
+
+export function parsePrivateKey(input: string, field: string): `0x${string}` {
+  if (!isPrivateKeyString(input)) {
+    throw new Error(`${field} must be a 0x-prefixed 32-byte private key.`);
+  }
+
+  return input;
+}

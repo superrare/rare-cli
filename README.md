@@ -30,6 +30,14 @@ rare configure --chain sepolia --private-key 0xYourPrivateKeyHere
 
 > **Security note:** Your private key is stored in plaintext at `~/.rare/config.json`. Keep this file secure and never commit it to version control.
 
+Or store the private key in 1Password and configure rare with a secret reference:
+
+```bash
+rare configure --chain sepolia --private-key-ref op://Private/rare-sepolia/private-key
+```
+
+The CLI runs `op read` once during configuration to derive and store the public wallet address. Later, it resolves the 1Password secret only when viem signs a message or transaction. The plaintext private key is never written to `~/.rare/config.json`.
+
 Or generate a new wallet:
 
 ```bash
@@ -56,6 +64,8 @@ You can set both at once:
 
 ```bash
 rare configure --chain sepolia --private-key 0x... --rpc-url https://your-rpc-endpoint.com
+# or, without storing the key in plaintext:
+rare configure --chain sepolia --private-key-ref op://Private/rare-sepolia/private-key --rpc-url https://your-rpc-endpoint.com
 ```
 
 ### 3. View your config
@@ -687,11 +697,14 @@ await rare.import.erc721({
 
 ## Configuration
 
-Config is stored at `~/.rare/config.json`. Each chain has its own private key and RPC URL.
+Config is stored at `~/.rare/config.json`. Each chain has its own key source and RPC URL. A key source can be a plaintext `privateKey` or a 1Password `privateKeyRef` plus the derived public `walletAddress`.
 
 ```bash
 # Set private key and RPC for a chain
 rare configure --chain sepolia --private-key 0x... --rpc-url https://...
+
+# Set a 1Password-backed private key reference and RPC for a chain
+rare configure --chain sepolia --private-key-ref op://Private/rare-sepolia/private-key --rpc-url https://...
 
 # Configure multiple chains
 rare configure --chain base --rpc-url https://your-base-rpc.com
@@ -708,9 +721,19 @@ rare configure --show
 
 - **Use sepolia for testing.** Default to sepolia and only switch to mainnet when you're ready.
 - **Set a reliable RPC endpoint.** Public endpoints throttle and drop requests. Services like Alchemy or Infura provide free tiers.
-- **Don't share your private key.** Keep `~/.rare/config.json` secure and never commit it to version control.
+- **Prefer 1Password for private keys.** Install the 1Password CLI, run `op signin`, and configure keys with `--private-key-ref` to avoid storing plaintext keys in rare config.
+- **Don't share your private key.** If you use `--private-key` or generated saved wallets, keep `~/.rare/config.json` secure and never commit it to version control.
 - **Check status before transacting.** Use `rare status` and `rare auction status` to inspect on-chain state before sending transactions.
 - **Back up your wallet.** If you lose your private key, you lose access to your assets. Store a copy somewhere safe.
+
+### 1Password Test Setup
+
+The default test suite does not require access to a real 1Password vault. To run the optional live 1Password integration, sign in with `op signin` and provide a private-key secret reference:
+
+```bash
+RARE_CLI_TEST_OP_PRIVATE_KEY_REF=op://Private/rare-sepolia/private-key \
+  npx vitest run test/integration/one-password.test.ts --config vitest.config.ts
+```
 
 ## Contract Addresses
 

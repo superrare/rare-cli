@@ -21,9 +21,10 @@ Manages CLI configuration stored at `~/.rare/config.json`.
 |---|---|
 | `--chain <chain>` | Target chain (`sepolia` or `mainnet`) |
 | `--private-key <key>` | Set private key for signing transactions |
+| `--private-key-ref <op://ref>` | Set a 1Password secret reference for signing transactions |
 | `--rpc-url <url>` | Set custom RPC endpoint |
 | `--default-chain <chain>` | Set the default network |
-| `--show` | Display current config (keys masked) |
+| `--show` | Display current config (keys masked, 1Password refs shown) |
 
 ---
 

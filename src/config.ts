@@ -1,11 +1,16 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { getAddress, isAddress, type Address } from 'viem';
 import { chainIds, supportedChains, isSupportedChain, type SupportedChain } from './contracts/addresses.js';
 import { isHexString } from './sdk/validation.js';
 
+export type PrivateKeyReference = `op://${string}`;
+
 export type ChainConfig = {
   privateKey?: `0x${string}`;
+  privateKeyRef?: PrivateKeyReference;
+  walletAddress?: Address;
   rpcUrl?: string;
 }
 
@@ -47,6 +52,18 @@ export function setChainConfig(config: Config, chain: SupportedChain, updates: C
       },
     },
   };
+}
+
+export function isPrivateKeyReference(value: string): value is PrivateKeyReference {
+  return value.startsWith('op://') && value.length > 'op://'.length;
+}
+
+export function parsePrivateKeyReference(value: string, field: string): PrivateKeyReference {
+  if (!isPrivateKeyReference(value)) {
+    throw new Error(`${field} must be a 1Password secret reference beginning with op://.`);
+  }
+
+  return value;
 }
 
 export function getActiveChain(chainFlag?: string, chainIdFlag?: string): SupportedChain {
@@ -96,7 +113,7 @@ function formatSupportedChainIds(): string {
   return supportedChains.map((chain) => `${chainIds[chain]} (${chain})`).join(', ');
 }
 
-function parseConfig(value: unknown): Config {
+export function parseConfig(value: unknown): Config {
   if (!isRecord(value)) {
     return { chains: {} };
   }
@@ -127,14 +144,27 @@ function parseChainConfig(value: unknown): ChainConfig | undefined {
   const privateKey = typeof value.privateKey === 'string' && isHexString(value.privateKey)
     ? value.privateKey
     : undefined;
+  const privateKeyRef = typeof value.privateKeyRef === 'string' && isPrivateKeyReference(value.privateKeyRef)
+    ? value.privateKeyRef
+    : undefined;
+  const walletAddress = typeof value.walletAddress === 'string' && isAddress(value.walletAddress)
+    ? getAddress(value.walletAddress)
+    : undefined;
   const rpcUrl = typeof value.rpcUrl === 'string' ? value.rpcUrl : undefined;
 
-  if (privateKey === undefined && rpcUrl === undefined) {
+  if (
+    privateKey === undefined &&
+    privateKeyRef === undefined &&
+    walletAddress === undefined &&
+    rpcUrl === undefined
+  ) {
     return undefined;
   }
 
   return {
     ...(privateKey === undefined ? {} : { privateKey }),
+    ...(privateKeyRef === undefined ? {} : { privateKeyRef }),
+    ...(walletAddress === undefined ? {} : { walletAddress }),
     ...(rpcUrl === undefined ? {} : { rpcUrl }),
   };
 }
