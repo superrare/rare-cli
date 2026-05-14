@@ -1,5 +1,4 @@
 import {
-  parseUnits,
   type Address,
   type Hash,
   type PublicClient,
@@ -16,8 +15,7 @@ import {
   approvalAbi,
   preparePayment,
   requireWallet,
-  resolveCurrencyDecimals,
-  stringifyAmountInput,
+  toCurrencyAmount,
   waitForApproval,
 } from './helpers.js';
 import {
@@ -38,9 +36,7 @@ export function createListingNamespace(
     async create(params): ReturnType<ListingMarketplaceNamespace['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency ?? ETH_ADDRESS;
-      const price = typeof params.price === 'bigint'
-        ? params.price
-        : parseUnits(stringifyAmountInput(params.price, 'price'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const price = await toCurrencyAmount(publicClient, chain, currency, params.price, 'price');
       const plan = planListingCreate({ ...params, currency, price }, accountAddress);
       const approvalTxHash = params.autoApprove === false
         ? undefined
@@ -94,9 +90,7 @@ export function createListingNamespace(
     async buy(params): ReturnType<ListingMarketplaceNamespace['buy']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency ?? ETH_ADDRESS;
-      const amount = typeof params.amount === 'bigint'
-        ? params.amount
-        : parseUnits(stringifyAmountInput(params.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const amount = await toCurrencyAmount(publicClient, chain, currency, params.amount, 'amount');
       const plan = planListingBuy({ ...params, currency, amount });
 
       const value = await preparePayment({

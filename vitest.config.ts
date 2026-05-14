@@ -16,7 +16,15 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      include: ['src/sdk/**/*.ts', 'src/contracts/addresses.ts', 'src/data-access/**/*.ts'],
+      include: [
+        'src/sdk/**/*.ts',
+        'src/swap/**/*.ts',
+        'src/liquid/**/*.ts',
+        'src/commands/*-core.ts',
+        'src/config.ts',
+        'src/contracts/addresses.ts',
+        'src/data-access/**/*.ts',
+      ],
       exclude: ['src/data-access/schema.d.ts', 'src/contracts/abis/**'],
     },
     testTimeout: runLiveE2E ? 600_000 : 10_000,

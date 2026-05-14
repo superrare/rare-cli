@@ -20,13 +20,18 @@ import {
   toTokenAmount,
   waitForApproval,
 } from './helpers.js';
-import { planSplits } from './marketplace-core.js';
 import {
   generateApiAddressMerkleRoot,
   generateApiNftMerkleRoot,
   resolveApiAddressMerkleProof,
   resolveApiNftMerkleProof,
 } from './merkle-api.js';
+import {
+  planBatchListingRootRegistration,
+  shapeBatchListingStatus,
+  shouldResolveBatchListingAllowListProof,
+  uniqueAddresses,
+} from './batch-listing-core.js';
 
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
@@ -45,7 +50,7 @@ export function createBatchListingNamespace(
     async create(params): Promise<BatchListingCreateResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const artifact = await resolveApiBatchListingRootArtifact(config, params.artifact);
-      const splitConfig = prepareRootRegistrationConfig(artifact, accountAddress);
+      const splitConfig = planBatchListingRootRegistration(artifact, accountAddress);
 
       const uniqueContracts = uniqueAddresses(artifact.tokens.map((token) => token.contract));
 
@@ -221,25 +226,17 @@ export function createBatchListingNamespace(
         args: [resolvedParams.creator, resolvedParams.root],
       }));
 
-      const hasListing =
-        listingConfig.amount > 0n &&
-        cancellationNonce === listingConfig.nonce;
       const allowList = await readAllowListConfig(publicClient, addresses.batchListing, resolvedParams.creator, resolvedParams.root);
       const tokenStatus = await readTokenStatus(publicClient, addresses.batchListing, resolvedParams);
 
-      return {
+      return shapeBatchListingStatus({
         root: resolvedParams.root,
-        seller: resolvedParams.creator,
-        currencyAddress: listingConfig.currency,
-        amount: listingConfig.amount,
-        splitRecipients: [...listingConfig.splitRecipients],
-        splitRatios: [...listingConfig.splitRatios],
-        nonce: listingConfig.nonce,
-        isEth: isAddressEqual(listingConfig.currency, ETH_ADDRESS),
-        hasListing,
+        creator: resolvedParams.creator,
+        listingConfig,
+        cancellationNonce,
         allowList,
-        ...tokenStatus,
-      };
+        tokenStatus,
+      });
     },
   };
 }
@@ -296,10 +293,13 @@ async function resolveBatchListingBuyProofArtifact(opts: {
   const block = allowList === undefined || tokenProof.allowListProof !== undefined
     ? undefined
     : await opts.publicClient.getBlock();
-  const allowListActive = allowList !== undefined &&
-    (block === undefined || allowList.endTimestamp > BigInt(block.timestamp));
+  const shouldResolveAllowListProof = shouldResolveBatchListingAllowListProof({
+    allowList,
+    tokenProof,
+    nowTimestamp: block === undefined ? undefined : BigInt(block.timestamp),
+  });
 
-  if (!allowListActive || tokenProof.allowListProof !== undefined) {
+  if (!shouldResolveAllowListProof) {
     return tokenProof;
   }
 
@@ -377,37 +377,6 @@ async function resolveBatchListingStatusParams(opts: {
 
 function isHash(value: Hash | undefined): value is Hash {
   return value !== undefined;
-}
-
-function uniqueAddresses(addresses: Address[]): Address[] {
-  return addresses.reduce<Address[]>(
-    (unique, address) => unique.some((existing) => isAddressEqual(existing, address)) ? unique : [...unique, address],
-    [],
-  );
-}
-
-function prepareRootRegistrationConfig(
-  artifact: BatchListingRootArtifact,
-  accountAddress: Address,
-): { splitAddresses: Address[]; splitRatios: number[] } {
-  if (artifact.tokens.length < 2) {
-    throw new Error('Root artifact must contain at least two tokens; the batch listing contract rejects empty proofs');
-  }
-
-  if (artifact.allowList !== undefined && artifact.allowList.addresses.length < 2) {
-    throw new Error(
-      'Allowlist must contain at least two addresses; the batch listing contract rejects empty allowlist proofs',
-    );
-  }
-
-  const { splitAddresses, splitRatios } = artifact;
-  if (splitAddresses.length === 0 && splitRatios.length === 0) {
-    const splits = planSplits(undefined, undefined, accountAddress);
-    return { splitAddresses: splits.addresses, splitRatios: splits.ratios };
-  }
-
-  const splits = planSplits(splitAddresses, splitRatios, accountAddress);
-  return { splitAddresses: splits.addresses, splitRatios: splits.ratios };
 }
 
 async function prepareBatchListingPayment(opts: {

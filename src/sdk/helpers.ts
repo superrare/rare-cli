@@ -246,6 +246,23 @@ export async function resolveCurrencyDecimals(
   return Number(decimals);
 }
 
+export async function toCurrencyAmount(
+  publicClient: Pick<PublicClient, 'readContract'>,
+  chain: SupportedChain,
+  currency: Address,
+  value: AmountInput,
+  field: string,
+): Promise<bigint> {
+  if (typeof value === 'bigint') {
+    return value;
+  }
+
+  return parseUnits(
+    stringifyAmountInput(value, field),
+    await resolveCurrencyDecimals(publicClient, chain, currency),
+  );
+}
+
 export async function toTokenAmount(
   publicClient: PublicClient,
   token: Address,
