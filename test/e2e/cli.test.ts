@@ -352,6 +352,68 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('exposes account market list command help', async () => {
+    await withTempHome(async (home) => {
+      const collection = await runCli(['collection', 'list', '--help'], { home });
+      expect(collection.code).toBe(0);
+      expect(collection.stdout).toContain('Usage: rare collection list [options]');
+      expect(collection.stdout).toContain('--account <address>');
+      expect(collection.stdout).toContain('--chain-id <id>');
+
+      const listing = await runCli(['listing', 'list', '--help'], { home });
+      expect(listing.code).toBe(0);
+      expect(listing.stdout).toContain('Usage: rare listing list [options]');
+      expect(listing.stdout).toContain('--account <address>');
+
+      const offer = await runCli(['offer', 'list', '--help'], { home });
+      expect(offer.code).toBe(0);
+      expect(offer.stdout).toContain('Usage: rare offer list [options]');
+      expect(offer.stdout).toContain('--side <maker|taker>');
+
+      const auction = await runCli(['auction', 'list', '--help'], { home });
+      expect(auction.code).toBe(0);
+      expect(auction.stdout).toContain('Usage: rare auction list [options]');
+      expect(auction.stdout).toContain('--side <maker|taker>');
+
+      const batchListing = await runCli(['listing', 'batch', 'list', '--help'], { home });
+      expect(batchListing.code).toBe(0);
+      expect(batchListing.stdout).toContain('Usage: rare listing batch list [options]');
+      expect(batchListing.stdout).toContain('--account <address>');
+    });
+  });
+
+  it('rejects invalid account market list options before API requests', async () => {
+    await withTempHome(async (home) => {
+      const invalidAccount = await runCli(['listing', 'list', '--account', 'not-an-address'], { home });
+      expect(invalidAccount.code).toBe(1);
+      expect(invalidAccount.stderr).toContain('--account must be a valid EVM address.');
+
+      const invalidSide = await runCli([
+        'offer',
+        'list',
+        '--account',
+        '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+        '--side',
+        'both',
+      ], { home });
+      expect(invalidSide.code).toBe(1);
+      expect(invalidSide.stderr).toContain('--side must be one of: maker, taker');
+
+      const invalidPage = await runCli([
+        'auction',
+        'list',
+        '--account',
+        '0x70997970C51812dc3A010C7d01b50e0d17dc79C8',
+        '--side',
+        'maker',
+        '--page',
+        '0',
+      ], { home });
+      expect(invalidPage.code).toBe(1);
+      expect(invalidPage.stderr).toContain('--page must be a positive integer.');
+    });
+  });
+
   it('exposes utility tree command help', async () => {
     await withTempHome(async (home) => {
       const build = await runCli(['utils', 'tree', 'build', '--help'], { home });

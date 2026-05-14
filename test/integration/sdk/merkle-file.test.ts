@@ -6,7 +6,7 @@ import type { Address } from 'viem';
 import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import {
   loadMerkleRootArtifact,
-  validateMerkleRootArtifact,
+  validateRootArtifact,
 } from '../../../src/sdk/merkle.js';
 import type { BatchListingRootArtifact } from '../../../src/sdk/types.js';
 
@@ -42,7 +42,7 @@ describe('merkle artifact file integration', () => {
       expect(loaded.allowList?.root).toBe(allowListedRootArtifact.allowList.root);
 
       const parsed = JSON.parse(await readFile(path, 'utf8')) as unknown;
-      expect(() => validateMerkleRootArtifact(parsed)).not.toThrow();
+      expect(() => validateRootArtifact(parsed)).not.toThrow();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }

@@ -1,16 +1,5 @@
 import { getContractAddresses, chainIds } from '../contracts/addresses.js';
-import {
-  importErc721 as importErc721Api,
-  pinMetadata as pinMetadataApi,
-  searchCollections as searchCollectionsApi,
-  searchNfts as searchNftsApi,
-  uploadMedia as uploadMediaApi,
-  getNft as getNftApi,
-  getNftEvents as getNftEventsApi,
-  getCollection as getCollectionApi,
-  getCollectionEvents as getCollectionEventsApi,
-  getUser as getUserApi,
-} from './api.js';
+import { createRareApi } from './api.js';
 import type { RareClientConfig, RareClient } from './types.js';
 import { resolveChainFromPublicClient } from './helpers.js';
 import { createDeployNamespace } from './deploy.js';
@@ -35,6 +24,10 @@ export function createRareClient(config: RareClientConfig): RareClient {
   const chain = resolveChainFromPublicClient(publicClient);
   const chainId = chainIds[chain];
   const addresses = getContractAddresses(chain);
+  const api = createRareApi({
+    baseUrl: config.apiBaseUrl,
+    fetch: config.apiFetch,
+  });
   const release = createReleaseNamespace(publicClient, config, addresses);
   const listing = {
     ...createListingNamespace(publicClient, config, chain, addresses),
@@ -111,41 +104,42 @@ export function createRareClient(config: RareClientConfig): RareClient {
     search: {
       async nfts(params = {}): ReturnType<RareClient['search']['nfts']> {
         const requestParams = params.chainId ? params : { ...params, chainId };
-        return searchNftsApi(requestParams);
+        return api.searchNfts(requestParams);
       },
 
       async collections(params = {}): ReturnType<RareClient['search']['collections']> {
-        return searchCollectionsApi(params);
+        const requestParams = params.chainId ? params : { ...params, chainId };
+        return api.searchCollections(requestParams);
       },
     },
     nft: {
       async get(universalTokenId): ReturnType<RareClient['nft']['get']> {
-        return getNftApi(universalTokenId);
+        return api.getNft(universalTokenId);
       },
       async events(universalTokenId, opts): ReturnType<RareClient['nft']['events']> {
-        return getNftEventsApi(universalTokenId, opts);
+        return api.getNftEvents(universalTokenId, opts);
       },
     },
     collection: createCollectionNamespace(publicClient, config, chain, {
       async get(id) {
-        return getCollectionApi(id);
+        return api.getCollection(id);
       },
       async events(id, opts): ReturnType<RareClient['collection']['events']> {
-        return getCollectionEventsApi(id, opts);
+        return api.getCollectionEvents(id, opts);
       },
     }),
     user: {
       async get(address): ReturnType<RareClient['user']['get']> {
-        return getUserApi(address);
+        return api.getUser(address);
       },
     },
     media: {
       async upload(buffer, filename): ReturnType<RareClient['media']['upload']> {
-        return uploadMediaApi(buffer, filename);
+        return api.uploadMedia(buffer, filename);
       },
 
       async pinMetadata(opts): ReturnType<RareClient['media']['pinMetadata']> {
-        return pinMetadataApi(opts);
+        return api.pinMetadata(opts);
       },
     },
     import: {
@@ -155,7 +149,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
           throw new Error('No owner available for import. Pass params.owner or provide config.account/walletClient with an account.');
         }
 
-        await importErc721Api({
+        await api.importErc721({
           chainId,
           contract: params.contract,
           owner,

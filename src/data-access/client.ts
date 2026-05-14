@@ -20,9 +20,13 @@ const errorMiddleware: Middleware = {
   },
 };
 
-export function createApiClient(baseUrl?: string): ReturnType<typeof createClient<paths>> {
+export function createApiClient(
+  baseUrl?: string,
+  fetch?: typeof globalThis.fetch,
+): ReturnType<typeof createClient<paths>> {
   const client = createClient<paths>({
     baseUrl: resolveRareApiBaseUrl(baseUrl),
+    ...(fetch === undefined ? {} : { fetch }),
   });
 
   client.use(errorMiddleware);

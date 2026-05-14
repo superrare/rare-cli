@@ -27,6 +27,7 @@ import {
   writeMerkleArtifact,
 } from '../sdk/merkle.js';
 import { parseAddress } from '../sdk/validation.js';
+import { createBatchListingListCommand } from './account-market-list.js';
 import { formatBatchAmount, parseBatchAmount } from './batch-amounts.js';
 
 type ChainOptions = {
@@ -994,6 +995,8 @@ export function createUtilsMerkleCommand(): Command {
 }
 
 function addBatchListingCommands(cmd: Command): void {
+  cmd.addCommand(createBatchListingListCommand());
+
   cmd
     .command('create')
     .description('Register a sale-price Merkle root from a root artifact')

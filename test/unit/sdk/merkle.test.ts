@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { Address } from 'viem';
 import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import {
   buildMerkleProofArtifact,
-  validateMerkleProofArtifact,
-  validateMerkleRootArtifact,
+  loadMerkleRootArtifact,
+  validateProofArtifact,
+  validateRootArtifact,
 } from '../../../src/sdk/merkle.js';
 import type { BatchListingRootArtifact } from '../../../src/sdk/types.js';
 
@@ -56,7 +60,7 @@ describe('merkle artifact core utilities', () => {
 
   it('catches structural errors and root mismatches', () => {
     expect(() =>
-      validateMerkleRootArtifact({
+      validateRootArtifact({
         root: `0x${'11'.repeat(32)}`,
         currency: '0x1111111111111111111111111111111111111111',
         amount: '1',
@@ -67,7 +71,7 @@ describe('merkle artifact core utilities', () => {
     ).toThrow(/tokens must contain at least two entries/);
 
     expect(() =>
-      validateMerkleProofArtifact({
+      validateProofArtifact({
         root: `0x${'11'.repeat(32)}`,
         contract: '0x1111111111111111111111111111111111111111',
         tokenId: '1',
@@ -82,5 +86,21 @@ describe('merkle artifact core utilities', () => {
         '1',
       ),
     ).toThrow(/does not match artifact root/);
+  });
+
+  it('loads root artifacts without computing roots from token-set input', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'rare-batch-root-artifact-'));
+    const path = join(dir, 'artifact.json');
+    try {
+      await writeFile(path, JSON.stringify(allowListedRootArtifact, null, 2));
+      const loaded = await loadMerkleRootArtifact(path);
+      expect(loaded.root).toBe(allowListedRootArtifact.root);
+      expect(loaded.allowList?.root).toBe(allowListedRootArtifact.allowList.root);
+
+      const parsed = JSON.parse(await readFile(path, 'utf8')) as unknown;
+      expect(() => validateRootArtifact(parsed)).not.toThrow();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

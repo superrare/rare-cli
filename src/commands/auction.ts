@@ -7,6 +7,7 @@ import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
 import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
+import { createAuctionListCommand } from './account-market-list.js';
 import { resolveCurrencyDecimals } from '../sdk/helpers.js';
 import { parseAuctionTypeOption } from './auction-core.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
@@ -39,7 +40,8 @@ type AuctionTokenOptions = {
 
 export function auctionCommand(): Command {
   const cmd = new Command('auction');
-  cmd.description('Auction subcommands (create, bid, settle, cancel, status)');
+  cmd.description('Auction subcommands (list, create, bid, settle, cancel, status)');
+  cmd.addCommand(createAuctionListCommand());
 
   // auction create
   cmd
