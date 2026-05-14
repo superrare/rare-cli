@@ -74,7 +74,7 @@ rare configure --chain sepolia --private-key-ref op://Private/rare-sepolia/priva
 rare configure --show
 ```
 
-Private keys are masked in the output.
+Private keys are masked in the output. Configured account addresses are shown.
 
 ## Usage
 
@@ -317,11 +317,8 @@ rare listing release limits set-mint --contract 0x... --limit 2
 # Per-wallet mint transaction count; 0 disables it.
 rare listing release limits set-tx --contract 0x... --limit 1
 
-# Minimum seller staking requirement in RARE; 0 disables it.
-rare listing release staking set-minimum \
-  --contract 0x... \
-  --minimum 100 \
-  --end-timestamp 2026-06-01T16:00:00Z
+# Verify release config, allowlist, and limits.
+rare listing release status --contract 0x... --account 0x...
 ```
 
 ### Auctions
@@ -497,25 +494,18 @@ rare search tokens --mine
 # Search NFTs by owner
 rare search tokens --owner 0x...
 
-# Find active auctions (defaults to PENDING + RUNNING)
-rare search auctions
+# Find NFTs with running auctions
+rare search tokens --auction-state RUNNING
 
-# Filter by auction state
-rare search auctions --state SETTLED
+# Find NFTs with listings or offers
+rare search tokens --has-listing
+rare search tokens --has-offer
 
-# Search your collections
+# Search collections
 rare search collections
 ```
 
-All search commands support `--take <n>` and `--cursor <n>` for pagination.
-
-### List All Collections
-
-Fetches every collection you own (auto-paginates):
-
-```bash
-rare list-collections
-```
+All search commands support `--per-page <n>` and `--page <n>` for pagination.
 
 ### Query On-Chain Status
 
@@ -707,7 +697,7 @@ await rare.import.erc721({
 
 ## Configuration
 
-Config is stored at `~/.rare/config.json`. Each chain has its own key source and RPC URL. A key source can be a plaintext `privateKey` or a 1Password `privateKeyRef` plus the derived public `walletAddress`.
+Config is stored at `~/.rare/config.json`. Each chain has its own key source and RPC URL. A key source can be a plaintext `privateKey` or a 1Password `privateKeyRef` plus a derived public address. `rare configure --show` prints the account address for configured key sources.
 
 ```bash
 # Set private key and RPC for a chain
@@ -723,8 +713,14 @@ rare configure --chain base-sepolia --private-key 0x... --rpc-url https://your-b
 # Change default network
 rare configure --default-chain mainnet
 
-# View current config
+# View current config, including derived account addresses
 rare configure --show
+
+# Delete local config (prompts for confirmation)
+rare configure delete
+
+# Delete local config without prompting
+rare configure delete --yes
 ```
 
 Merkle root and proof flows use `https://api.superrare.com` by default. Set `RARE_API_BASE_URL` to point the SDK and CLI at another rare-api deployment.

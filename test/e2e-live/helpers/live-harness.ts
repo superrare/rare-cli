@@ -8,7 +8,6 @@ import {
   erc20Abi,
   formatUnits,
   http,
-  isHex,
   parseUnits,
   type Address,
   type PublicClient,
@@ -23,6 +22,12 @@ import {
 } from '../../../src/contracts/addresses.js';
 import { parseJsonStdout, runCli } from '../../helpers/cli.js';
 import { loadDotEnv, missingLiveEnv } from '../env.mjs';
+import {
+  releaseLiveWallets,
+  reserveLiveWallet,
+  reserveLiveWalletPair,
+  type LiveWalletLease,
+} from './live-wallet-pool.js';
 
 loadDotEnv();
 
@@ -52,6 +57,8 @@ export type LiveFixture = {
   publicClient: PublicClient;
   sellerAddress: Address;
   buyerAddress?: Address;
+  sellerWallet: LiveWalletLease;
+  buyerWallet?: LiveWalletLease;
   rareAddress: Address;
   usdcAddress: Address;
 };
@@ -87,14 +94,24 @@ export async function createLiveFixture(options: { buyer?: boolean } = {}): Prom
   const buyerHome = options.buyer ? await createTempHome('rare-cli-live-buyer-home-') : undefined;
   const tempDir = await mkdtemp(join(tmpdir(), 'rare-cli-live-'));
   const curvesFile = join(tempDir, 'liquid-curves.json');
+  let sellerWallet: LiveWalletLease | undefined;
+  let buyerWallet: LiveWalletLease | undefined;
 
   try {
     const chain = await detectLiveChain();
     const publicClient = createLivePublicClient(chain);
+    if (buyerHome === undefined) {
+      sellerWallet = await reserveLiveWallet('seller', chain);
+    } else {
+      ({ sellerWallet, buyerWallet } = await reserveLiveWalletPair(chain));
+    }
     await writeFile(curvesFile, JSON.stringify(LIQUID_CURVES, null, 2), 'utf8');
-    await step('configure seller wallet', () => configureLiveHome(sellerHome, chain, livePrivateKey('E2E_SELLER_PRIVATE_KEY')));
+    await step('configure seller wallet', () => configureLiveHome(sellerHome, chain, sellerWallet.privateKey));
     if (buyerHome) {
-      await step('configure buyer wallet', () => configureLiveHome(buyerHome, chain, livePrivateKey('E2E_BUYER_PRIVATE_KEY')));
+      if (buyerWallet === undefined) {
+        throw new Error('Buyer wallet lease was not created.');
+      }
+      await step('configure buyer wallet', () => configureLiveHome(buyerHome, chain, buyerWallet.privateKey));
     }
 
     return {
@@ -105,26 +122,32 @@ export async function createLiveFixture(options: { buyer?: boolean } = {}): Prom
       chain,
       chainId: chainIds[chain],
       publicClient,
-      sellerAddress: privateKeyToAccount(livePrivateKey('E2E_SELLER_PRIVATE_KEY')).address,
-      buyerAddress: buyerHome ? privateKeyToAccount(livePrivateKey('E2E_BUYER_PRIVATE_KEY')).address : undefined,
+      sellerAddress: sellerWallet.address,
+      buyerAddress: buyerWallet?.address,
+      sellerWallet,
+      buyerWallet,
       rareAddress: resolveCurrency('rare', chain),
       usdcAddress: resolveCurrency('usdc', chain),
     };
   } catch (error) {
-    await cleanupLiveFixture({ sellerHome, buyerHome, tempDir });
+    await cleanupLiveFixture({ sellerHome, buyerHome, tempDir, sellerWallet, buyerWallet });
     throw error;
   }
 }
 
-export async function cleanupLiveFixture(live: Pick<LiveFixture, 'sellerHome' | 'buyerHome' | 'tempDir'> | undefined): Promise<void> {
+export async function cleanupLiveFixture(
+  live: Pick<LiveFixture, 'sellerHome' | 'buyerHome' | 'tempDir'> &
+    Partial<Pick<LiveFixture, 'sellerWallet' | 'buyerWallet'>> | undefined,
+): Promise<void> {
   await cleanupTempPath(live?.sellerHome);
   await cleanupTempPath(live?.buyerHome);
   await cleanupTempPath(live?.tempDir);
+  await releaseLiveWallets([live?.sellerWallet, live?.buyerWallet]);
 }
 
 export function requireBuyerFixture(fixture: LiveFixture): BuyerLiveFixture {
   if (fixture.buyerHome === undefined || fixture.buyerAddress === undefined) {
-    throw new Error('Live buyer fixture requires E2E_BUYER_PRIVATE_KEY and buyer setup.');
+    throw new Error('Live buyer fixture requires E2E_BUYER_PRIVATE_KEYS and buyer setup.');
   }
   return {
     ...fixture,
@@ -193,10 +216,16 @@ export async function approveToken(
   token: Address,
   spender: Address,
   amount: bigint,
-  ownerPrivateKeyName: 'E2E_SELLER_PRIVATE_KEY' | 'E2E_BUYER_PRIVATE_KEY',
+  ownerRole: 'seller' | 'buyer',
 ): Promise<void> {
+  const privateKey = ownerRole === 'seller'
+    ? live.sellerWallet.privateKey
+    : live.buyerWallet?.privateKey;
+  if (privateKey === undefined) {
+    throw new Error('Live buyer wallet lease is required for token approval.');
+  }
   const walletClient = createWalletClient({
-    account: privateKeyToAccount(livePrivateKey(ownerPrivateKeyName)),
+    account: privateKeyToAccount(privateKey),
     chain: viemChains[live.chain],
     transport: http(liveRpcUrl()),
   });
@@ -280,14 +309,6 @@ async function configureLiveHome(home: string, chain: SupportedChain, privateKey
 
   expect(result.code).toBe(0);
   expect(result.stderr).toBe('');
-}
-
-export function livePrivateKey(name: 'E2E_SELLER_PRIVATE_KEY' | 'E2E_BUYER_PRIVATE_KEY'): `0x${string}` {
-  const value = process.env[name];
-  if (!value || !isHex(value)) {
-    throw new Error(`${name} must be set to a 0x-prefixed private key.`);
-  }
-  return value;
 }
 
 export function liveRpcUrl(): string {

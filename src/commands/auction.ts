@@ -22,6 +22,7 @@ type AuctionCreateOptions = {
   startTime?: string;
   split?: SplitAccumulator;
   chain?: string;
+  chainId?: string;
 };
 
 type AuctionBidOptions = {
@@ -30,12 +31,14 @@ type AuctionBidOptions = {
   amount: string;
   currency?: string;
   chain?: string;
+  chainId?: string;
 };
 
 type AuctionTokenOptions = {
   contract: string;
   tokenId: string;
   chain?: string;
+  chainId?: string;
 };
 
 export function auctionCommand(): Command {
@@ -60,10 +63,11 @@ export function auctionCommand(): Command {
       collectSplit,
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: AuctionCreateOptions): Promise<void> => {
       const auctionType = parseAuctionTypeOption(opts.type, opts.startTime);
       const splits = finalizeSplits(opts.split);
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
@@ -132,8 +136,9 @@ export function auctionCommand(): Command {
     .requiredOption('--amount <amount>', 'bid amount in ETH (or token units)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: AuctionBidOptions): Promise<void> => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
@@ -174,8 +179,9 @@ export function auctionCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: AuctionTokenOptions): Promise<void> => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
@@ -208,8 +214,9 @@ export function auctionCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: AuctionTokenOptions): Promise<void> => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
@@ -242,8 +249,9 @@ export function auctionCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: AuctionTokenOptions): Promise<void> => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient });
       const contract = parseAddress(opts.contract, '--contract');

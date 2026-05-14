@@ -67,7 +67,7 @@ describeLive('live ERC20 listing CLI write command', () => {
     }
 
     await step('set buyer ERC20 allowance below required listing payment', () =>
-      approveToken(fixture, currency, auctionAddress, amountWei, 'E2E_BUYER_PRIVATE_KEY'),
+      approveToken(fixture, currency, auctionAddress, amountWei, 'buyer'),
     );
     expect(await readTokenAllowance(fixture, currency, fixture.buyerAddress, auctionAddress)).toBe(amountWei);
 

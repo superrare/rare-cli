@@ -70,6 +70,7 @@ function swapBuyCommand(): Command {
     .option('--recipient <address>', 'recipient address')
     .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(withErrorHandling(async (opts: {
       token: string;
       eth: string;
@@ -79,8 +80,9 @@ function swapBuyCommand(): Command {
       recipient?: string;
       deadlineSeconds?: string;
       chain?: string;
+      chainId?: string;
     }) => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
@@ -130,6 +132,7 @@ function swapSellCommand(): Command {
     .option('--recipient <address>', 'recipient address')
     .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(withErrorHandling(async (opts: {
       token: string;
       amount: string;
@@ -139,8 +142,9 @@ function swapSellCommand(): Command {
       recipient?: string;
       deadlineSeconds?: string;
       chain?: string;
+      chainId?: string;
     }) => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
@@ -191,6 +195,7 @@ function swapSwapCommand(): Command {
     .option('--recipient <address>', 'recipient address')
     .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(withErrorHandling(async (opts: {
       tokenIn: string;
       amountIn: string;
@@ -201,8 +206,9 @@ function swapSwapCommand(): Command {
       recipient?: string;
       deadlineSeconds?: string;
       chain?: string;
+      chainId?: string;
     }) => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
@@ -256,6 +262,7 @@ function swapBuyTokenCommand(): Command {
     .option('--recipient <address>', 'recipient address')
     .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(withErrorHandling(async (opts: {
       token: string;
       eth: string;
@@ -266,8 +273,9 @@ function swapBuyTokenCommand(): Command {
       recipient?: string;
       deadlineSeconds?: string;
       chain?: string;
+      chainId?: string;
     }) => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const wallet = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: wallet.client });
@@ -374,6 +382,7 @@ function swapSellTokenCommand(): Command {
     .option('--recipient <address>', 'recipient address')
     .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(withErrorHandling(async (opts: {
       token: string;
       amount: string;
@@ -384,8 +393,9 @@ function swapSellTokenCommand(): Command {
       recipient?: string;
       deadlineSeconds?: string;
       chain?: string;
+      chainId?: string;
     }) => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const wallet = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: wallet.client });
@@ -493,6 +503,7 @@ function swapBuyRareCommand(): Command {
     .option('--recipient <address>', 'recipient address')
     .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(withErrorHandling(async (opts: {
       eth: string;
       slippageBps?: string;
@@ -502,8 +513,9 @@ function swapBuyRareCommand(): Command {
       recipient?: string;
       deadlineSeconds?: string;
       chain?: string;
+      chainId?: string;
     }) => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const quoteClient = createRareClient({ publicClient });
       const quote = await quoteClient.swap.quoteBuyRare({

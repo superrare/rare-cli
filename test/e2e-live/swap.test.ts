@@ -1,4 +1,7 @@
 import { afterAll, beforeAll, describe, it } from 'vitest';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { formatEther } from 'viem';
 import {
   cleanupLiveFixture,
   createLiveFixture,
@@ -104,4 +107,113 @@ describeLive('live swap CLI write commands', () => {
 
     expectTx(result);
   });
+
+  it('buys RARE through the curated buy-rare command', async () => {
+    const fixture = live.value;
+    const result = await step('buy RARE with curated buy-rare command', () =>
+      jsonCommand<TxResult>(fixture.sellerHome, [
+        'swap',
+        'buy-rare',
+        '--eth',
+        liveSwapEthAmount(),
+        '--yes',
+        '--chain',
+        fixture.chain,
+      ], 240_000),
+    );
+
+    expectTx(result);
+  });
+
+  it('executes raw router buy and sell commands from quoted routes', async () => {
+    const fixture = live.value;
+    const buyQuote = await step('quote RARE raw buy route', () =>
+      jsonCommand<{
+        commands: `0x${string}`;
+        inputs: `0x${string}`[];
+        minRareOut: string;
+      }>(fixture.sellerHome, [
+        'swap',
+        'buy-rare',
+        '--eth',
+        liveSwapEthAmount(),
+        '--quote-only',
+        '--chain',
+        fixture.chain,
+      ], 240_000),
+    );
+    const buyInputsFile = await writeSwapInputsFile(fixture, 'rare-raw-buy-inputs.json', buyQuote.inputs);
+
+    expectTx(await step('execute raw RARE buy route', () =>
+      jsonCommand<TxResult>(fixture.sellerHome, [
+        'swap',
+        'buy',
+        '--token',
+        fixture.rareAddress,
+        '--eth',
+        liveSwapEthAmount(),
+        '--min-out',
+        formatEther(BigInt(buyQuote.minRareOut)),
+        '--commands',
+        buyQuote.commands,
+        '--inputs-file',
+        buyInputsFile,
+        '--chain',
+        fixture.chain,
+      ], 240_000),
+    ));
+
+    await expectTokenBalanceAtLeast(fixture, fixture.sellerAddress, fixture.rareAddress, liveSwapRareAmount());
+    const sellQuote = await step('quote RARE raw sell route', () =>
+      jsonCommand<{
+        commands: `0x${string}` | null;
+        inputs: `0x${string}`[] | null;
+        minAmountOut: string;
+      }>(fixture.sellerHome, [
+        'swap',
+        'sell-token',
+        '--token',
+        fixture.rareAddress,
+        '--amount',
+        liveSwapRareAmount(),
+        '--quote-only',
+        '--chain',
+        fixture.chain,
+      ], 240_000),
+    );
+    if (sellQuote.commands === null || sellQuote.inputs === null) {
+      throw new Error('Expected RARE sell quote to use liquid-router calldata for raw sell coverage.');
+    }
+    const sellCommands = sellQuote.commands;
+    const sellInputsFile = await writeSwapInputsFile(fixture, 'rare-raw-sell-inputs.json', sellQuote.inputs);
+
+    expectTx(await step('execute raw RARE sell route', () =>
+      jsonCommand<TxResult>(fixture.sellerHome, [
+        'swap',
+        'sell',
+        '--token',
+        fixture.rareAddress,
+        '--amount',
+        liveSwapRareAmount(),
+        '--min-out',
+        formatEther(BigInt(sellQuote.minAmountOut)),
+        '--commands',
+        sellCommands,
+        '--inputs-file',
+        sellInputsFile,
+        '--chain',
+        fixture.chain,
+      ], 240_000),
+    ));
+  });
 });
+
+async function writeSwapInputsFile(
+  fixture: LiveFixture,
+  name: string,
+  inputs: readonly `0x${string}`[],
+): Promise<string> {
+  const path = join(fixture.tempDir, name);
+  await writeFile(path, JSON.stringify(inputs, null, 2), 'utf8');
+  return path;
+}

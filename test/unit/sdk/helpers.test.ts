@@ -7,6 +7,7 @@ import {
   requireWallet,
   resolveCurrencyDecimals,
   resolveChainFromPublicClient,
+  toCurrencyAmount,
   toInteger,
   toNonNegativeInteger,
   toNonNegativeWei,
@@ -104,6 +105,7 @@ describe('currency decimal resolution', () => {
     expect(getKnownCurrencyDecimals(rare, 'sepolia')).toBe(18);
     expect(getKnownCurrencyDecimals(usdc, 'sepolia')).toBe(6);
     expect(await resolveCurrencyDecimals(client, 'sepolia', usdc)).toBe(6);
+    expect(await toCurrencyAmount(client, 'sepolia', usdc, '1.25', 'price')).toBe(1250000n);
   });
 
   it('reads decimals for arbitrary ERC20 currencies', async () => {

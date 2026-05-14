@@ -10,21 +10,24 @@ import {
   detectLiveChain,
   expectTx,
   jsonCommand,
-  livePrivateKey,
   liveRpcUrl,
   retryNonceConflict,
   step,
   withLiveTransactionLock,
   type TxResult,
 } from './live-helpers.js';
+import { hasLiveWalletEnv } from './env.mjs';
+import { releaseLiveWallets, reserveLiveWalletPair, type LiveWalletLease } from './helpers/live-wallet-pool.js';
 
 const requiredEnv = [
   'TEST_RPC_URL',
-  'E2E_SELLER_PRIVATE_KEY',
-  'E2E_BUYER_PRIVATE_KEY',
 ] as const;
 
-const missingEnv = requiredEnv.filter((name) => !process.env[name]);
+const missingEnv = [
+  ...requiredEnv.filter((name) => !process.env[name]),
+  ...(hasLiveWalletEnv('seller') ? [] : ['E2E_SELLER_PRIVATE_KEYS']),
+  ...(hasLiveWalletEnv('buyer') ? [] : ['E2E_BUYER_PRIVATE_KEYS']),
+];
 const describeLive = missingEnv.length === 0 ? describe.sequential : describe.skip;
 
 // Runtime dispatches owner() and mintTo(address). Creation code injects the seller as owner.
@@ -60,6 +63,8 @@ type LiveState = {
   buyerHome: string;
   sellerAddress: Address;
   buyerAddress: Address;
+  sellerWallet: LiveWalletLease;
+  buyerWallet: LiveWalletLease;
   releaseContract: Address;
   chain: SupportedChain;
 };
@@ -71,18 +76,21 @@ describeLive('live RareMinter direct sale release mint', () => {
     const sellerHome = await createTempHome();
     const buyerHome = await createTempHome();
     const chain = await detectLiveChain();
-    const sellerAddress = privateKeyToAccount(livePrivateKey('E2E_SELLER_PRIVATE_KEY')).address;
-    const buyerAddress = privateKeyToAccount(livePrivateKey('E2E_BUYER_PRIVATE_KEY')).address;
+    let sellerWallet: LiveWalletLease | undefined;
+    let buyerWallet: LiveWalletLease | undefined;
 
     try {
+      ({ sellerWallet, buyerWallet } = await reserveLiveWalletPair(chain));
+      const sellerAddress = sellerWallet.address;
+      const buyerAddress = buyerWallet.address;
       await step('configure seller wallet for direct sale release', () =>
-        configureLiveHome(sellerHome, livePrivateKey('E2E_SELLER_PRIVATE_KEY'), chain),
+        configureLiveHome(sellerHome, sellerWallet.privateKey, chain),
       );
       await step('configure buyer wallet for direct sale release', () =>
-        configureLiveHome(buyerHome, livePrivateKey('E2E_BUYER_PRIVATE_KEY'), chain),
+        configureLiveHome(buyerHome, buyerWallet.privateKey, chain),
       );
       const releaseContract = await step('deploy RareMinter direct sale fixture contract', () =>
-        deployReleaseFixtureContract(chain, livePrivateKey('E2E_SELLER_PRIVATE_KEY'), sellerAddress),
+        deployReleaseFixtureContract(chain, sellerWallet.privateKey, sellerAddress),
       );
 
       live = {
@@ -90,12 +98,15 @@ describeLive('live RareMinter direct sale release mint', () => {
         buyerHome,
         sellerAddress,
         buyerAddress,
+        sellerWallet,
+        buyerWallet,
         releaseContract,
         chain,
       };
     } catch (error) {
       await cleanupTempHome(sellerHome);
       await cleanupTempHome(buyerHome);
+      await releaseLiveWallets([sellerWallet, buyerWallet]);
       throw error;
     }
   });
@@ -103,6 +114,7 @@ describeLive('live RareMinter direct sale release mint', () => {
   afterAll(async () => {
     await cleanupTempHome(live?.sellerHome);
     await cleanupTempHome(live?.buyerHome);
+    await releaseLiveWallets([live?.sellerWallet, live?.buyerWallet]);
   });
 
   it('mints a configured zero-price direct sale release', async () => {

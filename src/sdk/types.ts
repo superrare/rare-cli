@@ -399,163 +399,6 @@ export type OfferStatus = {
   canCancel: boolean | null;
 }
 
-export type CollectionMarketOfferCreateParams = {
-  originCollection: Address;
-  currency?: Address;
-  amount: AmountInput;
-  autoApprove?: boolean;
-}
-
-export type CollectionMarketOfferCreateResult = {
-  collectionMarket: Address;
-  buyer: Address;
-  originCollection: Address;
-  currency: Address;
-  amount: bigint;
-  requiredPayment: bigint;
-  approvalTxHash?: Hash;
-} & TransactionResult
-
-export type CollectionMarketOfferCancelParams = {
-  originCollection: Address;
-}
-
-export type CollectionMarketOfferCancelResult = {
-  collectionMarket: Address;
-  buyer: Address;
-  originCollection: Address;
-  hadOffer: boolean;
-  currency: Address;
-  amount: bigint;
-} & TransactionResult
-
-export type CollectionMarketOfferAcceptParams = {
-  buyer: Address;
-  originCollection: Address;
-  tokenId: IntegerInput;
-  currency?: Address;
-  amount: AmountInput;
-  splitAddresses?: Address[];
-  splitRatios?: number[];
-  autoApprove?: boolean;
-}
-
-export type CollectionMarketOfferAcceptResult = {
-  collectionMarket: Address;
-  seller: Address;
-  buyer: Address;
-  originCollection: Address;
-  tokenId: bigint;
-  currency: Address;
-  amount: bigint;
-  approvalTxHash?: Hash;
-} & TransactionResult
-
-export type CollectionMarketOfferStatusParams = {
-  buyer: Address;
-  originCollection: Address;
-  tokenId?: IntegerInput;
-  account?: Address;
-}
-
-export type CollectionMarketOfferStatus = {
-  buyer: Address;
-  originCollection: Address;
-  amount: bigint;
-  currency: Address;
-  marketplaceFee: bigint;
-  requiredPayment: bigint;
-  hasOffer: boolean;
-  state: 'NONE' | 'ACTIVE';
-  isEth: boolean;
-  expiry: null;
-  currentWallet?: Address;
-  tokenId?: bigint;
-  tokenOwner?: Address;
-  canCancel: boolean;
-  canAccept: boolean;
-}
-
-export type CollectionMarketListingSetParams = {
-  originCollection: Address;
-  currency?: Address;
-  amount: AmountInput;
-  splitAddresses?: Address[];
-  splitRatios?: number[];
-  autoApprove?: boolean;
-}
-
-export type CollectionMarketListingSetResult = {
-  collectionMarket: Address;
-  seller: Address;
-  originCollection: Address;
-  currency: Address;
-  amount: bigint;
-  splitRecipients: Address[];
-  splitRatios: number[];
-  approvalTxHash?: Hash;
-} & TransactionResult
-
-export type CollectionMarketListingCancelParams = {
-  originCollection: Address;
-}
-
-export type CollectionMarketListingCancelResult = {
-  collectionMarket: Address;
-  seller: Address;
-  originCollection: Address;
-  hadListing: boolean;
-  currency: Address;
-  amount: bigint;
-} & TransactionResult
-
-export type CollectionMarketListingBuyParams = {
-  originCollection: Address;
-  seller: Address;
-  tokenId: IntegerInput;
-  currency?: Address;
-  amount: AmountInput;
-  autoApprove?: boolean;
-}
-
-export type CollectionMarketListingBuyResult = {
-  collectionMarket: Address;
-  seller: Address;
-  buyer: Address;
-  originCollection: Address;
-  tokenId: bigint;
-  currency: Address;
-  amount: bigint;
-  requiredPayment: bigint;
-  approvalTxHash?: Hash;
-} & TransactionResult
-
-export type CollectionMarketListingStatusParams = {
-  originCollection: Address;
-  seller: Address;
-  tokenId?: IntegerInput;
-  account?: Address;
-}
-
-export type CollectionMarketListingStatus = {
-  seller: Address;
-  originCollection: Address;
-  amount: bigint;
-  currency: Address;
-  splitRecipients: Address[];
-  splitRatios: number[];
-  marketplaceFee: bigint;
-  requiredPayment: bigint;
-  hasListing: boolean;
-  state: 'NONE' | 'ACTIVE';
-  isEth: boolean;
-  currentWallet?: Address;
-  tokenId?: bigint;
-  tokenOwner?: Address;
-  canCancel: boolean;
-  canBuy: boolean;
-}
-
 export type ListingCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
@@ -765,15 +608,6 @@ export type ReleaseLimitConfig = {
   enabled: boolean;
 }
 
-export type ReleaseSellerStakingMinimum = {
-  rareMinter: Address;
-  contract: Address;
-  amount: bigint;
-  endTimestamp: bigint;
-  active: boolean;
-  now: bigint;
-}
-
 export type ReleaseSetAllowlistConfigParams = {
   contract: Address;
   root?: Hash;
@@ -792,16 +626,6 @@ export type ReleaseSetLimitParams = {
 
 export type ReleaseSetLimitResult = {
   config: ReleaseLimitConfig;
-} & TransactionResult
-
-export type ReleaseSetSellerStakingMinimumParams = {
-  contract: Address;
-  amount: AmountInput;
-  endTimestamp?: TimestampInput;
-}
-
-export type ReleaseSetSellerStakingMinimumResult = {
-  config: ReleaseSellerStakingMinimum;
 } & TransactionResult
 
 export type ReleaseStatusParams = {
@@ -830,9 +654,6 @@ export type ReleaseStatus = {
   account: Address | null;
   accountMints: bigint | null;
   accountTxs: bigint | null;
-  stakingMinimumAmount: bigint;
-  stakingMinimumEndTimestamp: bigint;
-  stakingMinimumActive: boolean;
   totalSupply: bigint | null;
   maxSupply: bigint | null;
   remainingSupply: bigint | null;
@@ -1039,7 +860,7 @@ export type TokenContractInfo = {
   chain: SupportedChain;
   name: string;
   symbol: string;
-  totalSupply: bigint;
+  totalSupply: bigint | null;
 }
 
 export type TokenInfo = {
@@ -1207,8 +1028,6 @@ export type ReleaseNamespace = {
   setMintLimit: (params: ReleaseSetLimitParams) => Promise<ReleaseSetLimitResult>;
   getTxLimit: (params: { contract: Address }) => Promise<ReleaseLimitConfig>;
   setTxLimit: (params: ReleaseSetLimitParams) => Promise<ReleaseSetLimitResult>;
-  getSellerStakingMinimum: (params: { contract: Address }) => Promise<ReleaseSellerStakingMinimum>;
-  setSellerStakingMinimum: (params: ReleaseSetSellerStakingMinimumParams) => Promise<ReleaseSetSellerStakingMinimumResult>;
   mintDirectSale: (params: ReleaseMintDirectSaleParams) => Promise<ReleaseMintDirectSaleResult>;
   getStatus: (params: ReleaseStatusParams) => Promise<ReleaseStatus>;
 }
@@ -1235,7 +1054,6 @@ export type RareClient = {
     rareMinter?: Address;
     lazyBatchMintFactory?: Address;
     batchListing?: Address;
-    collectionMarket?: Address;
     batchOfferCreator?: Address;
     batchAuctionHouse?: Address;
     marketplaceSettings?: Address;
@@ -1281,20 +1099,6 @@ export type RareClient = {
     cancel: (params: OfferCancelParams) => Promise<TransactionResult>;
     accept: (params: OfferAcceptParams) => Promise<TransactionResult>;
     getStatus: (params: OfferStatusParams) => Promise<OfferStatus>;
-  };
-  collectionMarket: {
-    offer: {
-      create: (params: CollectionMarketOfferCreateParams) => Promise<CollectionMarketOfferCreateResult>;
-      cancel: (params: CollectionMarketOfferCancelParams) => Promise<CollectionMarketOfferCancelResult>;
-      accept: (params: CollectionMarketOfferAcceptParams) => Promise<CollectionMarketOfferAcceptResult>;
-      getStatus: (params: CollectionMarketOfferStatusParams) => Promise<CollectionMarketOfferStatus>;
-    };
-    listing: {
-      set: (params: CollectionMarketListingSetParams) => Promise<CollectionMarketListingSetResult>;
-      cancel: (params: CollectionMarketListingCancelParams) => Promise<CollectionMarketListingCancelResult>;
-      buy: (params: CollectionMarketListingBuyParams) => Promise<CollectionMarketListingBuyResult>;
-      getStatus: (params: CollectionMarketListingStatusParams) => Promise<CollectionMarketListingStatus>;
-    };
   };
   listing: ListingNamespace;
   batchListing: {

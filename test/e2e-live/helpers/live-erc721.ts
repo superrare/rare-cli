@@ -47,6 +47,7 @@ export async function mintToken(
   opts: { to?: Address } = {},
 ): Promise<MintResult> {
   const baseArgs = [
+    'collection',
     'mint',
     '--contract',
     contract,

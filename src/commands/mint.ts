@@ -27,6 +27,7 @@ type MintOptions = {
   to?: string;
   royaltyReceiver?: string;
   chain?: string;
+  chainId?: string;
 };
 
 export function mintCommand(): Command {
@@ -45,6 +46,7 @@ export function mintCommand(): Command {
     .option('--to <address>', 'recipient address (defaults to caller)')
     .option('--royalty-receiver <address>', 'royalty receiver address (defaults to caller)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: MintOptions): Promise<void> => {
       try {
         const tokenUriPlan = planMintTokenUri({
@@ -60,7 +62,7 @@ export function mintCommand(): Command {
           ? tokenUriPlan.tokenUri
           : await uploadAndPinMetadata(tokenUriPlan.metadata);
 
-        const chain = getActiveChain(opts.chain);
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const publicClient = getPublicClient(chain);
         const { client, account } = getWalletClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });

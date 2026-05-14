@@ -48,7 +48,6 @@ export type ContractAddresses = {
   rareMinter?: Address;
   lazyBatchMintFactory?: Address;
   batchListing?: Address;
-  collectionMarket?: Address;
   batchOfferCreator?: Address;
   batchAuctionHouse?: Address;
   marketplaceSettings?: Address;

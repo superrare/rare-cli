@@ -3,14 +3,14 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Address } from 'viem';
-import { ETH_ADDRESS } from '../src/contracts/addresses.js';
+import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import {
   buildMerkleProofArtifact,
   loadMerkleRootArtifact,
   validateProofArtifact,
   validateRootArtifact,
-} from '../src/sdk/merkle.js';
-import type { BatchListingRootArtifact } from '../src/sdk/types.js';
+} from '../../../src/sdk/merkle.js';
+import type { BatchListingRootArtifact } from '../../../src/sdk/types.js';
 
 const contract = '0x1111111111111111111111111111111111111111' satisfies Address;
 const buyer = '0x1000000000000000000000000000000000000000' satisfies Address;
@@ -37,7 +37,7 @@ const allowListedRootArtifact = {
   },
 } satisfies BatchListingRootArtifact;
 
-describe('merkle artifact utilities', () => {
+describe('merkle artifact core utilities', () => {
   it('builds token proofs from a service-provided root artifact', () => {
     const proof = buildMerkleProofArtifact(rootArtifact, contract, '1');
 

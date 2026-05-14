@@ -1,7 +1,7 @@
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isAddress } from 'viem';
+import { isAddress, zeroAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { parseJsonStdout, runCli, withTempHome } from '../helpers/cli.js';
 
@@ -23,6 +23,8 @@ describe('built CLI deterministic behavior', () => {
 
   it('writes and displays config without touching the real home directory', async () => {
     await withTempHome(async (home) => {
+      const privateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+      const expectedAddress = privateKeyToAccount(privateKey).address;
       const configure = await runCli([
         'configure',
         '--default-chain',
@@ -30,7 +32,7 @@ describe('built CLI deterministic behavior', () => {
         '--chain',
         'sepolia',
         '--private-key',
-        '0xabc123',
+        privateKey,
         '--rpc-url',
         'http://127.0.0.1:8545',
       ], { home });
@@ -43,7 +45,7 @@ describe('built CLI deterministic behavior', () => {
         defaultChain: 'base-sepolia',
         chains: {
           sepolia: {
-            privateKey: '0xabc123',
+            privateKey,
             rpcUrl: 'http://127.0.0.1:8545',
           },
         },
@@ -57,7 +59,8 @@ describe('built CLI deterministic behavior', () => {
         chains: {
           sepolia: {
             keySource: 'plaintext',
-            privateKey: '0xabc1...c123',
+            privateKey: '0x0123...cdef',
+            accountAddress: expectedAddress,
             rpcUrl: 'http://127.0.0.1:8545',
           },
         },
@@ -65,17 +68,68 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('configures a 1Password private key reference without storing plaintext', async () => {
+  it('deletes config only after confirmation', async () => {
     await withTempHome(async (home) => {
-      const privateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
-      const expectedAddress = privateKeyToAccount(privateKey).address;
-      const fakeOp = await createFakeOp(home);
-      const env = fakeOpEnv(fakeOp.binDir, privateKey);
-
+      const configPath = join(home, '.rare', 'config.json');
       const configure = await runCli([
         'configure',
         '--chain',
         'sepolia',
+        '--rpc-url',
+        'http://127.0.0.1:8545',
+      ], { home });
+      expect(configure.code).toBe(0);
+
+      const aborted = await runCli(['configure', 'delete'], { home, input: 'n\n' });
+      expect(aborted.code).toBe(0);
+      expect(aborted.stdout).toContain(`This will permanently delete rare config at ${configPath}.`);
+      expect(aborted.stdout).toContain('This cannot be undone.');
+      expect(aborted.stdout).toContain('Delete config? [y/N]');
+      expect(aborted.stdout).toContain('Aborted.');
+      expect(aborted.stderr).toBe('');
+      expect(JSON.parse(await readFile(configPath, 'utf8'))).toEqual({
+        chains: {
+          sepolia: {
+            rpcUrl: 'http://127.0.0.1:8545',
+          },
+        },
+      });
+
+      const deleted = await runCli(['configure', 'delete'], { home, input: 'yes\n' });
+      expect(deleted.code).toBe(0);
+      expect(deleted.stdout).toContain('This cannot be undone.');
+      expect(deleted.stdout).toContain(`Deleted rare config: ${configPath}`);
+      expect(deleted.stderr).toBe('');
+      await expect(access(configPath)).rejects.toMatchObject({ code: 'ENOENT' });
+
+      const missing = await runCli(['configure', 'delete', '--yes'], { home });
+      expect(missing.code).toBe(0);
+      expect(missing.stdout).toContain(`No rare config found at ${configPath}`);
+      expect(missing.stderr).toBe('');
+    });
+  });
+
+  it('configures a 1Password private key reference without storing plaintext', async () => {
+    await withTempHome(async (home) => {
+      const privateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+      const previousPrivateKey = '0x1111111111111111111111111111111111111111111111111111111111111111';
+      const expectedAddress = privateKeyToAccount(privateKey).address;
+      const fakeOp = await createFakeOp(home);
+      const env = fakeOpEnv(fakeOp.binDir, privateKey);
+
+      const configurePlaintext = await runCli([
+        'configure',
+        '--chain',
+        'sepolia',
+        '--private-key',
+        previousPrivateKey,
+        '--rpc-url',
+        'http://127.0.0.1:7545',
+      ], { home });
+      expect(configurePlaintext.code).toBe(0);
+
+      const configure = await runCli([
+        'configure',
         '--private-key-ref',
         'op://Private/rare-sepolia/private-key',
         '--rpc-url',
@@ -91,7 +145,7 @@ describe('built CLI deterministic behavior', () => {
         chains: {
           sepolia: {
             privateKeyRef: 'op://Private/rare-sepolia/private-key',
-            walletAddress: expectedAddress,
+            accountAddress: expectedAddress,
             rpcUrl: 'http://127.0.0.1:8545',
           },
         },
@@ -117,11 +171,72 @@ describe('built CLI deterministic behavior', () => {
           sepolia: {
             keySource: '1password',
             privateKeyRef: 'op://Private/rare-sepolia/private-key',
-            walletAddress: expectedAddress,
+            accountAddress: expectedAddress,
             rpcUrl: 'http://127.0.0.1:8545',
           },
         },
       });
+    });
+  });
+
+  it('accepts chain name or chain ID and rejects mismatched chain selectors', async () => {
+    await withTempHome(async (home) => {
+      const configureByChainId = await runCli([
+        'configure',
+        '--chain-id',
+        '84532',
+        '--rpc-url',
+        'http://127.0.0.1:8545',
+      ], { home });
+      expect(configureByChainId.code).toBe(0);
+      expect(configureByChainId.stdout).toContain('Configuration updated for chain: base-sepolia');
+
+      const configureMatchingPair = await runCli([
+        'configure',
+        '--chain',
+        'sepolia',
+        '--chain-id',
+        '11155111',
+        '--rpc-url',
+        'http://127.0.0.1:9545',
+      ], { home });
+      expect(configureMatchingPair.code).toBe(0);
+      expect(configureMatchingPair.stdout).toContain('Configuration updated for chain: sepolia');
+
+      const config: unknown = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
+      expect(config).toEqual({
+        chains: {
+          'base-sepolia': {
+            rpcUrl: 'http://127.0.0.1:8545',
+          },
+          sepolia: {
+            rpcUrl: 'http://127.0.0.1:9545',
+          },
+        },
+      });
+
+      const mismatch = await runCli([
+        'configure',
+        '--chain',
+        'sepolia',
+        '--chain-id',
+        '1',
+        '--rpc-url',
+        'http://127.0.0.1:7545',
+      ], { home });
+      expect(mismatch.code).toBe(1);
+      expect(mismatch.stdout).toBe('');
+      expect(mismatch.stderr).toContain('--chain "sepolia" does not match --chain-id "1"');
+
+      const deployHelp = await runCli(['deploy', 'erc721', '--help'], { home });
+      expect(deployHelp.code).toBe(0);
+      expect(deployHelp.stdout).toContain('--chain <chain>');
+      expect(deployHelp.stdout).toContain('--chain-id <id>');
+
+      const treeHelp = await runCli(['utils', 'tree', 'build', '--help'], { home });
+      expect(treeHelp.code).toBe(0);
+      expect(treeHelp.stdout).toContain('--chain <chain>');
+      expect(treeHelp.stdout).toContain('--chain-id <id>');
     });
   });
 
@@ -238,6 +353,96 @@ describe('built CLI deterministic behavior', () => {
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('Error: --default-chain must be one of: mainnet, sepolia, base, base-sepolia');
+    });
+  });
+
+  it('lists supported currencies as JSON without wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const currencies = parseJsonStdout<{ name: string; address: string }[]>(
+        await runCli(['--json', 'currencies', '--chain', 'sepolia'], { home }),
+      );
+
+      expect(currencies).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: 'ETH', address: zeroAddress }),
+        expect.objectContaining({ name: 'RARE' }),
+        expect.objectContaining({ name: 'USDC' }),
+      ]));
+    });
+  });
+
+  it('covers read/API CLI command wiring and validation', async () => {
+    await withTempHome(async (home) => {
+      const tokenSearch = parseJsonStdout<{ pagination: { page: number; perPage: number }; data: unknown[] }>(
+        await runCli(['--json', 'search', 'tokens', '--chain', 'mainnet', '--per-page', '1'], { home, timeoutMs: 30_000 }),
+      );
+      expect(tokenSearch.pagination).toMatchObject({ page: 1, perPage: 1 });
+      expect(Array.isArray(tokenSearch.data)).toBe(true);
+
+      const collectionSearch = parseJsonStdout<{ pagination: { page: number; perPage: number }; data: unknown[] }>(
+        await runCli(['--json', 'search', 'collections', '--chain', 'mainnet', '--per-page', '1'], {
+          home,
+          timeoutMs: 30_000,
+        }),
+      );
+      expect(collectionSearch.pagination).toMatchObject({ page: 1, perPage: 1 });
+      expect(Array.isArray(collectionSearch.data)).toBe(true);
+
+      const auctions = parseJsonStdout<{ pagination: { page: number; perPage: number }; data: unknown[] }>(
+        await runCli([
+          '--json',
+          'search',
+          'tokens',
+          '--chain',
+          'mainnet',
+          '--auction-state',
+          'RUNNING',
+          '--per-page',
+          '1',
+        ], { home, timeoutMs: 30_000 }),
+      );
+      expect(auctions.pagination).toMatchObject({ page: 1, perPage: 1 });
+      expect(Array.isArray(auctions.data)).toBe(true);
+
+      const searchHelp = await runCli(['search', 'tokens', '--help'], { home });
+      expect(searchHelp.code).toBe(0);
+      expect(searchHelp.stdout).toContain('--has-auction');
+      expect(searchHelp.stdout).toContain('--auction-state <state>');
+      expect(searchHelp.stdout).toContain('--has-listing');
+      expect(searchHelp.stdout).toContain('--has-offer');
+
+      const configured = await runCli([
+        'configure',
+        '--chain',
+        'sepolia',
+        '--private-key',
+        '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        '--rpc-url',
+        'http://127.0.0.1:8545',
+      ], { home });
+      expect(configured.code).toBe(0);
+
+      const badImport = await runCli([
+        'import',
+        'erc721',
+        '--contract',
+        'not-an-address',
+        '--chain',
+        'sepolia',
+      ], { home });
+      expect(badImport.code).toBe(1);
+      expect(badImport.stdout).toBe('');
+      expect(badImport.stderr).toContain('Error: --contract must be a valid EVM address.');
+
+      const badStatus = await runCli([
+        'status',
+        '--contract',
+        'not-an-address',
+        '--chain',
+        'sepolia',
+      ], { home });
+      expect(badStatus.code).toBe(1);
+      expect(badStatus.stdout).toBe('');
+      expect(badStatus.stderr).toContain('Error: --contract must be a valid EVM address.');
     });
   });
 
@@ -370,58 +575,62 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('exposes collection-wide offer flags on the offer commands', async () => {
+  it('exposes token-specific offer flags on the offer commands', async () => {
     await withTempHome(async (home) => {
       const create = await runCli(['offer', 'create', '--help'], { home });
       expect(create.code).toBe(0);
       expect(create.stdout).toContain('Usage: rare offer create [options]');
       expect(create.stdout).toContain('--contract <address>');
       expect(create.stdout).toContain('--token-id <id>');
-      expect(create.stdout).toContain('--collection <address>');
       expect(create.stdout).toContain('--amount <amount>');
+      expect(create.stdout).not.toContain('--collection <address>');
       expect(create.stderr).toBe('');
 
       const accept = await runCli(['offer', 'accept', '--help'], { home });
       expect(accept.code).toBe(0);
       expect(accept.stdout).toContain('Usage: rare offer accept [options]');
-      expect(accept.stdout).toContain('--collection <address>');
-      expect(accept.stdout).toContain('--buyer <address>');
+      expect(accept.stdout).toContain('--contract <address>');
       expect(accept.stdout).toContain('--token-id <id>');
+      expect(accept.stdout).not.toContain('--collection <address>');
+      expect(accept.stdout).not.toContain('--buyer <address>');
       expect(accept.stderr).toBe('');
 
       const status = await runCli(['offer', 'status', '--help'], { home });
       expect(status.code).toBe(0);
       expect(status.stdout).toContain('Usage: rare offer status [options]');
-      expect(status.stdout).toContain('--collection <address>');
-      expect(status.stdout).toContain('--account <address>');
+      expect(status.stdout).toContain('--contract <address>');
+      expect(status.stdout).not.toContain('--collection <address>');
+      expect(status.stdout).not.toContain('--account <address>');
       expect(status.stderr).toBe('');
     });
   });
 
-  it('exposes collection-wide listing flags on the listing commands', async () => {
+  it('exposes token-specific listing flags on the listing commands', async () => {
     await withTempHome(async (home) => {
       const create = await runCli(['listing', 'create', '--help'], { home });
       expect(create.code).toBe(0);
       expect(create.stdout).toContain('Usage: rare listing create [options]');
       expect(create.stdout).toContain('--contract <address>');
       expect(create.stdout).toContain('--token-id <id>');
-      expect(create.stdout).toContain('--collection <address>');
-      expect(create.stdout).toContain('--amount <amount>');
+      expect(create.stdout).toContain('--price <amount>');
+      expect(create.stdout).not.toContain('--collection <address>');
       expect(create.stderr).toBe('');
 
       const buy = await runCli(['listing', 'buy', '--help'], { home });
       expect(buy.code).toBe(0);
       expect(buy.stdout).toContain('Usage: rare listing buy [options]');
-      expect(buy.stdout).toContain('--collection <address>');
-      expect(buy.stdout).toContain('--seller <address>');
+      expect(buy.stdout).toContain('--contract <address>');
       expect(buy.stdout).toContain('--token-id <id>');
+      expect(buy.stdout).not.toContain('--collection <address>');
+      expect(buy.stdout).not.toContain('--seller <address>');
       expect(buy.stderr).toBe('');
 
       const status = await runCli(['listing', 'status', '--help'], { home });
       expect(status.code).toBe(0);
       expect(status.stdout).toContain('Usage: rare listing status [options]');
-      expect(status.stdout).toContain('--collection <address>');
-      expect(status.stdout).toContain('--account <address>');
+      expect(status.stdout).toContain('--contract <address>');
+      expect(status.stdout).not.toContain('--collection <address>');
+      expect(status.stdout).not.toContain('--account <address>');
       expect(status.stderr).toBe('');
     });
   });
@@ -596,7 +805,7 @@ describe('built CLI deterministic behavior', () => {
       expect(help.stdout).toContain('configure');
       expect(help.stdout).toContain('allowlist');
       expect(help.stdout).toContain('limits');
-      expect(help.stdout).toContain('staking');
+      expect(help.stdout).not.toContain('staking');
       expect(help.stdout).toContain('mint');
       expect(help.stdout).toContain('status');
 

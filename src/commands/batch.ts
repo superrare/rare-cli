@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import { getAddress, isAddress, isAddressEqual, isHex, type Address, type Hex, type PublicClient } from 'viem';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
-import { ETH_ADDRESS, resolveCurrency, type SupportedChain } from '../contracts/addresses.js';
+import { ETH_ADDRESS, chainIds, resolveCurrency, type SupportedChain } from '../contracts/addresses.js';
 import { printError } from '../errors.js';
 import { output, log } from '../output.js';
 import { createRareClient } from '../sdk/client.js';
@@ -45,6 +45,7 @@ type TreeInputOptions = {
   input: string;
   format?: string;
   output?: string;
+  chain?: string;
   chainId?: string;
 };
 
@@ -121,6 +122,7 @@ type OfferRootOptions = {
   root?: string;
   input?: string;
   format?: string;
+  chain?: string;
   chainId?: string;
 };
 
@@ -129,10 +131,12 @@ type OfferCreateOptions = OfferRootOptions & {
   currency?: string;
   expiry: string;
   chain?: string;
+  chainId?: string;
 };
 
 type OfferRevokeOptions = OfferRootOptions & {
   chain?: string;
+  chainId?: string;
 };
 
 type OfferAcceptOptions = {
@@ -144,12 +148,14 @@ type OfferAcceptOptions = {
   splitRecipient?: string[];
   splitRatio?: string[];
   chain?: string;
+  chainId?: string;
   autoApprove?: boolean;
 };
 
 type OfferStatusOptions = OfferRootOptions & {
   creator: string;
   chain?: string;
+  chainId?: string;
 };
 
 type AuctionRootInput = {
@@ -164,11 +170,13 @@ type AuctionCreateOptions = OfferRootOptions & {
   splitRecipient?: string[];
   splitRatio?: string[];
   chain?: string;
+  chainId?: string;
   autoApprove?: boolean;
 };
 
 type AuctionCancelOptions = OfferRootOptions & {
   chain?: string;
+  chainId?: string;
 };
 
 type AuctionBidOptions = {
@@ -180,6 +188,7 @@ type AuctionBidOptions = {
   amount: string;
   currency?: string;
   chain?: string;
+  chainId?: string;
   autoApprove?: boolean;
 };
 
@@ -187,6 +196,7 @@ type AuctionSettleOptions = {
   contract: string;
   tokenId: string;
   chain?: string;
+  chainId?: string;
 };
 
 type AuctionStatusOptions = OfferRootOptions & {
@@ -195,6 +205,7 @@ type AuctionStatusOptions = OfferRootOptions & {
   contract: string;
   tokenId: string;
   chain?: string;
+  chainId?: string;
 };
 
 function createUtilsTreeBuildCommand(): Command {
@@ -204,6 +215,7 @@ function createUtilsTreeBuildCommand(): Command {
   cmd
     .requiredOption('--input <path>', 'CSV, JSON, or artifact token list')
     .option('--format <format>', 'input format (csv, json)')
+    .option('--chain <chain>', 'chain name to store in the artifact')
     .option('--chain-id <id>', 'chain ID to store in the artifact')
     .option('--output <path>', 'write the generated artifact JSON to a file')
     .action(async (opts: TreeInputOptions) => {
@@ -248,6 +260,7 @@ function createUtilsTreeProofCommand(): Command {
     .requiredOption('--contract <address>', 'token contract address')
     .requiredOption('--token-id <id>', 'token ID to prove')
     .option('--format <format>', 'input format (csv, json)')
+    .option('--chain <chain>', 'chain name to store in the proof')
     .option('--chain-id <id>', 'chain ID to store in the proof')
     .option('--output <path>', 'write the proof JSON to a file')
     .action(async (opts: TreeProofOptions) => {
@@ -258,7 +271,7 @@ function createUtilsTreeProofCommand(): Command {
           artifact,
           contractAddress,
           tokenId: opts.tokenId,
-          chainId: opts.chainId,
+          chainId: resolveTreeChainId(opts),
         });
 
         if (opts.output !== undefined) {
@@ -307,6 +320,7 @@ function createUtilsTreeVerifyCommand(): Command {
     .option('--proof <path>', 'proof JSON from rare utils tree proof')
     .option('--root <bytes32>', 'expected Merkle root; defaults to the input or proof root')
     .option('--format <format>', 'input format (csv, json)')
+    .option('--chain <chain>', 'chain name to use for artifact/proof checks')
     .option('--chain-id <id>', 'chain ID to use for artifact/proof checks')
     .action(async (opts: TreeVerifyOptions) => {
       try {
@@ -318,7 +332,7 @@ function createUtilsTreeVerifyCommand(): Command {
               artifact,
               contractAddress,
               tokenId: opts.tokenId,
-              chainId: opts.chainId,
+              chainId: resolveTreeChainId(opts),
             })
           : undefined;
         const proof = proofInput?.proof ?? generatedProof?.proof ?? [];
@@ -378,7 +392,7 @@ function createOfferCreateCommand(): Command {
     .action(async (opts: OfferCreateOptions) => {
       try {
         const root = await resolveOfferRoot(opts);
-        const { chain, rare } = createWriteBatchClient(opts.chain);
+        const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
         const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
 
         log(`Creating batch offer on ${chain}...`);
@@ -438,7 +452,7 @@ function createOfferRevokeCommand(): Command {
     .action(async (opts: OfferRevokeOptions) => {
       try {
         const root = await resolveOfferRoot(opts);
-        const { chain, rare } = createWriteBatchClient(opts.chain);
+        const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
 
         log(`Revoking batch offer on ${chain}...`);
         log(`  BatchOfferCreator: ${rare.contracts.batchOfferCreator}`);
@@ -484,6 +498,7 @@ function createOfferAcceptCommand(): Command {
     .option('--split-ratio <percent>', 'seller split ratio percentage; repeat with --split-recipient', collect, [])
     .option('--no-auto-approve', 'do not auto-approve the NFT transfer')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: OfferAcceptOptions) => {
       try {
         const creator = parseAddressOption(opts.creator, '--creator');
@@ -503,7 +518,7 @@ function createOfferAcceptCommand(): Command {
         }
         const splitAddresses = parseSplitRecipients(opts.splitRecipient);
         const splitRatios = parseSplitRatios(opts.splitRatio);
-        const { chain, rare } = createWriteBatchClient(opts.chain);
+        const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
 
         log(`Accepting batch offer on ${chain}...`);
         log(`  BatchOfferCreator: ${rare.contracts.batchOfferCreator}`);
@@ -573,7 +588,7 @@ function createOfferStatusCommand(): Command {
       try {
         const root = await resolveOfferRoot(opts);
         const creator = parseAddressOption(opts.creator, '--creator');
-        const { chain, publicClient, rare } = createReadBatchClient(opts.chain);
+        const { chain, publicClient, rare } = createReadBatchClient(opts.chain, opts.chainId);
         const result = await rare.batch.offer.getStatus({ creator, root });
         const expiry = result.expiry > 0n ? new Date(Number(result.expiry) * 1000).toISOString() : 'none';
         const amount = await formatBatchAmount(publicClient, chain, result.currency, result.amount);
@@ -616,7 +631,7 @@ function createAuctionCreateCommand(): Command {
     .action(async (opts: AuctionCreateOptions) => {
       try {
         const rootInput = await resolveAuctionRootInput(opts);
-        const { chain, rare } = createWriteBatchClient(opts.chain);
+        const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
         const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
         const splitAddresses = parseSplitRecipients(opts.splitRecipient);
         const splitRatios = parseSplitRatios(opts.splitRatio);
@@ -686,7 +701,7 @@ function createAuctionCancelCommand(): Command {
     .action(async (opts: AuctionCancelOptions) => {
       try {
         const root = await resolveOfferRoot(opts);
-        const { chain, rare } = createWriteBatchClient(opts.chain);
+        const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
 
         log(`Cancelling batch auction on ${chain}...`);
         log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse}`);
@@ -730,6 +745,7 @@ function createAuctionBidCommand(): Command {
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--no-auto-approve', 'do not auto-approve ERC20 allowance')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: AuctionBidOptions) => {
       try {
         const creator = parseAddressOption(opts.creator, '--creator');
@@ -747,7 +763,7 @@ function createAuctionBidCommand(): Command {
             allowRootOverride: opts.root !== undefined,
           });
         }
-        const { chain, rare } = createWriteBatchClient(opts.chain);
+        const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
         const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
 
         log(`Bidding on batch auction token on ${chain}...`);
@@ -809,10 +825,11 @@ function createAuctionSettleCommand(): Command {
     .requiredOption('--contract <address>', 'token contract address')
     .requiredOption('--token-id <id>', 'token ID to settle')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: AuctionSettleOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
-        const { chain, rare } = createWriteBatchClient(opts.chain);
+        const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
 
         log(`Settling batch auction token on ${chain}...`);
         log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse}`);
@@ -882,7 +899,7 @@ function createAuctionStatusCommand(): Command {
           });
         }
         const creator = opts.creator === undefined ? undefined : parseAddressOption(opts.creator, '--creator');
-        const { chain, publicClient, rare } = createReadBatchClient(opts.chain);
+        const { chain, publicClient, rare } = createReadBatchClient(opts.chain, opts.chainId);
         const result = await rare.batch.auction.getStatus({
           contract,
           tokenId: opts.tokenId,
@@ -1254,8 +1271,17 @@ async function readBatchTreeArtifact(opts: TreeInputOptions): Promise<BatchToken
     content,
     format,
     sourceName: opts.input,
-    chainId: opts.chainId,
+    chainId: resolveTreeChainId(opts),
   });
+}
+
+function resolveTreeChainId(opts: { chain?: string; chainId?: string }): string | undefined {
+  if (opts.chain === undefined) {
+    return opts.chainId;
+  }
+
+  const chain = getActiveChain(opts.chain, opts.chainId);
+  return String(chainIds[chain]);
 }
 
 async function resolveOfferRoot(opts: OfferRootOptions): Promise<Hex> {
@@ -1274,6 +1300,7 @@ async function resolveAuctionRootInput(opts: OfferRootOptions): Promise<AuctionR
   const artifact = await readBatchTreeArtifact({
     input: opts.input,
     format: opts.format,
+    chain: opts.chain,
     chainId: opts.chainId,
   });
   if (directRoot !== undefined && directRoot !== artifact.root) {
@@ -1370,8 +1397,8 @@ function parseSplitRatios(values: string[] | undefined): number[] | undefined {
   });
 }
 
-function createReadBatchClient(chainInput: string | undefined): BatchCommandClient {
-  const chain = getActiveChain(chainInput);
+function createReadBatchClient(chainInput: string | undefined, chainIdInput: string | undefined): BatchCommandClient {
+  const chain = getActiveChain(chainInput, chainIdInput);
   const publicClient = getPublicClient(chain);
   return {
     chain,
@@ -1380,8 +1407,8 @@ function createReadBatchClient(chainInput: string | undefined): BatchCommandClie
   };
 }
 
-function createWriteBatchClient(chainInput: string | undefined): BatchCommandClient {
-  const chain = getActiveChain(chainInput);
+function createWriteBatchClient(chainInput: string | undefined, chainIdInput: string | undefined): BatchCommandClient {
+  const chain = getActiveChain(chainInput, chainIdInput);
   const { client } = getWalletClient(chain);
   const publicClient = getPublicClient(chain);
   return {

@@ -5,6 +5,7 @@ import { output } from '../output.js';
 
 type CurrenciesOptions = {
   chain?: string;
+  chainId?: string;
 };
 
 export function currenciesCommand(): Command {
@@ -12,8 +13,9 @@ export function currenciesCommand(): Command {
   cmd
     .description('List supported currencies and their addresses')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action((opts: CurrenciesOptions): void => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
 
       const currencies = currencyNames.map((name) => ({
         name: name.toUpperCase(),

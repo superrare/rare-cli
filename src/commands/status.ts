@@ -11,6 +11,7 @@ type StatusOptions = {
   contract: string;
   tokenId?: string;
   chain?: string;
+  chainId?: string;
 };
 
 type TokenInfo = Awaited<ReturnType<RareClient['token']['getTokenInfo']>>;
@@ -23,8 +24,9 @@ export function statusCommand(): Command {
     .requiredOption('--contract <address>', 'token contract address')
     .option('--token-id <id>', 'token ID to query (optional)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: StatusOptions): Promise<void> => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient });
       const contractAddress = parseAddress(opts.contract, '--contract');
@@ -46,7 +48,7 @@ export function statusCommand(): Command {
             console.log(`  Chain:        ${contractInfo.chain}`);
             console.log(`  Name:         ${contractInfo.name}`);
             console.log(`  Symbol:       ${contractInfo.symbol}`);
-            console.log(`  Total Supply: ${contractInfo.totalSupply}`);
+            console.log(`  Total Supply: ${contractInfo.totalSupply?.toString() ?? 'unavailable'}`);
 
             if (opts.tokenId !== undefined) {
               if (tokenInfo) {

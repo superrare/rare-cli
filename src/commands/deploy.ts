@@ -178,8 +178,13 @@ function deployErc721Command(): Command {
     .argument('<symbol>', 'symbol of the NFT collection')
     .option('--max-tokens <number>', 'maximum number of tokens (optional)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .action(async (name: string, symbol: string, opts: { maxTokens?: string; chain?: string }): Promise<void> => {
-      const chain = getActiveChain(opts.chain);
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
+    .action(async (
+      name: string,
+      symbol: string,
+      opts: { maxTokens?: string; chain?: string; chainId?: string },
+    ): Promise<void> => {
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
@@ -238,6 +243,7 @@ function deployLiquidEditionCommand(): Command {
     .option('--tag <tag>', 'tag (repeatable)', collectRepeatedString, [])
     .option('--attribute <attr>', 'attribute as "trait=value" or JSON (repeatable)', collectRepeatedString, [])
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(
       async (
         name: string,
@@ -257,9 +263,10 @@ function deployLiquidEditionCommand(): Command {
           tag: string[];
           attribute: string[];
           chain?: string;
+          chainId?: string;
         },
       ) => {
-        const chain = getActiveChain(opts.chain);
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const publicClient = getPublicClient(chain);
         const readOnlyRare = createRareClient({ publicClient });
 

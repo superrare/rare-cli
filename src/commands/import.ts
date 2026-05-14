@@ -10,6 +10,7 @@ import { output, log } from '../output.js';
 type ImportErc721Options = {
   contract: string;
   chain?: string;
+  chainId?: string;
 };
 
 export function importCommand(): Command {
@@ -21,8 +22,9 @@ export function importCommand(): Command {
     .description('Import an ERC-721 contract')
     .requiredOption('--contract <address>', 'contract address to import')
     .option('--chain <chain>', 'chain the contract is deployed on')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ImportErc721Options): Promise<void> => {
-      const chain = getActiveChain(opts.chain);
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const { client, account } = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });

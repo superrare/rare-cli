@@ -3,6 +3,9 @@ import { isAddressEqual, recoverMessageAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { parsePrivateKeyReference, type PrivateKeyReference } from '../../src/config.js';
 import { createOnePasswordAccount, readOnePasswordPrivateKey } from '../../src/one-password.js';
+import { loadDotEnv } from '../helpers/env.js';
+
+loadDotEnv();
 
 const privateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const otherPrivateKey = '0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
@@ -49,8 +52,8 @@ describe('1Password account adapter integration', () => {
   });
 });
 
-const livePrivateKeyRef = process.env.RARE_CLI_TEST_OP_PRIVATE_KEY_REF;
-const describeLiveOp = livePrivateKeyRef === undefined ? describe.skip : describe;
+const livePrivateKeyRef = process.env.RARE_CLI_TEST_OP_PRIVATE_KEY_REF?.trim();
+const describeLiveOp = livePrivateKeyRef ? describe : describe.skip;
 
 describeLiveOp('1Password CLI live integration', () => {
   it('reads and signs with a real op:// private key reference', async () => {

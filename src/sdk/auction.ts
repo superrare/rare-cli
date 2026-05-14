@@ -1,5 +1,4 @@
 import {
-  parseUnits,
   type Address,
   type Hash,
   type PublicClient,
@@ -12,8 +11,7 @@ import {
   approvalAbi,
   preparePayment,
   requireWallet,
-  resolveCurrencyDecimals,
-  stringifyAmountInput,
+  toCurrencyAmount,
   waitForApproval,
 } from './helpers.js';
 import {
@@ -34,9 +32,7 @@ export function createAuctionNamespace(
     async create(params): ReturnType<RareClient['auction']['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency ?? ETH_ADDRESS;
-      const startingPrice = typeof params.startingPrice === 'bigint'
-        ? params.startingPrice
-        : parseUnits(stringifyAmountInput(params.startingPrice, 'startingPrice'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const startingPrice = await toCurrencyAmount(publicClient, chain, currency, params.startingPrice, 'startingPrice');
       const plan = planAuctionCreate({ ...params, currency, startingPrice }, accountAddress);
       const approvalTxHash = params.autoApprove === false
         ? undefined
@@ -88,9 +84,7 @@ export function createAuctionNamespace(
     async bid(params): ReturnType<RareClient['auction']['bid']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency ?? ETH_ADDRESS;
-      const amount = typeof params.amount === 'bigint'
-        ? params.amount
-        : parseUnits(stringifyAmountInput(params.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const amount = await toCurrencyAmount(publicClient, chain, currency, params.amount, 'amount');
       const plan = planAuctionBid({ ...params, currency, amount });
 
       const value = await preparePayment({
