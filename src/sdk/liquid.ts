@@ -3,6 +3,7 @@ import type { SupportedChain } from '../contracts/addresses.js';
 import { liquidFactoryAbi } from '../contracts/abis/liquid-factory.js';
 import { buildCurvePreview, generatePresetCurves, validateCurves, type LiquidCurvePreview } from '../liquid/curve-config.js';
 import { fetchLiquidFactoryConfig, type LiquidFactoryConfig } from '../liquid/factory-config.js';
+import { resolveLiquidFactoryConfigForSupply } from '../liquid/factory-config-core.js';
 import { getTokenPrice } from './api.js';
 import {
   ensureTokenAllowance,
@@ -33,6 +34,17 @@ async function maybeFetchRarePriceUsd(): Promise<number | undefined> {
   } catch {
     return undefined;
   }
+}
+
+function resolveLiquidFactoryConfigForSupplyOrThrow(
+  factoryConfig: LiquidFactoryConfig,
+  totalSupply: Parameters<typeof resolveLiquidFactoryConfigForSupply>[1],
+): ReturnType<typeof resolveLiquidFactoryConfigForSupply> & { isValid: true } {
+  const result = resolveLiquidFactoryConfigForSupply(factoryConfig, totalSupply);
+  if (!result.isValid) {
+    throw new Error(result.errorMessage);
+  }
+  return result;
 }
 
 function getLiquidEditionAddressFromReceipt(receipt: TransactionReceipt): Address | undefined {
@@ -108,10 +120,14 @@ export function createLiquidNamespace(
 
     async generatePresetCurves(params): Promise<GeneratePresetCurvesResult> {
       const liquidFactory = requireConfiguredAddress(addresses.liquidFactory, 'Liquid Editions factory', chain);
-      const [factoryConfig, rarePriceUsd] = await Promise.all([
+      const [rawFactoryConfig, rarePriceUsd] = await Promise.all([
         fetchLiquidFactoryConfig(publicClient, liquidFactory),
         fetchRarePriceUsd(),
       ]);
+      const factoryConfig = resolveLiquidFactoryConfigForSupplyOrThrow(
+        rawFactoryConfig,
+        params.totalSupply,
+      ).factoryConfig;
       const curves = generatePresetCurves(params.preset, rarePriceUsd, factoryConfig);
       return {
         preset: params.preset,
@@ -123,10 +139,14 @@ export function createLiquidNamespace(
 
     async validateCurves(params): Promise<LiquidCurvePreview> {
       const liquidFactory = requireConfiguredAddress(addresses.liquidFactory, 'Liquid Editions factory', chain);
-      const [factoryConfig, rarePriceUsd] = await Promise.all([
+      const [rawFactoryConfig, rarePriceUsd] = await Promise.all([
         fetchLiquidFactoryConfig(publicClient, liquidFactory),
         maybeFetchRarePriceUsd(),
       ]);
+      const factoryConfig = resolveLiquidFactoryConfigForSupplyOrThrow(
+        rawFactoryConfig,
+        params.totalSupply,
+      ).factoryConfig;
       const validation = validateCurves(params.curves, factoryConfig);
       if (!validation.isValid || !validation.curves) {
         throw new Error(validation.errorMessage ?? 'Invalid curve configuration');
@@ -137,7 +157,12 @@ export function createLiquidNamespace(
     async deployMultiCurve(params): Promise<DeployLiquidEditionResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const liquidFactory = requireConfiguredAddress(addresses.liquidFactory, 'Liquid Editions factory', chain);
-      const factoryConfig = await fetchLiquidFactoryConfig(publicClient, liquidFactory);
+      const rawFactoryConfig = await fetchLiquidFactoryConfig(publicClient, liquidFactory);
+      const factoryConfigResult = resolveLiquidFactoryConfigForSupplyOrThrow(
+        rawFactoryConfig,
+        params.totalSupply,
+      );
+      const { factoryConfig, totalSupplyWei: customMaxTotalSupply } = factoryConfigResult;
       const validation = validateCurves(params.curves, factoryConfig);
       if (!validation.isValid || !validation.curves) {
         throw new Error(validation.errorMessage ?? 'Invalid curve configuration');
@@ -158,26 +183,45 @@ export function createLiquidNamespace(
         initialRareLiquidity,
       );
 
-      const txHash = await walletClient.writeContract({
-        address: liquidFactory,
-        abi: liquidFactoryAbi,
-        functionName: 'createLiquidTokenMultiCurve',
-        args: [
-          accountAddress,
-          params.tokenUri,
-          params.name,
-          params.symbol,
-          initialRareLiquidity,
-          validation.curves.map((curve) => ({
-            tickLower: curve.tickLower,
-            tickUpper: curve.tickUpper,
-            numPositions: curve.numPositions,
-            shares: parseUnits(curve.shares, 18),
-          })),
-        ],
-        account,
-        chain: undefined,
-      });
+      const curves = validation.curves.map((curve) => ({
+        tickLower: curve.tickLower,
+        tickUpper: curve.tickUpper,
+        numPositions: curve.numPositions,
+        shares: parseUnits(curve.shares, 18),
+      }));
+
+      const txHash = customMaxTotalSupply === undefined
+        ? await walletClient.writeContract({
+            address: liquidFactory,
+            abi: liquidFactoryAbi,
+            functionName: 'createLiquidTokenMultiCurve',
+            args: [
+              accountAddress,
+              params.tokenUri,
+              params.name,
+              params.symbol,
+              initialRareLiquidity,
+              curves,
+            ],
+            account,
+            chain: undefined,
+          })
+        : await walletClient.writeContract({
+            address: liquidFactory,
+            abi: liquidFactoryAbi,
+            functionName: 'createLiquidTokenMultiCurveWithSupply',
+            args: [
+              accountAddress,
+              params.tokenUri,
+              params.name,
+              params.symbol,
+              initialRareLiquidity,
+              curves,
+              customMaxTotalSupply,
+            ],
+            account,
+            chain: undefined,
+          });
 
       const { receipt, contract } = await waitForLiquidEditionAddress(publicClient, txHash);
 

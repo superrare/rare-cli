@@ -10,6 +10,7 @@ import {
   type LiquidCurvePreview,
   type LiquidCurveSegment,
 } from '../liquid/curve-config.js';
+import { resolveLiquidFactoryConfigForSupply } from '../liquid/factory-config-core.js';
 import { runLiquidCurveWizard } from '../liquid/wizard.js';
 import { output, log } from '../output.js';
 import {
@@ -91,11 +92,23 @@ function collectRepeatedString(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
+function resolveFactoryConfigForSupplyOrThrow(
+  factoryConfig: Awaited<ReturnType<ReturnType<typeof createRareClient>['liquid']['getFactoryConfig']>>,
+  totalSupply?: string,
+): Awaited<ReturnType<ReturnType<typeof createRareClient>['liquid']['getFactoryConfig']>> {
+  const result = resolveLiquidFactoryConfigForSupply(factoryConfig, totalSupply);
+  if (!result.isValid) {
+    throw new Error(result.errorMessage);
+  }
+  return result.factoryConfig;
+}
+
 async function resolveCurves(
   opts: {
     curvesFile?: string;
     curvePreset?: string;
     writeCurvesFile?: string;
+    totalSupply?: string;
     yes?: boolean;
   },
   rare: ReturnType<typeof createRareClient>,
@@ -111,10 +124,13 @@ async function resolveCurves(
     if (!opts.curvesFile) {
       throw new Error('--curves-file is required for file curve source.');
     }
-    const factoryConfig = await rare.liquid.getFactoryConfig();
+    const factoryConfig = resolveFactoryConfigForSupplyOrThrow(
+      await rare.liquid.getFactoryConfig(),
+      opts.totalSupply,
+    );
     const raw = await readFile(opts.curvesFile, 'utf-8');
     const curves = parseCurveConfig(raw, factoryConfig.curvePoolSupplyTokens, factoryConfig.poolTickSpacing);
-    const preview = await rare.liquid.validateCurves({ curves });
+    const preview = await rare.liquid.validateCurves({ curves, totalSupply: opts.totalSupply });
     return {
       source: `file:${opts.curvesFile}`,
       curves,
@@ -129,6 +145,7 @@ async function resolveCurves(
     }
     const generated = await rare.liquid.generatePresetCurves({
       preset: opts.curvePreset,
+      totalSupply: opts.totalSupply,
     });
     await writeGeneratedCurves(opts.writeCurvesFile, generated.curves);
     return {
@@ -141,7 +158,7 @@ async function resolveCurves(
 
   const wizard = await runLiquidCurveWizard({
     skipConfirmation: opts.yes,
-    generatePresetCurves: async (preset) => rare.liquid.generatePresetCurves({ preset }),
+    generatePresetCurves: async (preset) => rare.liquid.generatePresetCurves({ preset, totalSupply: opts.totalSupply }),
   });
   await writeGeneratedCurves(opts.writeCurvesFile, wizard.curves);
   return {
@@ -211,6 +228,7 @@ function deployLiquidEditionCommand(): Command {
     .option('--curve-preset <preset>', 'curve preset to generate (low-demand, medium-demand, high-demand)')
     .option('--write-curves-file <path>', 'write generated curves to a JSON file')
     .option('--initial-rare-liquidity <amount>', 'initial RARE liquidity to seed with')
+    .option('--total-supply <amount>', 'custom max total token supply')
     .option('--preview', 'preview the resolved curve config without deploying')
     .option('--yes', 'skip the interactive curve confirmation prompt')
     .option('--token-uri <uri>', 'token metadata URI (skip upload if provided)')
@@ -229,6 +247,7 @@ function deployLiquidEditionCommand(): Command {
           curvePreset?: string;
           writeCurvesFile?: string;
           initialRareLiquidity?: string;
+          totalSupply?: string;
           preview?: boolean;
           yes?: boolean;
           tokenUri?: string;
@@ -273,6 +292,9 @@ function deployLiquidEditionCommand(): Command {
           if (opts.initialRareLiquidity) {
             log(`  Initial RARE liquidity: ${opts.initialRareLiquidity}`);
           }
+          if (opts.totalSupply) {
+            log(`  Total supply: ${opts.totalSupply}`);
+          }
           log('Waiting for confirmation...');
 
           const result = await rare.liquid.deployMultiCurve({
@@ -280,6 +302,7 @@ function deployLiquidEditionCommand(): Command {
             symbol,
             tokenUri,
             initialRareLiquidity: opts.initialRareLiquidity,
+            totalSupply: opts.totalSupply,
             curves: curves.curves,
           });
           const liquidEditionUrl = formatLiquidEditionUrl(rare.chainId, result.contract);
@@ -292,6 +315,7 @@ function deployLiquidEditionCommand(): Command {
               chainId: rare.chainId,
               liquidEditionUrl,
               tokenUri,
+              totalSupply: opts.totalSupply ?? null,
               curves: curves.curves,
               source: curves.source,
               rarePriceUsd: curves.rarePriceUsd ?? null,

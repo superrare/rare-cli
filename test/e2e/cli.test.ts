@@ -184,6 +184,7 @@ describe('built CLI deterministic behavior', () => {
       expect(liquid.stdout).toContain('Usage: rare deploy liquid-edition [options] <name> <symbol>');
       expect(liquid.stdout).toContain('--curves-file <path>');
       expect(liquid.stdout).toContain('--initial-rare-liquidity <amount>');
+      expect(liquid.stdout).toContain('--total-supply <amount>');
       expect(liquid.stderr).toBe('');
     });
   });

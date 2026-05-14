@@ -162,6 +162,30 @@ export const liquidFactoryAbi = [
     stateMutability: 'nonpayable',
   },
   {
+    type: 'function',
+    name: 'createLiquidTokenMultiCurveWithSupply',
+    inputs: [
+      { name: '_creator', type: 'address' },
+      { name: '_tokenUri', type: 'string' },
+      { name: '_name', type: 'string' },
+      { name: '_symbol', type: 'string' },
+      { name: '_initialRareLiquidity', type: 'uint256' },
+      {
+        name: '_curves',
+        type: 'tuple[]',
+        components: [
+          { name: 'tickLower', type: 'int24' },
+          { name: 'tickUpper', type: 'int24' },
+          { name: 'numPositions', type: 'uint16' },
+          { name: 'shares', type: 'uint256' },
+        ],
+      },
+      { name: '_customMaxTotalSupply', type: 'uint256' },
+    ],
+    outputs: [{ name: 'token', type: 'address' }],
+    stateMutability: 'nonpayable',
+  },
+  {
     type: 'event',
     name: 'LiquidTokenCreated',
     inputs: [
