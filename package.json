@@ -45,7 +45,8 @@
     "rare": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && tsup",
     "dev": "tsup --watch",
     "generate:types": "set -a; [ -f .env ] && . ./.env; set +a; openapi-typescript ${RARE_API_BASE_URL:-https://api.superrare.com}/doc -o src/data-access/schema.d.ts",
     "knip": "knip",

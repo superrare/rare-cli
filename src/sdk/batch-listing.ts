@@ -308,6 +308,9 @@ async function resolveBatchListingBuyProofArtifact(opts: {
   if (!shouldResolveAllowListProof) {
     return tokenProof;
   }
+  if (allowList === undefined) {
+    throw new Error('unreachable: batch listing allowlist proof resolution requires allowlist config');
+  }
 
   const allowListProof = await resolveApiAddressMerkleProof(opts.config, {
     root: allowList.root,

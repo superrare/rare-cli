@@ -421,7 +421,7 @@ export type ListingCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
-  price?: AmountInput;
+  price: AmountInput;
   target?: Address;
   splitAddresses?: Address[];
   splitRatios?: number[];

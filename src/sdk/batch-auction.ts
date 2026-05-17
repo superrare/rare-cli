@@ -388,15 +388,16 @@ async function approveNftContracts(opts: {
   if (opts.operator === undefined) {
     return [];
   }
+  const { walletClient, operator } = opts;
 
   return opts.nftAddresses.reduce<Promise<Hash[]>>(async (previous, nftAddress) => {
     const hashes = await previous;
     const txHash = await approveNftContract({
       publicClient: opts.publicClient,
-      walletClient: opts.walletClient,
+      walletClient,
       account: opts.account,
       accountAddress: opts.accountAddress,
-      operator: opts.operator,
+      operator,
       nftAddress,
     });
     return txHash === undefined ? hashes : [...hashes, txHash];
