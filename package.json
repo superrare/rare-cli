@@ -29,9 +29,6 @@
     "LICENSE"
   ],
   "exports": {
-    ".": {
-      "import": "./dist/index.js"
-    },
     "./client": {
       "import": "./dist/client.js",
       "types": "./dist/client.d.ts"
