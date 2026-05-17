@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
 
-const runLiveE2E = process.argv.some((arg) => arg.includes('test/e2e-live'));
+const runLiveE2E = process.argv.some(isLiveE2EArg);
 const liveE2EHookTimeoutMs = parsePositiveInt(process.env.E2E_LIVE_HOOK_TIMEOUT_MS, 3_600_000);
 
 export default defineConfig({
@@ -32,6 +32,10 @@ export default defineConfig({
     hookTimeout: runLiveE2E ? liveE2EHookTimeoutMs : 10_000,
   },
 });
+
+export function isLiveE2EArg(arg: string): boolean {
+  return arg.replaceAll('\\', '/').includes('test/e2e-live');
+}
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (value === undefined) {
