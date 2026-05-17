@@ -12,8 +12,10 @@ import { ETH_ADDRESS, chainIds, requireContractAddress, type SupportedChain } fr
 import {
   approvalAbi,
   preparePaymentForSpender,
+  requireInput,
   requireWallet,
   resolveCurrencyDecimals,
+  resolveAlias,
   stringifyAmountInput,
   waitForApproval,
 } from './helpers.js';
@@ -43,10 +45,12 @@ export function createBatchOfferNamespace(
       const block = await publicClient.getBlock();
       const resolvedParams = await resolveBatchOfferCreateParams(config, params);
       const currency = resolvedParams.currency ?? ETH_ADDRESS;
-      const amount = typeof resolvedParams.amount === 'bigint'
-        ? resolvedParams.amount
-        : parseUnits(stringifyAmountInput(resolvedParams.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
-      const plan = planBatchOfferCreate({ ...resolvedParams, currency, amount }, block.timestamp);
+      const price = requireInput(resolveAlias(resolvedParams.price, resolvedParams.amount, 'price', 'amount'), 'price');
+      const amount = typeof price === 'bigint'
+        ? price
+        : parseUnits(stringifyAmountInput(price, 'price'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const { amount: _deprecatedAmount, ...canonicalParams } = resolvedParams;
+      const plan = planBatchOfferCreate({ ...canonicalParams, price: amount, currency }, block.timestamp);
       const payment = await preparePaymentForSpender({
         publicClient,
         walletClient,

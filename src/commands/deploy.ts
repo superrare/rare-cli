@@ -169,7 +169,7 @@ async function resolveCurves(
   };
 }
 
-function deployErc721Command(): Command {
+export function deployErc721Command(): Command {
   const cmd = new Command('erc721');
   cmd.description('Deploy a new ERC-721 NFT contract via the RARE factory');
 
@@ -179,6 +179,7 @@ function deployErc721Command(): Command {
     .option('--max-tokens <number>', 'maximum number of tokens (optional)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
+    .option('--yes', 'yes to all prompts, including transaction submission')
     .action(async (
       name: string,
       symbol: string,
@@ -222,7 +223,7 @@ function deployErc721Command(): Command {
   return cmd;
 }
 
-function deployLiquidEditionCommand(): Command {
+export function deployLiquidEditionCommand(): Command {
   const cmd = new Command('liquid-edition');
   cmd.description('Deploy a new Liquid Edition via the liquid factory');
 
@@ -235,7 +236,7 @@ function deployLiquidEditionCommand(): Command {
     .option('--initial-rare-liquidity <amount>', 'initial RARE liquidity to seed with')
     .option('--total-supply <amount>', 'custom max total token supply')
     .option('--preview', 'preview the resolved curve config without deploying')
-    .option('--yes', 'skip the interactive curve confirmation prompt')
+    .option('--yes', 'yes to all prompts, including transaction submission')
     .option('--token-uri <uri>', 'token metadata URI (skip upload if provided)')
     .option('--description <description>', 'description for metadata when uploading')
     .option('--image <path>', 'path to the metadata image')

@@ -10,12 +10,15 @@ import { output, log } from '../output.js';
 import { createOfferListCommand } from './account-market-list.js';
 import { resolveCurrencyDecimals } from '../sdk/helpers.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
+import { offerBatchCommand } from './batch.js';
 
 type OfferCreateOptions = {
   contract?: string;
   tokenId?: string;
-  amount: string;
+  price?: string;
+  amount?: string;
   currency?: string;
+  yes?: boolean;
   chain?: string;
   chainId?: string;
 };
@@ -31,11 +34,13 @@ type OfferCancelOptions = {
 type OfferAcceptOptions = {
   contract?: string;
   tokenId: string;
-  amount: string;
+  price?: string;
+  amount?: string;
   currency?: string;
   split?: SplitAccumulator;
   chain?: string;
   chainId?: string;
+  yes?: boolean;
 };
 
 type OfferStatusOptions = {
@@ -50,19 +55,26 @@ export function offerCommand(): Command {
   const cmd = new Command('offer');
   cmd.description('Offer subcommands (list, create, cancel, accept, status)');
   cmd.addCommand(createOfferListCommand());
+  cmd.addCommand(offerBatchCommand());
 
   cmd
     .command('create')
     .description('Create a token-specific offer')
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
-    .requiredOption('--amount <amount>', 'offer amount in ETH or token units')
+    .option('--price <amount>', 'offer price in ETH or token units')
+    .option('--amount <amount>', 'alias for --price')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
+    .option('--yes', 'yes to all prompts, including approval and transaction submission')
     .action(async (opts: OfferCreateOptions) => {
       try {
         requireTokenScopeOptions(opts, 'create');
+        const price = opts.price ?? opts.amount;
+        if (!hasOption(price)) {
+          throw new Error('rare offer create requires --price.');
+        }
         const chain = getActiveChain(opts.chain, opts.chainId);
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
@@ -75,12 +87,12 @@ export function offerCommand(): Command {
         log(`  Marketplace contract: ${rare.contracts.auction}`);
         log(`  NFT contract: ${contract}`);
         log(`  Token ID: ${opts.tokenId}`);
-        log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
+        log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
 
         const result = await rare.offer.create({
           contract,
           tokenId: opts.tokenId,
-          amount: opts.amount,
+          price,
           currency,
         });
 
@@ -104,6 +116,7 @@ export function offerCommand(): Command {
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
+    .option('--yes', 'yes to all prompts, including transaction submission')
     .action(async (opts: OfferCancelOptions) => {
       try {
         requireTokenScopeOptions(opts, 'cancel');
@@ -139,7 +152,8 @@ export function offerCommand(): Command {
     .description('Accept a token-specific offer')
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID to sell')
-    .requiredOption('--amount <amount>', 'offer amount to accept in ETH or token units')
+    .option('--price <amount>', 'offer price to accept in ETH or token units')
+    .option('--amount <amount>', 'alias for --price')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option(
       '--split <addr=ratio>',
@@ -148,6 +162,7 @@ export function offerCommand(): Command {
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
+    .option('--yes', 'yes to all prompts, including approval and transaction submission')
     .action(async (opts: OfferAcceptOptions) => {
       try {
         const chain = getActiveChain(opts.chain, opts.chainId);
@@ -157,6 +172,10 @@ export function offerCommand(): Command {
         const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
         const isEth = currency === ETH_ADDRESS;
         const splits = finalizeSplits(opts.split);
+        const price = opts.price ?? opts.amount;
+        if (!hasOption(price)) {
+          throw new Error('rare offer accept requires --price.');
+        }
         if (!hasOption(opts.contract)) {
           throw new Error('rare offer accept requires --contract.');
         }
@@ -165,7 +184,7 @@ export function offerCommand(): Command {
         log(`Accepting offer on ${chain}...`);
         log(`  NFT contract: ${contract}`);
         log(`  Token ID: ${opts.tokenId}`);
-        log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
+        log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
         if (splits) {
           log('  Splits:');
           formatSplitLines(splits).forEach((line) => {
@@ -176,7 +195,7 @@ export function offerCommand(): Command {
         const result = await rare.offer.accept({
           contract,
           tokenId: opts.tokenId,
-          amount: opts.amount,
+          price,
           currency,
           splitAddresses: splits?.addresses,
           splitRatios: splits?.ratios,

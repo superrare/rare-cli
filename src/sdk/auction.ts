@@ -11,6 +11,8 @@ import {
   approvalAbi,
   preparePayment,
   requireWallet,
+  requireInput,
+  resolveAlias,
   toCurrencyAmount,
   waitForApproval,
 } from './helpers.js';
@@ -32,8 +34,10 @@ export function createAuctionNamespace(
     async create(params): ReturnType<RareClient['auction']['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency ?? ETH_ADDRESS;
-      const startingPrice = await toCurrencyAmount(publicClient, chain, currency, params.startingPrice, 'startingPrice');
-      const plan = planAuctionCreate({ ...params, currency, startingPrice }, accountAddress);
+      const price = requireInput(resolveAlias(params.price, params.startingPrice, 'price', 'startingPrice'), 'price');
+      const startingPrice = await toCurrencyAmount(publicClient, chain, currency, price, 'price');
+      const { startingPrice: _deprecatedStartingPrice, ...canonicalParams } = params;
+      const plan = planAuctionCreate({ ...canonicalParams, price: startingPrice, currency }, accountAddress);
       const approvalTxHash = params.autoApprove === false
         ? undefined
         : await approveMarketplaceIfNeeded({
@@ -84,8 +88,10 @@ export function createAuctionNamespace(
     async bid(params): ReturnType<RareClient['auction']['bid']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency ?? ETH_ADDRESS;
-      const amount = await toCurrencyAmount(publicClient, chain, currency, params.amount, 'amount');
-      const plan = planAuctionBid({ ...params, currency, amount });
+      const price = requireInput(resolveAlias(params.price, params.amount, 'price', 'amount'), 'price');
+      const amount = await toCurrencyAmount(publicClient, chain, currency, price, 'price');
+      const { amount: _deprecatedAmount, ...canonicalParams } = params;
+      const plan = planAuctionBid({ ...canonicalParams, price: amount, currency });
 
       const value = await preparePayment({
         publicClient, walletClient, account, accountAddress,

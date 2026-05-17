@@ -2,7 +2,6 @@ import { expect } from 'vitest';
 import type { Address, PublicClient } from 'viem';
 import { royaltyRegistryAbi, royaltyRegistryResolverAbi } from '../../../src/contracts/abis/royalty-registry.js';
 import { getContractAddresses, type SupportedChain } from '../../../src/contracts/addresses.js';
-import { parseAddress } from '../../../src/sdk/validation.js';
 import {
   cleanupTempHome,
   configureLiveHome,
@@ -206,6 +205,7 @@ export async function deployErc721Collection(
   const suffix = Date.now().toString(36);
   const collection = await step(`deploy ERC-721 collection on ${fixture.chain}`, () =>
     jsonCommand<DeployResult>(fixture.sellerHome, [
+      'collection',
       'deploy',
       'erc721',
       `Rare CLI E2E ${suffix}`,
@@ -239,7 +239,7 @@ export async function mintToken(
   ];
   const args = opts.to ? [...baseArgs, '--to', opts.to] : baseArgs;
 
-  const result = await jsonCommand<MintResult>(fixture.sellerHome, args);
+  const result = await jsonCommand<MintResult>(fixture.sellerHome, args, 300_000);
 
   expectTx(result);
   expect(result.contract).toBe(contract);
@@ -364,26 +364,6 @@ export async function expectTokenOwner(
   }
   expect(token.owner.toLowerCase()).toBe(owner.toLowerCase());
   expect(token.tokenUri).toBe(E2E_TOKEN_URI);
-}
-
-export function hasRoyaltyRegistryStatusFixture(): boolean {
-  return process.env.E2E_ROYALTY_REGISTRY_CONTRACT !== undefined &&
-    process.env.E2E_ROYALTY_REGISTRY_TOKEN_ID !== undefined;
-}
-
-export function royaltyRegistryStatusFixture(): { contract: Address; tokenId: string } {
-  const contract = process.env.E2E_ROYALTY_REGISTRY_CONTRACT;
-  const tokenId = process.env.E2E_ROYALTY_REGISTRY_TOKEN_ID;
-  if (contract === undefined || tokenId === undefined) {
-    throw new Error(
-      'E2E_ROYALTY_REGISTRY_CONTRACT and E2E_ROYALTY_REGISTRY_TOKEN_ID are required for royalty registry status live coverage.',
-    );
-  }
-
-  return {
-    contract: parseAddress(contract, 'E2E_ROYALTY_REGISTRY_CONTRACT'),
-    tokenId,
-  };
 }
 
 export function liveAuctionDurationSeconds(): number {

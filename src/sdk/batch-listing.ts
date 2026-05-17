@@ -15,9 +15,12 @@ import {
   approvalAbi,
   ensureTokenAllowance,
   marketplaceSettingsAbi,
+  requireInput,
   requireWallet,
+  resolveAlias,
   toInteger,
   toTokenAmount,
+  toUnixTimestamp,
   waitForApproval,
 } from './helpers.js';
 import {
@@ -155,7 +158,9 @@ export function createBatchListingNamespace(
         throw new Error('Proof artifact proof must not be empty; the batch listing contract rejects empty token proofs');
       }
 
-      const amount = await toTokenAmount(publicClient, params.currency, params.amount, 'amount');
+      const price = requireInput(resolveAlias(params.price, params.amount, 'price', 'amount'), 'price');
+      const amount = await toTokenAmount(publicClient, params.currency, price, 'price');
+      const { amount: _deprecatedAmount, ...canonicalParams } = params;
       const tokenIdBig = toInteger(proofArtifact.tokenId, 'tokenId');
       const allowListProof = proofArtifact.allowListProof ?? [];
 
@@ -177,9 +182,9 @@ export function createBatchListingNamespace(
         args: [
           proofArtifact.contract,
           tokenIdBig,
-          params.currency,
+          canonicalParams.currency,
           amount,
-          params.creator,
+          canonicalParams.creator,
           proofArtifact.root,
           proofArtifact.proof,
           allowListProof,
@@ -194,11 +199,12 @@ export function createBatchListingNamespace(
 
     async setAllowList(params): Promise<TransactionResult> {
       const { walletClient, account } = requireWallet(config);
+      const endTime = requireInput(resolveAlias(params.endTime, params.endTimestamp, 'endTime', 'endTimestamp'), 'endTime');
       const txHash = await walletClient.writeContract({
         address: addresses.batchListing,
         abi: batchListingAbi,
         functionName: 'setAllowListConfig',
-        args: [params.root, params.allowListRoot, toInteger(params.endTimestamp, 'endTimestamp')],
+        args: [params.root, params.allowListRoot, toUnixTimestamp(endTime, 'endTime')],
         account,
         chain: undefined,
       });

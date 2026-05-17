@@ -20,7 +20,14 @@ import type {
   TimestampInput,
 } from './types.js';
 import { ETH_ADDRESS } from '../contracts/addresses.js';
-import { toInteger, toNonNegativeInteger, toPositiveInteger } from './helpers.js';
+import {
+  requireInput,
+  resolveAlias,
+  resolveAliasWithField,
+  toInteger,
+  toNonNegativeInteger,
+  toPositiveInteger,
+} from './helpers.js';
 
 export const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 export const RELEASE_ALLOWLIST_ARTIFACT_KIND = 'rare-release-allowlist-v1' as const;
@@ -282,7 +289,10 @@ export function planReleaseConfigure(
     currencyDecimals: opts.currencyDecimals,
   });
   const startTime = normalizeReleaseStartTime(params.startTime, opts.nowSeconds);
-  const maxMints = toInteger(params.maxMints, 'maxMints');
+  const maxMints = toInteger(
+    requireInput(resolveAlias(params.amount, params.maxMints, 'amount', 'maxMints'), 'amount'),
+    'amount',
+  );
   if (maxMints < 1n || maxMints > 100n) {
     throw new Error('maxMints must be an integer between 1 and 100.');
   }
@@ -307,17 +317,19 @@ export function planReleaseAllowlistConfig(params: {
   contract: Address;
   root?: Hex;
   artifact?: ReleaseAllowlistArtifact;
-  endTimestamp: TimestampInput;
+  endTime?: TimestampInput;
+  endTimestamp?: TimestampInput;
 }): ReleaseAllowlistConfigPlan {
   const root = params.root ?? params.artifact?.root;
   if (!root) {
     throw new Error('allowlist root is required. Pass a root or allowlist artifact.');
   }
 
+  const endTime = requireInput(resolveAlias(params.endTime, params.endTimestamp, 'endTime', 'endTimestamp'), 'endTime');
   return {
     contract: params.contract,
     root: normalizeBytes32(root, 'allowlist root'),
-    endTimestamp: normalizeReleaseTimestamp(params.endTimestamp, 'endTimestamp'),
+    endTimestamp: normalizeReleaseTimestamp(endTime, 'endTime'),
   };
 }
 
@@ -333,18 +345,23 @@ export function planReleaseClearAllowlistConfig(params: {
 
 export function planReleaseLimitConfig(params: {
   contract: Address;
-  limit: IntegerInput;
+  amount?: IntegerInput;
+  limit?: IntegerInput;
 }): ReleaseLimitConfigPlan {
+  const resolvedAmount = resolveAliasWithField(params.amount, params.limit, 'amount', 'limit');
+  const amount = requireInput(resolvedAmount.value, resolvedAmount.field);
   return {
     contract: params.contract,
-    limit: toNonNegativeInteger(params.limit, 'limit'),
+    limit: toNonNegativeInteger(amount, resolvedAmount.field),
   };
 }
 
 export function planReleaseDirectSaleMint(params: ReleaseMintDirectSaleParams): ReleaseDirectSaleMintPlan {
-  const quantity = toPositiveInteger(params.quantity ?? 1, 'quantity');
+  const resolvedAmount = resolveAliasWithField(params.amount, params.quantity, 'amount', 'quantity');
+  const quantityField = resolvedAmount.value === undefined ? 'amount' : resolvedAmount.field;
+  const quantity = toPositiveInteger(resolvedAmount.value ?? 1, quantityField);
   if (quantity > MAX_DIRECT_SALE_MINT_QUANTITY) {
-    throw new Error('quantity must be less than or equal to 255.');
+    throw new Error(`${quantityField} must be less than or equal to 255.`);
   }
 
   return {
@@ -379,6 +396,9 @@ export function collectReleaseSplit(
 
   const addresses = previous === undefined ? [] : [...previous.addresses];
   const ratios = previous === undefined ? [] : [...previous.ratios];
+  if (addresses.length >= 5) {
+    throw new Error('--split can be provided at most 5 times.');
+  }
   if (addresses.some((candidate) => isAddressEqual(candidate, address))) {
     throw new Error(`Duplicate address in --split: "${address}".`);
   }
@@ -398,6 +418,9 @@ export function finalizeReleaseSplitAccumulator(
   accumulator: ReleaseSplitAccumulator | undefined,
 ): { addresses: Address[]; ratios: number[] } | undefined {
   if (!accumulator || accumulator.addresses.length === 0) return undefined;
+  if (accumulator.addresses.length > 5) {
+    throw new Error('--split can be provided at most 5 times.');
+  }
 
   const sum = accumulator.ratios.reduce((total, ratio) => total + ratio, 0);
   if (sum !== 100) {

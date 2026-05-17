@@ -22,6 +22,10 @@ import {
   toNonNegativeWei,
   toPositiveInteger,
   toPositiveWei,
+  requireInput,
+  resolveAlias,
+  resolveAliasWithField,
+  toUnixTimestamp,
 } from './helpers.js';
 import { parseAddress } from './validation.js';
 
@@ -109,10 +113,12 @@ export function planListingCancel(params: ListingCancelParams): { tokenId: bigin
 }
 
 export function planListingBuy(params: ListingBuyParams): ListingBuyPlan {
+  const resolvedPrice = resolveAliasWithField(params.price, params.amount, 'price', 'amount');
+  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
-    amount: toPositiveWei(params.amount, 'amount'),
+    amount: toPositiveWei(price, resolvedPrice.field),
   };
 }
 
@@ -165,10 +171,12 @@ export function shapeListingStatus(
 }
 
 export function planOfferCreate(params: OfferCreateParams): OfferCreatePlan {
+  const resolvedPrice = resolveAliasWithField(params.price, params.amount, 'price', 'amount');
+  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
-    amount: toPositiveWei(params.amount, 'amount'),
+    amount: toPositiveWei(price, resolvedPrice.field),
   };
 }
 
@@ -181,11 +189,13 @@ export function planOfferCancel(params: OfferCancelParams): { tokenId: bigint; c
 
 export function planOfferAccept(params: OfferAcceptParams, accountAddress: Address): OfferAcceptPlan {
   const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
+  const resolvedPrice = resolveAliasWithField(params.price, params.amount, 'price', 'amount');
+  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
 
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
-    amount: toPositiveWei(params.amount, 'amount'),
+    amount: toPositiveWei(price, resolvedPrice.field),
     splitAddresses: splits.addresses,
     splitRatios: splits.ratios,
   };
@@ -302,28 +312,47 @@ export function planProvidedSplits(
 export function planAuctionCreate(params: AuctionCreateParams, accountAddress: Address): AuctionCreatePlan {
   const auctionType = normalizeAuctionType(params);
   const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
+  const resolvedPrice = resolveAliasWithField(params.price, params.startingPrice, 'price', 'startingPrice');
+  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
+  const startTime = auctionType === 'scheduled' ? toUnixTimestamp(params.startTime ?? 0, 'startTime') : 0n;
+  const duration = resolveAuctionDuration(params, startTime);
 
   return {
     nftAddress: params.contract,
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
     startingPrice: auctionType === 'scheduled'
-      ? toNonNegativeWei(params.startingPrice, 'startingPrice')
-      : toPositiveWei(params.startingPrice, 'startingPrice'),
-    duration: toPositiveInteger(params.duration, 'duration'),
+      ? toNonNegativeWei(price, resolvedPrice.field)
+      : toPositiveWei(price, resolvedPrice.field),
+    duration,
     auctionType,
-    startTime: auctionType === 'scheduled' ? toPositiveInteger(params.startTime ?? 0, 'startTime') : 0n,
+    startTime,
     splitAddresses: splits.addresses,
     splitRatios: splits.ratios,
   };
 }
 
 export function planAuctionBid(params: AuctionBidParams): AuctionBidPlan {
+  const resolvedPrice = resolveAliasWithField(params.price, params.amount, 'price', 'amount');
+  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
-    amount: toPositiveWei(params.amount, 'amount'),
+    amount: toPositiveWei(price, resolvedPrice.field),
   };
+}
+
+function resolveAuctionDuration(params: AuctionCreateParams, startTime: bigint): bigint {
+  if (params.endTime !== undefined) {
+    const endTime = toUnixTimestamp(params.endTime, 'endTime');
+    const beginsAt = startTime > 0n ? startTime : BigInt(Math.floor(Date.now() / 1000));
+    if (endTime <= beginsAt) {
+      throw new Error('endTime must be after the auction start time.');
+    }
+    return endTime - beginsAt;
+  }
+
+  return toPositiveInteger(requireInput(params.duration, 'endTime'), 'duration');
 }
 
 export function planAuctionTokenAction(params: AuctionSettleParams | AuctionCancelParams): { tokenId: bigint } {

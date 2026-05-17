@@ -157,6 +157,13 @@ function isLiveWriteCommand(args: string[]): boolean {
   if (command === 'deploy') return true;
   if (command === 'listing') {
     if (subcommand === 'create' || subcommand === 'cancel' || subcommand === 'buy') return true;
+    if (subcommand === 'batch') {
+      const batchListingSubcommand = args[2];
+      return batchListingSubcommand === 'create' ||
+        batchListingSubcommand === 'cancel' ||
+        batchListingSubcommand === 'buy' ||
+        batchListingSubcommand === 'set-allowlist';
+    }
     if (subcommand !== 'release') return false;
     const releaseSubcommand = args[2];
     if (releaseSubcommand === 'configure') return true;
@@ -180,10 +187,26 @@ function isLiveWriteCommand(args: string[]): boolean {
     return false;
   }
   if (command === 'auction') {
+    if (subcommand === 'batch') {
+      const batchAuctionSubcommand = args[2];
+      return batchAuctionSubcommand === 'create' ||
+        batchAuctionSubcommand === 'cancel' ||
+        batchAuctionSubcommand === 'bid' ||
+        batchAuctionSubcommand === 'settle';
+    }
     return subcommand === 'create' || subcommand === 'cancel' || subcommand === 'bid' || subcommand === 'settle';
   }
-  if (command === 'offer') return subcommand === 'create' || subcommand === 'cancel' || subcommand === 'accept';
+  if (command === 'offer') {
+    if (subcommand === 'batch') {
+      const batchOfferSubcommand = args[2];
+      return batchOfferSubcommand === 'create' ||
+        batchOfferSubcommand === 'revoke' ||
+        batchOfferSubcommand === 'accept';
+    }
+    return subcommand === 'create' || subcommand === 'cancel' || subcommand === 'accept';
+  }
   if (command === 'collection') {
+    if (subcommand === 'deploy') return true;
     if (subcommand === 'create' || subcommand === 'mint' || subcommand === 'mint-batch' || subcommand === 'prepare-lazy-mint') return true;
     if (subcommand === 'metadata') {
       const metadataSubcommand = args[2];

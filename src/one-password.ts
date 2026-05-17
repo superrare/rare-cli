@@ -26,6 +26,8 @@ export async function readOnePasswordSecret(privateKeyRef: PrivateKeyReference):
     const { stdout } = await execFileAsync('op', ['read', privateKeyRef], {
       encoding: 'utf8',
       maxBuffer: 16 * 1024,
+      timeout: 10_000,
+      killSignal: 'SIGTERM',
     });
     return stdout.trim();
   } catch (error) {

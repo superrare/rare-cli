@@ -4,6 +4,10 @@ import {
   toNonNegativeInteger,
   toPositiveInteger,
   toPositiveWei,
+  requireInput,
+  resolveAlias,
+  resolveAliasWithField,
+  toUnixTimestamp,
 } from './helpers.js';
 import { normalizeBytes32, verifyBatchTokenProof } from './batch-core.js';
 import type {
@@ -92,11 +96,13 @@ export function planBatchAuctionCreate(
   params: BatchAuctionCreateParams,
   accountAddress: Address,
 ): BatchAuctionCreatePlan {
+  const resolvedPrice = resolveAliasWithField(params.price, params.reserveAmount, 'price', 'reserveAmount');
+  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
   return {
     root: resolveBatchAuctionRoot(params),
     currency: params.currency ?? ETH_ADDRESS,
-    reserveAmount: toPositiveWei(params.reserveAmount, 'reserveAmount'),
-    duration: toPositiveInteger(params.duration, 'duration'),
+    reserveAmount: toPositiveWei(price, resolvedPrice.field),
+    duration: resolveBatchAuctionDuration(params),
     ...planSplitRecipients(params.splitAddresses, params.splitRatios, accountAddress),
     approvalContracts: params.autoApprove === false || params.artifact === undefined
       ? []
@@ -124,7 +130,9 @@ export function planBatchAuctionBid(params: BatchAuctionBidParams): BatchAuction
     throw new Error('Batch auction proof is not valid for the requested token.');
   }
 
-  const amount = toPositiveWei(params.amount, 'amount');
+  const resolvedPrice = resolveAliasWithField(params.price, params.amount, 'price', 'amount');
+  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
+  const amount = toPositiveWei(price, resolvedPrice.field);
   return {
     creator: params.creator,
     root,
@@ -135,6 +143,19 @@ export function planBatchAuctionBid(params: BatchAuctionBidParams): BatchAuction
     amount,
     requiredPayment: addMarketplaceFee(amount),
   };
+}
+
+function resolveBatchAuctionDuration(params: BatchAuctionCreateParams): bigint {
+  if (params.endTime !== undefined) {
+    const endTime = toUnixTimestamp(params.endTime, 'endTime');
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    if (endTime <= now) {
+      throw new Error('endTime must be in the future.');
+    }
+    return endTime - now;
+  }
+
+  return toPositiveInteger(requireInput(params.duration, 'endTime'), 'duration');
 }
 
 export function planBatchAuctionToken(params: BatchAuctionStatusParams): BatchAuctionTokenPlan {

@@ -1,6 +1,6 @@
 import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { delimiter, join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, type TestContext } from 'vitest';
 import { isAddress, zeroAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { parseJsonStdout, runCli, withTempHome } from '../helpers/cli.js';
@@ -228,7 +228,7 @@ describe('built CLI deterministic behavior', () => {
       expect(mismatch.stdout).toBe('');
       expect(mismatch.stderr).toContain('--chain "sepolia" does not match --chain-id "1"');
 
-      const deployHelp = await runCli(['deploy', 'erc721', '--help'], { home });
+      const deployHelp = await runCli(['collection', 'deploy', 'erc721', '--help'], { home });
       expect(deployHelp.code).toBe(0);
       expect(deployHelp.stdout).toContain('--chain <chain>');
       expect(deployHelp.stdout).toContain('--chain-id <id>');
@@ -288,15 +288,9 @@ describe('built CLI deterministic behavior', () => {
 
   it('exposes liquid edition deployment help', async () => {
     await withTempHome(async (home) => {
-      const deploy = await runCli(['deploy', '--help'], { home });
-      expect(deploy.code).toBe(0);
-      expect(deploy.stdout).toContain('liquid-edition');
-      expect(deploy.stdout).not.toContain('liquid-token');
-      expect(deploy.stderr).toBe('');
-
-      const liquid = await runCli(['deploy', 'liquid-edition', '--help'], { home });
+      const liquid = await runCli(['liquid-edition', 'deploy', '--help'], { home });
       expect(liquid.code).toBe(0);
-      expect(liquid.stdout).toContain('Usage: rare deploy liquid-edition [options] <name> <symbol>');
+      expect(liquid.stdout).toContain('Usage: rare liquid-edition deploy [options] <name> <symbol>');
       expect(liquid.stdout).toContain('--curves-file <path>');
       expect(liquid.stdout).toContain('--initial-rare-liquidity <amount>');
       expect(liquid.stdout).toContain('--total-supply <amount>');
@@ -330,11 +324,11 @@ describe('built CLI deterministic behavior', () => {
     await withTempHome(async (home) => {
       const collection = await runCli(['collection', '--help'], { home });
       expect(collection.code).toBe(0);
-      expect(collection.stdout).toContain('create');
+      expect(collection.stdout).toContain('deploy');
       expect(collection.stdout).toContain('mint');
       expect(collection.stderr).toBe('');
 
-      const create = await runCli(['collection', 'create', '--help'], { home });
+      const create = await runCli(['collection', 'deploy', '--help'], { home });
       const mint = await runCli(['collection', 'mint', '--help'], { home });
       expect(mint.code).toBe(0);
       expect(mint.stdout).toContain('Usage: rare collection mint [options]');
@@ -347,9 +341,9 @@ describe('built CLI deterministic behavior', () => {
       expect(create.stdout).toContain('lazy-batch-mint');
       expect(create.stderr).toBe('');
 
-      const lazyBatchMint = await runCli(['collection', 'create', 'lazy-batch-mint', '--help'], { home });
+      const lazyBatchMint = await runCli(['collection', 'deploy', 'lazy-batch-mint', '--help'], { home });
       expect(lazyBatchMint.code).toBe(0);
-      expect(lazyBatchMint.stdout).toContain('Usage: rare collection create lazy-batch-mint [options] <name> <symbol>');
+      expect(lazyBatchMint.stdout).toContain('Usage: rare collection deploy lazy-batch-mint [options] <name> <symbol>');
       expect(lazyBatchMint.stdout).toContain('--max-tokens <number>');
       expect(lazyBatchMint.stdout).toContain('--chain-id <id>');
       expect(lazyBatchMint.stderr).toBe('');
@@ -392,10 +386,13 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('covers read/API CLI command wiring and validation', async () => {
+  it('covers read/API CLI command wiring and validation', async (ctx) => {
     await withTempHome(async (home) => {
       const tokenSearch = parseJsonStdout<{ pagination: { page: number; perPage: number }; data: unknown[] }>(
-        await runCli(['--json', 'search', 'tokens', '--chain', 'mainnet', '--per-page', '1'], { home, timeoutMs: 30_000 }),
+        skipIfRareApiUnavailable(ctx, await runCli(
+          ['--json', 'search', 'tokens', '--chain', 'mainnet', '--per-page', '1'],
+          { home, timeoutMs: 30_000 },
+        )),
       );
       expect(tokenSearch.pagination).toMatchObject({ page: 1, perPage: 1 });
       expect(Array.isArray(tokenSearch.data)).toBe(true);
@@ -410,7 +407,7 @@ describe('built CLI deterministic behavior', () => {
       expect(Array.isArray(collectionSearch.data)).toBe(true);
 
       const auctions = parseJsonStdout<{ pagination: { page: number; perPage: number }; data: unknown[] }>(
-        await runCli([
+        skipIfRareApiUnavailable(ctx, await runCli([
           '--json',
           'search',
           'tokens',
@@ -420,7 +417,7 @@ describe('built CLI deterministic behavior', () => {
           'RUNNING',
           '--per-page',
           '1',
-        ], { home, timeoutMs: 30_000 }),
+        ], { home, timeoutMs: 30_000 })),
       );
       expect(auctions.pagination).toMatchObject({ page: 1, perPage: 1 });
       expect(Array.isArray(auctions.data)).toBe(true);
@@ -473,11 +470,15 @@ describe('built CLI deterministic behavior', () => {
       const proofHelp = await runCli(['utils', 'merkle', 'proof', '--help'], { home });
       expect(proofHelp.code).toBe(0);
       expect(proofHelp.stdout).toContain('Usage: rare utils merkle proof [options]');
+      expect(proofHelp.stdout).toContain('--input <path>');
+      expect(proofHelp.stdout).not.toContain('--root <path>');
       expect(proofHelp.stdout).toContain('--output <path>');
       expect(proofHelp.stdout).toContain('--buyer <address>');
 
       const createHelp = await runCli(['listing', 'batch', 'create', '--help'], { home });
       expect(createHelp.code).toBe(0);
+      expect(createHelp.stdout).toContain('--input <path>');
+      expect(createHelp.stdout).not.toContain('--root <path>');
       expect(createHelp.stdout).toContain('--yes');
       expect(createHelp.stdout).toContain('--chain-id <id>');
       expect(createHelp.stdout).not.toContain('--no-approve');
@@ -485,7 +486,7 @@ describe('built CLI deterministic behavior', () => {
       const setAllowListHelp = await runCli(['listing', 'batch', 'set-allowlist', '--help'], { home });
       expect(setAllowListHelp.code).toBe(0);
       expect(setAllowListHelp.stdout).toContain('--allowlist-root <hex>');
-      expect(setAllowListHelp.stdout).toContain('--end-timestamp <unix>');
+      expect(setAllowListHelp.stdout).toContain('--end-time <unix>');
     });
   });
 
@@ -567,30 +568,30 @@ describe('built CLI deterministic behavior', () => {
       expect(proof.stdout).toContain('--token-id <id>');
       expect(proof.stderr).toBe('');
 
-      const offerCreate = await runCli(['batch', 'offer', 'create', '--help'], { home });
+      const offerCreate = await runCli(['offer', 'batch', 'create', '--help'], { home });
       expect(offerCreate.code).toBe(0);
-      expect(offerCreate.stdout).toContain('Usage: rare batch offer create [options]');
-      expect(offerCreate.stdout).toContain('--amount <amount>');
-      expect(offerCreate.stdout).toContain('--expiry <seconds>');
+      expect(offerCreate.stdout).toContain('Usage: rare offer batch create [options]');
+      expect(offerCreate.stdout).toContain('--price <amount>');
+      expect(offerCreate.stdout).toContain('--end-time <time>');
       expect(offerCreate.stderr).toBe('');
 
-      const offerAccept = await runCli(['batch', 'offer', 'accept', '--help'], { home });
+      const offerAccept = await runCli(['offer', 'batch', 'accept', '--help'], { home });
       expect(offerAccept.code).toBe(0);
-      expect(offerAccept.stdout).toContain('Usage: rare batch offer accept [options]');
+      expect(offerAccept.stdout).toContain('Usage: rare offer batch accept [options]');
       expect(offerAccept.stdout).toContain('--proof <path>');
       expect(offerAccept.stdout).toContain('--creator <address>');
       expect(offerAccept.stderr).toBe('');
 
-      const auctionCreate = await runCli(['batch', 'auction', 'create', '--help'], { home });
+      const auctionCreate = await runCli(['auction', 'batch', 'create', '--help'], { home });
       expect(auctionCreate.code).toBe(0);
-      expect(auctionCreate.stdout).toContain('Usage: rare batch auction create [options]');
-      expect(auctionCreate.stdout).toContain('--reserve <amount>');
-      expect(auctionCreate.stdout).toContain('--duration <seconds>');
+      expect(auctionCreate.stdout).toContain('Usage: rare auction batch create [options]');
+      expect(auctionCreate.stdout).toContain('--price <amount>');
+      expect(auctionCreate.stdout).toContain('--end-time <time>');
       expect(auctionCreate.stderr).toBe('');
 
-      const auctionBid = await runCli(['batch', 'auction', 'bid', '--help'], { home });
+      const auctionBid = await runCli(['auction', 'batch', 'bid', '--help'], { home });
       expect(auctionBid.code).toBe(0);
-      expect(auctionBid.stdout).toContain('Usage: rare batch auction bid [options]');
+      expect(auctionBid.stdout).toContain('Usage: rare auction batch bid [options]');
       expect(auctionBid.stdout).toContain('--proof <path>');
       expect(auctionBid.stdout).toContain('--creator <address>');
       expect(auctionBid.stderr).toBe('');
@@ -604,7 +605,7 @@ describe('built CLI deterministic behavior', () => {
       expect(create.stdout).toContain('Usage: rare offer create [options]');
       expect(create.stdout).toContain('--contract <address>');
       expect(create.stdout).toContain('--token-id <id>');
-      expect(create.stdout).toContain('--amount <amount>');
+      expect(create.stdout).toContain('--price <amount>');
       expect(create.stdout).not.toContain('--collection <address>');
       expect(create.stderr).toBe('');
 
@@ -780,12 +781,12 @@ describe('built CLI deterministic behavior', () => {
   it('rejects malformed batch offer inputs before wallet setup', async () => {
     await withTempHome(async (home) => {
       const missingRoot = await runCli([
-        'batch',
         'offer',
+        'batch',
         'create',
-        '--amount',
+        '--price',
         '0.1',
-        '--expiry',
+        '--end-time',
         '1778500000',
       ], { home });
 
@@ -800,8 +801,8 @@ describe('built CLI deterministic behavior', () => {
       }), 'utf8');
 
       const badProof = await runCli([
-        'batch',
         'offer',
+        'batch',
         'accept',
         '--creator',
         '0x2222222222222222222222222222222222222222',
@@ -843,7 +844,7 @@ describe('built CLI deterministic behavior', () => {
 
       const mintHelp = await runCli(['listing', 'release', 'mint', '--help'], { home });
       expect(mintHelp.code).toBe(0);
-      expect(mintHelp.stdout).toContain('--quantity <number>');
+      expect(mintHelp.stdout).toContain('--amount <number>');
       expect(mintHelp.stdout).toContain('--proof <file>');
       expect(mintHelp.stdout).toContain('--chain-id <id>');
 
@@ -931,10 +932,10 @@ describe('built CLI deterministic behavior', () => {
 
   it('exposes the Sovereign collection create command help', async () => {
     await withTempHome(async (home) => {
-      const result = await runCli(['collection', 'create', 'sovereign', '--help'], { home });
+      const result = await runCli(['collection', 'deploy', 'sovereign', '--help'], { home });
 
       expect(result.code).toBe(0);
-      expect(result.stdout).toContain('Usage: rare collection create sovereign [options] <name> <symbol>');
+      expect(result.stdout).toContain('Usage: rare collection deploy sovereign [options] <name> <symbol>');
       expect(result.stdout).toContain('--contract-type <type>');
       expect(result.stdout).toContain('--max-tokens <number>');
       expect(result.stderr).toBe('');
@@ -943,10 +944,10 @@ describe('built CLI deterministic behavior', () => {
 
   it('exposes the Lazy Sovereign collection create command help', async () => {
     await withTempHome(async (home) => {
-      const result = await runCli(['collection', 'create', 'lazy-sovereign', '--help'], { home });
+      const result = await runCli(['collection', 'deploy', 'lazy-sovereign', '--help'], { home });
 
       expect(result.code).toBe(0);
-      expect(result.stdout).toContain('Usage: rare collection create lazy-sovereign [options] <name> <symbol>');
+      expect(result.stdout).toContain('Usage: rare collection deploy lazy-sovereign [options] <name> <symbol>');
       expect(result.stdout).toContain('--contract-type <type>');
       expect(result.stdout).toContain('--max-tokens <number>');
       expect(result.stderr).toBe('');
@@ -961,7 +962,7 @@ describe('built CLI deterministic behavior', () => {
       expect(result.stdout).toContain('Usage: rare collection mint-batch [options]');
       expect(result.stdout).toContain('--contract <address>');
       expect(result.stdout).toContain('--base-uri <uri>');
-      expect(result.stdout).toContain('--token-count <number>');
+      expect(result.stdout).toContain('--amount <number>');
       expect(result.stderr).toBe('');
     });
   });
@@ -974,7 +975,7 @@ describe('built CLI deterministic behavior', () => {
       expect(result.stdout).toContain('Usage: rare collection prepare-lazy-mint [options]');
       expect(result.stdout).toContain('--contract <address>');
       expect(result.stdout).toContain('--base-uri <uri>');
-      expect(result.stdout).toContain('--token-count <number>');
+      expect(result.stdout).toContain('--amount <number>');
       expect(result.stdout).toContain('--minter <address>');
       expect(result.stderr).toBe('');
     });
@@ -1010,7 +1011,7 @@ describe('built CLI deterministic behavior', () => {
         'not-an-address',
         '--base-uri',
         'ipfs://batch',
-        '--token-count',
+        '--amount',
         '2',
       ], { home });
 
@@ -1031,14 +1032,14 @@ describe('built CLI deterministic behavior', () => {
       const royalty = await runCli(['collection', 'royalty', 'status', '--help'], { home });
       expect(royalty.code).toBe(0);
       expect(royalty.stdout).toContain('Usage: rare collection royalty status [options]');
-      expect(royalty.stdout).toContain('--sale-price <raw>');
+      expect(royalty.stdout).toContain('--price <raw>');
       expect(royalty.stderr).toBe('');
 
       const registry = await runCli(['collection', 'royalty', 'registry', 'status', '--help'], { home });
       expect(registry.code).toBe(0);
       expect(registry.stdout).toContain('Usage: rare collection royalty registry status [options]');
       expect(registry.stdout).toContain('--registry <address>');
-      expect(registry.stdout).toContain('--sale-price <raw>');
+      expect(registry.stdout).toContain('--price <raw>');
       expect(registry.stderr).toBe('');
 
       const registrySet = await runCli([
@@ -1098,7 +1099,7 @@ describe('built CLI deterministic behavior', () => {
     await withTempHome(async (home) => {
       const result = await runCli([
         'collection',
-        'create',
+        'deploy',
         'sovereign',
         'Test',
         'TST',
@@ -1116,7 +1117,7 @@ describe('built CLI deterministic behavior', () => {
     await withTempHome(async (home) => {
       const result = await runCli([
         'collection',
-        'create',
+        'deploy',
         'lazy-sovereign',
         'Test',
         'TST',
@@ -1132,6 +1133,16 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 });
+
+function skipIfRareApiUnavailable<T extends { code: number | null; stderr: string }>(
+  ctx: TestContext,
+  result: T,
+): T {
+  if (result.code !== 0 && result.stderr.includes('"Status: 500"') && result.stderr.includes('"Path: /v1/nfts"')) {
+    ctx.skip('Rare API /v1/nfts returned 500.');
+  }
+  return result;
+}
 
 function isConfigWithSepoliaPrivateKey(value: unknown): value is {
   chains: { sepolia: { privateKey: string } };

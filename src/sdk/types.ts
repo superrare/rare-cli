@@ -101,7 +101,9 @@ export type CreateLazySovereignCollectionResult = {
 export type CollectionMintBatchParams = {
   contract: Address;
   baseUri: string;
-  tokenCount: IntegerInput;
+  amount?: IntegerInput;
+  /** @deprecated use amount */
+  tokenCount?: IntegerInput;
 }
 
 export type CollectionMintBatchResult = {
@@ -116,7 +118,9 @@ export type CollectionMintBatchResult = {
 export type CollectionPrepareLazyMintParams = {
   contract: Address;
   baseUri: string;
-  tokenCount: IntegerInput;
+  amount?: IntegerInput;
+  /** @deprecated use amount */
+  tokenCount?: IntegerInput;
   minter?: Address;
 }
 
@@ -141,6 +145,8 @@ export type CollectionTokenCreatorResult = {
 export type CollectionRoyaltyInfoParams = {
   contract: Address;
   tokenId: IntegerInput;
+  price?: IntegerInput;
+  /** @deprecated use price */
   salePrice?: IntegerInput;
 }
 
@@ -180,6 +186,8 @@ export type CollectionRoyaltyRegistryStatusParams = {
   registry?: Address;
   contract: Address;
   tokenId: IntegerInput;
+  price?: IntegerInput;
+  /** @deprecated use price */
   salePrice?: IntegerInput;
 }
 
@@ -301,11 +309,15 @@ export type MintToResult = {
 export type AuctionCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
-  startingPrice: AmountInput;
-  duration: IntegerInput;
+  price?: AmountInput;
+  endTime?: TimestampInput;
+  /** @deprecated use price */
+  startingPrice?: AmountInput;
+  /** @deprecated use endTime */
+  duration?: IntegerInput;
   currency?: Address;
   auctionType?: 'reserve' | 'scheduled';
-  startTime?: IntegerInput;
+  startTime?: TimestampInput;
   splitAddresses?: Address[];
   splitRatios?: number[];
   autoApprove?: boolean;
@@ -314,7 +326,9 @@ export type AuctionCreateParams = {
 export type AuctionBidParams = {
   contract: Address;
   tokenId: IntegerInput;
-  amount: AmountInput;
+  price?: AmountInput;
+  /** @deprecated use price */
+  amount?: AmountInput;
   currency?: Address;
 }
 
@@ -362,7 +376,9 @@ export type OfferCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
-  amount: AmountInput;
+  price?: AmountInput;
+  /** @deprecated use price */
+  amount?: AmountInput;
 }
 
 export type OfferCancelParams = {
@@ -375,7 +391,9 @@ export type OfferAcceptParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
-  amount: AmountInput;
+  price?: AmountInput;
+  /** @deprecated use price */
+  amount?: AmountInput;
   splitAddresses?: Address[];
   splitRatios?: number[];
 }
@@ -403,7 +421,7 @@ export type ListingCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
-  price: AmountInput;
+  price?: AmountInput;
   target?: Address;
   splitAddresses?: Address[];
   splitRatios?: number[];
@@ -420,7 +438,9 @@ export type ListingBuyParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
-  amount: AmountInput;
+  price?: AmountInput;
+  /** @deprecated use price */
+  amount?: AmountInput;
 }
 
 export type ListingStatusParams = {
@@ -497,13 +517,17 @@ export type BatchListingBuyParams = {
   tokenId?: IntegerInput;
   creator: Address;
   currency: Address;
-  amount: AmountInput;
+  price: AmountInput;
+  /** @deprecated use price */
+  amount?: AmountInput;
 }
 
 export type BatchListingSetAllowListParams = {
   root: `0x${string}`;
   allowListRoot: `0x${string}`;
-  endTimestamp: IntegerInput;
+  endTime?: TimestampInput;
+  /** @deprecated use endTime */
+  endTimestamp?: IntegerInput;
 }
 
 export type BatchListingStatusParams = {
@@ -534,7 +558,9 @@ export type ReleaseConfigureParams = {
   currency?: Address;
   price: AmountInput;
   startTime?: TimestampInput;
-  maxMints: IntegerInput;
+  amount?: IntegerInput;
+  /** @deprecated use amount */
+  maxMints?: IntegerInput;
   splitAddresses?: Address[];
   splitRatios?: number[];
 }
@@ -552,6 +578,8 @@ export type ReleaseConfigureResult = {
 
 export type ReleaseMintDirectSaleParams = {
   contract: Address;
+  amount?: IntegerInput;
+  /** @deprecated use amount */
   quantity?: IntegerInput;
   currency?: Address;
   price?: AmountInput;
@@ -612,7 +640,9 @@ export type ReleaseSetAllowlistConfigParams = {
   contract: Address;
   root?: Hash;
   artifact?: ReleaseAllowlistArtifact;
-  endTimestamp: TimestampInput;
+  endTime?: TimestampInput;
+  /** @deprecated use endTime */
+  endTimestamp?: TimestampInput;
 }
 
 export type ReleaseSetAllowlistConfigResult = {
@@ -621,7 +651,9 @@ export type ReleaseSetAllowlistConfigResult = {
 
 export type ReleaseSetLimitParams = {
   contract: Address;
-  limit: IntegerInput;
+  amount?: IntegerInput;
+  /** @deprecated use amount */
+  limit?: IntegerInput;
 }
 
 export type ReleaseSetLimitResult = {
@@ -667,9 +699,13 @@ export type ReleaseStatus = {
 export type BatchOfferCreateParams = {
   root?: Hex;
   artifact?: BatchTokenListArtifact;
-  amount: AmountInput;
+  price?: AmountInput;
+  /** @deprecated use price */
+  amount?: AmountInput;
   currency?: Address;
-  expiry: IntegerInput;
+  endTime?: TimestampInput;
+  /** @deprecated use endTime */
+  expiry?: IntegerInput;
 }
 
 export type BatchOfferCreateResult = {
@@ -745,9 +781,13 @@ export type BatchOfferStatus = {
 export type BatchAuctionCreateParams = {
   root?: Hex;
   artifact?: BatchTokenListArtifact;
-  reserveAmount: AmountInput;
+  price?: AmountInput;
+  /** @deprecated use price */
+  reserveAmount?: AmountInput;
   currency?: Address;
-  duration: IntegerInput;
+  endTime?: TimestampInput;
+  /** @deprecated use endTime */
+  duration?: IntegerInput;
   splitAddresses?: Address[];
   splitRatios?: number[];
   autoApprove?: boolean;
@@ -783,7 +823,9 @@ export type BatchAuctionBidParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
-  amount: AmountInput;
+  price?: AmountInput;
+  /** @deprecated use price */
+  amount?: AmountInput;
   autoApprove?: boolean;
 }
 
@@ -967,8 +1009,12 @@ export type SetLiquidEditionRenderContractResult = {
 
 export type RouterBuyParams = {
   token: Address;
-  ethAmount: AmountInput;
-  minTokensOut: AmountInput;
+  ethAmountIn?: AmountInput;
+  minAmountOut?: AmountInput;
+  /** @deprecated use ethAmountIn */
+  ethAmount?: AmountInput;
+  /** @deprecated use minAmountOut */
+  minTokensOut?: AmountInput;
   commands: `0x${string}`;
   inputs: readonly `0x${string}`[];
   recipient?: Address;
@@ -977,8 +1023,12 @@ export type RouterBuyParams = {
 
 export type RouterSellParams = {
   token: Address;
-  tokenAmount: AmountInput;
-  minEthOut: AmountInput;
+  amountIn?: AmountInput;
+  minAmountOut?: AmountInput;
+  /** @deprecated use amountIn */
+  tokenAmount?: AmountInput;
+  /** @deprecated use minAmountOut */
+  minEthOut?: AmountInput;
   commands: `0x${string}`;
   inputs: readonly `0x${string}`[];
   recipient?: Address;
@@ -997,7 +1047,11 @@ export type RouterSwapParams = {
 }
 
 export type BuyRareParams = {
-  ethAmount: AmountInput;
+  ethAmountIn?: AmountInput;
+  minAmountOut?: AmountInput;
+  /** @deprecated use ethAmountIn */
+  ethAmount?: AmountInput;
+  /** @deprecated use minAmountOut */
   minRareOut?: AmountInput;
   slippageBps?: IntegerInput;
   recipient?: Address;
@@ -1006,7 +1060,11 @@ export type BuyRareParams = {
 
 export type BuyTokenParams = {
   token: Address;
-  ethAmount: AmountInput;
+  ethAmountIn?: AmountInput;
+  minAmountOut?: AmountInput;
+  /** @deprecated use ethAmountIn */
+  ethAmount?: AmountInput;
+  /** @deprecated use minAmountOut */
   minTokensOut?: AmountInput;
   slippageBps?: IntegerInput;
   recipient?: Address;
@@ -1015,7 +1073,11 @@ export type BuyTokenParams = {
 
 export type SellTokenParams = {
   token: Address;
-  tokenAmount: AmountInput;
+  amountIn?: AmountInput;
+  minAmountOut?: AmountInput;
+  /** @deprecated use amountIn */
+  tokenAmount?: AmountInput;
+  /** @deprecated use minAmountOut */
   minEthOut?: AmountInput;
   slippageBps?: IntegerInput;
   recipient?: Address;

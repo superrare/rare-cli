@@ -1,6 +1,13 @@
 import { isAddressEqual, zeroAddress, type Address, type Hex } from 'viem';
 import type { IntegerInput } from './types.js';
-import { toNonNegativeInteger, toPositiveInteger, toSafeIntegerNumber } from './helpers.js';
+import {
+  requireInput,
+  resolveAlias,
+  resolveAliasWithField,
+  toNonNegativeInteger,
+  toPositiveInteger,
+  toSafeIntegerNumber,
+} from './helpers.js';
 
 export const sovereignCollectionContractTypes = [
   'standard',
@@ -67,7 +74,8 @@ export type CreateLazySovereignCollectionWrite = {
 export type PlanCollectionMintBatchParams = {
   contract: Address;
   baseUri: string;
-  tokenCount: IntegerInput;
+  amount?: IntegerInput;
+  tokenCount?: IntegerInput;
 }
 
 export type CollectionMintBatchPlan = {
@@ -79,7 +87,8 @@ export type CollectionMintBatchPlan = {
 export type PlanCollectionPrepareLazyMintParams = {
   contract: Address;
   baseUri: string;
-  tokenCount: IntegerInput;
+  amount?: IntegerInput;
+  tokenCount?: IntegerInput;
   minter?: Address;
 }
 
@@ -111,6 +120,7 @@ export type CollectionTokenPlan = {
 }
 
 export type PlanCollectionRoyaltyInfoParams = {
+  price?: IntegerInput;
   salePrice?: IntegerInput;
 } & PlanCollectionTokenParams
 
@@ -138,6 +148,7 @@ export type CollectionTokenReceiverPlan = {
 
 export type PlanCollectionRoyaltyRegistryStatusParams = {
   registry?: Address;
+  price?: IntegerInput;
   salePrice?: IntegerInput;
 } & PlanCollectionTokenParams
 
@@ -392,20 +403,24 @@ export function buildCreateLazySovereignCollectionWrite(
 export function planCollectionMintBatch(
   params: PlanCollectionMintBatchParams,
 ): CollectionMintBatchPlan {
+  const resolvedAmount = resolveAliasWithField(params.amount, params.tokenCount, 'amount', 'tokenCount');
+  const amount = requireInput(resolvedAmount.value, resolvedAmount.field);
   return {
     contract: params.contract,
     baseUri: params.baseUri,
-    tokenCount: toPositiveInteger(params.tokenCount, 'tokenCount'),
+    tokenCount: toPositiveInteger(amount, resolvedAmount.field),
   };
 }
 
 export function planCollectionPrepareLazyMint(
   params: PlanCollectionPrepareLazyMintParams,
 ): CollectionPrepareLazyMintPlan {
+  const resolvedAmount = resolveAliasWithField(params.amount, params.tokenCount, 'amount', 'tokenCount');
+  const amount = requireInput(resolvedAmount.value, resolvedAmount.field);
   const basePlan = {
     contract: params.contract,
     baseUri: params.baseUri,
-    tokenCount: toPositiveInteger(params.tokenCount, 'tokenCount'),
+    tokenCount: toPositiveInteger(amount, resolvedAmount.field),
   };
 
   if (params.minter === undefined) {
@@ -455,11 +470,12 @@ export function planCollectionToken(
 export function planCollectionRoyaltyInfo(
   params: PlanCollectionRoyaltyInfoParams,
 ): CollectionRoyaltyInfoPlan {
+  const price = resolveAlias(params.price, params.salePrice, 'price', 'salePrice');
   return {
     ...planCollectionToken(params),
-    salePrice: params.salePrice === undefined
+    salePrice: price === undefined
       ? defaultRoyaltyInfoSalePrice
-      : toNonNegativeInteger(params.salePrice, 'salePrice'),
+      : toNonNegativeInteger(price, 'price'),
   };
 }
 
@@ -484,12 +500,13 @@ export function planCollectionTokenReceiver(
 export function planCollectionRoyaltyRegistryStatus(
   params: PlanCollectionRoyaltyRegistryStatusParams,
 ): CollectionRoyaltyRegistryStatusPlan {
+  const price = resolveAlias(params.price, params.salePrice, 'price', 'salePrice');
   return {
     ...planCollectionToken(params),
     registry: params.registry,
-    salePrice: params.salePrice === undefined
+    salePrice: price === undefined
       ? defaultRoyaltyInfoSalePrice
-      : toNonNegativeInteger(params.salePrice, 'salePrice'),
+      : toNonNegativeInteger(price, 'price'),
   };
 }
 

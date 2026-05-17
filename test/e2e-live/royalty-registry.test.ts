@@ -3,10 +3,8 @@ import { describeLive, expectTx, jsonCommand, step } from './live-helpers.js';
 import {
   cleanupLiveCliFixture,
   createLiveCliFixture,
-  hasRoyaltyRegistryStatusFixture,
   readProtocolRoyaltyRegistry,
   readRoyaltyRegistryReceiverOverride,
-  royaltyRegistryStatusFixture,
   type CollectionRoyaltyRegistryReceiverOverrideResult,
   type CollectionRoyaltyRegistryStatusResult,
   type LiveCliFixture,
@@ -14,7 +12,10 @@ import {
 } from './helpers/live-cli-fixture.js';
 
 const live = new LiveCliFixtureRef<LiveCliFixture>('Live royalty registry CLI fixture has not been initialized.');
-const itRoyaltyRegistryStatus = hasRoyaltyRegistryStatusFixture() ? it : it.skip;
+const royaltyRegistryStatusFixture = {
+  contract: '0xECd22766A90E83474Ef13a1B38D7Ffa6A1d64c57',
+  tokenId: '1',
+};
 
 describeLive('live royalty registry CLI writes', () => {
   beforeAll(async () => {
@@ -25,9 +26,8 @@ describeLive('live royalty registry CLI writes', () => {
     await cleanupLiveCliFixture(live.optionalValue);
   });
 
-  itRoyaltyRegistryStatus('reads legacy royalty registry status for the configured token fixture', async () => {
+  it('reads legacy royalty registry status for the configured token fixture', async () => {
     const fixture = live.value;
-    const tokenFixture = royaltyRegistryStatusFixture();
     const registry = await readProtocolRoyaltyRegistry(fixture);
     const status = await step('read legacy royalty registry status', () =>
       jsonCommand<CollectionRoyaltyRegistryStatusResult>(fixture.sellerHome, [
@@ -36,9 +36,9 @@ describeLive('live royalty registry CLI writes', () => {
         'registry',
         'status',
         '--contract',
-        tokenFixture.contract,
+        royaltyRegistryStatusFixture.contract,
         '--token-id',
-        tokenFixture.tokenId,
+        royaltyRegistryStatusFixture.tokenId,
         '--chain',
         fixture.chain,
       ]),
@@ -46,8 +46,8 @@ describeLive('live royalty registry CLI writes', () => {
 
     expect(status.chain).toBe(fixture.chain);
     expect(status.registry.toLowerCase()).toBe(registry.toLowerCase());
-    expect(status.contract.toLowerCase()).toBe(tokenFixture.contract.toLowerCase());
-    expect(status.tokenId).toBe(tokenFixture.tokenId);
+    expect(status.contract.toLowerCase()).toBe(royaltyRegistryStatusFixture.contract.toLowerCase());
+    expect(status.tokenId).toBe(royaltyRegistryStatusFixture.tokenId);
     expect(status.salePrice).toBe('10000');
     expect(status.creatorRegistry).toMatch(/^0x[0-9a-fA-F]{40}$/);
     expect(status.receiver).toMatch(/^0x[0-9a-fA-F]{40}$/);
