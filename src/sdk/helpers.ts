@@ -12,7 +12,7 @@ import {
 import { auctionAbi } from '../contracts/abis/auction.js';
 import { chainIds, ETH_ADDRESS, resolveCurrency, supportedChains, type SupportedChain } from '../contracts/addresses.js';
 import type { UniswapTransactionRequest } from '../swap/uniswap-api.js';
-import type { RareClientConfig, IntegerInput, AmountInput, WalletAccount, TransactionResult } from './types.js';
+import type { RareClientConfig, IntegerInput, AmountInput, TimestampInput, WalletAccount, TransactionResult } from './types.js';
 
 const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
@@ -191,6 +191,60 @@ export function toPositiveInteger(value: IntegerInput, field: string): bigint {
     throw new Error(`${field} must be greater than 0.`);
   }
   return normalized;
+}
+
+export function requireInput<T>(value: T | undefined, field: string): T {
+  if (value === undefined) {
+    throw new Error(`${field} is required.`);
+  }
+  return value;
+}
+
+export function resolveAlias<T>(
+  primary: T | undefined,
+  legacy: T | undefined,
+  primaryField: string,
+  legacyField: string,
+): T | undefined {
+  return resolveAliasWithField(primary, legacy, primaryField, legacyField).value;
+}
+
+export function resolveAliasWithField<T>(
+  primary: T | undefined,
+  legacy: T | undefined,
+  primaryField: string,
+  legacyField: string,
+): { value: T | undefined; field: string } {
+  if (primary !== undefined && legacy !== undefined && primary !== legacy) {
+    throw new Error(`${primaryField} and deprecated ${legacyField} cannot both be provided.`);
+  }
+  if (primary !== undefined) {
+    return { value: primary, field: primaryField };
+  }
+  if (legacy !== undefined) {
+    return { value: legacy, field: legacyField };
+  }
+  return { value: undefined, field: primaryField };
+}
+
+export function toUnixTimestamp(value: TimestampInput, field: string): bigint {
+  if (value instanceof Date) {
+    const millis = value.getTime();
+    if (!Number.isFinite(millis)) {
+      throw new Error(`${field} must be a valid date.`);
+    }
+    return BigInt(Math.floor(millis / 1000));
+  }
+
+  if (typeof value === 'string' && /[T:Z+-]/.test(value)) {
+    const millis = Date.parse(value);
+    if (Number.isNaN(millis)) {
+      throw new Error(`${field} must be a unix timestamp or ISO date.`);
+    }
+    return BigInt(Math.floor(millis / 1000));
+  }
+
+  return toPositiveInteger(value, field);
 }
 
 export function toWei(value: AmountInput): bigint {

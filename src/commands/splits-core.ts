@@ -13,6 +13,9 @@ export type SplitOptions = {
 
 export function collectSplit(value: string, previous: SplitAccumulator | undefined): SplitAccumulator {
   const acc = previous ?? { addresses: [], ratios: [] };
+  if (acc.addresses.length >= 5) {
+    throw new Error('--split can be provided at most 5 times.');
+  }
   const idx = value.indexOf('=');
   if (idx <= 0 || idx === value.length - 1) {
     throw new Error(`Invalid --split format: "${value}". Expected ADDRESS=RATIO (e.g. 0xabc...=70).`);
@@ -29,6 +32,9 @@ export function collectSplit(value: string, previous: SplitAccumulator | undefin
 export function finalizeSplits(acc: SplitAccumulator | undefined): SplitOptions | undefined {
   if (acc === undefined || acc.addresses.length === 0) {
     return undefined;
+  }
+  if (acc.addresses.length > 5) {
+    throw new Error('--split can be provided at most 5 times.');
   }
 
   return { addresses: acc.addresses, ratios: acc.ratios };

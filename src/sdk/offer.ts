@@ -12,7 +12,9 @@ import {
   approvalAbi,
   preparePayment,
   requireWallet,
+  requireInput,
   resolveCurrencyDecimals,
+  resolveAlias,
   stringifyAmountInput,
   waitForApproval,
 } from './helpers.js';
@@ -62,10 +64,12 @@ export function createOfferNamespace(
     async create(params): ReturnType<RareClient['offer']['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency ?? ETH_ADDRESS;
-      const amount = typeof params.amount === 'bigint'
-        ? params.amount
-        : parseUnits(stringifyAmountInput(params.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
-      const plan = planOfferCreate({ ...params, currency, amount });
+      const price = requireInput(resolveAlias(params.price, params.amount, 'price', 'amount'), 'price');
+      const amount = typeof price === 'bigint'
+        ? price
+        : parseUnits(stringifyAmountInput(price, 'price'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const { amount: _deprecatedAmount, ...canonicalParams } = params;
+      const plan = planOfferCreate({ ...canonicalParams, price: amount, currency });
 
       const value = await preparePayment({
         publicClient, walletClient, account, accountAddress,
@@ -106,10 +110,12 @@ export function createOfferNamespace(
     async accept(params): ReturnType<RareClient['offer']['accept']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency ?? ETH_ADDRESS;
-      const amount = typeof params.amount === 'bigint'
-        ? params.amount
-        : parseUnits(stringifyAmountInput(params.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
-      const plan = planOfferAccept({ ...params, currency, amount }, accountAddress);
+      const price = requireInput(resolveAlias(params.price, params.amount, 'price', 'amount'), 'price');
+      const amount = typeof price === 'bigint'
+        ? price
+        : parseUnits(stringifyAmountInput(price, 'price'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const { amount: _deprecatedAmount, ...canonicalParams } = params;
+      const plan = planOfferAccept({ ...canonicalParams, price: amount, currency }, accountAddress);
 
       await ensureNftApproved(
         publicClient, walletClient, account, accountAddress,

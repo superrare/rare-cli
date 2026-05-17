@@ -12,8 +12,10 @@ import { ETH_ADDRESS, chainIds, requireContractAddress, type SupportedChain } fr
 import {
   approvalAbi,
   preparePaymentAmountForSpender,
+  requireInput,
   requireWallet,
   resolveCurrencyDecimals,
+  resolveAlias,
   stringifyAmountInput,
   waitForApproval,
 } from './helpers.js';
@@ -46,10 +48,12 @@ export function createBatchAuctionNamespace(
       const { walletClient, account, accountAddress } = requireWallet(config);
       const resolvedParams = await resolveBatchAuctionCreateParams(config, params);
       const currency = resolvedParams.currency ?? ETH_ADDRESS;
-      const reserveAmount = typeof resolvedParams.reserveAmount === 'bigint'
-        ? resolvedParams.reserveAmount
-        : parseUnits(stringifyAmountInput(resolvedParams.reserveAmount, 'reserveAmount'), await resolveCurrencyDecimals(publicClient, chain, currency));
-      const plan = planBatchAuctionCreate({ ...resolvedParams, currency, reserveAmount }, accountAddress);
+      const price = requireInput(resolveAlias(resolvedParams.price, resolvedParams.reserveAmount, 'price', 'reserveAmount'), 'price');
+      const reserveAmount = typeof price === 'bigint'
+        ? price
+        : parseUnits(stringifyAmountInput(price, 'price'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const { reserveAmount: _deprecatedReserveAmount, ...canonicalParams } = resolvedParams;
+      const plan = planBatchAuctionCreate({ ...canonicalParams, price: reserveAmount, currency }, accountAddress);
       const erc721ApprovalManager = plan.approvalContracts.length === 0
         ? undefined
         : requireContractAddress(chain, 'erc721ApprovalManager');
@@ -142,10 +146,12 @@ export function createBatchAuctionNamespace(
       const { walletClient, account, accountAddress } = requireWallet(config);
       const resolvedParams = await resolveBatchAuctionBidParams(config, chainIds[chain], params);
       const currency = resolvedParams.currency ?? ETH_ADDRESS;
-      const amount = typeof resolvedParams.amount === 'bigint'
-        ? resolvedParams.amount
-        : parseUnits(stringifyAmountInput(resolvedParams.amount, 'amount'), await resolveCurrencyDecimals(publicClient, chain, currency));
-      const plan = planBatchAuctionBid({ ...resolvedParams, currency, amount });
+      const price = requireInput(resolveAlias(resolvedParams.price, resolvedParams.amount, 'price', 'amount'), 'price');
+      const amount = typeof price === 'bigint'
+        ? price
+        : parseUnits(stringifyAmountInput(price, 'price'), await resolveCurrencyDecimals(publicClient, chain, currency));
+      const { amount: _deprecatedAmount, ...canonicalParams } = resolvedParams;
+      const plan = planBatchAuctionBid({ ...canonicalParams, currency, price: amount });
       const erc20ApprovalManager = isAddressEqual(plan.currency, ETH_ADDRESS)
         ? batchAuctionHouse
         : requireContractAddress(chain, 'erc20ApprovalManager');

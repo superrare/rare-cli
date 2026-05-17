@@ -10,17 +10,18 @@ import { output, log } from '../output.js';
 import { createListingListCommand } from './account-market-list.js';
 import { resolveCurrencyDecimals } from '../sdk/helpers.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
-import { batchCommand } from './batch.js';
+import { listingBatchCommand } from './batch.js';
 import { releaseCommand } from './release.js';
 
 type ListingCreateOptions = {
   contract?: string;
   tokenId?: string;
   price?: string;
+  amount?: string;
   currency?: string;
   target?: string;
   split?: SplitAccumulator;
-  autoApprove?: boolean;
+  yes?: boolean;
   chain?: string;
   chainId?: string;
 };
@@ -36,7 +37,8 @@ type ListingCancelOptions = {
 type ListingBuyOptions = {
   contract?: string;
   tokenId: string;
-  amount: string;
+  price?: string;
+  amount?: string;
   currency?: string;
   chain?: string;
   chainId?: string;
@@ -54,7 +56,7 @@ export function listingCommand(): Command {
   const cmd = new Command('listing');
   cmd.description('Listing subcommands (list, create, cancel, buy, status, batch, release)');
   cmd.addCommand(createListingListCommand());
-  cmd.addCommand(batchCommand());
+  cmd.addCommand(listingBatchCommand());
   cmd.addCommand(releaseCommand());
 
   cmd
@@ -62,7 +64,8 @@ export function listingCommand(): Command {
     .description('Create a token-specific listing')
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
-    .requiredOption('--price <amount>', 'listing price in ETH or token units')
+    .option('--price <amount>', 'listing price in ETH or token units')
+    .option('--amount <amount>', 'alias for --price')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--target <address>', 'target buyer address (defaults to public listing)')
     .option(
@@ -70,13 +73,14 @@ export function listingCommand(): Command {
       'payout split recipient (repeatable). Format: 0xADDR=RATIO. Ratios must sum to 100. If omitted, 100% goes to the connected wallet.',
       collectSplit,
     )
-    .option('--no-auto-approve', 'do not auto-approve required NFT transfer permissions')
+    .option('--yes', 'yes to all prompts, including approval and transaction submission')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ListingCreateOptions): Promise<void> => {
       try {
         requireTokenScopeOptions(opts, 'create');
-        if (!hasOption(opts.price)) {
+        const price = opts.price ?? opts.amount;
+        if (!hasOption(price)) {
           throw new Error('rare listing create requires --price.');
         }
         const chain = getActiveChain(opts.chain, opts.chainId);
@@ -93,7 +97,7 @@ export function listingCommand(): Command {
         log(`  Marketplace contract: ${rare.contracts.auction}`);
         log(`  NFT contract: ${contract}`);
         log(`  Token ID: ${opts.tokenId}`);
-        log(`  Price: ${opts.price} ${isEth ? 'ETH' : currency}`);
+        log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
         log(`  Target: ${isAddressEqual(target, PUBLIC_LISTING_TARGET) ? 'public' : target}`);
         if (splits) {
           log('  Splits:');
@@ -105,12 +109,12 @@ export function listingCommand(): Command {
         const result = await rare.listing.create({
           contract,
           tokenId: opts.tokenId,
-          price: opts.price,
+          price,
           currency,
           target,
           splitAddresses: splits?.addresses,
           splitRatios: splits?.ratios,
-          autoApprove: opts.autoApprove,
+          autoApprove: opts.yes,
         });
 
         output(
@@ -175,7 +179,8 @@ export function listingCommand(): Command {
     .description('Buy a token-specific listing')
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID to buy')
-    .requiredOption('--amount <amount>', 'purchase amount in ETH or token units')
+    .option('--price <amount>', 'purchase price in ETH or token units')
+    .option('--amount <amount>', 'alias for --price')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
@@ -190,18 +195,22 @@ export function listingCommand(): Command {
         if (!hasOption(opts.contract)) {
           throw new Error('rare listing buy requires --contract.');
         }
+        const price = opts.price ?? opts.amount;
+        if (!hasOption(price)) {
+          throw new Error('rare listing buy requires --price.');
+        }
         const contract = parseAddress(opts.contract, '--contract');
 
         log(`Buying token on ${chain}...`);
         log(`  Marketplace contract: ${rare.contracts.auction}`);
         log(`  NFT contract: ${contract}`);
         log(`  Token ID: ${opts.tokenId}`);
-        log(`  Amount: ${opts.amount} ${isEth ? 'ETH' : currency}`);
+        log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
 
         const result = await rare.listing.buy({
           contract,
           tokenId: opts.tokenId,
-          amount: opts.amount,
+          price,
           currency,
         });
 

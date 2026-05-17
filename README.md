@@ -420,21 +420,21 @@ Root artifacts are produced outside the CLI. Token sets and allowlists must each
 ```bash
 # Build a proof artifact for one token in the root
 rare utils merkle proof \
-  --root ./root.json \
+  --input ./root.json \
   --contract 0x... \
   --token-id 1 \
   --output ./proof.json
 
 # If the root has an allowlist, include the buyer when generating the proof
 rare utils merkle proof \
-  --root ./root.json \
+  --input ./root.json \
   --contract 0x... \
   --token-id 1 \
   --buyer 0x... \
   --output ./proof.json
 
 # Register the batch listing from the root artifact
-rare listing batch create --root ./root.json --yes
+rare listing batch create --input ./root.json --yes
 
 # Buy one token using a proof artifact
 rare listing batch buy \

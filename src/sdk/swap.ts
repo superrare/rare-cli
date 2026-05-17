@@ -17,7 +17,9 @@ import {
   getConfiguredAccountAddress,
   getTokenDecimals,
   requireConfiguredAddress,
+  requireInput,
   requireWallet,
+  resolveAlias,
   resolveDeadline,
   sendPreparedTransaction,
   toSafeIntegerNumber,
@@ -40,10 +42,12 @@ import {
   resolveSlippageBps,
 } from '../swap/trade-core.js';
 import type {
+  AmountInput,
   BuyRareParams,
   BuyRareQuote,
   BuyRareResult,
   BuyTokenParams,
+  IntegerInput,
   RareClient,
   SellTokenParams,
   TokenTradeResult,
@@ -55,6 +59,26 @@ import type {
 type TokenTradeDirection = 'buy' | 'sell';
 type LocalTokenTradeQuote = Extract<TokenTradeQuote, { execution: 'liquid-router' }>;
 type UniswapTokenTradeQuote = Extract<TokenTradeQuote, { execution: 'uniswap-api' }>;
+
+type LocalBuyTradeParams = {
+  direction: 'buy';
+  token: Address;
+  ethAmount: AmountInput;
+  minTokensOut?: AmountInput;
+  slippageBps?: IntegerInput;
+  recipient?: Address;
+};
+
+type LocalSellTradeParams = {
+  direction: 'sell';
+  token: Address;
+  tokenAmount: AmountInput;
+  minEthOut?: AmountInput;
+  slippageBps?: IntegerInput;
+  recipient?: Address;
+};
+
+type LocalTradeParams = LocalBuyTradeParams | LocalSellTradeParams;
 
 type LocalTokenTradeQuoteDetails = {
   kind: 'local';
@@ -107,9 +131,7 @@ async function buildLocalTokenTradeQuote(
   publicClient: RareClientConfig['publicClient'],
   chain: SupportedChain,
   addresses: { v4Quoter?: Address },
-  params:
-    | ({ direction: 'buy' } & Pick<BuyTokenParams, 'token' | 'ethAmount' | 'minTokensOut' | 'slippageBps'>)
-    | ({ direction: 'sell' } & Pick<SellTokenParams, 'token' | 'tokenAmount' | 'minEthOut' | 'slippageBps'>),
+  params: LocalTradeParams,
 ): Promise<LocalTokenTradeQuoteDetails | null> {
   try {
     const route = await resolveCanonicalEthTradeRoute(publicClient, chain, params.token, params.direction);
@@ -162,9 +184,7 @@ async function buildUniswapFallbackTradeQuote(
   chainId: number,
   token: Address,
   accountAddress: Address,
-  params:
-    | ({ direction: 'buy' } & Pick<BuyTokenParams, 'ethAmount' | 'minTokensOut' | 'slippageBps' | 'recipient'>)
-    | ({ direction: 'sell' } & Pick<SellTokenParams, 'tokenAmount' | 'minEthOut' | 'slippageBps' | 'recipient'>),
+  params: LocalTradeParams,
 ): Promise<UniswapTokenTradeQuoteDetails> {
   assertRecipientSupportedForUniswapFallback(params.recipient, accountAddress);
 
@@ -258,9 +278,7 @@ async function buildTokenTradeQuote(
   chainId: number,
   addresses: { v4Quoter?: Address },
   accountAddress: Address | undefined,
-  params:
-    | ({ direction: 'buy' } & Pick<BuyTokenParams, 'token' | 'ethAmount' | 'minTokensOut' | 'slippageBps' | 'recipient'>)
-    | ({ direction: 'sell' } & Pick<SellTokenParams, 'token' | 'tokenAmount' | 'minEthOut' | 'slippageBps' | 'recipient'>),
+  params: LocalTradeParams,
 ): Promise<TokenTradeQuoteDetails> {
   const localQuote = await buildLocalTokenTradeQuote(publicClient, chain, addresses, params);
   if (localQuote) {
@@ -278,14 +296,15 @@ async function buildBuyRareQuote(
   publicClient: RareClientConfig['publicClient'],
   chain: SupportedChain,
   addresses: { v4Quoter?: Address },
-  params: Pick<BuyRareParams, 'ethAmount' | 'minRareOut' | 'slippageBps'>,
+  params: Pick<BuyRareParams, 'ethAmountIn' | 'ethAmount' | 'minAmountOut' | 'minRareOut' | 'slippageBps'>,
 ): Promise<BuyRareQuote> {
   const rareAddress = getRareAddress(chain);
+  const ethAmountIn = requireInput(resolveAlias(params.ethAmountIn, params.ethAmount, 'ethAmountIn', 'ethAmount'), 'ethAmountIn');
   const tokenQuote = await buildLocalTokenTradeQuote(publicClient, chain, addresses, {
     direction: 'buy',
     token: rareAddress,
-    ethAmount: params.ethAmount,
-    minTokensOut: params.minRareOut,
+    ethAmount: ethAmountIn,
+    minTokensOut: resolveAlias(params.minAmountOut, params.minRareOut, 'minAmountOut', 'minRareOut'),
     slippageBps: params.slippageBps,
   });
 
@@ -311,8 +330,10 @@ export function createSwapNamespace(
       validateRouterPayload(params.commands, params.inputs);
 
       const recipient = params.recipient ?? accountAddress;
-      const ethAmount = toWei(params.ethAmount);
-      const minTokensOut = await toTokenAmount(publicClient, params.token, params.minTokensOut, 'minTokensOut');
+      const ethAmountIn = requireInput(resolveAlias(params.ethAmountIn, params.ethAmount, 'ethAmountIn', 'ethAmount'), 'ethAmountIn');
+      const minAmountOutInput = requireInput(resolveAlias(params.minAmountOut, params.minTokensOut, 'minAmountOut', 'minTokensOut'), 'minAmountOut');
+      const ethAmount = toWei(ethAmountIn);
+      const minTokensOut = await toTokenAmount(publicClient, params.token, minAmountOutInput, 'minAmountOut');
       const txHash = await walletClient.writeContract({
         address: router,
         abi: liquidRouterAbi,
@@ -332,8 +353,10 @@ export function createSwapNamespace(
       const router = requireConfiguredAddress(addresses.swapRouter, 'Liquid router', chain);
       validateRouterPayload(params.commands, params.inputs);
 
-      const tokenAmount = await toTokenAmount(publicClient, params.token, params.tokenAmount, 'tokenAmount');
-      const minEthOut = toWei(params.minEthOut);
+      const amountIn = requireInput(resolveAlias(params.amountIn, params.tokenAmount, 'amountIn', 'tokenAmount'), 'amountIn');
+      const minAmountOutInput = requireInput(resolveAlias(params.minAmountOut, params.minEthOut, 'minAmountOut', 'minEthOut'), 'minAmountOut');
+      const tokenAmount = await toTokenAmount(publicClient, params.token, amountIn, 'amountIn');
+      const minEthOut = toWei(minAmountOutInput);
 
       await ensureTokenAllowance(publicClient, walletClient, account, accountAddress, params.token, router, tokenAmount);
 
@@ -403,8 +426,8 @@ export function createSwapNamespace(
         {
           direction: 'buy',
           token: params.token,
-          ethAmount: params.ethAmount,
-          minTokensOut: params.minTokensOut,
+          ethAmount: requireInput(resolveAlias(params.ethAmountIn, params.ethAmount, 'ethAmountIn', 'ethAmount'), 'ethAmountIn'),
+          minTokensOut: resolveAlias(params.minAmountOut, params.minTokensOut, 'minAmountOut', 'minTokensOut'),
           slippageBps: params.slippageBps,
           recipient: params.recipient,
         },
@@ -417,8 +440,8 @@ export function createSwapNamespace(
       const quoteDetails = await buildTokenTradeQuote(publicClient, chain, chainId, addresses, accountAddress, {
         direction: 'buy',
         token: params.token,
-        ethAmount: params.ethAmount,
-        minTokensOut: params.minTokensOut,
+        ethAmount: requireInput(resolveAlias(params.ethAmountIn, params.ethAmount, 'ethAmountIn', 'ethAmount'), 'ethAmountIn'),
+        minTokensOut: resolveAlias(params.minAmountOut, params.minTokensOut, 'minAmountOut', 'minTokensOut'),
         slippageBps: params.slippageBps,
         recipient: params.recipient,
       });
@@ -480,8 +503,8 @@ export function createSwapNamespace(
         {
           direction: 'sell',
           token: params.token,
-          tokenAmount: params.tokenAmount,
-          minEthOut: params.minEthOut,
+          tokenAmount: requireInput(resolveAlias(params.amountIn, params.tokenAmount, 'amountIn', 'tokenAmount'), 'amountIn'),
+          minEthOut: resolveAlias(params.minAmountOut, params.minEthOut, 'minAmountOut', 'minEthOut'),
           slippageBps: params.slippageBps,
           recipient: params.recipient,
         },
@@ -494,8 +517,8 @@ export function createSwapNamespace(
       const quoteDetails = await buildTokenTradeQuote(publicClient, chain, chainId, addresses, accountAddress, {
         direction: 'sell',
         token: params.token,
-        tokenAmount: params.tokenAmount,
-        minEthOut: params.minEthOut,
+        tokenAmount: requireInput(resolveAlias(params.amountIn, params.tokenAmount, 'amountIn', 'tokenAmount'), 'amountIn'),
+        minEthOut: resolveAlias(params.minAmountOut, params.minEthOut, 'minAmountOut', 'minEthOut'),
         slippageBps: params.slippageBps,
         recipient: params.recipient,
       });
@@ -503,7 +526,8 @@ export function createSwapNamespace(
       if (quoteDetails.kind === 'local') {
         const router = requireConfiguredAddress(addresses.swapRouter, 'Liquid router', chain);
 
-        const tokenAmount = await toTokenAmount(publicClient, params.token, params.tokenAmount, 'tokenAmount');
+        const amountIn = requireInput(resolveAlias(params.amountIn, params.tokenAmount, 'amountIn', 'tokenAmount'), 'amountIn');
+        const tokenAmount = await toTokenAmount(publicClient, params.token, amountIn, 'amountIn');
         await ensureTokenAllowance(publicClient, walletClient, account, accountAddress, params.token, router, tokenAmount);
 
         const txHash = await walletClient.writeContract({

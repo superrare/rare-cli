@@ -6,6 +6,7 @@ import { createRareClient } from '../sdk/client.js';
 import { parseAddress } from '../sdk/validation.js';
 import { log, output } from '../output.js';
 import type { LiquidEditionPoolKey, RareClient } from '../sdk/types.js';
+import { deployLiquidEditionCommand } from './deploy.js';
 
 type ChainOptions = {
   chain?: string;
@@ -26,6 +27,9 @@ export function liquidEditionCommand(): Command {
   const cmd = new Command('liquid-edition');
   cmd.description('Inspect and manage Liquid Edition tokens');
 
+  const deploy = deployLiquidEditionCommand();
+  deploy.name('deploy');
+  cmd.addCommand(deploy);
   cmd.addCommand(liquidEditionStatusCommand());
   cmd.addCommand(liquidEditionTokenUriCommand());
   cmd.addCommand(liquidEditionSetRenderContractCommand());
@@ -89,6 +93,7 @@ function liquidEditionSetRenderContractCommand(): Command {
   cmd
     .requiredOption('--contract <address>', 'Liquid Edition token contract address')
     .requiredOption('--render-contract <address>', 'render contract address')
+    .option('--yes', 'yes to all prompts, including transaction submission')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: SetRenderContractOptions): Promise<void> => {

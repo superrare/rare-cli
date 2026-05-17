@@ -4,6 +4,10 @@ import {
   toNonNegativeInteger,
   toPositiveInteger,
   toPositiveWei,
+  requireInput,
+  resolveAlias,
+  resolveAliasWithField,
+  toUnixTimestamp,
 } from './helpers.js';
 import { normalizeBytes32, verifyBatchTokenProof } from './batch-core.js';
 import type {
@@ -54,14 +58,20 @@ export function planBatchOfferCreate(
   params: BatchOfferCreateParams,
   nowSeconds?: bigint,
 ): BatchOfferCreatePlan {
-  const expiry = toPositiveInteger(params.expiry, 'expiry');
+  const expiry = toUnixTimestamp(
+    requireInput(resolveAlias(params.endTime, params.expiry, 'endTime', 'expiry'), 'endTime'),
+    'endTime',
+  );
   if (nowSeconds !== undefined && expiry <= nowSeconds) {
     throw new Error('expiry must be in the future.');
   }
 
+  const resolvedPrice = resolveAliasWithField(params.price, params.amount, 'price', 'amount');
+  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
+
   return {
     root: resolveBatchOfferRoot(params),
-    amount: toPositiveWei(params.amount, 'amount'),
+    amount: toPositiveWei(price, resolvedPrice.field),
     currency: params.currency ?? ETH_ADDRESS,
     expiry,
   };

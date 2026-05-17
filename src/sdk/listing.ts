@@ -15,6 +15,8 @@ import {
   approvalAbi,
   preparePayment,
   requireWallet,
+  requireInput,
+  resolveAlias,
   toCurrencyAmount,
   waitForApproval,
 } from './helpers.js';
@@ -90,8 +92,10 @@ export function createListingNamespace(
     async buy(params): ReturnType<ListingMarketplaceNamespace['buy']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency ?? ETH_ADDRESS;
-      const amount = await toCurrencyAmount(publicClient, chain, currency, params.amount, 'amount');
-      const plan = planListingBuy({ ...params, currency, amount });
+      const price = requireInput(resolveAlias(params.price, params.amount, 'price', 'amount'), 'price');
+      const amount = await toCurrencyAmount(publicClient, chain, currency, price, 'price');
+      const { amount: _deprecatedAmount, ...canonicalParams } = params;
+      const plan = planListingBuy({ ...canonicalParams, price: amount, currency });
 
       const value = await preparePayment({
         publicClient, walletClient, account, accountAddress,

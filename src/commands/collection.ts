@@ -15,6 +15,7 @@ import { printError } from '../errors.js';
 import { output, log } from '../output.js';
 import { createCollectionListCommand } from './account-market-list.js';
 import { mintCommand } from './mint.js';
+import { deployErc721Command } from './deploy.js';
 
 type LazyBatchMintOptions = {
   maxTokens?: string;
@@ -39,18 +40,22 @@ type CreateLazySovereignOptions = {
 type CollectionMintBatchOptions = {
   contract: string;
   baseUri: string;
-  tokenCount: string;
+  amount?: string;
+  tokenCount?: string;
   chain?: string;
   chainId?: string;
+  yes?: boolean;
 };
 
 type CollectionPrepareLazyMintOptions = {
   contract: string;
   baseUri: string;
-  tokenCount: string;
+  amount?: string;
+  tokenCount?: string;
   minter?: string;
   chain?: string;
   chainId?: string;
+  yes?: boolean;
 };
 
 type CollectionTokenOptions = {
@@ -61,6 +66,7 @@ type CollectionTokenOptions = {
 };
 
 type CollectionRoyaltyStatusOptions = CollectionTokenOptions & {
+  price?: string;
   salePrice?: string;
 };
 
@@ -82,6 +88,7 @@ type CollectionRoyaltyRegistryOptions = {
 };
 
 type CollectionRoyaltyRegistryStatusOptions = CollectionTokenOptions & CollectionRoyaltyRegistryOptions & {
+  price?: string;
   salePrice?: string;
 };
 
@@ -133,6 +140,7 @@ function lazyBatchMintCmd(): Command {
     .option('--max-tokens <number>', 'optional supply cap (immutable). If omitted, the collection is uncapped.')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--yes', 'yes to all prompts, including transaction submission')
     .action(async (name: string, symbol: string, opts: LazyBatchMintOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
@@ -183,6 +191,7 @@ function createSovereignCollectionCommand(): Command {
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
+    .option('--yes', 'yes to all prompts, including transaction submission')
     .action(async (name: string, symbol: string, opts: CreateSovereignOptions): Promise<void> => {
       const contractType = normalizeSovereignCollectionContractType(opts.contractType);
       const chain = getActiveChain(opts.chain, opts.chainId);
@@ -243,6 +252,7 @@ function createLazySovereignCollectionCommand(): Command {
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
+    .option('--yes', 'yes to all prompts, including transaction submission')
     .action(async (name: string, symbol: string, opts: CreateLazySovereignOptions): Promise<void> => {
       const contractType = normalizeLazySovereignCollectionContractType(opts.contractType);
       const chain = getActiveChain(opts.chain, opts.chainId);
@@ -297,12 +307,18 @@ function createMintBatchCommand(): Command {
   cmd
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--base-uri <uri>', 'base URI for token metadata')
-    .requiredOption('--token-count <number>', 'number of tokens to mint')
+    .option('--amount <number>', 'number of tokens to mint')
+    .option('--token-count <number>', 'alias for --amount')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
+    .option('--yes', 'yes to all prompts, including transaction submission')
     .action(async (opts: CollectionMintBatchOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
+        const amount = opts.amount ?? opts.tokenCount;
+        if (amount === undefined) {
+          throw new Error('collection mint-batch requires --amount.');
+        }
         const chain = getActiveChain(opts.chain, opts.chainId);
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
@@ -311,13 +327,13 @@ function createMintBatchCommand(): Command {
         log(`Batch minting collection tokens on ${chain}...`);
         log(`  Contract: ${contract}`);
         log(`  Base URI: ${opts.baseUri}`);
-        log(`  Token count: ${opts.tokenCount}`);
+        log(`  Amount: ${amount}`);
         log('Waiting for confirmation...');
 
         const result = await rare.collection.mintBatch({
           contract,
           baseUri: opts.baseUri,
-          tokenCount: opts.tokenCount,
+          amount,
         });
 
         output(
@@ -351,13 +367,19 @@ function createPrepareLazyMintCommand(): Command {
   cmd
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--base-uri <uri>', 'base URI for token metadata')
-    .requiredOption('--token-count <number>', 'number of tokens to prepare')
+    .option('--amount <number>', 'number of tokens to prepare')
+    .option('--token-count <number>', 'alias for --amount')
     .option('--minter <address>', 'optional approved minter address')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
+    .option('--yes', 'yes to all prompts, including transaction submission')
     .action(async (opts: CollectionPrepareLazyMintOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
+        const amount = opts.amount ?? opts.tokenCount;
+        if (amount === undefined) {
+          throw new Error('collection prepare-lazy-mint requires --amount.');
+        }
         const minter = opts.minter === undefined
           ? undefined
           : parseAddressOption(opts.minter, '--minter');
@@ -369,14 +391,14 @@ function createPrepareLazyMintCommand(): Command {
         log(`Preparing Lazy Sovereign mint on ${chain}...`);
         log(`  Contract: ${contract}`);
         log(`  Base URI: ${opts.baseUri}`);
-        log(`  Token count: ${opts.tokenCount}`);
+        log(`  Amount: ${amount}`);
         if (minter !== undefined) log(`  Minter: ${minter}`);
         log('Waiting for confirmation...');
 
         const result = await rare.collection.prepareLazyMint({
           contract,
           baseUri: opts.baseUri,
-          tokenCount: opts.tokenCount,
+          amount,
           minter,
         });
 
@@ -449,7 +471,7 @@ function createRoyaltyStatusCommand(): Command {
   cmd
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--token-id <id>', 'token ID to inspect')
-    .option('--sale-price <raw>', 'raw sale price units used for the royalty quote')
+    .option('--price <raw>', 'raw sale price units used for the royalty quote')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionRoyaltyStatusOptions) => {
@@ -459,7 +481,7 @@ function createRoyaltyStatusCommand(): Command {
         const result = await rare.collection.getRoyaltyInfo({
           contract,
           tokenId: opts.tokenId,
-          salePrice: opts.salePrice,
+          price: opts.price,
         });
 
         output(
@@ -590,7 +612,7 @@ function createRoyaltyRegistryStatusCommand(): Command {
   cmd
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--token-id <id>', 'token ID to inspect')
-    .option('--sale-price <raw>', 'raw sale price units used for the royalty quote')
+    .option('--price <raw>', 'raw sale price units used for the royalty quote')
     .option('--registry <address>', 'royalty registry address (defaults to the protocol registry)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
@@ -602,7 +624,7 @@ function createRoyaltyRegistryStatusCommand(): Command {
         registry,
         contract,
         tokenId: opts.tokenId,
-        salePrice: opts.salePrice,
+        price: opts.price,
       });
 
       output(
@@ -1019,6 +1041,16 @@ function createMetadataCommand(): Command {
   return cmd;
 }
 
+function createCollectionDeployCommand(): Command {
+  const cmd = new Command('deploy');
+  cmd.description('Deploy NFT collections through RARE factories');
+  cmd.addCommand(deployErc721Command());
+  cmd.addCommand(lazyBatchMintCmd());
+  cmd.addCommand(createSovereignCollectionCommand());
+  cmd.addCommand(createLazySovereignCollectionCommand());
+  return cmd;
+}
+
 function createCollectionCreateCommand(): Command {
   const cmd = new Command('create');
   cmd.description('Create NFT collections through RARE factories');
@@ -1032,6 +1064,7 @@ export function collectionCommand(): Command {
   const cmd = new Command('collection');
   cmd.description('Create and manage NFT collections');
   cmd.addCommand(createCollectionListCommand());
+  cmd.addCommand(createCollectionDeployCommand());
   cmd.addCommand(createCollectionCreateCommand());
   cmd.addCommand(mintCommand());
   cmd.addCommand(createMintBatchCommand());

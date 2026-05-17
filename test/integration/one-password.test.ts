@@ -56,7 +56,7 @@ const livePrivateKeyRef = process.env.RARE_CLI_TEST_OP_PRIVATE_KEY_REF?.trim();
 const describeLiveOp = livePrivateKeyRef ? describe : describe.skip;
 
 describeLiveOp('1Password CLI live integration', () => {
-  it('reads and signs with a real op:// private key reference', async () => {
+  it('reads and signs with a real op:// private key reference', async (ctx) => {
     if (livePrivateKeyRef === undefined) {
       throw new Error('RARE_CLI_TEST_OP_PRIVATE_KEY_REF must be set for live 1Password integration tests.');
     }
@@ -65,10 +65,12 @@ describeLiveOp('1Password CLI live integration', () => {
       livePrivateKeyRef,
       'RARE_CLI_TEST_OP_PRIVATE_KEY_REF',
     );
-    const expectedAccount = privateKeyToAccount(await readOnePasswordPrivateKey(privateKeyRefFromEnv));
+    const privateKey = await readOnePasswordPrivateKeyOrSkip(ctx, privateKeyRefFromEnv);
+    const expectedAccount = privateKeyToAccount(privateKey);
     const account = createOnePasswordAccount({
       address: expectedAccount.address,
       privateKeyRef: privateKeyRefFromEnv,
+      resolvePrivateKey: async () => privateKey,
     });
 
     const signature = await account.signMessage({ message: 'hello rare from op' });
@@ -77,3 +79,16 @@ describeLiveOp('1Password CLI live integration', () => {
     expect(isAddressEqual(recovered, expectedAccount.address)).toBe(true);
   }, 30_000);
 });
+
+async function readOnePasswordPrivateKeyOrSkip(
+  ctx: { skip: (reason?: string) => void },
+  privateKeyRefFromEnv: PrivateKeyReference,
+): Promise<`0x${string}`> {
+  try {
+    return await readOnePasswordPrivateKey(privateKeyRefFromEnv);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    ctx.skip(`1Password CLI unavailable or locked: ${message}`);
+    throw error;
+  }
+}

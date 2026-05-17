@@ -63,22 +63,28 @@ function swapBuyCommand(): Command {
 
   cmd
     .requiredOption('--token <address>', 'token address to buy')
-    .requiredOption('--eth <amount>', 'ETH amount to spend')
-    .requiredOption('--min-out <amount>', 'minimum token amount out')
+    .option('--eth-amount-in <amount>', 'ETH amount to spend')
+    .option('--eth <amount>', 'alias for --eth-amount-in')
+    .option('--min-amount-out <amount>', 'minimum token amount out')
+    .option('--min-out <amount>', 'alias for --min-amount-out')
     .requiredOption('--commands <hex>', 'raw router commands hex')
     .requiredOption('--inputs-file <path>', 'JSON file containing router input calldata array')
     .option('--recipient <address>', 'recipient address')
-    .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
+    .option('--deadline <seconds>', 'deadline as a unix timestamp in seconds')
+    .option('--yes', 'yes to all prompts and required approvals')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(withErrorHandling(async (opts: {
       token: string;
-      eth: string;
-      minOut: string;
+      ethAmountIn?: string;
+      eth?: string;
+      minAmountOut?: string;
+      minOut?: string;
       commands: string;
       inputsFile: string;
       recipient?: string;
-      deadlineSeconds?: string;
+      deadline?: string;
+      yes?: boolean;
       chain?: string;
       chainId?: string;
     }) => {
@@ -86,6 +92,10 @@ function swapBuyCommand(): Command {
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
+      const ethAmountIn = opts.ethAmountIn ?? opts.eth;
+      const minAmountOut = opts.minAmountOut ?? opts.minOut;
+      if (ethAmountIn === undefined) throw new Error('swap buy requires --eth-amount-in.');
+      if (minAmountOut === undefined) throw new Error('swap buy requires --min-amount-out.');
       const inputs = await readInputsFile(opts.inputsFile);
       const commands = ensureHex(opts.commands, 'commands');
       const token = parseAddress(opts.token, 'token');
@@ -94,17 +104,17 @@ function swapBuyCommand(): Command {
       log(`Buying token via router on ${chain}...`);
       log(`  Router: ${rare.contracts.swapRouter}`);
       log(`  Token: ${token}`);
-      log(`  ETH in: ${opts.eth}`);
-      log(`  Min out: ${opts.minOut}`);
+      log(`  ETH in: ${ethAmountIn}`);
+      log(`  Min out: ${minAmountOut}`);
 
       const result = await rare.swap.buy({
         token,
-        ethAmount: opts.eth,
-        minTokensOut: opts.minOut,
+        ethAmountIn,
+        minAmountOut,
         commands,
         inputs,
         recipient,
-        deadline: opts.deadlineSeconds,
+        deadline: opts.deadline,
       });
 
       output(
@@ -125,22 +135,28 @@ function swapSellCommand(): Command {
 
   cmd
     .requiredOption('--token <address>', 'token address to sell')
-    .requiredOption('--amount <amount>', 'token amount to sell')
-    .requiredOption('--min-out <amount>', 'minimum ETH amount out')
+    .option('--amount-in <amount>', 'token amount to sell')
+    .option('--amount <amount>', 'alias for --amount-in')
+    .option('--min-amount-out <amount>', 'minimum ETH amount out')
+    .option('--min-out <amount>', 'alias for --min-amount-out')
     .requiredOption('--commands <hex>', 'raw router commands hex')
     .requiredOption('--inputs-file <path>', 'JSON file containing router input calldata array')
     .option('--recipient <address>', 'recipient address')
-    .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
+    .option('--deadline <seconds>', 'deadline as a unix timestamp in seconds')
+    .option('--yes', 'yes to all prompts and required approvals')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(withErrorHandling(async (opts: {
       token: string;
-      amount: string;
-      minOut: string;
+      amountIn?: string;
+      amount?: string;
+      minAmountOut?: string;
+      minOut?: string;
       commands: string;
       inputsFile: string;
       recipient?: string;
-      deadlineSeconds?: string;
+      deadline?: string;
+      yes?: boolean;
       chain?: string;
       chainId?: string;
     }) => {
@@ -148,6 +164,10 @@ function swapSellCommand(): Command {
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
+      const amountIn = opts.amountIn ?? opts.amount;
+      const minAmountOut = opts.minAmountOut ?? opts.minOut;
+      if (amountIn === undefined) throw new Error('swap sell requires --amount-in.');
+      if (minAmountOut === undefined) throw new Error('swap sell requires --min-amount-out.');
       const inputs = await readInputsFile(opts.inputsFile);
       const commands = ensureHex(opts.commands, 'commands');
       const token = parseAddress(opts.token, 'token');
@@ -156,17 +176,17 @@ function swapSellCommand(): Command {
       log(`Selling token via router on ${chain}...`);
       log(`  Router: ${rare.contracts.swapRouter}`);
       log(`  Token: ${token}`);
-      log(`  Amount: ${opts.amount}`);
-      log(`  Min ETH out: ${opts.minOut}`);
+      log(`  Amount: ${amountIn}`);
+      log(`  Min ETH out: ${minAmountOut}`);
 
       const result = await rare.swap.sell({
         token,
-        tokenAmount: opts.amount,
-        minEthOut: opts.minOut,
+        amountIn,
+        minAmountOut,
         commands,
         inputs,
         recipient,
-        deadline: opts.deadlineSeconds,
+        deadline: opts.deadline,
       });
 
       output(
@@ -189,22 +209,26 @@ function swapSwapCommand(): Command {
     .requiredOption('--token-in <address>', 'input token address')
     .requiredOption('--amount-in <amount>', 'amount of the input token')
     .requiredOption('--token-out <address>', 'output token address')
-    .requiredOption('--min-out <amount>', 'minimum output token amount')
+    .option('--min-amount-out <amount>', 'minimum output token amount')
+    .option('--min-out <amount>', 'alias for --min-amount-out')
     .requiredOption('--commands <hex>', 'raw router commands hex')
     .requiredOption('--inputs-file <path>', 'JSON file containing router input calldata array')
     .option('--recipient <address>', 'recipient address')
-    .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
+    .option('--deadline <seconds>', 'deadline as a unix timestamp in seconds')
+    .option('--yes', 'yes to all prompts and required approvals')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(withErrorHandling(async (opts: {
       tokenIn: string;
       amountIn: string;
       tokenOut: string;
-      minOut: string;
+      minAmountOut?: string;
+      minOut?: string;
       commands: string;
       inputsFile: string;
       recipient?: string;
-      deadlineSeconds?: string;
+      deadline?: string;
+      yes?: boolean;
       chain?: string;
       chainId?: string;
     }) => {
@@ -212,6 +236,8 @@ function swapSwapCommand(): Command {
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
+      const minAmountOut = opts.minAmountOut ?? opts.minOut;
+      if (minAmountOut === undefined) throw new Error('swap swap requires --min-amount-out.');
       const inputs = await readInputsFile(opts.inputsFile);
       const commands = ensureHex(opts.commands, 'commands');
       const tokenIn = parseAddress(opts.tokenIn, 'token-in');
@@ -223,17 +249,17 @@ function swapSwapCommand(): Command {
       log(`  Token in: ${tokenIn}`);
       log(`  Amount in: ${opts.amountIn}`);
       log(`  Token out: ${tokenOut}`);
-      log(`  Min out: ${opts.minOut}`);
+      log(`  Min out: ${minAmountOut}`);
 
       const result = await rare.swap.swap({
         tokenIn,
         amountIn: opts.amountIn,
         tokenOut,
-        minAmountOut: opts.minOut,
+        minAmountOut,
         commands,
         inputs,
         recipient,
-        deadline: opts.deadlineSeconds,
+        deadline: opts.deadline,
       });
 
       output(
@@ -254,24 +280,26 @@ function swapBuyTokenCommand(): Command {
 
   cmd
     .requiredOption('--token <address>', 'token address to buy')
-    .requiredOption('--eth <amount>', 'ETH amount to spend')
+    .option('--eth-amount-in <amount>', 'ETH amount to spend')
+    .option('--eth <amount>', 'alias for --eth-amount-in')
     .option('--slippage-bps <bps>', 'slippage in basis points (default: 50)')
-    .option('--min-out <amount>', 'override minimum token amount out')
+    .option('--min-amount-out <amount>', 'override minimum token amount out')
     .option('--quote-only', 'show the quote without submitting a transaction')
-    .option('--yes', 'skip the interactive confirmation prompt')
+    .option('--yes', 'yes to all prompts and required approvals')
     .option('--recipient <address>', 'recipient address')
-    .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
+    .option('--deadline <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(withErrorHandling(async (opts: {
       token: string;
-      eth: string;
+      ethAmountIn?: string;
+      eth?: string;
       slippageBps?: string;
-      minOut?: string;
+      minAmountOut?: string;
       quoteOnly?: boolean;
       yes?: boolean;
       recipient?: string;
-      deadlineSeconds?: string;
+      deadline?: string;
       chain?: string;
       chainId?: string;
     }) => {
@@ -279,12 +307,14 @@ function swapBuyTokenCommand(): Command {
       const publicClient = getPublicClient(chain);
       const wallet = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: wallet.client });
+      const ethAmountIn = opts.ethAmountIn ?? opts.eth;
+      if (ethAmountIn === undefined) throw new Error('swap buy-token requires --eth-amount-in.');
       const token = parseAddress(opts.token, 'token');
       const recipient = opts.recipient ? parseAddress(opts.recipient, 'recipient') : wallet.account.address;
       const quote = await rare.swap.quoteBuyToken({
         token,
-        ethAmount: opts.eth,
-        minTokensOut: opts.minOut,
+        ethAmountIn,
+        minAmountOut: opts.minAmountOut,
         slippageBps: opts.slippageBps,
         recipient,
       });
@@ -294,10 +324,10 @@ function swapBuyTokenCommand(): Command {
         direction: 'buy',
         token,
         amountLabel: 'ETH in',
-        amountIn: opts.eth,
+        amountIn: ethAmountIn,
         quote,
         recipient,
-        usedMinOutOverride: opts.minOut !== undefined,
+        usedMinOutOverride: opts.minAmountOut !== undefined,
       });
 
       if (opts.quoteOnly) {
@@ -309,7 +339,7 @@ function swapBuyTokenCommand(): Command {
             execution: quote.execution,
             routeSource: quote.routeSource,
             routeDescription: quote.routeDescription,
-            ethIn: opts.eth,
+            ethIn: ethAmountIn,
             estimatedAmountOut: quote.estimatedAmountOut.toString(),
             minAmountOut: quote.minAmountOut.toString(),
             slippageBps: quote.slippageBps,
@@ -340,10 +370,10 @@ function swapBuyTokenCommand(): Command {
 
       const result = await rare.swap.buyToken({
         token,
-        ethAmount: opts.eth,
-        minTokensOut: quote.minAmountOut,
+        ethAmountIn,
+        minAmountOut: quote.minAmountOut,
         recipient,
-        deadline: opts.deadlineSeconds,
+        deadline: opts.deadline,
       });
 
       output(
@@ -374,24 +404,26 @@ function swapSellTokenCommand(): Command {
 
   cmd
     .requiredOption('--token <address>', 'token address to sell')
-    .requiredOption('--amount <amount>', 'token amount to sell')
+    .option('--amount-in <amount>', 'token amount to sell')
+    .option('--amount <amount>', 'alias for --amount-in')
     .option('--slippage-bps <bps>', 'slippage in basis points (default: 50)')
-    .option('--min-out <amount>', 'override minimum ETH amount out')
+    .option('--min-amount-out <amount>', 'override minimum ETH amount out')
     .option('--quote-only', 'show the quote without submitting a transaction')
-    .option('--yes', 'skip the interactive confirmation prompt')
+    .option('--yes', 'yes to all prompts and required approvals')
     .option('--recipient <address>', 'recipient address')
-    .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
+    .option('--deadline <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(withErrorHandling(async (opts: {
       token: string;
-      amount: string;
+      amountIn?: string;
+      amount?: string;
       slippageBps?: string;
-      minOut?: string;
+      minAmountOut?: string;
       quoteOnly?: boolean;
       yes?: boolean;
       recipient?: string;
-      deadlineSeconds?: string;
+      deadline?: string;
       chain?: string;
       chainId?: string;
     }) => {
@@ -399,12 +431,14 @@ function swapSellTokenCommand(): Command {
       const publicClient = getPublicClient(chain);
       const wallet = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: wallet.client });
+      const amountIn = opts.amountIn ?? opts.amount;
+      if (amountIn === undefined) throw new Error('swap sell-token requires --amount-in.');
       const token = parseAddress(opts.token, 'token');
       const recipient = opts.recipient ? parseAddress(opts.recipient, 'recipient') : wallet.account.address;
       const quote = await rare.swap.quoteSellToken({
         token,
-        tokenAmount: opts.amount,
-        minEthOut: opts.minOut,
+        amountIn,
+        minAmountOut: opts.minAmountOut,
         slippageBps: opts.slippageBps,
         recipient,
       });
@@ -414,10 +448,10 @@ function swapSellTokenCommand(): Command {
         direction: 'sell',
         token,
         amountLabel: 'Token in',
-        amountIn: opts.amount,
+        amountIn,
         quote,
         recipient,
-        usedMinOutOverride: opts.minOut !== undefined,
+        usedMinOutOverride: opts.minAmountOut !== undefined,
       });
 
       if (opts.quoteOnly) {
@@ -429,7 +463,7 @@ function swapSellTokenCommand(): Command {
             execution: quote.execution,
             routeSource: quote.routeSource,
             routeDescription: quote.routeDescription,
-            tokenIn: opts.amount,
+            tokenIn: amountIn,
             estimatedAmountOut: quote.estimatedAmountOut.toString(),
             minAmountOut: quote.minAmountOut.toString(),
             slippageBps: quote.slippageBps,
@@ -460,10 +494,10 @@ function swapSellTokenCommand(): Command {
 
       const result = await rare.swap.sellToken({
         token,
-        tokenAmount: opts.amount,
-        minEthOut: quote.minAmountOut,
+        amountIn,
+        minAmountOut: quote.minAmountOut,
         recipient,
-        deadline: opts.deadlineSeconds,
+        deadline: opts.deadline,
       });
 
       output(
@@ -495,32 +529,36 @@ function swapBuyRareCommand(): Command {
   cmd.description('Buy RARE with ETH using the curated canonical route');
 
   cmd
-    .requiredOption('--eth <amount>', 'ETH amount to spend')
+    .option('--eth-amount-in <amount>', 'ETH amount to spend')
+    .option('--eth <amount>', 'alias for --eth-amount-in')
     .option('--slippage-bps <bps>', 'slippage in basis points (default: 50)')
-    .option('--min-rare-out <amount>', 'override minimum RARE out')
+    .option('--min-amount-out <amount>', 'override minimum RARE out')
     .option('--quote-only', 'show the quote without submitting a transaction')
-    .option('--yes', 'skip the interactive confirmation prompt')
+    .option('--yes', 'yes to all prompts and required approvals')
     .option('--recipient <address>', 'recipient address')
-    .option('--deadline-seconds <seconds>', 'deadline as a unix timestamp in seconds')
+    .option('--deadline <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(withErrorHandling(async (opts: {
-      eth: string;
+      ethAmountIn?: string;
+      eth?: string;
       slippageBps?: string;
-      minRareOut?: string;
+      minAmountOut?: string;
       quoteOnly?: boolean;
       yes?: boolean;
       recipient?: string;
-      deadlineSeconds?: string;
+      deadline?: string;
       chain?: string;
       chainId?: string;
     }) => {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const quoteClient = createRareClient({ publicClient });
+      const ethAmountIn = opts.ethAmountIn ?? opts.eth;
+      if (ethAmountIn === undefined) throw new Error('swap buy-rare requires --eth-amount-in.');
       const quote = await quoteClient.swap.quoteBuyRare({
-        ethAmount: opts.eth,
-        minRareOut: opts.minRareOut,
+        ethAmountIn,
+        minAmountOut: opts.minAmountOut,
         slippageBps: opts.slippageBps,
       });
       const promptNeeded = shouldPromptForConfirmation(opts, Boolean(process.stdin.isTTY), isJsonMode());
@@ -529,10 +567,10 @@ function swapBuyRareCommand(): Command {
       const quoteLines = formatBuyRareQuoteLines({
         chain,
         router: quoteClient.contracts.swapRouter,
-        eth: opts.eth,
+        eth: ethAmountIn,
         quote,
         recipient,
-        usedMinRareOutOverride: opts.minRareOut !== undefined,
+        usedMinRareOutOverride: opts.minAmountOut !== undefined,
       });
 
       if (opts.quoteOnly) {
@@ -540,7 +578,7 @@ function swapBuyRareCommand(): Command {
           {
             chain,
             router: quoteClient.contracts.swapRouter ?? null,
-            ethIn: opts.eth,
+            ethIn: ethAmountIn,
             recipient: recipient ?? null,
             estimatedRareOut: quote.estimatedRareOut.toString(),
             minRareOut: quote.minRareOut.toString(),
@@ -574,10 +612,10 @@ function swapBuyRareCommand(): Command {
       log(`Submitting RARE buy on ${chain}...`);
 
       const result = await rare.swap.buyRare({
-        ethAmount: opts.eth,
-        minRareOut: quote.minRareOut,
+        ethAmountIn,
+        minAmountOut: quote.minRareOut,
         recipient,
-        deadline: opts.deadlineSeconds,
+        deadline: opts.deadline,
       });
 
       output(

@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, type TestContext } from 'vitest';
 import { createPublicClient, http } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import { getContractAddresses } from '../../../src/contracts/addresses.js';
+import { RareApiError } from '../../../src/data-access/errors.js';
 import { createRareClient } from '../../../src/sdk/client.js';
 import { createTestSepoliaPublicClient, hasTestRpcUrl } from '../../helpers/liveViem.js';
 
@@ -20,20 +21,20 @@ describeLive('Rare SDK client live integration', () => {
     expect('release' in rare).toBe(false);
   }, 30_000);
 
-  it('defaults NFT search requests to the real client chain ID', async () => {
+  it('defaults NFT search requests to the real client chain ID', async (ctx) => {
     const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
 
-    const result = await rare.search.nfts({ page: 1, perPage: 2 });
+    const result = await searchNftsOrSkip(ctx, () => rare.search.nfts({ page: 1, perPage: 2 }));
 
     expect(result.pagination).toMatchObject({ page: 1, perPage: 2 });
     expect(result.data.length).toBeGreaterThan(0);
     expect(result.data.every((nft) => Number(nft.chainId) === 11_155_111)).toBe(true);
   }, 30_000);
 
-  it('does not override an explicit NFT search chain ID', async () => {
+  it('does not override an explicit NFT search chain ID', async (ctx) => {
     const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
 
-    const result = await rare.search.nfts({ chainId: 1, page: 1, perPage: 2 });
+    const result = await searchNftsOrSkip(ctx, () => rare.search.nfts({ chainId: 1, page: 1, perPage: 2 }));
 
     expect(result.pagination).toMatchObject({ page: 1, perPage: 2 });
     expect(result.data.length).toBeGreaterThan(0);
@@ -61,3 +62,18 @@ describeLive('Rare SDK client live integration', () => {
     ).rejects.toThrow('Lazy batch mint factory is not deployed on this chain.');
   });
 });
+
+async function searchNftsOrSkip<T>(ctx: TestContext, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    skipIfRareApiUnavailable(ctx, error);
+    throw error;
+  }
+}
+
+function skipIfRareApiUnavailable(ctx: TestContext, error: unknown): void {
+  if (error instanceof RareApiError && error.status >= 500) {
+    ctx.skip(`Rare API ${error.path} returned ${error.status}.`);
+  }
+}

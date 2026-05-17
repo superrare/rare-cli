@@ -33,6 +33,9 @@ export function parseSplitOptions(opts: SplitOptions): {
       splitRatios: undefined,
     };
   }
+  if (opts.split.length > 5) {
+    throw new Error('--split can be provided at most 5 times.');
+  }
 
   return opts.split.reduce<{
     splitAddresses: Address[];
