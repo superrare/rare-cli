@@ -2,7 +2,6 @@ import { isAddressEqual, type Address, type Hex } from 'viem';
 import { ETH_ADDRESS } from '../contracts/addresses.js';
 import {
   toNonNegativeInteger,
-  toPositiveInteger,
   toPositiveWei,
   requireInput,
   resolveAlias,

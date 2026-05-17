@@ -5,7 +5,6 @@ import {
   toPositiveInteger,
   toPositiveWei,
   requireInput,
-  resolveAlias,
   resolveAliasWithField,
   toUnixTimestamp,
 } from './helpers.js';
