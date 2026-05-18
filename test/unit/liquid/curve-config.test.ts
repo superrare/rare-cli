@@ -75,6 +75,21 @@ test('validateCurves rejects spans that are too narrow for their positions', () 
   assert.match(result.errorMessage ?? '', /narrow/i);
 });
 
+test('validateCurves rejects stacked liquidity that exceeds the per-tick limit', () => {
+  const curves: LiquidCurveSegment[] = [
+    { tickLower: 120_000, tickUpper: 120_060, numPositions: 1, shares: '0.2' },
+    { tickLower: 120_060, tickUpper: 120_120, numPositions: 1, shares: '0.8' },
+  ];
+  const result = validateCurves(curves, {
+    ...baseFactoryConfig,
+    curvePoolSupplyTokens: '100000000000',
+  });
+
+  assert.equal(result.isValid, false);
+  assert.equal(result.error, 'tick-span-too-narrow');
+  assert.match(result.errorMessage ?? '', /stacked liquidity at tick 120060/i);
+});
+
 test('buildCurvePreview includes usd ranges when a price is supplied', () => {
   const curves = generatePresetCurves('low-demand', 2, baseFactoryConfig);
   const preview = buildCurvePreview(curves, baseFactoryConfig, 2);

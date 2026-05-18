@@ -81,6 +81,7 @@ type GrossLiquidityTickEntry = {
 
 const TICK_BASE = 1.0001;
 const TICK_LOG_BASE = Math.log(TICK_BASE);
+const TOKEN_BASE_UNITS = 1e18;
 const RESERVE_TAIL_SHARES_PERCENT = 2;
 const RESERVE_TAIL_END_PRICE_MULTIPLE = 100;
 const SHARES_SUM_TOLERANCE = 1e-6;
@@ -243,7 +244,7 @@ function computeGrossLiquidityAtFarTick(
   sharesFraction: number,
   totalCurveSupplyTokens: number,
 ): number {
-  const totalAmount = totalCurveSupplyTokens * 1e18 * sharesFraction;
+  const totalAmount = totalCurveSupplyTokens * TOKEN_BASE_UNITS * sharesFraction;
   const amountPerPosition = totalAmount / numPositions;
 
   return Array.from({ length: numPositions }, (_value, index) => {
@@ -268,7 +269,7 @@ function getGrossLiquidityOverflow(
 ): { tick: number; curveIndexes: number[] } | null {
   const positions = segments.flatMap((segment, curveIndex) => {
     const shareFraction = Number(segment.shares);
-    const curveSupplyTokens = totalCurveSupplyTokens * shareFraction;
+    const curveSupplyTokens = totalCurveSupplyTokens * TOKEN_BASE_UNITS * shareFraction;
     const amountPerPosition = curveSupplyTokens / segment.numPositions;
     const tickSpan = segment.tickUpper - segment.tickLower;
 
