@@ -638,7 +638,16 @@ export type ReleaseLimitConfig = {
 
 export type ReleaseSetAllowlistConfigParams = {
   contract: Address;
+  /**
+   * Direct root override. When provided, the SDK configures this root without
+   * registering an artifact with the Rare API.
+   */
   root?: Hash;
+  /**
+   * Locally reproducible allowlist proof artifact. When root is omitted, the
+   * SDK registers the artifact wallets with the Rare API and configures the
+   * API-returned canonical root on-chain.
+   */
   artifact?: ReleaseAllowlistArtifact;
   endTime?: TimestampInput;
   /** @deprecated use endTime */

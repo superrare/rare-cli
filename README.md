@@ -286,7 +286,7 @@ rare listing release allowlist build \
   --output ./allowlist-artifact.json
 ```
 
-The artifact contains the Merkle root plus one proof per wallet. Configure the release with that root and the allowlist end time:
+The artifact contains the locally reproducible Merkle root plus one proof per wallet. In the normal flow, `allowlist set --input` submits the artifact wallet list to the Rare API and configures the API-returned canonical root on-chain with the allowlist end time:
 
 ```bash
 rare listing release allowlist set \
@@ -294,7 +294,7 @@ rare listing release allowlist set \
   --input ./allowlist-artifact.json \
   --end-timestamp 2026-06-01T16:00:00Z
 
-# Or set a known root directly
+# Or bypass artifact registration and set a known root directly
 rare listing release allowlist set \
   --contract 0x... \
   --root 0x... \
@@ -306,7 +306,7 @@ rare listing release allowlist proof \
   --account 0x...
 ```
 
-Rare listing release minting checks the configured on-chain root while the allowlist window is active. The proof artifact is the portable file that maps each wallet to the proof needed by a mint client or service. Keep the artifact alongside release operations; the chain stores only the root and end timestamp.
+Rare listing release minting checks the configured on-chain root while the allowlist window is active. The proof artifact is the portable file that maps each wallet to the proof needed by a mint client or service. Keep the artifact alongside release operations; the chain stores only the root and end timestamp. Use `--root` only when you already have a root that should be configured directly instead of registering an artifact through the Rare API.
 
 Creator-facing RareMinter limits are configured separately and verified after each write:
 
