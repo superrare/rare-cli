@@ -246,7 +246,7 @@ export const tokenAbi =[
   },
   {
     "inputs": [],
-    "name": "defaultRoyaltyPercentage",
+    "name": "getDefaultRoyaltyPercentage",
     "outputs": [
       {
         "internalType": "uint256",
@@ -259,7 +259,7 @@ export const tokenAbi =[
   },
   {
     "inputs": [],
-    "name": "defaultRoyaltyReceiver",
+    "name": "getDefaultRoyaltyReceiver",
     "outputs": [
       {
         "internalType": "address",
@@ -459,7 +459,7 @@ export const tokenAbi =[
     "inputs": [],
     "name": "renounceOwnership",
     "outputs": [],
-    "stateMutability": "view",
+    "stateMutability": "nonpayable",
     "type": "function"
   },
   {
@@ -750,7 +750,7 @@ export const tokenAbi =[
     ],
     "name": "transferOwnership",
     "outputs": [],
-    "stateMutability": "view",
+    "stateMutability": "nonpayable",
     "type": "function"
   }
 ] as const;
