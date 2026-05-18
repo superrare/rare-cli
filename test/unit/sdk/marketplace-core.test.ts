@@ -174,6 +174,15 @@ describe('marketplace transaction planning', () => {
       splitAddresses: [accountAddress, buyerAddress],
       splitRatios: [50, 40],
     }, accountAddress)).toThrow('splitRatios must sum to 100 (got 90).');
+
+    expect(() => planAuctionCreate({
+      contract: nftContract,
+      tokenId: '1',
+      startingPrice: '0',
+      duration: '3600',
+      auctionType: 'scheduled',
+      startTime: '-1',
+    }, accountAddress)).toThrow('startTime must be greater than 0.');
   });
 
   it('plans offer create, cancel, and accept inputs', () => {

@@ -16,6 +16,7 @@ import type { RareClientConfig, IntegerInput, AmountInput, TimestampInput, Walle
 
 const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
+const ISO_DATE_STRING_PATTERN = /^\d{4}-\d{2}-\d{2}(?:[Tt]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:[Zz]|[+-]\d{2}:?\d{2})?)?$/;
 
 export const approvalAbi = [
   {
@@ -236,7 +237,7 @@ export function toUnixTimestamp(value: TimestampInput, field: string): bigint {
     return BigInt(Math.floor(millis / 1000));
   }
 
-  if (typeof value === 'string' && /[T:Z+-]/.test(value)) {
+  if (typeof value === 'string' && ISO_DATE_STRING_PATTERN.test(value)) {
     const millis = Date.parse(value);
     if (Number.isNaN(millis)) {
       throw new Error(`${field} must be a unix timestamp or ISO date.`);

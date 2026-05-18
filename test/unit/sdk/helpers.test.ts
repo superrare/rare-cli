@@ -14,6 +14,7 @@ import {
   toPositiveInteger,
   toPositiveWei,
   toSafeIntegerNumber,
+  toUnixTimestamp,
   toWei,
 } from '../../../src/sdk/helpers.js';
 import { resolveCurrency } from '../../../src/contracts/addresses.js';
@@ -61,6 +62,17 @@ describe('SDK helper normalization', () => {
     expect(toPositiveInteger('1', 'duration')).toBe(1n);
     expect(() => toPositiveInteger(0, 'duration')).toThrow('duration must be greater than 0.');
     expect(() => toPositiveInteger(-1, 'duration')).toThrow('duration must be greater than 0.');
+  });
+
+  it('normalizes unix timestamp and ISO date inputs', () => {
+    expect(toUnixTimestamp('1778500000', 'startTime')).toBe(1_778_500_000n);
+    expect(toUnixTimestamp('2026-05-18T12:30:45Z', 'startTime')).toBe(1_779_107_445n);
+    expect(toUnixTimestamp('2026-05-18T08:30:45-04:00', 'startTime')).toBe(1_779_107_445n);
+  });
+
+  it('rejects signed and malformed timestamp strings through integer validation', () => {
+    expect(() => toUnixTimestamp('-1', 'startTime')).toThrow('startTime must be greater than 0.');
+    expect(() => toUnixTimestamp('2026-05-18Tbad', 'startTime')).toThrow('startTime must be an integer.');
   });
 
   it('normalizes amount inputs to wei', () => {
