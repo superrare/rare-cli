@@ -58,17 +58,17 @@ export function mintCommand(): Command {
           tags: opts.tag,
           attributes: opts.attribute,
         });
-        const tokenUri = tokenUriPlan.mode === 'provided'
-          ? tokenUriPlan.tokenUri
-          : await uploadAndPinMetadata(tokenUriPlan.metadata);
 
         const chain = getActiveChain(opts.chain, opts.chainId);
-        const publicClient = getPublicClient(chain);
-        const { client, account } = getWalletClient(chain);
-        const rare = createRareClient({ publicClient, walletClient: client });
         const contractAddress = parseAddress(opts.contract, '--contract');
         const to = parseOptionalAddress(opts.to, '--to');
         const royaltyReceiver = parseOptionalAddress(opts.royaltyReceiver, '--royalty-receiver');
+        const publicClient = getPublicClient(chain);
+        const { client, account } = getWalletClient(chain);
+        const rare = createRareClient({ publicClient, walletClient: client });
+        const tokenUri = tokenUriPlan.mode === 'provided'
+          ? tokenUriPlan.tokenUri
+          : await uploadAndPinMetadata(tokenUriPlan.metadata);
 
         log(`\nMinting NFT on ${chain}...`);
         log(`  Contract: ${contractAddress}`);
