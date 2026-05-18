@@ -121,7 +121,9 @@ function encodeRouteParts(
     ROUTER_COMMANDS.V4_SWAP,
     encodeV4ExactIn({
       steps: v4Block.steps,
-      amountIn: executionMode.inputSource === 'user' ? amountIn : ROUTER_AMOUNT_CONSTANTS.openDelta,
+      amountIn: shouldUseOriginalAmountInForV4Block(quote.steps, stepIndex, executionMode)
+        ? amountIn
+        : ROUTER_AMOUNT_CONSTANTS.openDelta,
       minAmountOut: executionMode.outputTarget === 'user' ? quote.minAmountOut : 0n,
       currencyIn: executionMode.inputSource === 'user' ? currencyIn : firstStep.tokenIn,
       currencyOut: executionMode.outputTarget === 'user' ? currencyOut : lastStep.tokenOut,
@@ -155,6 +157,18 @@ function collectV4RouteBlock(
     steps: [step, ...rest.steps],
     nextIndex: rest.nextIndex,
   };
+}
+
+function shouldUseOriginalAmountInForV4Block(
+  steps: readonly RouteQuote['steps'][number][],
+  stepIndex: number,
+  executionMode: V4BlockExecutionMode,
+): boolean {
+  if (executionMode.inputSource === 'user') {
+    return true;
+  }
+
+  return stepIndex > 0 && steps[stepIndex - 1]?.kind === 'wrapEth';
 }
 
 function getV4ExecutionMode(
@@ -249,8 +263,8 @@ function encodeV4ExactIn({
         )
       : encodeAbiParameters(
           parseAbiParameters('address currency, address recipient, uint256 amount'),
-          [currencyOut, ROUTER_RECIPIENTS.addressThis, ROUTER_AMOUNT_CONSTANTS.openDelta],
-        );
+        [currencyOut, ROUTER_RECIPIENTS.addressThis, ROUTER_AMOUNT_CONSTANTS.openDelta],
+      );
 
   if (executionMode.inputSource === 'router' && steps.length === 1) {
     const singleStep = steps[0];
@@ -260,7 +274,7 @@ function encodeV4ExactIn({
 
     const actions = encodePacked(
       ['uint8', 'uint8', 'uint8'],
-      [V4_ACTIONS.SWAP_EXACT_IN_SINGLE, settleAction, takeAction],
+      [settleAction, V4_ACTIONS.SWAP_EXACT_IN_SINGLE, takeAction],
     );
 
     return encodeAbiParameters(
@@ -268,8 +282,8 @@ function encodeV4ExactIn({
       [
         actions,
         [
-          encodeV4ExactInSingle(singleStep, ROUTER_AMOUNT_CONSTANTS.openDelta, minAmountOut),
           settleParams,
+          encodeV4ExactInSingle(singleStep, ROUTER_AMOUNT_CONSTANTS.openDelta, minAmountOut),
           takeParams,
         ],
       ],

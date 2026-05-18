@@ -22,6 +22,7 @@ import {
 } from '../../../src/contracts/addresses.js';
 import { parseJsonStdout, runCli } from '../../helpers/cli.js';
 import { loadDotEnv, missingLiveEnv } from '../env.mjs';
+import { withLiveWriteConsent } from './live-consent.js';
 import {
   releaseLiveWallets,
   reserveLiveWallet,
@@ -98,12 +99,12 @@ export async function createLiveFixture(options: { buyer?: boolean } = {}): Prom
   let buyerWallet: LiveWalletLease | undefined;
 
   try {
-    const chain = await detectLiveChain();
+    const chain = await step('detect live chain', () => detectLiveChain());
     const publicClient = createLivePublicClient(chain);
     if (buyerHome === undefined) {
-      sellerWallet = await reserveLiveWallet('seller', chain);
+      sellerWallet = await step('reserve seller live wallet', () => reserveLiveWallet('seller', chain));
     } else {
-      ({ sellerWallet, buyerWallet } = await reserveLiveWalletPair(chain));
+      ({ sellerWallet, buyerWallet } = await step('reserve seller and buyer live wallets', () => reserveLiveWalletPair(chain)));
     }
     await writeFile(curvesFile, JSON.stringify(LIQUID_CURVES, null, 2), 'utf8');
     await step('configure seller wallet', () => configureLiveHome(sellerHome, chain, sellerWallet.privateKey));
@@ -167,7 +168,7 @@ export async function detectLiveChain(): Promise<SupportedChain> {
 }
 
 export async function jsonCommand<T>(home: string, args: string[], timeoutMs = 180_000): Promise<T> {
-  return parseJsonStdout<T>(await runCli(['--json', ...args], { home, timeoutMs }));
+  return parseJsonStdout<T>(await runCli(['--json', ...withLiveWriteConsent(args)], { home, timeoutMs }));
 }
 
 export function expectTx(result: TxResult): void {

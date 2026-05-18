@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, it } from 'vitest';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { formatEther } from 'viem';
+import { ETH_ADDRESS } from '../../src/contracts/addresses.js';
 import {
   cleanupLiveFixture,
   createLiveFixture,
@@ -19,6 +20,7 @@ import {
   type TxResult,
 } from './helpers/live-harness.js';
 import {
+  encodeEthToUsdcViaWethSwap,
   encodeRareToUsdcSwap,
   expectKnownPoolSwap,
   type TokenTradeResult,
@@ -100,6 +102,41 @@ describeLive('live swap CLI write commands', () => {
         encoded.commands,
         '--inputs-file',
         encoded.inputsFile,
+        '--yes',
+        '--chain',
+        fixture.chain,
+      ], 240_000),
+    );
+
+    expectTx(result);
+  });
+
+  it('swaps ETH for USDC through a router-funded WETH V4 pool', async () => {
+    const fixture = live.value;
+    if (fixture.chain !== 'sepolia') {
+      return;
+    }
+
+    const encoded = await encodeEthToUsdcViaWethSwap(fixture, liveSwapEthAmount());
+    const minAmountOut = await formatTokenAmount(fixture, fixture.usdcAddress, encoded.quote.minAmountOut);
+
+    const result = await step('swap ETH for USDC through WETH V4 pool', () =>
+      jsonCommand<TxResult>(fixture.sellerHome, [
+        'swap',
+        'swap',
+        '--token-in',
+        ETH_ADDRESS,
+        '--amount-in',
+        liveSwapEthAmount(),
+        '--token-out',
+        fixture.usdcAddress,
+        '--min-out',
+        minAmountOut,
+        '--commands',
+        encoded.commands,
+        '--inputs-file',
+        encoded.inputsFile,
+        '--yes',
         '--chain',
         fixture.chain,
       ], 240_000),
@@ -158,6 +195,7 @@ describeLive('live swap CLI write commands', () => {
         buyQuote.commands,
         '--inputs-file',
         buyInputsFile,
+        '--yes',
         '--chain',
         fixture.chain,
       ], 240_000),
@@ -201,6 +239,7 @@ describeLive('live swap CLI write commands', () => {
         sellCommands,
         '--inputs-file',
         sellInputsFile,
+        '--yes',
         '--chain',
         fixture.chain,
       ], 240_000),

@@ -23,6 +23,7 @@ export type LiveWalletPairLease = {
 export async function reserveLiveWallet(role: LiveWalletRole, chain: SupportedChain): Promise<LiveWalletLease> {
   const candidates = livePrivateKeys(role);
   const start = Date.now();
+  let waitingLogged = false;
 
   while (true) {
     for (const privateKey of candidates) {
@@ -35,10 +36,17 @@ export async function reserveLiveWallet(role: LiveWalletRole, chain: SupportedCh
     if (Date.now() - start > liveWalletLeaseTimeoutMs()) {
       throw new Error(
         `Timed out waiting for an available ${role} live E2E wallet. ` +
-          `Configured ${candidates.length} ${role} wallet(s); add more keys or raise E2E_WALLET_LEASE_TIMEOUT_MS.`,
+        `Configured ${candidates.length} ${role} wallet(s); add more keys or raise E2E_WALLET_LEASE_TIMEOUT_MS.`,
       );
     }
 
+    if (!waitingLogged) {
+      console.error(
+        `[live e2e] waiting for available ${role} live wallet ` +
+          `(${candidates.length} configured, timeout ${liveWalletLeaseTimeoutMs()}ms)`,
+      );
+      waitingLogged = true;
+    }
     await sleep(liveWalletLeasePollMs());
   }
 }
@@ -47,6 +55,7 @@ export async function reserveLiveWalletPair(chain: SupportedChain): Promise<Live
   const sellerCandidates = livePrivateKeys('seller');
   const buyerCandidates = livePrivateKeys('buyer');
   const start = Date.now();
+  let waitingLogged = false;
 
   while (true) {
     for (const sellerPrivateKey of sellerCandidates) {
@@ -78,6 +87,14 @@ export async function reserveLiveWalletPair(chain: SupportedChain): Promise<Live
       );
     }
 
+    if (!waitingLogged) {
+      console.error(
+        '[live e2e] waiting for available seller and buyer live wallets ' +
+          `(${sellerCandidates.length} seller configured, ${buyerCandidates.length} buyer configured, ` +
+          `timeout ${liveWalletLeaseTimeoutMs()}ms)`,
+      );
+      waitingLogged = true;
+    }
     await sleep(liveWalletLeasePollMs());
   }
 }

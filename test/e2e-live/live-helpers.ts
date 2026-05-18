@@ -13,6 +13,7 @@ import {
 import { parseAddress } from '../../src/sdk/validation.js';
 import { parseJsonStdout, runCli } from '../helpers/cli.js';
 import { loadDotEnv, missingLiveEnv } from './env.mjs';
+import { isLiveWriteCommand, withLiveWriteConsent } from './helpers/live-consent.js';
 
 loadDotEnv();
 
@@ -43,9 +44,10 @@ export async function configureLiveHome(home: string, privateKey: `0x${string}`,
 }
 
 export async function jsonCommand<T>(home: string, args: string[], timeoutMs = 180_000): Promise<T> {
-  const label = `rare ${args.join(' ')}`;
+  const commandArgs = withLiveWriteConsent(args);
+  const label = `rare ${commandArgs.join(' ')}`;
   return retryNonceConflict(label, async () => {
-    const run = async (): Promise<T> => parseJsonStdout<T>(await runCli(['--json', ...args], { home, timeoutMs }));
+    const run = async (): Promise<T> => parseJsonStdout<T>(await runCli(['--json', ...commandArgs], { home, timeoutMs }));
     if (!isLiveWriteCommand(args)) {
       return run();
     }
@@ -150,78 +152,6 @@ function isNonceConflict(error: unknown): boolean {
     /invalid transaction nonce/i,
     /account sequence mismatch/i,
   ].some((pattern) => pattern.test(message));
-}
-
-function isLiveWriteCommand(args: string[]): boolean {
-  const [command, subcommand] = args;
-  if (command === 'deploy') return true;
-  if (command === 'listing') {
-    if (subcommand === 'create' || subcommand === 'cancel' || subcommand === 'buy') return true;
-    if (subcommand === 'batch') {
-      const batchListingSubcommand = args[2];
-      return batchListingSubcommand === 'create' ||
-        batchListingSubcommand === 'cancel' ||
-        batchListingSubcommand === 'buy' ||
-        batchListingSubcommand === 'set-allowlist';
-    }
-    if (subcommand !== 'release') return false;
-    const releaseSubcommand = args[2];
-    if (releaseSubcommand === 'configure') return true;
-    if (releaseSubcommand === 'mint') return true;
-    if (releaseSubcommand === 'allowlist') return args[3] === 'set' || args[3] === 'clear';
-    if (releaseSubcommand === 'limits') return args[3]?.startsWith('set-') === true;
-    return false;
-  }
-  if (command === 'batch') {
-    if (subcommand === 'offer') {
-      const offerSubcommand = args[2];
-      return offerSubcommand === 'create' || offerSubcommand === 'revoke' || offerSubcommand === 'accept';
-    }
-    if (subcommand === 'auction') {
-      const auctionSubcommand = args[2];
-      return auctionSubcommand === 'create' ||
-        auctionSubcommand === 'cancel' ||
-        auctionSubcommand === 'bid' ||
-        auctionSubcommand === 'settle';
-    }
-    return false;
-  }
-  if (command === 'auction') {
-    if (subcommand === 'batch') {
-      const batchAuctionSubcommand = args[2];
-      return batchAuctionSubcommand === 'create' ||
-        batchAuctionSubcommand === 'cancel' ||
-        batchAuctionSubcommand === 'bid' ||
-        batchAuctionSubcommand === 'settle';
-    }
-    return subcommand === 'create' || subcommand === 'cancel' || subcommand === 'bid' || subcommand === 'settle';
-  }
-  if (command === 'offer') {
-    if (subcommand === 'batch') {
-      const batchOfferSubcommand = args[2];
-      return batchOfferSubcommand === 'create' ||
-        batchOfferSubcommand === 'revoke' ||
-        batchOfferSubcommand === 'accept';
-    }
-    return subcommand === 'create' || subcommand === 'cancel' || subcommand === 'accept';
-  }
-  if (command === 'collection') {
-    if (subcommand === 'deploy') return true;
-    if (subcommand === 'create' || subcommand === 'mint' || subcommand === 'mint-batch' || subcommand === 'prepare-lazy-mint') return true;
-    if (subcommand === 'metadata') {
-      const metadataSubcommand = args[2];
-      return metadataSubcommand === 'update-base-uri' ||
-        metadataSubcommand === 'update-token-uri' ||
-        metadataSubcommand === 'lock-base-uri';
-    }
-    if (subcommand === 'royalty') {
-      const royaltySubcommand = args[2];
-      if (royaltySubcommand === 'set-default-receiver' || royaltySubcommand === 'set-token-receiver') return true;
-      if (royaltySubcommand === 'registry') return args[3]?.startsWith('set-') === true;
-    }
-    return false;
-  }
-  return false;
 }
 
 export function liveRpcUrl(): string {
