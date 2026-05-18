@@ -35,8 +35,15 @@ export function readConfig(): Config {
     const raw = fs.readFileSync(CONFIG_FILE, 'utf-8');
     const parsed: unknown = JSON.parse(raw);
     return parseConfig(parsed);
-  } catch {
-    return { chains: {} };
+  } catch (error) {
+    if (isNodeFileNotFoundError(error)) {
+      return { chains: {} };
+    }
+    if (error instanceof SyntaxError) {
+      throw new Error(`Failed to parse rare config at ${CONFIG_FILE}.`, { cause: error });
+    }
+
+    throw error;
   }
 }
 
