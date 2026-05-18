@@ -305,12 +305,14 @@ function swapBuyTokenCommand(): Command {
     }) => {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
-      const wallet = getWalletClient(chain);
-      const rare = createRareClient({ publicClient, walletClient: wallet.client });
+      const wallet = opts.quoteOnly ? undefined : getWalletClient(chain);
+      const rare = wallet === undefined
+        ? createRareClient({ publicClient })
+        : createRareClient({ publicClient, walletClient: wallet.client });
       const ethAmountIn = opts.ethAmountIn ?? opts.eth;
       if (ethAmountIn === undefined) throw new Error('swap buy-token requires --eth-amount-in.');
       const token = parseAddress(opts.token, 'token');
-      const recipient = opts.recipient ? parseAddress(opts.recipient, 'recipient') : wallet.account.address;
+      const recipient = opts.recipient ? parseAddress(opts.recipient, 'recipient') : wallet?.account.address;
       const quote = await rare.swap.quoteBuyToken({
         token,
         ethAmountIn,
@@ -429,12 +431,14 @@ function swapSellTokenCommand(): Command {
     }) => {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
-      const wallet = getWalletClient(chain);
-      const rare = createRareClient({ publicClient, walletClient: wallet.client });
+      const wallet = opts.quoteOnly ? undefined : getWalletClient(chain);
+      const rare = wallet === undefined
+        ? createRareClient({ publicClient })
+        : createRareClient({ publicClient, walletClient: wallet.client });
       const amountIn = opts.amountIn ?? opts.amount;
       if (amountIn === undefined) throw new Error('swap sell-token requires --amount-in.');
       const token = parseAddress(opts.token, 'token');
-      const recipient = opts.recipient ? parseAddress(opts.recipient, 'recipient') : wallet.account.address;
+      const recipient = opts.recipient ? parseAddress(opts.recipient, 'recipient') : wallet?.account.address;
       const quote = await rare.swap.quoteSellToken({
         token,
         amountIn,
