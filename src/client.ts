@@ -11,6 +11,7 @@ import {
   type PrivateKeyReference,
 } from './config.js';
 import { createOnePasswordAccount } from './one-password.js';
+import { isJsonMode, log } from './output.js';
 
 export type WalletAccount = PrivateKeyAccount | LocalAccount;
 
@@ -100,22 +101,28 @@ function getWalletConfig(chain: SupportedChain): WalletConfig {
         `Run: rare configure --chain ${chain} --private-key-ref ${chainConfig.privateKeyRef}`,
     );
   }
+  if (isJsonMode()) {
+    throw new Error(
+      `no wallet configured for "${chain}". ` +
+        `Run: rare wallet generate --save --chain ${chain} or rare configure --chain ${chain} --private-key <key>.`,
+    );
+  }
 
-  console.log(`No private key configured for chain "${chain}". Generating a new wallet...`);
+  log(`No private key configured for chain "${chain}". Generating a new wallet...`);
   const privateKey = generatePrivateKey();
   const newAccount = privateKeyToAccount(privateKey);
-  console.log(`  Address:     ${newAccount.address}`);
-  console.log(`  Private Key: ${privateKey}`);
-  console.log('');
-  console.log('Store your private key securely. It will not be shown again.');
-  console.log('');
+  log(`  Address:     ${newAccount.address}`);
+  log(`  Private Key: ${privateKey}`);
+  log('');
+  log('Store your private key securely. It will not be shown again.');
+  log('');
 
   writeConfig(setChainConfig(readConfig(), chain, {
     privateKey,
     privateKeyRef: undefined,
     accountAddress: undefined,
   }));
-  console.log(`Private key saved to config for chain: ${chain}\n`);
+  log(`Private key saved to config for chain: ${chain}\n`);
 
   return { ...chainConfig, privateKey };
 }

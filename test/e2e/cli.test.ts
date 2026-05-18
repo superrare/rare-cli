@@ -286,6 +286,29 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('does not auto-generate and print wallet secrets for JSON commands', async () => {
+    await withTempHome(async (home) => {
+      const result = await runCli([
+        '--json',
+        'wallet',
+        'address',
+        '--chain',
+        'sepolia',
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).not.toContain('Private Key:');
+      expect(result.stderr).not.toMatch(/0x[0-9a-f]{64}/);
+
+      const error: unknown = JSON.parse(result.stderr);
+      expect(error).toEqual(expect.objectContaining({
+        error: true,
+        message: expect.stringContaining('no wallet configured for "sepolia"'),
+      }));
+    });
+  });
+
   it('exposes liquid edition deployment help', async () => {
     await withTempHome(async (home) => {
       const liquid = await runCli(['liquid-edition', 'deploy', '--help'], { home });
