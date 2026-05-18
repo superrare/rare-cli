@@ -21,11 +21,6 @@ import {
 
 type BatchFixture = LiveCliFixture & {
   collection: DeployResult;
-  listingTokens: [MintResult, MintResult];
-  offerRevokeTokens: [MintResult, MintResult];
-  offerAcceptTokens: [MintResult, MintResult];
-  auctionCancelTokens: [MintResult, MintResult];
-  auctionSettleTokens: [MintResult, MintResult];
 };
 
 type BatchTreeBuildResult = {
@@ -98,26 +93,6 @@ describeLive('live batch marketplace CLI commands', () => {
       live.set({
         ...fixture,
         collection,
-        listingTokens: [
-          await step('mint batch listing token 1', () => mintToken(fixture, collection.contract)),
-          await step('mint batch listing token 2', () => mintToken(fixture, collection.contract)),
-        ],
-        offerRevokeTokens: [
-          await step('mint batch offer revoke token 1', () => mintToken(fixture, collection.contract)),
-          await step('mint batch offer revoke token 2', () => mintToken(fixture, collection.contract)),
-        ],
-        offerAcceptTokens: [
-          await step('mint batch offer accept token 1', () => mintToken(fixture, collection.contract)),
-          await step('mint batch offer accept token 2', () => mintToken(fixture, collection.contract)),
-        ],
-        auctionCancelTokens: [
-          await step('mint batch auction cancel token 1', () => mintToken(fixture, collection.contract)),
-          await step('mint batch auction cancel token 2', () => mintToken(fixture, collection.contract)),
-        ],
-        auctionSettleTokens: [
-          await step('mint batch auction settle token 1', () => mintToken(fixture, collection.contract)),
-          await step('mint batch auction settle token 2', () => mintToken(fixture, collection.contract)),
-        ],
       });
     } catch (error) {
       await cleanupLiveCliFixture(fixture);
@@ -131,8 +106,9 @@ describeLive('live batch marketplace CLI commands', () => {
 
   it('creates a batch listing and buys it from the taker side', async () => {
     const fixture = live.value;
-    const [token] = fixture.listingTokens;
-    const listing = await buildBatchListingArtifact(fixture, 'listing-buy', fixture.listingTokens);
+    const tokens = await mintBatchTokenPair(fixture, 'batch listing');
+    const [token] = tokens;
+    const listing = await buildBatchListingArtifact(fixture, 'listing-buy', tokens);
 
     const created = await step('create batch listing as maker', () =>
       jsonCommand<BatchListingCreateResult>(fixture.sellerHome, [
@@ -180,7 +156,8 @@ describeLive('live batch marketplace CLI commands', () => {
 
   it('creates, reads, and revokes a batch offer', async () => {
     const fixture = live.value;
-    const tree = await buildBatchTree(fixture, 'offer-revoke', fixture.offerRevokeTokens);
+    const tokens = await mintBatchTokenPair(fixture, 'batch offer revoke');
+    const tree = await buildBatchTree(fixture, 'offer-revoke', tokens);
     const expiry = Math.floor(Date.now() / 1000) + 3_600;
 
     const created = await step('create batch offer for revoke', () =>
@@ -230,8 +207,9 @@ describeLive('live batch marketplace CLI commands', () => {
 
   it('creates and accepts a proof-backed batch offer', async () => {
     const fixture = live.value;
-    const [token] = fixture.offerAcceptTokens;
-    const tree = await buildBatchTree(fixture, 'offer-accept', fixture.offerAcceptTokens);
+    const tokens = await mintBatchTokenPair(fixture, 'batch offer accept');
+    const [token] = tokens;
+    const tree = await buildBatchTree(fixture, 'offer-accept', tokens);
     const proof = await buildBatchProof(fixture, tree.artifactPath, 'offer-accept', token);
     const expiry = Math.floor(Date.now() / 1000) + 3_600;
 
@@ -277,8 +255,9 @@ describeLive('live batch marketplace CLI commands', () => {
 
   it('creates, reads, and cancels a batch auction root', async () => {
     const fixture = live.value;
-    const tree = await buildBatchTree(fixture, 'auction-cancel', fixture.auctionCancelTokens);
-    const [token] = fixture.auctionCancelTokens;
+    const tokens = await mintBatchTokenPair(fixture, 'batch auction cancel');
+    const tree = await buildBatchTree(fixture, 'auction-cancel', tokens);
+    const [token] = tokens;
     const proof = await buildBatchProof(fixture, tree.artifactPath, 'auction-cancel', token);
     const endTime = Math.floor(Date.now() / 1000) + liveAuctionDurationSeconds();
 
@@ -324,8 +303,9 @@ describeLive('live batch marketplace CLI commands', () => {
 
   it('creates, bids, and settles a proof-backed batch auction', async () => {
     const fixture = live.value;
-    const [token] = fixture.auctionSettleTokens;
-    const tree = await buildBatchTree(fixture, 'auction-settle', fixture.auctionSettleTokens);
+    const tokens = await mintBatchTokenPair(fixture, 'batch auction settle');
+    const [token] = tokens;
+    const tree = await buildBatchTree(fixture, 'auction-settle', tokens);
     const proof = await buildBatchProof(fixture, tree.artifactPath, 'auction-settle', token);
     const endTime = Math.floor(Date.now() / 1000) + liveAuctionDurationSeconds();
 
@@ -411,6 +391,16 @@ async function buildBatchListingArtifact(
   }, null, 2)}\n`, 'utf8');
 
   return { artifactPath, proofPath, root };
+}
+
+async function mintBatchTokenPair(
+  fixture: BatchFixture,
+  label: string,
+): Promise<[MintResult, MintResult]> {
+  return [
+    await step(`mint ${label} token 1`, () => mintToken(fixture, fixture.collection.contract)),
+    await step(`mint ${label} token 2`, () => mintToken(fixture, fixture.collection.contract)),
+  ];
 }
 
 async function buildBatchListingProof(
