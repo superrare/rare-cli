@@ -13,7 +13,6 @@ import {
   expectTokenOwner,
   liveAuctionDurationSeconds,
   mintToken,
-  waitForAuctionToEnd,
   type DeployResult,
   type LiveCliFixture,
   type MintResult,
@@ -73,6 +72,7 @@ type BatchAuctionStatus = {
   root: `0x${string}` | null;
   hasRootConfig: boolean;
   hasAuction: boolean;
+  endTime: string | null;
   settlementEligible: boolean;
 };
 
@@ -365,8 +365,9 @@ describeLive('live batch marketplace CLI commands', () => {
       ], 240_000),
     ));
 
-    await step('wait for batch auction to end', waitForAuctionToEnd);
-    const ended = await readBatchAuctionStatus(fixture, token, proof.proofPath, tree.root);
+    const ended = await step('wait for batch auction to end', () =>
+      waitForBatchAuctionToEnd(fixture, token, proof.proofPath, tree.root),
+    );
     expect(ended.state).toBe('ENDED');
     expect(ended.settlementEligible).toBe(true);
 
@@ -557,4 +558,28 @@ async function readBatchAuctionStatus(
     '--chain',
     fixture.chain,
   ]);
+}
+
+async function waitForBatchAuctionToEnd(
+  fixture: BatchFixture,
+  token: MintResult,
+  proofPath: string,
+  root: `0x${string}`,
+): Promise<BatchAuctionStatus> {
+  const timeoutAt = Date.now() + (liveAuctionDurationSeconds() + 120) * 1000;
+  let latest = await readBatchAuctionStatus(fixture, token, proofPath, root);
+
+  while (latest.state !== 'ENDED' || !latest.settlementEligible) {
+    if (Date.now() >= timeoutAt) {
+      throw new Error(
+        `Timed out waiting for batch auction to end. Last state: ${latest.state}, ` +
+          `settlementEligible: ${String(latest.settlementEligible)}, endTime: ${String(latest.endTime)}.`,
+      );
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
+    latest = await readBatchAuctionStatus(fixture, token, proofPath, root);
+  }
+
+  return latest;
 }
