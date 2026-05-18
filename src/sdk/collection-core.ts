@@ -109,6 +109,17 @@ export type CollectionPrepareLazyMintWrite = {
   args: [string, bigint] | [string, bigint, Address];
 };
 
+export type CollectionPrepareMintEventArgs =
+  | { baseURI: string; numberOfTokens: bigint }
+  | { baseURI: string; startTokenId: bigint; endTokenId: bigint };
+
+export type CollectionPrepareMintEventShape = {
+  baseUri: string;
+  tokenCount: bigint;
+  fromTokenId?: bigint;
+  toTokenId?: bigint;
+};
+
 export type PlanCollectionTokenParams = {
   contract: Address;
   tokenId: IntegerInput;
@@ -455,6 +466,28 @@ export function buildCollectionPrepareLazyMintWrite(
   return {
     functionName: 'prepareMintWithMinter',
     args: [plan.baseUri, plan.tokenCount, plan.minter],
+  };
+}
+
+export function shapeCollectionPrepareMintEvent(
+  args: CollectionPrepareMintEventArgs,
+): CollectionPrepareMintEventShape {
+  if ('numberOfTokens' in args) {
+    return {
+      baseUri: args.baseURI,
+      tokenCount: args.numberOfTokens,
+    };
+  }
+
+  if (args.endTokenId < args.startTokenId) {
+    throw new Error('PrepareMint endTokenId must be greater than or equal to startTokenId.');
+  }
+
+  return {
+    baseUri: args.baseURI,
+    tokenCount: args.endTokenId - args.startTokenId + 1n,
+    fromTokenId: args.startTokenId,
+    toTokenId: args.endTokenId,
   };
 }
 

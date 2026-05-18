@@ -128,6 +128,8 @@ export type CollectionPrepareLazyMintResult = {
   contract: Address;
   baseUri: string;
   tokenCount: bigint;
+  fromTokenId?: bigint;
+  toTokenId?: bigint;
   minter?: Address;
 } & TransactionResult
 

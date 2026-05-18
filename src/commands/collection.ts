@@ -409,6 +409,8 @@ function createPrepareLazyMintCommand(): Command {
             contract: result.contract,
             baseUri: result.baseUri,
             tokenCount: result.tokenCount,
+            fromTokenId: result.fromTokenId,
+            toTokenId: result.toTokenId,
             minter: result.minter,
           },
           () => {

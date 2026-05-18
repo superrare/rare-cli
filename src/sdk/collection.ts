@@ -32,6 +32,7 @@ import {
   planCollectionTokenUri,
   planCreateLazySovereignCollection,
   planCreateSovereignCollection,
+  shapeCollectionPrepareMintEvent,
   shapeCollectionRoyaltyRegistryStatus,
   type CollectionRoyaltyRegistryStatusRead,
 } from './collection-core.js';
@@ -171,13 +172,13 @@ export function createCollectionNamespace(
         throw new Error('Lazy prepare mint transaction succeeded but PrepareMint was not found in logs.');
       }
 
+      const prepared = shapeCollectionPrepareMintEvent(prepareLog.args);
       if (plan.minter === undefined) {
         return {
           txHash,
           receipt,
           contract: plan.contract,
-          baseUri: prepareLog.args.baseURI,
-          tokenCount: prepareLog.args.numberOfTokens,
+          ...prepared,
         };
       }
 
@@ -185,8 +186,7 @@ export function createCollectionNamespace(
         txHash,
         receipt,
         contract: plan.contract,
-        baseUri: prepareLog.args.baseURI,
-        tokenCount: prepareLog.args.numberOfTokens,
+        ...prepared,
         minter: plan.minter,
       };
     },

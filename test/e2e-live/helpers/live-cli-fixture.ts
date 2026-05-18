@@ -53,6 +53,8 @@ export type CollectionPrepareLazyMintResult = {
   contract: Address;
   baseUri: string;
   tokenCount: string;
+  fromTokenId?: string;
+  toTokenId?: string;
   minter?: Address;
 };
 

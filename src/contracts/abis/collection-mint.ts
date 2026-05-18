@@ -50,4 +50,14 @@ export const collectionMintAbi = [
     name: 'PrepareMint',
     type: 'event',
   },
+  {
+    anonymous: false,
+    inputs: [
+      { indexed: true, internalType: 'uint256', name: 'startTokenId', type: 'uint256' },
+      { indexed: true, internalType: 'uint256', name: 'endTokenId', type: 'uint256' },
+      { indexed: false, internalType: 'string', name: 'baseURI', type: 'string' },
+    ],
+    name: 'PrepareMint',
+    type: 'event',
+  },
 ] as const;

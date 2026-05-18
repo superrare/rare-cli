@@ -29,6 +29,7 @@ import {
   planCreateLazySovereignCollection,
   planCreateSovereignCollection,
   shapeCollectionRoyaltyRegistryStatus,
+  shapeCollectionPrepareMintEvent,
 } from '../../../src/sdk/collection-core.js';
 
 const COLLECTION_ADDRESS = '0x1111111111111111111111111111111111111111';
@@ -266,6 +267,33 @@ describe('Sovereign collection core', () => {
       functionName: 'prepareMintWithMinter',
       args: ['ipfs://lazy', 3n, MINTER_ADDRESS],
     });
+  });
+
+  it('shapes both lazy prepare mint event variants', () => {
+    expect(shapeCollectionPrepareMintEvent({
+      numberOfTokens: 3n,
+      baseURI: 'ipfs://lazy',
+    })).toEqual({
+      baseUri: 'ipfs://lazy',
+      tokenCount: 3n,
+    });
+
+    expect(shapeCollectionPrepareMintEvent({
+      startTokenId: 10n,
+      endTokenId: 12n,
+      baseURI: 'ipfs://lazy',
+    })).toEqual({
+      baseUri: 'ipfs://lazy',
+      tokenCount: 3n,
+      fromTokenId: 10n,
+      toTokenId: 12n,
+    });
+
+    expect(() => shapeCollectionPrepareMintEvent({
+      startTokenId: 12n,
+      endTokenId: 10n,
+      baseURI: 'ipfs://lazy',
+    })).toThrow('PrepareMint endTokenId must be greater than or equal to startTokenId.');
   });
 
   it('plans collection token reads with non-negative token IDs', () => {
