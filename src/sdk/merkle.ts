@@ -250,6 +250,9 @@ export function validateRootArtifact(value: unknown): asserts value is BatchList
     if (value.allowList.addresses.length < 2) {
       throw new Error('allowList.addresses must contain at least two entries');
     }
+    value.allowList.addresses.forEach((address) => {
+      assertAddress(address, 'allowList.addresses entry');
+    });
   }
 }
 
@@ -265,6 +268,12 @@ export function validateProofArtifact(value: unknown): asserts value is BatchLis
   });
   if (value.allowListProof !== undefined && value.allowListProof !== null) {
     if (!Array.isArray(value.allowListProof)) throw new Error('allowListProof must be an array');
+    value.allowListProof.forEach((proof) => {
+      assertHexRoot(proof, 'allowListProof entry');
+    });
+  }
+  if (value.allowListAddress !== undefined && value.allowListAddress !== null) {
+    assertAddress(value.allowListAddress, 'allowListAddress');
   }
 }
 
