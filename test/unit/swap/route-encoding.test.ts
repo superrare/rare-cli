@@ -96,7 +96,7 @@ test('encodeRoute emits WRAP_ETH then a single-hop V4 swap block', () => {
   assert.equal(encoded.inputs.length, 2);
 
   const [actions] = decodeAbiParameters(parseAbiParameters('bytes actions, bytes[] params'), getInput(encoded.inputs, 1));
-  assert.equal(actions, '0x0b060f');
+  assert.equal(actions, '0x060b0f');
 });
 
 test('encodeRoute emits a V4 swap block followed by UNWRAP_WETH', () => {

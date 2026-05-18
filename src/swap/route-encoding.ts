@@ -260,7 +260,7 @@ function encodeV4ExactIn({
 
     const actions = encodePacked(
       ['uint8', 'uint8', 'uint8'],
-      [settleAction, V4_ACTIONS.SWAP_EXACT_IN_SINGLE, takeAction],
+      [V4_ACTIONS.SWAP_EXACT_IN_SINGLE, settleAction, takeAction],
     );
 
     return encodeAbiParameters(
@@ -268,8 +268,8 @@ function encodeV4ExactIn({
       [
         actions,
         [
-          settleParams,
           encodeV4ExactInSingle(singleStep, ROUTER_AMOUNT_CONSTANTS.openDelta, minAmountOut),
+          settleParams,
           takeParams,
         ],
       ],
