@@ -15,6 +15,7 @@ import { liquidEditionCommand } from './commands/liquid-edition.js';
 import { swapCommand } from './commands/swap.js';
 import { batchCommand } from './commands/batch.js';
 import { utilsCommand } from './commands/utils.js';
+import { getConfirmationDecision, type ConfirmationOptions } from './confirmation.js';
 import { loadDotEnv } from './env.js';
 import { printError } from './errors.js';
 
@@ -29,14 +30,17 @@ program
   .option('--json', 'output results as JSON');
 
 program.hook('preAction', async (_thisCommand, actionCommand) => {
-  if (!shouldConfirmAction(actionCommand)) {
-    return;
+  const decision = confirmationDecision(actionCommand);
+  if (decision === 'reject-json') {
+    throw new Error(`${commandPath(actionCommand).join(' ')} requires --yes when --json is enabled.`);
   }
-  if (await confirmProceed()) {
-    return;
-  }
+  if (decision === 'prompt') {
+    if (await confirmProceed()) {
+      return;
+    }
 
-  throw new Error('Aborted.');
+    throw new Error('Aborted.');
+  }
 });
 
 program.addCommand(configureCommand());
@@ -59,22 +63,15 @@ program.parseAsync(process.argv).catch((err: unknown) => {
   printError(err);
 });
 
-function shouldConfirmAction(command: Command): boolean {
-  const opts = command.opts<{ yes?: boolean; preview?: boolean; quoteOnly?: boolean }>();
-  if (opts.yes === true || opts.preview === true || opts.quoteOnly === true) {
-    return false;
-  }
-  if (!process.stdin.isTTY || process.env.RARE_SKIP_CONFIRMATION === '1') {
-    return false;
-  }
-  if (program.opts<{ json?: boolean }>().json === true) {
-    return false;
-  }
-  if (!command.options.some((option) => option.long === '--yes')) {
-    return false;
-  }
-
-  return commandPath(command).join(' ') !== 'rare configure delete';
+function confirmationDecision(command: Command): ReturnType<typeof getConfirmationDecision> {
+  return getConfirmationDecision({
+    commandPath: commandPath(command),
+    hasYesOption: command.options.some((option) => option.long === '--yes'),
+    options: command.opts<ConfirmationOptions>(),
+    stdinIsTty: process.stdin.isTTY,
+    skipConfirmation: process.env.RARE_SKIP_CONFIRMATION === '1',
+    jsonMode: program.opts<{ json?: boolean }>().json === true,
+  });
 }
 
 function commandPath(command: Command): string[] {
