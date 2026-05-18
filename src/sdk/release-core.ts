@@ -646,9 +646,6 @@ export function preflightReleaseDirectSaleMint(params: {
   }
 
   const allowlistRequired = isReleaseAllowlistActive(status, nowSeconds);
-  if (allowlistRequired && plan.proof.length === 0) {
-    throw new Error('Active allowlist requires a proof.');
-  }
   if (
     allowlistRequired &&
     !verifyReleaseAllowlistProof({

@@ -476,6 +476,54 @@ describe('release direct sale mint planning', () => {
     });
   });
 
+  it('preflights singleton allowlists with an empty Merkle proof', () => {
+    const artifact = buildReleaseAllowlistArtifact([accountAddress]);
+    const walletProof = getReleaseAllowlistProof({ artifact, address: accountAddress });
+    if (walletProof === null) {
+      throw new Error('expected allowlist proof for accountAddress');
+    }
+    expect(walletProof.proof).toEqual([]);
+
+    const status = shapeReleaseStatus({
+      rareMinter,
+      contract: collection,
+      directSale: {
+        seller: recipientAddress,
+        currencyAddress: ETH_ADDRESS,
+        price: 10n,
+        startTime: 90n,
+        maxMints: 2n,
+        splitRecipients: [recipientAddress],
+        splitRatios: [100],
+      },
+      allowlist: { root: artifact.root, endTimestamp: 200n },
+      mintLimit: 0n,
+      txLimit: 0n,
+      account: accountAddress,
+      accountMints: 0n,
+      accountTxs: 0n,
+      totalSupply: 1n,
+      maxSupply: 3n,
+      currencyDecimals: 18,
+      nowSeconds: 100n,
+    });
+
+    expect(preflightReleaseDirectSaleMint({
+      status,
+      plan: planReleaseDirectSaleMint({
+        contract: collection,
+        quantity: 1,
+        proof: walletProof.proof,
+      }),
+      buyer: accountAddress,
+      nowSeconds: 100n,
+    })).toMatchObject({
+      proof: [],
+      allowlistRequired: true,
+      buyer: accountAddress,
+    });
+  });
+
   it('rejects direct sale mints that fail contract preconditions', () => {
     const baseStatusInput = {
       rareMinter,
@@ -521,7 +569,7 @@ describe('release direct sale mint planning', () => {
       plan: planReleaseDirectSaleMint({ contract: collection }),
       buyer: accountAddress,
       nowSeconds: 100n,
-    })).toThrow('Active allowlist requires a proof.');
+    })).toThrow('Allowlist proof does not match the connected wallet and release root.');
 
     expect(() => preflightReleaseDirectSaleMint({
       status: shapeReleaseStatus({
