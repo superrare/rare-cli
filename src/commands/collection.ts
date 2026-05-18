@@ -152,7 +152,7 @@ function lazyBatchMintCmd(): Command {
       log(`  Symbol: ${symbol}`);
       if (opts.maxTokens) log(`  Max tokens: ${opts.maxTokens}`);
       else log(`  Max tokens: uncapped`);
-      log('Waiting for confirmation...');
+      log('Waiting for transaction confirmation...');
 
       const result = await rare.deploy.lazyBatchMint({
         name,
@@ -206,7 +206,7 @@ function createSovereignCollectionCommand(): Command {
       log(`  Contract type: ${contractType ?? 'standard'}`);
       log(`  Factory: ${factoryAddress}`);
       if (opts.maxTokens) log(`  Max tokens: ${opts.maxTokens}`);
-      log('Waiting for confirmation...');
+      log('Waiting for transaction confirmation...');
 
       try {
         const result = await rare.collection.createSovereign({
@@ -267,7 +267,7 @@ function createLazySovereignCollectionCommand(): Command {
       log(`  Contract type: ${contractType ?? 'lazy'}`);
       log(`  Factory: ${factoryAddress}`);
       log(`  Max tokens: ${opts.maxTokens}`);
-      log('Waiting for confirmation...');
+      log('Waiting for transaction confirmation...');
 
       try {
         const result = await rare.collection.createLazySovereign({
@@ -328,7 +328,7 @@ function createMintBatchCommand(): Command {
         log(`  Contract: ${contract}`);
         log(`  Base URI: ${opts.baseUri}`);
         log(`  Amount: ${amount}`);
-        log('Waiting for confirmation...');
+        log('Waiting for transaction confirmation...');
 
         const result = await rare.collection.mintBatch({
           contract,
@@ -393,7 +393,7 @@ function createPrepareLazyMintCommand(): Command {
         log(`  Base URI: ${opts.baseUri}`);
         log(`  Amount: ${amount}`);
         if (minter !== undefined) log(`  Minter: ${minter}`);
-        log('Waiting for confirmation...');
+        log('Waiting for transaction confirmation...');
 
         const result = await rare.collection.prepareLazyMint({
           contract,
@@ -532,7 +532,7 @@ function createSetDefaultRoyaltyReceiverCommand(): Command {
         log(`Setting default royalty receiver on ${chain}...`);
         log(`  Contract: ${contract}`);
         log(`  Receiver: ${receiver}`);
-        log('Waiting for confirmation...');
+        log('Waiting for transaction confirmation...');
 
         const result = await rare.collection.setDefaultRoyaltyReceiver({ contract, receiver });
 
@@ -576,7 +576,7 @@ function createSetTokenRoyaltyReceiverCommand(): Command {
         log(`  Contract: ${contract}`);
         log(`  Token ID: ${opts.tokenId}`);
         log(`  Receiver: ${receiver}`);
-        log('Waiting for confirmation...');
+        log('Waiting for transaction confirmation...');
 
         const result = await rare.collection.setTokenRoyaltyReceiver({
           contract,
@@ -681,7 +681,7 @@ function createRoyaltyRegistrySetReceiverOverrideCommand(): Command {
       log(`Setting royalty registry receiver override on ${chain}...`);
       if (registry !== undefined) log(`  Registry: ${registry}`);
       log(`  Receiver: ${receiver}`);
-      log('Waiting for confirmation...');
+      log('Waiting for transaction confirmation...');
 
       const result = await rare.collection.setRoyaltyRegistryReceiverOverride({ registry, receiver });
 
@@ -722,7 +722,7 @@ function createRoyaltyRegistrySetContractReceiverCommand(): Command {
       if (registry !== undefined) log(`  Registry: ${registry}`);
       log(`  Contract: ${contract}`);
       log(`  Receiver: ${receiver}`);
-      log('Waiting for confirmation...');
+      log('Waiting for transaction confirmation...');
 
       const result = await rare.collection.setRoyaltyRegistryContractReceiver({
         registry,
@@ -770,7 +770,7 @@ function createRoyaltyRegistrySetTokenReceiverCommand(): Command {
       log(`  Contract: ${contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Receiver: ${receiver}`);
-      log('Waiting for confirmation...');
+      log('Waiting for transaction confirmation...');
 
       const result = await rare.collection.setRoyaltyRegistryTokenReceiver({
         registry,
@@ -817,7 +817,7 @@ function createRoyaltyRegistrySetContractPercentageCommand(): Command {
       if (registry !== undefined) log(`  Registry: ${registry}`);
       log(`  Contract: ${contract}`);
       log(`  Percentage: ${opts.percentage}%`);
-      log('Waiting for confirmation...');
+      log('Waiting for transaction confirmation...');
 
       const result = await rare.collection.setRoyaltyRegistryContractPercentage({
         registry,
@@ -917,7 +917,7 @@ function createUpdateBaseUriCommand(): Command {
         log(`Updating collection base URI on ${chain}...`);
         log(`  Contract: ${contract}`);
         log(`  Base URI: ${opts.baseUri}`);
-        log('Waiting for confirmation...');
+        log('Waiting for transaction confirmation...');
 
         const result = await rare.collection.updateBaseUri({
           contract,
@@ -963,7 +963,7 @@ function createUpdateTokenUriCommand(): Command {
         log(`  Contract: ${contract}`);
         log(`  Token ID: ${opts.tokenId}`);
         log(`  Token URI: ${opts.tokenUri}`);
-        log('Waiting for confirmation...');
+        log('Waiting for transaction confirmation...');
 
         const result = await rare.collection.updateTokenUri({
           contract,
@@ -1007,7 +1007,7 @@ function createLockBaseUriCommand(): Command {
 
         log(`Locking collection base URI on ${chain}...`);
         log(`  Contract: ${contract}`);
-        log('Waiting for confirmation...');
+        log('Waiting for transaction confirmation...');
 
         const result = await rare.collection.lockBaseUri({ contract });
 
