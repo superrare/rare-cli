@@ -15,6 +15,9 @@ type StatusOptions = {
 };
 
 type TokenInfo = Awaited<ReturnType<RareClient['token']['getTokenInfo']>>;
+type TokenReader = {
+  token: Pick<RareClient['token'], 'getTokenInfo'>;
+};
 
 export function statusCommand(): Command {
   const cmd = new Command('status');
@@ -56,7 +59,7 @@ export function statusCommand(): Command {
                 console.log(`  Owner:    ${tokenInfo.owner}`);
                 console.log(`  URI:      ${tokenInfo.tokenUri}`);
               } else {
-                console.log(`\nToken #${opts.tokenId}: not found or error reading token`);
+                console.log(`\nToken #${opts.tokenId}: not found`);
               }
             }
           },
@@ -69,14 +72,46 @@ export function statusCommand(): Command {
   return cmd;
 }
 
-async function readTokenInfo(
-  rare: RareClient,
+export async function readTokenInfo(
+  rare: TokenReader,
   contract: `0x${string}`,
   tokenId: string,
 ): Promise<TokenInfo | null> {
   try {
     return await rare.token.getTokenInfo({ contract, tokenId });
-  } catch {
-    return null;
+  } catch (error) {
+    if (isTokenNotFoundError(error)) {
+      return null;
+    }
+
+    throw error;
   }
+}
+
+function isTokenNotFoundError(error: unknown): boolean {
+  return errorMessages(error).some((message) =>
+    /nonexistent token/iu.test(message) ||
+    /invalid token id/iu.test(message) ||
+    /erc721nonexistenttoken/iu.test(message) ||
+    /token (?:does not exist|not found)/iu.test(message) ||
+    /not found.*token/iu.test(message)
+  );
+}
+
+function errorMessages(error: unknown): string[] {
+  if (!(error instanceof Error)) {
+    return [];
+  }
+
+  return [
+    error.message,
+    ...stringArrayProperty(error, 'metaMessages'),
+    ...errorMessages(error.cause),
+  ];
+}
+
+function stringArrayProperty(value: object, key: string): string[] {
+  const descriptor = Object.getOwnPropertyDescriptor(value, key);
+  const property = descriptor === undefined ? undefined : descriptor.value as unknown;
+  return Array.isArray(property) && property.every((item) => typeof item === 'string') ? property : [];
 }

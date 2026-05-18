@@ -34,22 +34,28 @@ export function walletCommand(): Command {
       const privateKey = generatePrivateKey();
       const account = privateKeyToAccount(privateKey);
 
-      output({ address: account.address, privateKey }, () => {
-        console.log('Generated new wallet:');
-        console.log(`  Address:     ${account.address}`);
-        console.log(`  Private Key: ${privateKey}`);
-        console.log('');
-        console.log('⚠ Store your private key securely. It will not be shown again.');
-      });
-
       if (opts.save) {
         writeConfig(setChainConfig(readConfig(), selectedChain, {
           privateKey,
           privateKeyRef: undefined,
           accountAddress: undefined,
         }));
-        console.log(`\nPrivate key saved to config for chain: ${selectedChain}`);
       }
+
+      output({
+        address: account.address,
+        privateKey,
+        ...(opts.save ? { saved: true, chain: selectedChain } : {}),
+      }, () => {
+        console.log('Generated new wallet:');
+        console.log(`  Address:     ${account.address}`);
+        console.log(`  Private Key: ${privateKey}`);
+        console.log('');
+        console.log('⚠ Store your private key securely. It will not be shown again.');
+        if (opts.save) {
+          console.log(`\nPrivate key saved to config for chain: ${selectedChain}`);
+        }
+      });
     });
 
   cmd
@@ -59,7 +65,10 @@ export function walletCommand(): Command {
     .option('--chain-id <id>', `chain ID to use (${Object.entries(chainIds).map(([chain, id]) => `${id} (${chain})`).join(', ')})`)
     .action((opts: WalletAddressOptions): void => {
       const chain = getActiveChain(opts.chain, opts.chainId);
-      console.log(getConfiguredAccountAddress(chain) ?? getWalletClient(chain).account.address);
+      const address = getConfiguredAccountAddress(chain) ?? getWalletClient(chain).account.address;
+      output({ address, chain }, () => {
+        console.log(address);
+      });
     });
 
   return cmd;

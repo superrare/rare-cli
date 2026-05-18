@@ -21,6 +21,8 @@ export type Config = {
 
 const CONFIG_DIR = path.join(os.homedir(), '.rare');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
+const CONFIG_DIR_MODE = 0o700;
+const CONFIG_FILE_MODE = 0o600;
 
 export function getConfigFilePath(): string {
   return CONFIG_FILE;
@@ -48,8 +50,13 @@ export function readConfig(): Config {
 }
 
 export function writeConfig(config: Config): void {
-  fs.mkdirSync(CONFIG_DIR, { recursive: true });
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+  fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: CONFIG_DIR_MODE });
+  fs.chmodSync(CONFIG_DIR, CONFIG_DIR_MODE);
+  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), {
+    encoding: 'utf-8',
+    mode: CONFIG_FILE_MODE,
+  });
+  fs.chmodSync(CONFIG_FILE, CONFIG_FILE_MODE);
 }
 
 export function deleteConfig(): boolean {

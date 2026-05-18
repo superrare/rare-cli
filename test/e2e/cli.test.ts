@@ -278,11 +278,30 @@ describe('built CLI deterministic behavior', () => {
       expect(saved.code).toBe(0);
       expect(saved.stdout).toContain('Private key saved to config for chain: sepolia');
 
+      const savedJson = parseJsonStdout<{
+        address: string;
+        privateKey: string;
+        saved: true;
+        chain: string;
+      }>(await runCli(['--json', 'wallet', 'generate', '--save', '--chain', 'sepolia'], { home }));
+      expect(isAddress(savedJson.address)).toBe(true);
+      expect(savedJson.privateKey).toMatch(/^0x[0-9a-f]{64}$/);
+      expect(savedJson.saved).toBe(true);
+      expect(savedJson.chain).toBe('sepolia');
+
       const config: unknown = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
       if (!isConfigWithSepoliaPrivateKey(config)) {
         throw new Error('Expected saved config to include a Sepolia private key.');
       }
-      expect(config.chains.sepolia.privateKey).toMatch(/^0x[0-9a-f]{64}$/);
+      expect(config.chains.sepolia.privateKey).toBe(savedJson.privateKey);
+
+      const addressJson = parseJsonStdout<{ address: string; chain: string }>(
+        await runCli(['--json', 'wallet', 'address', '--chain', 'sepolia'], { home }),
+      );
+      expect(addressJson).toEqual({
+        address: privateKeyToAccount(savedJson.privateKey).address,
+        chain: 'sepolia',
+      });
     });
   });
 
