@@ -4,7 +4,7 @@ import {
   getBatchTokenProof,
   verifyBatchTokenProof,
 } from './batch-core.js';
-import { buildMerkleProofArtifact } from './merkle.js';
+import { buildMerkleProofArtifact } from './merkle-core.js';
 
 export function createUtilsNamespace(): RareClient['utils'] {
   return {

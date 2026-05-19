@@ -1,15 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type { Address } from 'viem';
 import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import {
   buildMerkleProofArtifact,
-  loadMerkleRootArtifact,
   validateProofArtifact,
   validateRootArtifact,
-} from '../../../src/sdk/merkle.js';
+} from '../../../src/sdk/merkle-core.js';
 import type { BatchListingRootArtifact } from '../../../src/sdk/types.js';
 
 const contract = '0x1111111111111111111111111111111111111111' satisfies Address;
@@ -118,19 +114,7 @@ describe('merkle artifact core utilities', () => {
     ).toThrow(/does not match artifact root/);
   });
 
-  it('loads root artifacts without computing roots from token-set input', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'rare-batch-root-artifact-'));
-    const path = join(dir, 'artifact.json');
-    try {
-      await writeFile(path, JSON.stringify(allowListedRootArtifact, null, 2));
-      const loaded = await loadMerkleRootArtifact(path);
-      expect(loaded.root).toBe(allowListedRootArtifact.root);
-      expect(loaded.allowList?.root).toBe(allowListedRootArtifact.allowList.root);
-
-      const parsed = JSON.parse(await readFile(path, 'utf8')) as unknown;
-      expect(() => validateRootArtifact(parsed)).not.toThrow();
-    } finally {
-      await rm(dir, { recursive: true, force: true });
-    }
+  it('validates root artifacts without computing roots from token-set input', () => {
+    expect(() => validateRootArtifact(allowListedRootArtifact)).not.toThrow();
   });
 });

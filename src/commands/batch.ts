@@ -22,10 +22,12 @@ import {
 } from '../sdk/batch-core.js';
 import {
   buildMerkleProofArtifact,
+} from '../sdk/merkle-core.js';
+import {
   loadMerkleProofArtifact,
   loadMerkleRootArtifact,
   writeMerkleArtifact,
-} from '../sdk/merkle.js';
+} from '../sdk/merkle-file.js';
 import { parseAddress } from '../sdk/validation.js';
 import { createBatchListingListCommand } from './account-market-list.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';

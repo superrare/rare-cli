@@ -304,12 +304,9 @@ export { rareMinterAbi } from '../contracts/abis/rare-minter.js';
 
 export {
   buildMerkleProofArtifact,
-  loadMerkleRootArtifact,
-  loadMerkleProofArtifact,
   validateRootArtifact,
   validateProofArtifact,
-  writeMerkleArtifact,
-} from './merkle.js';
+} from './merkle-core.js';
 export type {
   BatchListingTokenEntry,
   BatchListingRootArtifact,

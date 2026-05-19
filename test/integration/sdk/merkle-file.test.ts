@@ -6,8 +6,10 @@ import type { Address } from 'viem';
 import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import {
   loadMerkleRootArtifact,
+} from '../../../src/sdk/merkle-file.js';
+import {
   validateRootArtifact,
-} from '../../../src/sdk/merkle.js';
+} from '../../../src/sdk/merkle-core.js';
 import type { BatchListingRootArtifact } from '../../../src/sdk/types.js';
 
 const contract = '0x1111111111111111111111111111111111111111' satisfies Address;
