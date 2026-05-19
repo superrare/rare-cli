@@ -1,4 +1,11 @@
-import { zeroAddress, type Address, type PublicClient } from 'viem';
+import {
+  ContractFunctionExecutionError,
+  ContractFunctionRevertedError,
+  ContractFunctionZeroDataError,
+  zeroAddress,
+  type Address,
+  type PublicClient,
+} from 'viem';
 import { liquidEditionAbi } from '../contracts/abis/liquid-edition.js';
 import { normalizeAddress } from './pool-core.js';
 import type { PoolKey } from './route-types.js';
@@ -31,7 +38,22 @@ export async function getLiquidEditionPoolKey(
       tickSpacing: Number(tickSpacing),
       hooks,
     };
-  } catch {
-    return null;
+  } catch (error) {
+    if (isUnavailablePoolKeyFunction(error)) {
+      return null;
+    }
+
+    throw error;
   }
+}
+
+function isUnavailablePoolKeyFunction(error: unknown): boolean {
+  if (!(error instanceof ContractFunctionExecutionError)) {
+    return false;
+  }
+
+  return (
+    error.cause instanceof ContractFunctionRevertedError ||
+    error.cause instanceof ContractFunctionZeroDataError
+  );
 }

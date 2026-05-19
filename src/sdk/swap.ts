@@ -92,6 +92,15 @@ type LocalTokenTradeQuoteDetails = {
   quote: LocalTokenTradeQuote;
 };
 
+type LocalTokenTradeQuoteUnavailableReason = 'no-canonical-route';
+
+type LocalTokenTradeQuoteUnavailable = {
+  kind: 'unavailable';
+  reason: LocalTokenTradeQuoteUnavailableReason;
+};
+
+type LocalTokenTradeQuoteResult = LocalTokenTradeQuoteDetails | LocalTokenTradeQuoteUnavailable;
+
 type UniswapTokenTradeQuoteDetails = {
   kind: 'uniswap';
   quote: UniswapTokenTradeQuote;
@@ -139,49 +148,45 @@ async function buildLocalTokenTradeQuote(
   chain: SupportedChain,
   addresses: { v4Quoter?: Address },
   params: LocalTradeParams,
-): Promise<LocalTokenTradeQuoteDetails | null> {
-  try {
-    const route = await resolveCanonicalEthTradeRoute(publicClient, chain, params.token, params.direction);
-    if (!route) {
-      return null;
-    }
-
-    const quoterAddress = requireConfiguredAddress(addresses.v4Quoter, 'Uniswap V4 quoter', chain);
-    const amountIn =
-      params.direction === 'buy'
-        ? toWei(params.amountIn)
-        : await toTokenAmount(publicClient, params.token, params.amountIn, 'amountIn');
-    const defaultSlippageBps = resolveSlippageBps(params.slippageBps);
-    const estimatedQuote = await quoteRoute(publicClient, quoterAddress, route, amountIn, 0n);
-    const minAmountOut =
-      params.direction === 'buy'
-        ? params.minAmountOut !== undefined
-          ? await toTokenAmount(publicClient, params.token, params.minAmountOut, 'minAmountOut')
-          : computeMinAmountOut(estimatedQuote.amountOut, defaultSlippageBps)
-        : params.minAmountOut !== undefined
-          ? toWei(params.minAmountOut)
-          : computeMinAmountOut(estimatedQuote.amountOut, defaultSlippageBps);
-    const routeQuote = { ...estimatedQuote, minAmountOut };
-    const { commands, inputs } = encodeRoute(routeQuote, amountIn, route.tokenIn, route.tokenOut);
-
-    return {
-      kind: 'local',
-      quote: buildLiquidRouterTradeQuote({
-        amountIn,
-        route,
-        routeQuote,
-        minAmountOut,
-        inputDecimals: await getTokenDecimals(publicClient, route.tokenIn),
-        outputDecimals: await getTokenDecimals(publicClient, route.tokenOut),
-        defaultSlippageBps,
-        usedMinAmountOutOverride: params.minAmountOut !== undefined,
-        commands,
-        inputs,
-      }),
-    };
-  } catch {
-    return null;
+): Promise<LocalTokenTradeQuoteResult> {
+  const route = await resolveCanonicalEthTradeRoute(publicClient, chain, params.token, params.direction);
+  if (!route) {
+    return { kind: 'unavailable', reason: 'no-canonical-route' };
   }
+
+  const quoterAddress = requireConfiguredAddress(addresses.v4Quoter, 'Uniswap V4 quoter', chain);
+  const amountIn =
+    params.direction === 'buy'
+      ? toWei(params.amountIn)
+      : await toTokenAmount(publicClient, params.token, params.amountIn, 'amountIn');
+  const defaultSlippageBps = resolveSlippageBps(params.slippageBps);
+  const estimatedQuote = await quoteRoute(publicClient, quoterAddress, route, amountIn, 0n);
+  const minAmountOut =
+    params.direction === 'buy'
+      ? params.minAmountOut !== undefined
+        ? await toTokenAmount(publicClient, params.token, params.minAmountOut, 'minAmountOut')
+        : computeMinAmountOut(estimatedQuote.amountOut, defaultSlippageBps)
+      : params.minAmountOut !== undefined
+        ? toWei(params.minAmountOut)
+        : computeMinAmountOut(estimatedQuote.amountOut, defaultSlippageBps);
+  const routeQuote = { ...estimatedQuote, minAmountOut };
+  const { commands, inputs } = encodeRoute(routeQuote, amountIn, route.tokenIn, route.tokenOut);
+
+  return {
+    kind: 'local',
+    quote: buildLiquidRouterTradeQuote({
+      amountIn,
+      route,
+      routeQuote,
+      minAmountOut,
+      inputDecimals: await getTokenDecimals(publicClient, route.tokenIn),
+      outputDecimals: await getTokenDecimals(publicClient, route.tokenOut),
+      defaultSlippageBps,
+      usedMinAmountOutOverride: params.minAmountOut !== undefined,
+      commands,
+      inputs,
+    }),
+  };
 }
 
 async function buildUniswapFallbackTradeQuote(
@@ -286,7 +291,7 @@ async function buildTokenTradeQuote(
   params: LocalTradeParams,
 ): Promise<TokenTradeQuoteDetails> {
   const localQuote = await buildLocalTokenTradeQuote(publicClient, chain, addresses, params);
-  if (localQuote) {
+  if (localQuote.kind === 'local') {
     return localQuote;
   }
 
@@ -313,7 +318,7 @@ async function buildBuyRareQuote(
     slippageBps: params.slippageBps,
   });
 
-  if (!tokenQuote) {
+  if (tokenQuote.kind === 'unavailable') {
     throw new Error('Failed to build the canonical RARE route.');
   }
 
