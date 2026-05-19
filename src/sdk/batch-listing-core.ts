@@ -5,7 +5,7 @@ import type {
   BatchListingRootArtifact,
   BatchListingStatus,
 } from './types.js';
-import { planSplits } from './marketplace-core.js';
+import { planPayoutSplits } from './splits-core.js';
 
 export type BatchListingReadConfig = {
   currency: Address;
@@ -43,11 +43,11 @@ export function planBatchListingRootRegistration(
 
   const { splitAddresses, splitRatios } = artifact;
   if (splitAddresses.length === 0 && splitRatios.length === 0) {
-    const splits = planSplits(undefined, undefined, accountAddress);
+    const splits = planPayoutSplits(undefined, undefined, accountAddress);
     return { splitAddresses: splits.addresses, splitRatios: splits.ratios };
   }
 
-  const splits = planSplits(splitAddresses, splitRatios, accountAddress);
+  const splits = planPayoutSplits(splitAddresses, splitRatios, accountAddress);
   return { splitAddresses: splits.addresses, splitRatios: splits.ratios };
 }
 

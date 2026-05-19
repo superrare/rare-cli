@@ -1,4 +1,5 @@
 import type { Address } from 'viem';
+import { MAX_PAYOUT_SPLIT_RECIPIENTS, planProvidedPayoutSplits } from '../sdk/splits-core.js';
 import { parseAddress } from '../sdk/validation.js';
 
 export type SplitAccumulator = {
@@ -13,8 +14,8 @@ export type SplitOptions = {
 
 export function collectSplit(value: string, previous: SplitAccumulator | undefined): SplitAccumulator {
   const acc = previous ?? { addresses: [], ratios: [] };
-  if (acc.addresses.length >= 5) {
-    throw new Error('--split can be provided at most 5 times.');
+  if (acc.addresses.length >= MAX_PAYOUT_SPLIT_RECIPIENTS) {
+    throw new Error(`--split can be provided at most ${MAX_PAYOUT_SPLIT_RECIPIENTS} times.`);
   }
   const idx = value.indexOf('=');
   if (idx <= 0 || idx === value.length - 1) {
@@ -33,11 +34,11 @@ export function finalizeSplits(acc: SplitAccumulator | undefined): SplitOptions 
   if (acc === undefined || acc.addresses.length === 0) {
     return undefined;
   }
-  if (acc.addresses.length > 5) {
-    throw new Error('--split can be provided at most 5 times.');
+  if (acc.addresses.length > MAX_PAYOUT_SPLIT_RECIPIENTS) {
+    throw new Error(`--split can be provided at most ${MAX_PAYOUT_SPLIT_RECIPIENTS} times.`);
   }
 
-  return { addresses: acc.addresses, ratios: acc.ratios };
+  return planProvidedPayoutSplits(acc.addresses, acc.ratios);
 }
 
 export function formatSplitLines(splits: SplitOptions): string[] {

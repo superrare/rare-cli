@@ -7,20 +7,18 @@ import { getPublicClient, getWalletClient } from '../client.js';
 import { printError } from '../errors.js';
 import {
   buildReleaseAllowlistArtifactFromInput,
-  collectReleaseSplit,
   createRareClient,
-  finalizeReleaseSplitAccumulator,
   getReleaseAllowlistProof,
   normalizeReleaseAllowlistProof,
   parseReleaseAllowlistArtifactJson,
   type RareClient,
   type ReleaseAllowlistArtifact,
   type ReleaseAllowlistInputFormat,
-  type ReleaseSplitAccumulator,
 } from '../sdk/index.js';
 import { resolveCurrency } from '../contracts/addresses.js';
 import { output, log } from '../output.js';
 import { runWithPaymentApprovalConsent } from './approval-consent.js';
+import { collectSplit, finalizeSplits, type SplitAccumulator } from './splits-core.js';
 
 const ETH_ADDRESS = zeroAddress;
 
@@ -31,7 +29,7 @@ type ReleaseConfigureOptions = {
   currency?: string;
   startTime?: string;
   start?: string;
-  split?: ReleaseSplitAccumulator;
+  split?: SplitAccumulator;
   chain?: string;
   chainId?: string;
 };
@@ -198,13 +196,13 @@ export function releaseCommand(): Command {
     .option(
       '--split <addr=ratio>',
       'payout split recipient (repeatable). Format: 0xADDR=RATIO. Ratios must sum to 100. If omitted, 100% goes to the connected wallet.',
-      collectReleaseSplit,
+      collectSplit,
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: ReleaseConfigureOptions): Promise<void> => {
       try {
-        const splits = finalizeReleaseSplitAccumulator(opts.split);
+        const splits = finalizeSplits(opts.split);
         assertAddressOption(opts.contract, 'contract');
         const maxMints = opts.maxMints;
         if (maxMints === undefined) {

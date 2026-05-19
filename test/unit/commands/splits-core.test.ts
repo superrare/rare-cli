@@ -28,6 +28,17 @@ test('collectSplit rejects invalid split option shape and addresses', () => {
   assert.throws(() => collectSplit('not-an-address=50', undefined), /valid EVM address/);
 });
 
+test('finalizeSplits applies shared payout split validation', () => {
+  assert.throws(
+    () => finalizeSplits(collectSplit(`${sellerAddress}=80`, undefined)),
+    /splitRatios must sum to 100 \(got 80\)/,
+  );
+  assert.throws(
+    () => finalizeSplits(collectSplit(`${sellerAddress}=0`, undefined)),
+    /Invalid split ratio/,
+  );
+});
+
 test('formatSplitLines renders split summaries consistently', () => {
   const splits = finalizeSplits(collectSplit(`${collaboratorAddress}=100`, undefined));
   if (splits === undefined) {

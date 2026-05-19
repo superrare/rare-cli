@@ -139,6 +139,12 @@ export type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../
 export type { LiquidFactoryConfig } from '../liquid/factory-config.js';
 
 export { NftApprovalRequiredError, PaymentApprovalRequiredError } from './helpers.js';
+export {
+  MAX_PAYOUT_SPLIT_RECIPIENTS,
+  planPayoutSplits,
+  planProvidedPayoutSplits,
+} from './splits-core.js';
+export type { PayoutSplits } from './splits-core.js';
 
 export {
   buildCollectionMintBatchWrite,
@@ -232,8 +238,6 @@ export type { NftIdentityParams } from './nft-core.js';
 export {
   buildReleaseAllowlistArtifact,
   buildReleaseAllowlistArtifactFromInput,
-  collectReleaseSplit,
-  finalizeReleaseSplitAccumulator,
   getReleaseAllowlistProof,
   normalizeReleaseAllowlistProof,
   parseReleaseAllowlistArtifact,
@@ -244,7 +248,6 @@ export {
 } from './release-core.js';
 export type {
   ReleaseAllowlistInputFormat,
-  ReleaseSplitAccumulator,
 } from './release-core.js';
 export type {
   MintGeneratedMetadataPlan,

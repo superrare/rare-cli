@@ -113,7 +113,7 @@ describe('batch offer core', () => {
       tokenId: '2',
       splitAddresses: [ACCOUNT],
       splitRatios: [99],
-    }, ACCOUNT)).toThrow('splitRatios must sum to 100.');
+    }, ACCOUNT)).toThrow('splitRatios must sum to 100 (got 99).');
   });
 
   it('shapes active, expired, and absent batch offer statuses', () => {

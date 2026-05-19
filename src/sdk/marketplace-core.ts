@@ -24,7 +24,7 @@ import {
   requireInput,
   toUnixTimestamp,
 } from './helpers.js';
-import { parseAddress } from './validation.js';
+import { planPayoutSplits, planProvidedPayoutSplits } from './splits-core.js';
 
 type ResolvedCurrencyParam<T extends { currency?: unknown }> = Omit<T, 'currency'> & {
   currency?: Address;
@@ -255,56 +255,14 @@ export function planSplits(
   splitRatios: number[] | undefined,
   accountAddress: Address,
 ): { addresses: Address[]; ratios: number[] } {
-  if (splitAddresses === undefined && splitRatios === undefined) {
-    return { addresses: [accountAddress], ratios: [100] };
-  }
-
-  if (splitAddresses === undefined || splitRatios === undefined) {
-    throw new Error('splitAddresses and splitRatios must both be provided.');
-  }
-
-  return planProvidedSplits(splitAddresses, splitRatios);
+  return planPayoutSplits(splitAddresses, splitRatios, accountAddress);
 }
 
 export function planProvidedSplits(
   splitAddresses: Address[],
   splitRatios: number[],
 ): { addresses: Address[]; ratios: number[] } {
-  if (splitAddresses.length === 0) {
-    throw new Error('splitAddresses must include at least 1 address.');
-  }
-
-  if (splitAddresses.length > 5) {
-    throw new Error('splitAddresses cannot include more than 5 addresses.');
-  }
-
-  if (splitAddresses.length !== splitRatios.length) {
-    throw new Error('splitAddresses and splitRatios must have the same length.');
-  }
-
-  const normalizedAddresses = splitAddresses.map((address) => parseAddress(address, 'splitAddress'));
-
-  const duplicateAddress = normalizedAddresses.find((address, index) =>
-    normalizedAddresses.some((otherAddress, otherIndex) =>
-      otherIndex < index && isAddressEqual(address, otherAddress),
-    ),
-  );
-  if (duplicateAddress !== undefined) {
-    throw new Error(`Duplicate split address: "${duplicateAddress}".`);
-  }
-
-  const totalRatio = splitRatios.reduce((total, ratio) => {
-    if (!Number.isInteger(ratio) || ratio < 1 || ratio > 100) {
-      throw new Error(`Invalid split ratio: "${String(ratio)}". Must be an integer between 1 and 100.`);
-    }
-    return total + ratio;
-  }, 0);
-
-  if (totalRatio !== 100) {
-    throw new Error(`splitRatios must sum to 100 (got ${totalRatio}).`);
-  }
-
-  return { addresses: normalizedAddresses, ratios: [...splitRatios] };
+  return planProvidedPayoutSplits(splitAddresses, splitRatios);
 }
 
 export function planAuctionCreate(

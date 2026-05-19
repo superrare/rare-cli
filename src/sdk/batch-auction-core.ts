@@ -7,6 +7,7 @@ import {
   toUnixTimestamp,
 } from './helpers.js';
 import { normalizeBytes32, verifyBatchTokenProof } from './batch-core.js';
+import { planPayoutSplits } from './splits-core.js';
 import type {
   BatchAuctionBidParams,
   BatchAuctionCancelParams,
@@ -380,31 +381,10 @@ function planSplitRecipients(
   splitRatios: number[] | undefined,
   accountAddress: Address,
 ): Pick<BatchAuctionCreatePlan, 'splitAddresses' | 'splitRatios'> {
-  const addresses = splitAddresses ?? [accountAddress];
-  const ratios = splitRatios ?? [100];
-
-  if (addresses.length === 0) {
-    throw new Error('splitAddresses must include at least one address.');
-  }
-  if (addresses.length > 5) {
-    throw new Error('splitAddresses cannot include more than 5 addresses.');
-  }
-  if (addresses.length !== ratios.length) {
-    throw new Error('splitAddresses and splitRatios must have the same length.');
-  }
-  const total = ratios.reduce((sum, ratio, index) => {
-    if (!Number.isInteger(ratio) || ratio < 0 || ratio > 100) {
-      throw new Error(`splitRatios[${index}] must be an integer from 0 to 100.`);
-    }
-    return sum + ratio;
-  }, 0);
-  if (total !== 100) {
-    throw new Error('splitRatios must sum to 100.');
-  }
-
+  const splits = planPayoutSplits(splitAddresses, splitRatios, accountAddress);
   return {
-    splitAddresses: addresses,
-    splitRatios: ratios,
+    splitAddresses: splits.addresses,
+    splitRatios: splits.ratios,
   };
 }
 

@@ -7,8 +7,6 @@ import {
   assertReleaseLimitMatches,
   buildReleaseAllowlistArtifact,
   buildReleaseAllowlistArtifactFromInput,
-  collectReleaseSplit,
-  finalizeReleaseSplitAccumulator,
   getReleaseAllowlistProof,
   normalizeReleasePrice,
   normalizeReleaseStartTime,
@@ -104,7 +102,7 @@ describe('release configure planning', () => {
         splitRatios: [50],
         defaultRecipient: accountAddress,
       }),
-    ).toThrow('Split ratios must sum to 100 (got 50).');
+    ).toThrow('splitRatios must sum to 100 (got 50).');
     expect(() =>
       normalizeReleasePrice({
         currencyAddress: erc20Currency,
@@ -112,18 +110,6 @@ describe('release configure planning', () => {
         currencyDecimals: null,
       }),
     ).toThrow('currencyDecimals is required to normalize ERC20 price amounts.');
-  });
-
-  it('parses repeatable split CLI values without mutating prior accumulator state', () => {
-    const first = collectReleaseSplit(`${accountAddress}=60`, undefined);
-    const second = collectReleaseSplit(`${recipientAddress}=40`, first);
-
-    expect(first).toEqual({ addresses: [accountAddress], ratios: [60] });
-    expect(second).toEqual({ addresses: [accountAddress, recipientAddress], ratios: [60, 40] });
-    expect(finalizeReleaseSplitAccumulator(second)).toEqual({
-      addresses: [accountAddress, recipientAddress],
-      ratios: [60, 40],
-    });
   });
 
   it('checks collection ownership as pure release validation', () => {

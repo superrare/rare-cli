@@ -30,6 +30,7 @@ import {
   toNonNegativeInteger,
   toPositiveInteger,
 } from './helpers.js';
+import { planPayoutSplits } from './splits-core.js';
 
 export const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 export const RELEASE_ALLOWLIST_ARTIFACT_KIND = 'rare-release-allowlist-v1' as const;
@@ -116,11 +117,6 @@ export type ReleaseMintTokenRange = {
   tokenIdStart: bigint;
   tokenIdEnd: bigint;
   tokenIds: bigint[];
-};
-
-export type ReleaseSplitAccumulator = {
-  addresses: Address[];
-  ratios: number[];
 };
 
 export function requireRareMinterAddress(address: Address | undefined): Address {
@@ -226,53 +222,10 @@ export function resolveReleaseSplits(opts: {
   splitRatios?: number[];
   defaultRecipient: Address;
 }): { splitRecipients: Address[]; splitRatios: number[] } {
-  const { splitAddresses, splitRatios, defaultRecipient } = opts;
-  const hasAddresses = splitAddresses !== undefined;
-  const hasRatios = splitRatios !== undefined;
-
-  if (!hasAddresses && !hasRatios) {
-    return {
-      splitRecipients: [defaultRecipient],
-      splitRatios: [100],
-    };
-  }
-
-  if (!splitAddresses || !splitRatios) {
-    throw new Error('splitAddresses and splitRatios must be provided together.');
-  }
-
-  if (splitAddresses.length === 0) {
-    throw new Error('At least one split recipient is required.');
-  }
-
-  if (splitAddresses.length !== splitRatios.length) {
-    throw new Error('splitAddresses and splitRatios must have the same length.');
-  }
-
-  const { sum } = splitAddresses.reduce<{ seen: Address[]; sum: number }>((state, address, index) => {
-    const ratio = splitRatios[index];
-    if (ratio === undefined) {
-      throw new Error('splitAddresses and splitRatios must have the same length.');
-    }
-    if (state.seen.some((seenAddress) => isAddressEqual(seenAddress, address))) {
-      throw new Error(`Duplicate split recipient: "${address}".`);
-    }
-    if (!Number.isInteger(ratio) || ratio < 1 || ratio > 100) {
-      throw new Error(`Invalid split ratio "${ratio}". Ratios must be integers between 1 and 100.`);
-    }
-    return {
-      seen: [...state.seen, address],
-      sum: state.sum + ratio,
-    };
-  }, { seen: [], sum: 0 });
-
-  if (sum !== 100) {
-    throw new Error(`Split ratios must sum to 100 (got ${sum}).`);
-  }
-
+  const splits = planPayoutSplits(opts.splitAddresses, opts.splitRatios, opts.defaultRecipient);
   return {
-    splitRecipients: [...splitAddresses],
-    splitRatios: [...splitRatios],
+    splitRecipients: splits.addresses,
+    splitRatios: splits.ratios,
   };
 }
 
@@ -374,60 +327,6 @@ export function planReleaseDirectSaleMint(params: ResolvedCurrencyParam<ReleaseM
 
 export function normalizeReleaseAllowlistProof(proof: readonly unknown[]): Hex[] {
   return proof.map((entry, index) => normalizeBytes32(entry, `proof[${index}]`));
-}
-
-export function collectReleaseSplit(
-  value: string,
-  previous: ReleaseSplitAccumulator | undefined,
-): ReleaseSplitAccumulator {
-  const idx = value.indexOf('=');
-  if (idx <= 0 || idx === value.length - 1) {
-    throw new Error(`Invalid --split format: "${value}". Expected ADDRESS=RATIO (e.g. 0xabc...=70).`);
-  }
-
-  const address = value.slice(0, idx).trim();
-  const ratioInput = value.slice(idx + 1).trim();
-  if (!isAddress(address)) {
-    throw new Error(`Invalid address in --split: "${address}".`);
-  }
-
-  const addresses = previous === undefined ? [] : [...previous.addresses];
-  const ratios = previous === undefined ? [] : [...previous.ratios];
-  if (addresses.length >= 5) {
-    throw new Error('--split can be provided at most 5 times.');
-  }
-  if (addresses.some((candidate) => isAddressEqual(candidate, address))) {
-    throw new Error(`Duplicate address in --split: "${address}".`);
-  }
-
-  const ratio = Number(ratioInput);
-  if (!Number.isInteger(ratio) || ratio < 1 || ratio > 100) {
-    throw new Error(`Invalid ratio in --split: "${ratioInput}". Must be an integer between 1 and 100.`);
-  }
-
-  return {
-    addresses: [...addresses, address],
-    ratios: [...ratios, ratio],
-  };
-}
-
-export function finalizeReleaseSplitAccumulator(
-  accumulator: ReleaseSplitAccumulator | undefined,
-): { addresses: Address[]; ratios: number[] } | undefined {
-  if (!accumulator || accumulator.addresses.length === 0) return undefined;
-  if (accumulator.addresses.length > 5) {
-    throw new Error('--split can be provided at most 5 times.');
-  }
-
-  const sum = accumulator.ratios.reduce((total, ratio) => total + ratio, 0);
-  if (sum !== 100) {
-    throw new Error(`--split ratios must sum to 100 (got ${sum}).`);
-  }
-
-  return {
-    addresses: [...accumulator.addresses],
-    ratios: [...accumulator.ratios],
-  };
 }
 
 export function buildReleaseAllowlistArtifactFromInput(
