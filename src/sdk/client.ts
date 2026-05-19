@@ -22,6 +22,50 @@ import { buildNftUniversalTokenId } from './nft-core.js';
 
 export type * from './types/client.js';
 
+/**
+ * Creates a chain-bound RARE SDK client from viem clients.
+ *
+ * The returned client derives its RARE network from `config.publicClient.chain`.
+ * Read-only namespaces such as `search`, `nft`, `collection.get`, `token`,
+ * and `currency` only require a public client. Write flows such as minting,
+ * listings, offers, auctions, imports, releases, and swaps require a wallet
+ * client and may also use `config.account` when the viem wallet client does
+ * not expose one directly.
+ *
+ * Create a separate RareClient for each chain you want to read or write. SDK
+ * methods intentionally reject per-call `chain` or `chainId` overrides when
+ * the client already knows its chain.
+ *
+ * See the generated [SDK Client Methods](/sdk/client-methods) page for the
+ * flat list of callable `rare.*` methods exposed by the returned client.
+ *
+ * @example
+ * ```ts
+ * import { createPublicClient, createWalletClient, http } from 'viem';
+ * import { privateKeyToAccount } from 'viem/accounts';
+ * import { sepolia } from 'viem/chains';
+ * import { createRareClient } from '@rareprotocol/rare-cli/client';
+ *
+ * const account = privateKeyToAccount(process.env.PRIVATE_KEY as `0x${string}`);
+ * const publicClient = createPublicClient({
+ *   chain: sepolia,
+ *   transport: http(process.env.RPC_URL),
+ * });
+ * const walletClient = createWalletClient({
+ *   account,
+ *   chain: sepolia,
+ *   transport: http(process.env.RPC_URL),
+ * });
+ *
+ * const rare = createRareClient({ publicClient, walletClient });
+ *
+ * const nfts = await rare.search.nfts({ query: 'portrait', perPage: 10 });
+ * const token = await rare.nft.get({
+ *   contract: '0x...',
+ *   tokenId: '1',
+ * });
+ * ```
+ */
 export function createRareClient(config: RareClientConfig): RareClient {
   const { publicClient } = config;
   const chain = resolveChainFromPublicClient(publicClient);

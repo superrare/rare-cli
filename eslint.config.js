@@ -21,6 +21,9 @@ export default defineConfig([
     ignores: [
       'coverage/**',
       'dist/**',
+      '.docs-build/**',
+      '.docusaurus/**',
+      'docs-site/.docusaurus/**',
       'node_modules/**',
       'src/data-access/schema.d.ts',
       'eslint-local-rules/**/*.d.ts',
@@ -332,7 +335,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['vitest.config.ts', 'tsup.config.ts'],
+    files: ['vitest.config.ts', 'tsup.config.ts', 'scripts/**/*.ts'],
     rules: {
       '@typescript-eslint/consistent-type-definitions': 'off',
       '@typescript-eslint/explicit-function-return-type': 'off',

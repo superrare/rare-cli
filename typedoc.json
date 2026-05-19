@@ -1,0 +1,20 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "src/sdk/index.ts",
+    "src/sdk/contracts.ts",
+    "src/sdk/public-utils.ts"
+  ],
+  "entryPointStrategy": "resolve",
+  "plugin": ["typedoc-plugin-markdown"],
+  "out": "docs/sdk/reference",
+  "readme": "none",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeInternal": true,
+  "excludeExternals": true,
+  "validation": {
+    "notExported": false
+  },
+  "hideGenerator": true
+}

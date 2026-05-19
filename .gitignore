@@ -2,6 +2,10 @@ node_modules/
 dist/
 .test-dist/
 coverage/
+.docs-build/
+.docusaurus/
+docs-site/.docusaurus/
 .env
 .context/
 .clawpatch
+/docs

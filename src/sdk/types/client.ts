@@ -24,11 +24,31 @@ import type { SwapNamespace } from './swap.js';
 import type { TokenNamespace } from './token.js';
 import type { UtilsNamespace } from './utils.js';
 
+/**
+ * Configuration for {@link createRareClient}.
+ */
 export type RareClientConfig = {
+  /**
+   * Viem public client with an explicit supported chain. The RARE SDK uses this
+   * chain for every read and write on the returned client.
+   */
   publicClient: PublicClient;
+  /**
+   * Optional viem wallet client for contract writes and signed flows.
+   */
   walletClient?: WalletClient;
+  /**
+   * Optional account address used by SDK flows that need a default owner or
+   * sender when the wallet client does not expose an account.
+   */
   account?: Address;
+  /**
+   * Optional Rare API base URL. Defaults to the production Rare API.
+   */
   apiBaseUrl?: string;
+  /**
+   * Optional fetch implementation for API-backed SDK methods.
+   */
   apiFetch?: typeof fetch;
 }
 
@@ -84,9 +104,21 @@ export type CurrencyNamespace = {
   resolveDecimals: (input: CurrencyInput) => Promise<ResolvedCurrencyWithDecimals>;
 }
 
+/**
+ * Chain-bound RARE SDK surface returned by {@link createRareClient}.
+ */
 export type RareClient = {
+  /**
+   * Supported RARE chain inferred from the viem public client.
+   */
   chain: SupportedChain;
+  /**
+   * Numeric chain ID for {@link chain}.
+   */
   chainId: number;
+  /**
+   * RARE contract addresses available on the client chain.
+   */
   contracts: RareClientContracts;
   liquidEdition: LiquidEditionNamespace;
   swap: SwapNamespace;

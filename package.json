@@ -62,6 +62,10 @@
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && tsup",
     "dev": "tsup --watch",
+    "docs:generate": "typedoc && tsx scripts/postprocess-sdk-docs.ts && tsx scripts/generate-sdk-method-docs.ts && tsx scripts/generate-cli-docs.ts",
+    "docs:serve": "npm run docs:generate && docusaurus start docs-site --no-open",
+    "docs:build": "npm run docs:generate && docusaurus build docs-site --out-dir ../.docs-build",
+    "docs:preview": "npm run docs:build && docusaurus serve docs-site --dir ../.docs-build --no-open",
     "generate:types": "set -a; [ -f .env ] && . ./.env; set +a; openapi-typescript ${RARE_API_BASE_URL:-https://api.superrare.com}/doc -o src/data-access/schema.d.ts",
     "knip": "knip",
     "lint": "eslint .",
@@ -79,6 +83,8 @@
     "viem": "2.48.8"
   },
   "devDependencies": {
+    "@docusaurus/core": "^3.10.1",
+    "@docusaurus/preset-classic": "^3.10.1",
     "@eslint/js": "10.0.1",
     "@types/node": "25.6.0",
     "@typescript-eslint/parser": "8.59.3",
@@ -90,9 +96,14 @@
     "globals": "17.6.0",
     "knip": "5.88.1",
     "openapi-typescript": "7.13.0",
+    "tslib": "^2.8.1",
     "tsup": "8.5.1",
+    "tsx": "^4.22.3",
+    "typedoc": "^0.28.19",
+    "typedoc-plugin-markdown": "^4.11.0",
     "typescript": "5.9.3",
     "typescript-eslint": "8.59.2",
-    "vitest": "4.1.5"
+    "vitest": "4.1.5",
+    "webpack": "5.95.0"
   }
 }
