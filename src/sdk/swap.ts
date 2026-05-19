@@ -391,7 +391,7 @@ export function createSwapNamespace(
       return { txHash, receipt };
     },
 
-    async swap(params): Promise<TransactionResult> {
+    async swapTokens(params): Promise<TransactionResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const router = requireConfiguredAddress(addresses.swapRouter, 'Liquid router', chain);
       validateRouterPayload(params.commands, params.inputs);

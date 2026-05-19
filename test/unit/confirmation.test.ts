@@ -21,15 +21,10 @@ describe('confirmation policy', () => {
     })).toBe('reject-json');
   });
 
-  it('skips confirmation when the command has explicit consent or is a preview', () => {
+  it('skips confirmation when the command has explicit consent or is quote-only', () => {
     expect(getConfirmationDecision({
       ...confirmableCommand,
       options: { yes: true },
-      jsonMode: true,
-    })).toBe('skip');
-    expect(getConfirmationDecision({
-      ...confirmableCommand,
-      options: { preview: true },
       jsonMode: true,
     })).toBe('skip');
     expect(getConfirmationDecision({
@@ -39,14 +34,25 @@ describe('confirmation policy', () => {
     })).toBe('skip');
   });
 
-  it('does not prompt for commands without extra confirmation policy or non-interactive execution', () => {
+  it('does not prompt for commands without extra confirmation policy', () => {
     expect(getConfirmationDecision({
       ...confirmableCommand,
       commandPath: ['rare', 'collection', 'deploy', 'erc721'],
     })).toBe('skip');
+  });
+
+  it('requires explicit --yes for non-interactive confirmable commands', () => {
     expect(getConfirmationDecision({
       ...confirmableCommand,
       stdinIsTty: false,
+    })).toBe('reject-non-interactive');
+  });
+
+  it('allows the explicit environment override to skip confirmation', () => {
+    expect(getConfirmationDecision({
+      ...confirmableCommand,
+      stdinIsTty: false,
+      skipConfirmation: true,
     })).toBe('skip');
   });
 
@@ -65,6 +71,7 @@ describe('confirmation policy', () => {
     expect(requiresExplicitConfirmation(['rare', 'auction', 'batch', 'bid'])).toBe(false);
     expect(requiresExplicitConfirmation(['rare', 'listing', 'release', 'mint'])).toBe(false);
     expect(requiresExplicitConfirmation(['rare', 'swap', 'sell'])).toBe(true);
+    expect(requiresExplicitConfirmation(['rare', 'swap', 'tokens'])).toBe(true);
     expect(requiresExplicitConfirmation(['rare', 'collection', 'deploy', 'erc721'])).toBe(false);
     expect(requiresExplicitConfirmation(['rare', 'listing', 'cancel'])).toBe(false);
   });

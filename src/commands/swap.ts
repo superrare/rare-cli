@@ -44,6 +44,9 @@ async function confirmQuotedSwapExecution(commandName: string): Promise<void> {
   if (isJsonMode()) {
     throw new Error(`${commandName} requires --yes when submitting a quoted swap.`);
   }
+  if (!process.stdin.isTTY) {
+    throw new Error(`${commandName} requires --yes in non-interactive mode.`);
+  }
   if (await confirmProceed()) {
     return;
   }
@@ -201,8 +204,8 @@ function swapSellCommand(): Command {
   return cmd;
 }
 
-function swapSwapCommand(): Command {
-  const cmd = new Command('swap');
+function swapTokensCommand(): Command {
+  const cmd = new Command('tokens');
   cmd.description('Execute a raw router token swap');
 
   cmd
@@ -249,7 +252,7 @@ function swapSwapCommand(): Command {
       log(`  Token out: ${tokenOut}`);
       log(`  Min out: ${minAmountOut}`);
 
-      const result = await rare.swap.swap({
+      const result = await rare.swap.swapTokens({
         tokenIn,
         amountIn: opts.amountIn,
         tokenOut,
@@ -636,7 +639,7 @@ export function swapCommand(): Command {
 
   cmd.addCommand(swapBuyCommand());
   cmd.addCommand(swapSellCommand());
-  cmd.addCommand(swapSwapCommand());
+  cmd.addCommand(swapTokensCommand());
   cmd.addCommand(swapBuyTokenCommand());
   cmd.addCommand(swapSellTokenCommand());
   cmd.addCommand(swapBuyRareCommand());

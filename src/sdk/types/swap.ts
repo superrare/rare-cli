@@ -21,7 +21,7 @@ export type RouterSellParams = {
   deadline?: IntegerInput;
 }
 
-export type RouterSwapParams = {
+export type RouterSwapTokensParams = {
   tokenIn: Address;
   amountIn: AmountInput;
   tokenOut: Address;
@@ -118,7 +118,7 @@ export type BuyRareResult = {
 export type SwapNamespace = {
   buy: (params: RouterBuyParams) => Promise<TransactionResult>;
   sell: (params: RouterSellParams) => Promise<TransactionResult>;
-  swap: (params: RouterSwapParams) => Promise<TransactionResult>;
+  swapTokens: (params: RouterSwapTokensParams) => Promise<TransactionResult>;
   quoteBuyToken: (params: BuyTokenParams) => Promise<TokenTradeQuote>;
   buyToken: (params: BuyTokenParams) => Promise<TokenTradeResult>;
   quoteSellToken: (params: SellTokenParams) => Promise<TokenTradeQuote>;

@@ -34,6 +34,9 @@ program.hook('preAction', async (_thisCommand, actionCommand) => {
   if (decision === 'reject-json') {
     throw new Error(`${commandPath(actionCommand).join(' ')} requires --yes when --json is enabled.`);
   }
+  if (decision === 'reject-non-interactive') {
+    throw new Error(`${commandPath(actionCommand).join(' ')} requires --yes in non-interactive mode.`);
+  }
   if (decision === 'prompt') {
     if (await confirmProceed()) {
       return;

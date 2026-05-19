@@ -1,15 +1,14 @@
 export type ConfirmationOptions = {
   yes?: boolean;
-  preview?: boolean;
   quoteOnly?: boolean;
 };
 
-export type ConfirmationDecision = 'skip' | 'prompt' | 'reject-json';
+export type ConfirmationDecision = 'skip' | 'prompt' | 'reject-json' | 'reject-non-interactive';
 
 const confirmationRequiredCommands = new Set([
   'rare swap buy',
   'rare swap sell',
-  'rare swap swap',
+  'rare swap tokens',
 ]);
 
 export function getConfirmationDecision(params: {
@@ -19,17 +18,20 @@ export function getConfirmationDecision(params: {
   skipConfirmation: boolean;
   jsonMode: boolean;
 }): ConfirmationDecision {
-  if (params.options.yes === true || params.options.preview === true || params.options.quoteOnly === true) {
+  if (params.options.yes === true || params.options.quoteOnly === true) {
     return 'skip';
   }
   if (!requiresExplicitConfirmation(params.commandPath)) {
     return 'skip';
   }
+  if (params.skipConfirmation) {
+    return 'skip';
+  }
   if (params.jsonMode) {
     return 'reject-json';
   }
-  if (!params.stdinIsTty || params.skipConfirmation) {
-    return 'skip';
+  if (!params.stdinIsTty) {
+    return 'reject-non-interactive';
   }
 
   return 'prompt';

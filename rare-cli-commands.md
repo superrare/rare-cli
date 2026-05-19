@@ -105,7 +105,7 @@ rare swap sell-token --token <address> --amount-in <amount> [--slippage-bps <bps
 rare swap buy-rare --amount-in <amount> [--slippage-bps <bps>] [--min-amount-out <amount>] [--quote-only] [--yes] [--recipient <address>] [--deadline <seconds>] [--chain <chain>] [--chain-id <id>]
 rare swap buy --token <address> --amount-in <amount> --min-amount-out <amount> --commands <hex> --inputs-file <path> [--recipient <address>] [--deadline <seconds>] [--yes] [--chain <chain>] [--chain-id <id>]
 rare swap sell --token <address> --amount-in <amount> --min-amount-out <amount> --commands <hex> --inputs-file <path> [--recipient <address>] [--deadline <seconds>] [--yes] [--chain <chain>] [--chain-id <id>]
-rare swap swap --token-in <address> --amount-in <amount> --token-out <address> --min-amount-out <amount> --commands <hex> --inputs-file <path> [--recipient <address>] [--deadline <seconds>] [--yes] [--chain <chain>] [--chain-id <id>]
+rare swap tokens --token-in <address> --amount-in <amount> --token-out <address> --min-amount-out <amount> --commands <hex> --inputs-file <path> [--recipient <address>] [--deadline <seconds>] [--yes] [--chain <chain>] [--chain-id <id>]
 
 rare utils tree build --input <path> [--format <format>] [--chain <chain>] [--chain-id <id>] [--output <path>]
 rare utils tree proof --input <path> --contract <address> --token-id <id> [--format <format>] [--chain <chain>] [--chain-id <id>] [--output <path>]

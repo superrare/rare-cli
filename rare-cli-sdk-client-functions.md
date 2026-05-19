@@ -107,7 +107,7 @@ Scope:
 - Includes `createRareClient` and the methods reachable from the returned client object.
 - Excludes ABI exports, contract-address exports, standalone utility exports, type exports, and pure planning utilities.
 - Method signatures are listed as `rare.<namespace>.<method>(...)`.
-- CLI confirmation flags such as `--yes`, `--preview`, and `--quote-only` are not SDK concepts. SDK approval behavior is represented in the relevant typed params, such as `autoApprove?: boolean`; quote flows are explicit `quote*` methods.
+- CLI confirmation flags such as `--yes` and `--quote-only` are not SDK concepts. SDK approval behavior is represented in the relevant typed params, such as `autoApprove?: boolean`; quote flows are explicit `quote*` methods.
 
 Client construction:
 
@@ -157,7 +157,7 @@ Swap:
 
 rare.swap.buy(params: RouterBuyParams): Promise<TransactionResult>
 rare.swap.sell(params: RouterSellParams): Promise<TransactionResult>
-rare.swap.swap(params: RouterSwapParams): Promise<TransactionResult>
+rare.swap.swapTokens(params: RouterSwapTokensParams): Promise<TransactionResult>
 rare.swap.quoteBuyToken(params: BuyTokenParams): Promise<TokenTradeQuote>
 rare.swap.buyToken(params: BuyTokenParams): Promise<TokenTradeResult>
 rare.swap.quoteSellToken(params: SellTokenParams): Promise<TokenTradeQuote>
