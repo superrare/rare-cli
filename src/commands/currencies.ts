@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
-import { resolveCurrency, currencyNames } from '../contracts/addresses.js';
+import { listCurrencies } from '../contracts/addresses.js';
 import { output } from '../output.js';
 
 type CurrenciesOptions = {
@@ -17,9 +17,9 @@ export function currenciesCommand(): Command {
     .action((opts: CurrenciesOptions): void => {
       const chain = getActiveChain(opts.chain, opts.chainId);
 
-      const currencies = currencyNames.map((name) => ({
-        name: name.toUpperCase(),
-        address: resolveCurrency(name, chain),
+      const currencies = listCurrencies(chain).map((currency) => ({
+        name: currency.symbol,
+        address: currency.address,
       }));
 
       output(currencies, () => {

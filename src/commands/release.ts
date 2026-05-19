@@ -315,11 +315,11 @@ export function releaseCommand(): Command {
         const result = await runWithPaymentApprovalConsent({
           commandName: 'rare listing release mint',
           approvalMessage: 'ERC20 approval is required before minting this release.',
-          runWithoutApproval: () => rare.listing.release.mint({
+          runWithoutApproval: async () => rare.listing.release.mint({
             ...mintParams,
             autoApprove: opts.yes === true,
           }),
-          runWithApproval: () => rare.listing.release.mint({
+          runWithApproval: async () => rare.listing.release.mint({
             ...mintParams,
             autoApprove: true,
           }),
@@ -645,7 +645,7 @@ export function releaseCommand(): Command {
         const chain = getActiveChain(opts.chain, opts.chainId);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient });
-        const result = await rare.listing.release.getStatus({
+        const result = await rare.listing.release.status({
           contract: opts.contract,
           account: opts.account,
         });

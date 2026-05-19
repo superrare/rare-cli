@@ -26,6 +26,10 @@ import {
 } from './helpers.js';
 import { parseAddress } from './validation.js';
 
+type ResolvedCurrencyParam<T extends { currency?: unknown }> = Omit<T, 'currency'> & {
+  currency?: Address;
+};
+
 export type ListingCreatePlan = {
   nftAddress: Address;
   tokenId: bigint;
@@ -88,7 +92,7 @@ export type AuctionTypeIds = {
 
 const zeroBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
-export function planListingCreate(params: ListingCreateParams, accountAddress: Address): ListingCreatePlan {
+export function planListingCreate(params: ResolvedCurrencyParam<ListingCreateParams>, accountAddress: Address): ListingCreatePlan {
   const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
 
   return {
@@ -109,7 +113,7 @@ export function planListingCancel(params: ListingCancelParams): { tokenId: bigin
   };
 }
 
-export function planListingBuy(params: ListingBuyParams): ListingBuyPlan {
+export function planListingBuy(params: ResolvedCurrencyParam<ListingBuyParams>): ListingBuyPlan {
   const price = requireInput(params.price, 'price');
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
@@ -166,7 +170,7 @@ export function shapeListingStatus(
   };
 }
 
-export function planOfferCreate(params: OfferCreateParams): OfferCreatePlan {
+export function planOfferCreate(params: ResolvedCurrencyParam<OfferCreateParams>): OfferCreatePlan {
   const price = requireInput(params.price, 'price');
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
@@ -175,14 +179,14 @@ export function planOfferCreate(params: OfferCreateParams): OfferCreatePlan {
   };
 }
 
-export function planOfferCancel(params: OfferCancelParams): { tokenId: bigint; currency: Address } {
+export function planOfferCancel(params: ResolvedCurrencyParam<OfferCancelParams>): { tokenId: bigint; currency: Address } {
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
   };
 }
 
-export function planOfferAccept(params: OfferAcceptParams, accountAddress: Address): OfferAcceptPlan {
+export function planOfferAccept(params: ResolvedCurrencyParam<OfferAcceptParams>, accountAddress: Address): OfferAcceptPlan {
   const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
   const price = requireInput(params.price, 'price');
 
@@ -195,7 +199,7 @@ export function planOfferAccept(params: OfferAcceptParams, accountAddress: Addre
   };
 }
 
-export function planOfferStatus(params: OfferStatusParams): { tokenId: bigint; currency: Address } {
+export function planOfferStatus(params: ResolvedCurrencyParam<OfferStatusParams>): { tokenId: bigint; currency: Address } {
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
@@ -303,7 +307,7 @@ export function planProvidedSplits(
   return { addresses: normalizedAddresses, ratios: [...splitRatios] };
 }
 
-export function planAuctionCreate(params: AuctionCreateParams, accountAddress: Address): AuctionCreatePlan {
+export function planAuctionCreate(params: ResolvedCurrencyParam<AuctionCreateParams>, accountAddress: Address): AuctionCreatePlan {
   const auctionType = normalizeAuctionType(params);
   const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
   const price = requireInput(params.price, 'price');
@@ -325,7 +329,7 @@ export function planAuctionCreate(params: AuctionCreateParams, accountAddress: A
   };
 }
 
-export function planAuctionBid(params: AuctionBidParams): AuctionBidPlan {
+export function planAuctionBid(params: ResolvedCurrencyParam<AuctionBidParams>): AuctionBidPlan {
   const price = requireInput(params.price, 'price');
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),

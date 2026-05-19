@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient } from '../client.js';
-import { chainIds } from '../contracts/addresses.js';
 import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import type { Nft } from '../sdk/api.js';
@@ -44,14 +43,13 @@ export function createCollectionListCommand(): Command {
     .action(async (opts: AccountListOptions): Promise<void> => {
       try {
         const account = parseAddress(opts.account, '--account');
-        const { chain, rare, chainId } = createReadClient(opts);
+        const { chain, rare } = createReadClient(opts);
         const page = parsePositiveInteger(opts.page, '--page');
         const perPage = parsePositiveInteger(opts.perPage, '--per-page');
 
         log(`Listing collections owned by ${account} on ${chain}...`);
         const result = await rare.search.collections({
           ownerAddress: account,
-          chainId,
           page,
           perPage,
         });
@@ -87,14 +85,13 @@ export function createListingListCommand(): Command {
     .action(async (opts: AccountListOptions): Promise<void> => {
       try {
         const account = parseAddress(opts.account, '--account');
-        const { chain, rare, chainId } = createReadClient(opts);
+        const { chain, rare } = createReadClient(opts);
         const page = parsePositiveInteger(opts.page, '--page');
         const perPage = parsePositiveInteger(opts.perPage, '--per-page');
 
         log(`Listing active token listings on NFTs held by ${account} on ${chain}...`);
         const result = await rare.search.nfts({
           ownerAddress: account,
-          chainId,
           hasListing: true,
           listingType: 'SALE_PRICE',
           page,
@@ -126,14 +123,13 @@ export function createBatchListingListCommand(): Command {
     .action(async (opts: AccountListOptions): Promise<void> => {
       try {
         const account = parseAddress(opts.account, '--account');
-        const { chain, rare, chainId } = createReadClient(opts);
+        const { chain, rare } = createReadClient(opts);
         const page = parsePositiveInteger(opts.page, '--page');
         const perPage = parsePositiveInteger(opts.perPage, '--per-page');
 
         log(`Listing active batch listings on NFTs held by ${account} on ${chain}...`);
         const result = await rare.search.nfts({
           ownerAddress: account,
-          chainId,
           hasListing: true,
           listingType: 'BATCH_SALE_PRICE',
           page,
@@ -167,7 +163,7 @@ export function createOfferListCommand(): Command {
       try {
         const account = parseAddress(opts.account, '--account');
         const side = parseMarketSide(opts.side);
-        const { chain, rare, chainId } = createReadClient(opts);
+        const { chain, rare } = createReadClient(opts);
         const page = parsePositiveInteger(opts.page, '--page');
         const perPage = parsePositiveInteger(opts.perPage, '--per-page');
         const makerParams = side === 'maker' ? { offerBuyerAddress: account } : {};
@@ -177,7 +173,6 @@ export function createOfferListCommand(): Command {
         const result = await rare.search.nfts({
           ...makerParams,
           ...takerParams,
-          chainId,
           hasOffer: true,
           page,
           perPage,
@@ -210,7 +205,7 @@ export function createAuctionListCommand(): Command {
       try {
         const account = parseAddress(opts.account, '--account');
         const side = parseMarketSide(opts.side);
-        const { chain, rare, chainId } = createReadClient(opts);
+        const { chain, rare } = createReadClient(opts);
         const page = parsePositiveInteger(opts.page, '--page');
         const perPage = parsePositiveInteger(opts.perPage, '--per-page');
         const makerParams = side === 'maker' ? { auctionCreatorAddress: account } : {};
@@ -220,7 +215,6 @@ export function createAuctionListCommand(): Command {
         const result = await rare.search.nfts({
           ...makerParams,
           ...takerParams,
-          chainId,
           hasAuction: true,
           page,
           perPage,
@@ -241,14 +235,12 @@ export function createAuctionListCommand(): Command {
 
 function createReadClient(opts: { chain?: string; chainId?: string }): {
   chain: ReturnType<typeof getActiveChain>;
-  chainId: number;
   rare: ReturnType<typeof createRareClient>;
 } {
   const chain = getActiveChain(opts.chain, opts.chainId);
   const publicClient = getPublicClient(chain);
   return {
     chain,
-    chainId: chainIds[chain],
     rare: createRareClient({ publicClient }),
   };
 }

@@ -14,9 +14,9 @@ type StatusOptions = {
   chainId?: string;
 };
 
-type TokenInfo = Awaited<ReturnType<RareClient['token']['getTokenInfo']>>;
+type TokenInfo = NonNullable<Awaited<ReturnType<RareClient['token']['status']>>['token']>;
 type TokenReader = {
-  token: Pick<RareClient['token'], 'getTokenInfo'>;
+  token: Pick<RareClient['token'], 'status'>;
 };
 
 export function statusCommand(): Command {
@@ -35,7 +35,7 @@ export function statusCommand(): Command {
       const contractAddress = parseAddress(opts.contract, '--contract');
 
       try {
-        const contractInfo = await rare.token.getContractInfo({ contract: contractAddress });
+        const { contract: contractInfo } = await rare.token.status({ contract: contractAddress });
         const tokenInfo = opts.tokenId === undefined
           ? undefined
           : await readTokenInfo(rare, contractAddress, opts.tokenId);
@@ -78,7 +78,8 @@ export async function readTokenInfo(
   tokenId: string,
 ): Promise<TokenInfo | null> {
   try {
-    return await rare.token.getTokenInfo({ contract, tokenId });
+    const status = await rare.token.status({ contract, tokenId });
+    return status.token ?? null;
   } catch (error) {
     if (isTokenNotFoundError(error)) {
       return null;

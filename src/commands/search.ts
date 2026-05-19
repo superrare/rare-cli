@@ -3,7 +3,8 @@ import { getActiveChain } from '../config.js';
 import { getConfiguredAccountAddress, getPublicClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
 import type { SupportedChain } from '../contracts/addresses.js';
-import type { EventSearchParams, NftSearchParams } from '../sdk/api.js';
+import type { NftSearchParams } from '../sdk/api.js';
+import type { RareClientEventSearchParams } from '../sdk/types.js';
 import { parseAddress, parseOptionalAddress } from '../sdk/validation.js';
 import { printError } from '../errors.js';
 import { output, log, printNftRow, printCollectionRow, printNftEventRow, printPagination } from '../output.js';
@@ -214,9 +215,8 @@ export function searchCommand(): Command {
     .action(async (opts: SearchEventsOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const rare = createRareClient({ publicClient: getPublicClient(chain) });
-      const params: EventSearchParams = {
+      const params: RareClientEventSearchParams = {
         collectionId: opts.collectionId,
-        chainId: opts.collectionId === undefined ? opts.chainId ?? rare.chainId : undefined,
         contract: opts.contract === undefined ? undefined : parseAddress(opts.contract, '--contract'),
         tokenId: opts.tokenId,
         eventType: parseNftEventTypes(opts.eventType),

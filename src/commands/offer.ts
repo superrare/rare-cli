@@ -96,11 +96,11 @@ export function offerCommand(): Command {
         const result = await runWithPaymentApprovalConsent({
           commandName: 'rare offer create',
           approvalMessage: 'ERC20 approval is required before creating this offer.',
-          runWithoutApproval: () => rare.offer.create({
+          runWithoutApproval: async () => rare.offer.create({
             ...offerParams,
             autoApprove: opts.yes === true,
           }),
-          runWithApproval: () => rare.offer.create({
+          runWithApproval: async () => rare.offer.create({
             ...offerParams,
             autoApprove: true,
           }),
@@ -221,11 +221,11 @@ export function offerCommand(): Command {
         const result = await runWithNftApprovalConsent({
           commandName: 'rare offer accept',
           approvalMessage: 'NFT approval is required before accepting this offer.',
-          runWithoutApproval: () => rare.offer.accept({
+          runWithoutApproval: async () => rare.offer.accept({
             ...acceptParams,
             autoApprove: opts.yes === true,
           }),
-          runWithApproval: () => rare.offer.accept({
+          runWithApproval: async () => rare.offer.accept({
             ...acceptParams,
             autoApprove: true,
           }),
@@ -275,7 +275,7 @@ export function offerCommand(): Command {
         const isEth = currency === ETH_ADDRESS;
         const contract = parseAddress(opts.contract, '--contract');
 
-        const result = await rare.offer.getStatus({
+        const result = await rare.offer.status({
           contract,
           tokenId: opts.tokenId,
           currency,

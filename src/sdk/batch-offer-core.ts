@@ -15,6 +15,10 @@ import type {
   BatchOfferRevokeParams,
 } from './types.js';
 
+type ResolvedCurrencyParam<T extends { currency?: unknown }> = Omit<T, 'currency'> & {
+  currency?: Address;
+};
+
 export type BatchOfferCreatePlan = {
   root: Hex;
   amount: bigint;
@@ -52,7 +56,7 @@ const zeroAddress = ETH_ADDRESS;
 const zeroBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
 export function planBatchOfferCreate(
-  params: BatchOfferCreateParams,
+  params: ResolvedCurrencyParam<BatchOfferCreateParams>,
   nowSeconds?: bigint,
 ): BatchOfferCreatePlan {
   const expiry = toUnixTimestamp(

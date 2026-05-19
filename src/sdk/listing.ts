@@ -22,6 +22,7 @@ import {
   planListingStatus,
   shapeListingStatus,
 } from './marketplace-core.js';
+import { resolveCurrencyForSdk } from './currency.js';
 
 export function createListingNamespace(
   publicClient: PublicClient,
@@ -32,7 +33,7 @@ export function createListingNamespace(
   return {
     async create(params): ReturnType<ListingMarketplaceNamespace['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const currency = params.currency ?? ETH_ADDRESS;
+      const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const price = await toCurrencyAmount(publicClient, chain, currency, params.price, 'price');
       const plan = planListingCreate({ ...params, currency, price }, accountAddress);
       const approvalTxHash = await approveNftContractIfNeeded({
@@ -85,7 +86,7 @@ export function createListingNamespace(
 
     async buy(params): ReturnType<ListingMarketplaceNamespace['buy']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const currency = params.currency ?? ETH_ADDRESS;
+      const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const price = requireInput(params.price, 'price');
       const amount = await toCurrencyAmount(publicClient, chain, currency, price, 'price');
       const plan = planListingBuy({ ...params, price: amount, currency });
@@ -113,7 +114,7 @@ export function createListingNamespace(
       return { txHash, receipt, approvalTxHash: payment.approvalTxHash };
     },
 
-    async getStatus(params): ReturnType<ListingMarketplaceNamespace['getStatus']> {
+    async status(params): ReturnType<ListingMarketplaceNamespace['status']> {
       const plan = planListingStatus(params);
 
       const result = await publicClient.readContract({

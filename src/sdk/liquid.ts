@@ -354,7 +354,7 @@ export function createLiquidNamespace(
       };
     },
 
-    async getTelemetry(params): Promise<LiquidEditionTelemetry> {
+    async status(params): Promise<LiquidEditionTelemetry> {
       const contract = { address: params.contract, abi: liquidEditionAbi } as const;
       const name = await publicClient.readContract({ ...contract, functionName: 'name' });
       const symbol = await publicClient.readContract({ ...contract, functionName: 'symbol' });

@@ -117,11 +117,11 @@ export function listingCommand(): Command {
         const result = await runWithNftApprovalConsent({
           commandName: 'rare listing create',
           approvalMessage: 'NFT approval is required before creating this listing.',
-          runWithoutApproval: () => rare.listing.create({
+          runWithoutApproval: async () => rare.listing.create({
             ...listingParams,
             autoApprove: opts.yes === true,
           }),
-          runWithApproval: () => rare.listing.create({
+          runWithApproval: async () => rare.listing.create({
             ...listingParams,
             autoApprove: true,
           }),
@@ -230,11 +230,11 @@ export function listingCommand(): Command {
         const result = await runWithPaymentApprovalConsent({
           commandName: 'rare listing buy',
           approvalMessage: 'ERC20 approval is required before buying this listing.',
-          runWithoutApproval: () => rare.listing.buy({
+          runWithoutApproval: async () => rare.listing.buy({
             ...buyParams,
             autoApprove: opts.yes === true,
           }),
-          runWithApproval: () => rare.listing.buy({
+          runWithApproval: async () => rare.listing.buy({
             ...buyParams,
             autoApprove: true,
           }),
@@ -283,7 +283,7 @@ export function listingCommand(): Command {
         const contract = parseAddress(opts.contract, '--contract');
         const target = opts.target ? parseAddress(opts.target, '--target') : PUBLIC_LISTING_TARGET;
 
-        const result = await rare.listing.getStatus({
+        const result = await rare.listing.status({
           contract,
           tokenId: opts.tokenId,
           target,

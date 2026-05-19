@@ -1,4 +1,4 @@
-import { getAddress, isAddress, zeroAddress, type Address, type Chain } from 'viem';
+import { getAddress, isAddress, isAddressEqual, zeroAddress, type Address, type Chain } from 'viem';
 import { sepolia, mainnet, base, baseSepolia } from 'viem/chains';
 
 export const supportedChains = [
@@ -152,6 +152,37 @@ export const canonicalV4Pools: Partial<Record<SupportedChain, CanonicalV4Pools>>
 export const currencyNames = ['eth', 'rare', 'usdc'] as const;
 
 export type CurrencyName = (typeof currencyNames)[number];
+export type CurrencyInput = CurrencyName | Uppercase<CurrencyName> | Address;
+
+export type CurrencyInfo = {
+  name: CurrencyName;
+  symbol: Uppercase<CurrencyName>;
+  chain: SupportedChain;
+  chainId: number;
+  address: Address;
+  decimals: number;
+  isNative: boolean;
+}
+
+export type CustomCurrencyInfo = {
+  name: null;
+  symbol: null;
+  chain: SupportedChain;
+  chainId: number;
+  address: Address;
+  decimals: null;
+  isNative: false;
+}
+
+export type ResolvedCurrency = CurrencyInfo | CustomCurrencyInfo;
+
+export type CurrencyResolveResult =
+  | { isValid: true; currency: ResolvedCurrency }
+  | {
+      isValid: false;
+      error: 'unknown_currency' | 'unavailable_currency';
+      errorMessage: string;
+    };
 
 export const ETH_ADDRESS: Address = zeroAddress;
 export const PUBLIC_LISTING_TARGET: Address = zeroAddress;
@@ -177,23 +208,83 @@ const currencyAddresses: Record<CurrencyName, Partial<Record<SupportedChain, Add
   },
 };
 
+const currencyDecimals: Record<CurrencyName, number> = {
+  eth: 18,
+  rare: 18,
+  usdc: 6,
+};
+
+const currencySymbols: Record<CurrencyName, Uppercase<CurrencyName>> = {
+  eth: 'ETH',
+  rare: 'RARE',
+  usdc: 'USDC',
+};
+
 function isCurrencyName(value: string): value is CurrencyName {
   return currencyNames.some((currencyName) => currencyName === value);
 }
 
-export function resolveCurrency(input: string, chain: SupportedChain): Address {
+export function listCurrencies(chain: SupportedChain): CurrencyInfo[] {
+  return currencyNames.flatMap((name) => {
+    const address = currencyAddresses[name][chain];
+    if (!address) return [];
+
+    return [{
+      name,
+      symbol: currencySymbols[name],
+      chain,
+      chainId: chainIds[chain],
+      address,
+      decimals: currencyDecimals[name],
+      isNative: name === 'eth',
+    }];
+  });
+}
+
+export function resolveCurrencyInfo(input: string, chain: SupportedChain): CurrencyResolveResult {
   const lower = input.toLowerCase();
   if (isCurrencyName(lower)) {
-    const addr = currencyAddresses[lower][chain];
-    if (!addr) {
-      throw new Error(`Currency "${lower}" is not available on "${chain}".`);
+    const currency = listCurrencies(chain).find((entry) => entry.name === lower);
+    if (currency === undefined) {
+      return {
+        isValid: false,
+        error: 'unavailable_currency',
+        errorMessage: `Currency "${lower}" is not available on "${chain}".`,
+      };
     }
-    return addr;
+    return { isValid: true, currency };
   }
+
   if (isAddress(input)) {
-    return getAddress(input);
+    const address = getAddress(input);
+    const known = listCurrencies(chain).find((entry) => isAddressEqual(entry.address, address));
+    return {
+      isValid: true,
+      currency: known ?? {
+        name: null,
+        symbol: null,
+        chain,
+        chainId: chainIds[chain],
+        address,
+        decimals: null,
+        isNative: false,
+      },
+    };
   }
-  throw new Error(`Unknown currency "${input}". Supported: ${currencyNames.join(', ')} or a 0x address.`);
+
+  return {
+    isValid: false,
+    error: 'unknown_currency',
+    errorMessage: `Unknown currency "${input}". Supported: ${currencyNames.join(', ')} or a 0x address.`,
+  };
+}
+
+export function resolveCurrency(input: string, chain: SupportedChain): Address {
+  const resolved = resolveCurrencyInfo(input, chain);
+  if (!resolved.isValid) {
+    throw new Error(resolved.errorMessage);
+  }
+  return resolved.currency.address;
 }
 
 export function getContractAddresses(chain: SupportedChain): ContractAddresses {

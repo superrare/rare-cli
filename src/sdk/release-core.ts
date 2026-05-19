@@ -19,6 +19,10 @@ import type {
   ReleaseStatus,
   TimestampInput,
 } from './types.js';
+
+type ResolvedCurrencyParam<T extends { currency?: unknown }> = Omit<T, 'currency'> & {
+  currency?: Address;
+};
 import { ETH_ADDRESS } from '../contracts/addresses.js';
 import {
   requireInput,
@@ -273,7 +277,7 @@ export function resolveReleaseSplits(opts: {
 }
 
 export function planReleaseConfigure(
-  params: ReleaseConfigureParams,
+  params: ResolvedCurrencyParam<ReleaseConfigureParams>,
   opts: {
     accountAddress: Address;
     nowSeconds: bigint;
@@ -351,7 +355,7 @@ export function planReleaseLimitConfig(params: {
   };
 }
 
-export function planReleaseDirectSaleMint(params: ReleaseMintDirectSaleParams): ReleaseDirectSaleMintPlan {
+export function planReleaseDirectSaleMint(params: ResolvedCurrencyParam<ReleaseMintDirectSaleParams>): ReleaseDirectSaleMintPlan {
   const quantity = toPositiveInteger(params.quantity ?? 1, 'quantity');
   if (quantity > MAX_DIRECT_SALE_MINT_QUANTITY) {
     throw new Error('quantity must be less than or equal to 255.');

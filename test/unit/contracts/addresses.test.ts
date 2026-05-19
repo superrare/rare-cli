@@ -9,8 +9,10 @@ import {
   getErc721ApprovalManagerAddress,
   getRareMinterAddress,
   isSupportedChain,
+  listCurrencies,
   requireContractAddress,
   resolveCurrency,
+  resolveCurrencyInfo,
 } from '../../../src/contracts/addresses.js';
 
 describe('chain and currency helpers', () => {
@@ -91,6 +93,31 @@ describe('chain and currency helpers', () => {
     expect(resolveCurrency('0x1230000000000000000000000000000000000000', 'sepolia')).toBe(
       '0x1230000000000000000000000000000000000000',
     );
+  });
+
+  it('lists and resolves structured currency metadata', () => {
+    expect(listCurrencies('sepolia')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'eth', symbol: 'ETH', address: ETH_ADDRESS, decimals: 18, isNative: true }),
+      expect.objectContaining({ name: 'rare', symbol: 'RARE', decimals: 18, isNative: false }),
+      expect.objectContaining({ name: 'usdc', symbol: 'USDC', decimals: 6, isNative: false }),
+    ]));
+    expect(resolveCurrencyInfo('usdc', 'sepolia')).toEqual({
+      isValid: true,
+      currency: expect.objectContaining({
+        name: 'usdc',
+        address: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+        decimals: 6,
+      }),
+    });
+    expect(resolveCurrencyInfo('0x1230000000000000000000000000000000000000', 'sepolia')).toEqual({
+      isValid: true,
+      currency: expect.objectContaining({
+        name: null,
+        symbol: null,
+        address: '0x1230000000000000000000000000000000000000',
+        decimals: null,
+      }),
+    });
   });
 
   it('rejects unknown currency names', () => {

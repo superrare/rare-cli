@@ -19,6 +19,7 @@ import {
   shapeAuctionBidRead,
   shapeAuctionStatus,
 } from './marketplace-core.js';
+import { resolveCurrencyForSdk } from './currency.js';
 
 export function createAuctionNamespace(
   publicClient: PublicClient,
@@ -29,7 +30,7 @@ export function createAuctionNamespace(
   return {
     async create(params): ReturnType<RareClient['auction']['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const currency = params.currency ?? ETH_ADDRESS;
+      const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const price = requireInput(params.price, 'price');
       const startingPrice = await toCurrencyAmount(publicClient, chain, currency, price, 'price');
       const plan = planAuctionCreate({ ...params, price: startingPrice, currency }, accountAddress);
@@ -81,7 +82,7 @@ export function createAuctionNamespace(
 
     async bid(params): ReturnType<RareClient['auction']['bid']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const currency = params.currency ?? ETH_ADDRESS;
+      const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const price = requireInput(params.price, 'price');
       const amount = await toCurrencyAmount(publicClient, chain, currency, price, 'price');
       const plan = planAuctionBid({ ...params, price: amount, currency });
@@ -143,7 +144,7 @@ export function createAuctionNamespace(
       return { txHash, receipt };
     },
 
-    async getStatus(params): ReturnType<RareClient['auction']['getStatus']> {
+    async status(params): ReturnType<RareClient['auction']['status']> {
       const plan = planAuctionTokenAction(params);
       const [
         result,

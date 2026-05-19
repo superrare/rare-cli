@@ -1,5 +1,6 @@
 import { isAddressEqual, type Address, type Hash, type PublicClient, type WalletClient } from 'viem';
 import { batchListingAbi } from '../contracts/abis/batch-listing.js';
+import type { SupportedChain } from '../contracts/addresses.js';
 import type {
   BatchListingCancelResult,
   BatchListingCreateResult,
@@ -20,7 +21,7 @@ import {
   requireInput,
   requireWallet,
   toInteger,
-  toTokenAmount,
+  toCurrencyAmount,
   toUnixTimestamp,
 } from './helpers.js';
 import {
@@ -36,6 +37,7 @@ import {
   uniqueAddresses,
 } from './batch-listing-core.js';
 import { normalizeBytes32 } from './batch-core.js';
+import { resolveCurrencyForSdk } from './currency.js';
 
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
@@ -47,6 +49,7 @@ export function createBatchListingNamespace(
     marketplaceSettings: Address;
     erc20ApprovalManager: Address;
     erc721ApprovalManager: Address;
+    chain: SupportedChain;
     chainId: number;
   },
 ): RareClient['listing']['batch'] {
@@ -82,7 +85,7 @@ export function createBatchListingNamespace(
       }
 
       const approvalTxHashes = await Promise.all(
-        uniqueContracts.map((nftAddress) => approveNftContractIfNeeded({
+        uniqueContracts.map(async (nftAddress) => approveNftContractIfNeeded({
           publicClient,
           walletClient,
           account,
@@ -152,7 +155,8 @@ export function createBatchListingNamespace(
       }
 
       const price = requireInput(params.price, 'price');
-      const amount = await toTokenAmount(publicClient, params.currency, price, 'price');
+      const currency = resolveCurrencyForSdk(params.currency, addresses.chain).address;
+      const amount = await toCurrencyAmount(publicClient, addresses.chain, currency, price, 'price');
       const tokenIdBig = toInteger(proofArtifact.tokenId, 'tokenId');
       const allowListProof = proofArtifact.allowListProof ?? [];
 
@@ -163,7 +167,7 @@ export function createBatchListingNamespace(
         accountAddress,
         marketplaceSettings: addresses.marketplaceSettings,
         erc20ApprovalManager: addresses.erc20ApprovalManager,
-        currency: params.currency,
+        currency,
         amount,
         autoApprove: params.autoApprove,
       });
@@ -175,7 +179,7 @@ export function createBatchListingNamespace(
         args: [
           proofArtifact.contract,
           tokenIdBig,
-          params.currency,
+          currency,
           amount,
           params.creator,
           proofArtifact.root,
@@ -215,7 +219,7 @@ export function createBatchListingNamespace(
       return { txHash, receipt, root, allowListRoot, endTime };
     },
 
-    async getStatus(params): Promise<BatchListingStatus> {
+    async status(params): Promise<BatchListingStatus> {
       const resolvedParams = await resolveBatchListingStatusParams({
         config,
         chainId: addresses.chainId,
@@ -421,14 +425,14 @@ async function resolveBatchListingTokenProof(opts: {
 }
 
 type ResolvedBatchListingStatusParams =
-  Parameters<RareClient['listing']['batch']['getStatus']>[0] & {
+  Parameters<RareClient['listing']['batch']['status']>[0] & {
     root: `0x${string}`;
   };
 
 async function resolveBatchListingStatusParams(opts: {
   config: RareClientConfig;
   chainId: number;
-  params: Parameters<RareClient['listing']['batch']['getStatus']>[0];
+  params: Parameters<RareClient['listing']['batch']['status']>[0];
 }): Promise<ResolvedBatchListingStatusParams> {
   const { root } = opts.params;
   if (root !== undefined) {

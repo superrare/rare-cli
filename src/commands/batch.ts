@@ -425,11 +425,11 @@ function createOfferCreateCommand(): Command {
         const result = await runWithPaymentApprovalConsent({
           commandName: 'rare offer batch create',
           approvalMessage: 'ERC20 approval is required before creating this batch offer.',
-          runWithoutApproval: () => rare.offer.batch.create({
+          runWithoutApproval: async () => rare.offer.batch.create({
             ...createParams,
             autoApprove: opts.yes === true,
           }),
-          runWithApproval: () => rare.offer.batch.create({
+          runWithApproval: async () => rare.offer.batch.create({
             ...createParams,
             autoApprove: true,
           }),
@@ -575,11 +575,11 @@ function createOfferAcceptCommand(): Command {
         const result = await runWithNftApprovalConsent({
           commandName: 'rare offer batch accept',
           approvalMessage: 'NFT approval is required before accepting this batch offer.',
-          runWithoutApproval: () => rare.offer.batch.accept({
+          runWithoutApproval: async () => rare.offer.batch.accept({
             ...acceptParams,
             autoApprove: opts.yes === true,
           }),
-          runWithApproval: () => rare.offer.batch.accept({
+          runWithApproval: async () => rare.offer.batch.accept({
             ...acceptParams,
             autoApprove: true,
           }),
@@ -635,7 +635,7 @@ function createOfferStatusCommand(): Command {
         const root = await resolveOfferRoot(opts);
         const creator = parseAddressOption(opts.creator, '--creator');
         const { chain, publicClient, rare } = createReadBatchClient(opts.chain, opts.chainId);
-        const result = await rare.offer.batch.getStatus({ creator, root });
+        const result = await rare.offer.batch.status({ creator, root });
         const expiry = result.expiry > 0n ? new Date(Number(result.expiry) * 1000).toISOString() : 'none';
         const amount = await formatBatchAmount(publicClient, chain, result.currency, result.amount);
 
@@ -710,11 +710,11 @@ function createAuctionCreateCommand(): Command {
         const result = await runWithNftApprovalConsent({
           commandName: 'rare auction batch create',
           approvalMessage: 'NFT approval is required before creating this batch auction.',
-          runWithoutApproval: () => rare.auction.batch.create({
+          runWithoutApproval: async () => rare.auction.batch.create({
             ...createParams,
             autoApprove: opts.yes === true,
           }),
-          runWithApproval: () => rare.auction.batch.create({
+          runWithApproval: async () => rare.auction.batch.create({
             ...createParams,
             autoApprove: true,
           }),
@@ -850,11 +850,11 @@ function createAuctionBidCommand(): Command {
         const result = await runWithPaymentApprovalConsent({
           commandName: 'rare auction batch bid',
           approvalMessage: 'ERC20 approval is required before placing this batch auction bid.',
-          runWithoutApproval: () => rare.auction.batch.bid({
+          runWithoutApproval: async () => rare.auction.batch.bid({
             ...bidParams,
             autoApprove: opts.yes === true,
           }),
-          runWithApproval: () => rare.auction.batch.bid({
+          runWithApproval: async () => rare.auction.batch.bid({
             ...bidParams,
             autoApprove: true,
           }),
@@ -978,7 +978,7 @@ function createAuctionStatusCommand(): Command {
         }
         const creator = opts.creator === undefined ? undefined : parseAddressOption(opts.creator, '--creator');
         const { chain, publicClient, rare } = createReadBatchClient(opts.chain, opts.chainId);
-        const result = await rare.auction.batch.getStatus({
+        const result = await rare.auction.batch.status({
           contract,
           tokenId: opts.tokenId,
           creator,
@@ -1120,11 +1120,11 @@ function addBatchListingCommands(cmd: Command): void {
         const result = await runWithNftApprovalConsent({
           commandName: 'rare listing batch create',
           approvalMessage: 'NFT approval is required before creating this batch listing.',
-          runWithoutApproval: () => rare.listing.batch.create({
+          runWithoutApproval: async () => rare.listing.batch.create({
             artifact,
             autoApprove: opts.yes === true,
           }),
-          runWithApproval: () => rare.listing.batch.create({
+          runWithApproval: async () => rare.listing.batch.create({
             artifact,
             autoApprove: true,
           }),
@@ -1244,11 +1244,11 @@ function addBatchListingCommands(cmd: Command): void {
         const result = await runWithPaymentApprovalConsent({
           commandName: 'rare listing batch buy',
           approvalMessage: 'ERC20 approval is required before buying this batch listing token.',
-          runWithoutApproval: () => rare.listing.batch.buy({
+          runWithoutApproval: async () => rare.listing.batch.buy({
             ...buyParams,
             autoApprove: opts.yes === true,
           }),
-          runWithApproval: () => rare.listing.batch.buy({
+          runWithApproval: async () => rare.listing.batch.buy({
             ...buyParams,
             autoApprove: true,
           }),
@@ -1351,7 +1351,7 @@ function addBatchListingCommands(cmd: Command): void {
         const rare = createRareClient({ publicClient });
         const root = opts.root === undefined ? undefined : await resolveRootInput(opts.root);
         const proofArtifact = opts.proof === undefined ? undefined : await loadMerkleProofArtifact(opts.proof);
-        const result = await rare.listing.batch.getStatus({
+        const result = await rare.listing.batch.status({
           root,
           creator: parseAddress(opts.creator, '--creator'),
           contract: parseOptionalAddress(opts.contract, '--contract'),

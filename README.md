@@ -468,6 +468,8 @@ Named currencies are parsed with chain-aware decimals. Arbitrary ERC20 addresses
 
 All marketplace commands (`auction`, `offer`, `listing`) accept `--currency` to specify a payment token. Named currencies (`eth`, `usdc`, `rare`) are resolved per-chain automatically. You can also pass any ERC20 address directly.
 
+SDK marketplace methods use the same currency contract: pass `eth`, `rare`, `usdc`, or an ERC20 address to `currency`, and use `rare.currency.list()`, `rare.currency.resolve(input)`, or `rare.currency.resolveDecimals(input)` to inspect the chain-aware mapping.
+
 ERC20 allowances are auto-approved when needed for bids, offers, listing purchases, and batch-listing purchases.
 
 ```bash
@@ -551,19 +553,17 @@ const rare = createRareClient({ publicClient, walletClient });
 
 ### Search
 
-`search.nfts` auto-applies the client chain unless you pass `chainId`.
+`RareClient` is bound to the chain on its `publicClient`. Client methods use that chain automatically; create a separate client with a different viem chain to query or write another network.
 
 ```ts
-const nfts = await rare.search.nfts({ query: 'portrait', take: 10 });
-const collections = await rare.search.collections({ ownerAddresses: [account.address] });
+const nfts = await rare.search.nfts({ query: 'portrait', perPage: 10 });
+const collections = await rare.search.collections({ ownerAddress: account.address });
 const events = await rare.search.events({
-  chain: 'mainnet',
   contract: '0x...',
   tokenId: '1',
   eventType: ['CREATE_NFT', 'SETTLE_AUCTION'],
 });
 const nft = await rare.nft.get({
-  chain: 'mainnet',
   contract: '0x...',
   tokenId: '1',
 });
@@ -678,7 +678,7 @@ const creator = await rare.collection.getTokenCreator({
   tokenId: 1,
 });
 
-const royalty = await rare.collection.getRoyaltyInfo({
+const royalty = await rare.collection.royalty.status({
   contract: '0xYourContractAddress',
   tokenId: 1,
 });

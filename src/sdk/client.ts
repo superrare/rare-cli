@@ -12,6 +12,7 @@ import { createBatchListingNamespace } from './batch-listing.js';
 import { createBatchAuctionNamespace } from './batch-auction.js';
 import { createBatchOfferNamespace } from './batch-offer.js';
 import { createTokenNamespace } from './token.js';
+import { createCurrencyNamespace } from './currency.js';
 import { createLiquidNamespace } from './liquid.js';
 import { createSwapNamespace } from './swap.js';
 import { createReleaseNamespace } from './release.js';
@@ -30,7 +31,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
     baseUrl: config.apiBaseUrl,
     fetch: config.apiFetch,
   });
-  const release = createReleaseNamespace(publicClient, config, addresses);
+  const release = createReleaseNamespace(publicClient, config, chain, addresses);
   const collectionDeploy = createDeployNamespace(publicClient, config, addresses);
   const collectionMint = createCollectionMint(publicClient, config);
   const batchListingAddresses = {
@@ -66,6 +67,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
       }
       return addresses.erc721ApprovalManager;
     },
+    chain,
     chainId,
   };
   const auction = {
@@ -109,18 +111,22 @@ export function createRareClient(config: RareClientConfig): RareClient {
     listing,
     utils: createUtilsNamespace(),
     token: createTokenNamespace(publicClient, chain),
+    currency: createCurrencyNamespace(publicClient, chain),
     search: {
       async nfts(params = {}): ReturnType<RareClient['search']['nfts']> {
-        const requestParams = params.chainId ? params : { ...params, chainId };
+        assertNoClientChainOverride(params, 'rare.search.nfts', chain);
+        const requestParams = { ...params, chainId };
         return api.searchNfts(requestParams);
       },
 
       async collections(params = {}): ReturnType<RareClient['search']['collections']> {
-        const requestParams = params.chainId ? params : { ...params, chainId };
+        assertNoClientChainOverride(params, 'rare.search.collections', chain);
+        const requestParams = { ...params, chainId };
         return api.searchCollections(requestParams);
       },
       async events(params): ReturnType<RareClient['search']['events']> {
-        const requestParams = params.collectionId !== undefined || params.chainId !== undefined || params.chain !== undefined
+        assertNoClientChainOverride(params, 'rare.search.events', chain);
+        const requestParams = params.collectionId !== undefined
           ? params
           : { ...params, chainId };
         return api.searchEvents(requestParams);
@@ -128,7 +134,8 @@ export function createRareClient(config: RareClientConfig): RareClient {
     },
     nft: {
       async get(params): ReturnType<RareClient['nft']['get']> {
-        return api.getNft(buildNftUniversalTokenId(params));
+        assertNoClientChainOverride(params, 'rare.nft.get', chain);
+        return api.getNft(buildNftUniversalTokenId({ ...params, chainId }));
       },
     },
     collection: createCollectionNamespace(
@@ -172,4 +179,24 @@ export function createRareClient(config: RareClientConfig): RareClient {
       },
     },
   };
+}
+
+function assertNoClientChainOverride(
+  params: unknown,
+  method: string,
+  chain: string,
+): void {
+  if (!isRecord(params)) return;
+  if (!Object.prototype.hasOwnProperty.call(params, 'chain') && !Object.prototype.hasOwnProperty.call(params, 'chainId')) {
+    return;
+  }
+
+  throw new Error(
+    `${method} uses the RareClient chain (${chain}). ` +
+      'Create another RareClient with a different publicClient to use another chain.',
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }

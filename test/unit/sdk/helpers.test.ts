@@ -116,12 +116,15 @@ describe('payment approval planning', () => {
           expect(params.functionName).toBe('allowance');
           return 4n;
         },
-      } as never,
+        async waitForTransactionReceipt(): Promise<never> {
+          throw new Error('unexpected approval receipt wait');
+        },
+      },
       walletClient: {
         async writeContract(): Promise<never> {
           throw new Error('unexpected approval write');
         },
-      } as never,
+      },
       account: sellerAddress,
       accountAddress: sellerAddress,
       spenderAddress: spender,
@@ -148,12 +151,15 @@ describe('NFT approval planning', () => {
           expect(params.functionName).toBe('isApprovedForAll');
           return false;
         },
-      } as never,
+        async waitForTransactionReceipt(): Promise<never> {
+          throw new Error('unexpected approval receipt wait');
+        },
+      },
       walletClient: {
         async writeContract(): Promise<never> {
           throw new Error('unexpected approval write');
         },
-      } as never,
+      },
       account: sellerAddress,
       accountAddress: sellerAddress,
       nftAddress,

@@ -2,7 +2,6 @@ import {
   isAddressEqual,
   parseUnits,
   parseEventLogs,
-  type Address,
   type PublicClient,
 } from 'viem';
 import { batchOfferAbi } from '../contracts/abis/batch-offer.js';
@@ -28,6 +27,7 @@ import {
   generateApiNftMerkleRoot,
   resolveApiNftMerkleProof,
 } from './merkle-api.js';
+import { resolveCurrencyForSdk } from './currency.js';
 
 export function createBatchOfferNamespace(
   publicClient: PublicClient,
@@ -41,7 +41,9 @@ export function createBatchOfferNamespace(
       const { walletClient, account, accountAddress } = requireWallet(config);
       const block = await publicClient.getBlock();
       const resolvedParams = await resolveBatchOfferCreateParams(config, params);
-      const currency = resolvedParams.currency ?? ETH_ADDRESS;
+      const currency = resolvedParams.currency === undefined
+        ? ETH_ADDRESS
+        : resolveCurrencyForSdk(resolvedParams.currency, chain).address;
       const price = requireInput(resolvedParams.price, 'price');
       const amount = typeof price === 'bigint'
         ? price
@@ -200,7 +202,7 @@ export function createBatchOfferNamespace(
       };
     },
 
-    async getStatus(params): ReturnType<RareClient['offer']['batch']['getStatus']> {
+    async status(params): ReturnType<RareClient['offer']['batch']['status']> {
       const batchOfferCreator = requireContractAddress(chain, 'batchOfferCreator');
       const plan = planBatchOfferRoot(params);
       const [offer, block] = await Promise.all([

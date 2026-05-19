@@ -1,5 +1,12 @@
 import type { Address, Hash, Hex, PublicClient, TransactionReceipt, WalletClient } from 'viem';
-import type { SupportedChain } from '../contracts/addresses.js';
+import type {
+  CurrencyInfo,
+  CurrencyInput,
+  CurrencyName,
+  CustomCurrencyInfo,
+  ResolvedCurrency,
+  SupportedChain,
+} from '../contracts/addresses.js';
 import type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
 import type { LiquidFactoryConfig } from '../liquid/factory-config.js';
 import type { LazySovereignCollectionContractType } from './collection-core.js';
@@ -31,6 +38,16 @@ export type IntegerInput = bigint | number | string;
 export type AmountInput = bigint | number | string;
 export type TimestampInput = IntegerInput | Date;
 export type WalletAccount = NonNullable<WalletClient['account']>;
+export type {
+  CurrencyInfo,
+  CurrencyInput,
+  CurrencyName,
+  CustomCurrencyInfo,
+  ResolvedCurrency,
+};
+export type ResolvedCurrencyWithDecimals =
+  | CurrencyInfo
+  | (Omit<CustomCurrencyInfo, 'decimals'> & { decimals: number });
 
 export type RareClientConfig = {
   publicClient: PublicClient;
@@ -39,6 +56,11 @@ export type RareClientConfig = {
   apiBaseUrl?: string;
   apiFetch?: typeof fetch;
 }
+
+export type RareClientNftSearchParams = Omit<NftSearchParams, 'chainId'>;
+export type RareClientCollectionSearchParams = Omit<CollectionSearchParams, 'chainId'>;
+export type RareClientEventSearchParams = Omit<EventSearchParams, 'chain' | 'chainId'>;
+export type RareClientNftGetParams = Omit<NftIdentityParams, 'chain' | 'chainId'>;
 
 export type TransactionResult = {
   txHash: Hash;
@@ -286,7 +308,7 @@ export type AuctionCreateParams = {
   tokenId: IntegerInput;
   price: AmountInput;
   endTime: TimestampInput;
-  currency?: Address;
+  currency?: CurrencyInput;
   auctionType?: 'reserve' | 'scheduled';
   startTime?: TimestampInput;
   splitAddresses?: Address[];
@@ -298,7 +320,7 @@ export type AuctionBidParams = {
   contract: Address;
   tokenId: IntegerInput;
   price: AmountInput;
-  currency?: Address;
+  currency?: CurrencyInput;
   autoApprove?: boolean;
 }
 
@@ -345,7 +367,7 @@ export type AuctionStatus = {
 export type OfferCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
-  currency?: Address;
+  currency?: CurrencyInput;
   price: AmountInput;
   autoApprove?: boolean;
 }
@@ -353,13 +375,13 @@ export type OfferCreateParams = {
 export type OfferCancelParams = {
   contract: Address;
   tokenId: IntegerInput;
-  currency?: Address;
+  currency?: CurrencyInput;
 }
 
 export type OfferAcceptParams = {
   contract: Address;
   tokenId: IntegerInput;
-  currency?: Address;
+  currency?: CurrencyInput;
   price: AmountInput;
   splitAddresses?: Address[];
   splitRatios?: number[];
@@ -369,7 +391,7 @@ export type OfferAcceptParams = {
 export type OfferStatusParams = {
   contract: Address;
   tokenId: IntegerInput;
-  currency?: Address;
+  currency?: CurrencyInput;
 }
 
 export type OfferStatus = {
@@ -388,7 +410,7 @@ export type OfferStatus = {
 export type ListingCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
-  currency?: Address;
+  currency?: CurrencyInput;
   price: AmountInput;
   target?: Address;
   splitAddresses?: Address[];
@@ -405,7 +427,7 @@ export type ListingCancelParams = {
 export type ListingBuyParams = {
   contract: Address;
   tokenId: IntegerInput;
-  currency?: Address;
+  currency?: CurrencyInput;
   price: AmountInput;
   autoApprove?: boolean;
 }
@@ -494,7 +516,7 @@ export type BatchListingBuyParams = {
   contract?: Address;
   tokenId?: IntegerInput;
   creator: Address;
-  currency: Address;
+  currency: CurrencyInput;
   price: AmountInput;
   autoApprove?: boolean;
 }
@@ -548,7 +570,7 @@ export type BatchListingStatus = {
 
 export type ReleaseConfigureParams = {
   contract: Address;
-  currency?: Address;
+  currency?: CurrencyInput;
   price: AmountInput;
   startTime?: TimestampInput;
   maxMints: IntegerInput;
@@ -570,7 +592,7 @@ export type ReleaseConfigureResult = {
 export type ReleaseMintDirectSaleParams = {
   contract: Address;
   quantity?: IntegerInput;
-  currency?: Address;
+  currency?: CurrencyInput;
   price?: AmountInput;
   proof?: readonly Hash[];
   recipient?: Address;
@@ -694,7 +716,7 @@ export type BatchOfferCreateParams = {
   root?: Hex;
   artifact?: BatchTokenListArtifact;
   price: AmountInput;
-  currency?: Address;
+  currency?: CurrencyInput;
   endTime: TimestampInput;
   autoApprove?: boolean;
 }
@@ -773,7 +795,7 @@ export type BatchAuctionCreateParams = {
   root?: Hex;
   artifact?: BatchTokenListArtifact;
   price: AmountInput;
-  currency?: Address;
+  currency?: CurrencyInput;
   endTime: TimestampInput;
   splitAddresses?: Address[];
   splitRatios?: number[];
@@ -809,7 +831,7 @@ export type BatchAuctionBidParams = {
   proofArtifact?: BatchTokenProofArtifact;
   contract: Address;
   tokenId: IntegerInput;
-  currency?: Address;
+  currency?: CurrencyInput;
   price: AmountInput;
   autoApprove?: boolean;
 }
@@ -895,6 +917,11 @@ export type TokenInfo = {
   tokenId: bigint;
   owner: Address;
   tokenUri: string;
+}
+
+export type TokenStatus = {
+  contract: TokenContractInfo;
+  token?: TokenInfo;
 }
 
 export type GeneratePresetCurvesParams = {
@@ -1127,7 +1154,7 @@ export type ReleaseNamespace = {
   limits: ReleaseLimitsNamespace;
   configure: (params: ReleaseConfigureParams) => Promise<ReleaseConfigureResult>;
   mint: (params: ReleaseMintDirectSaleParams) => Promise<ReleaseMintDirectSaleResult>;
-  getStatus: (params: ReleaseStatusParams) => Promise<ReleaseStatus>;
+  status: (params: ReleaseStatusParams) => Promise<ReleaseStatus>;
 }
 
 export type BatchListingNamespace = {
@@ -1135,14 +1162,14 @@ export type BatchListingNamespace = {
   cancel: (params: BatchListingCancelParams) => Promise<BatchListingCancelResult>;
   buy: (params: BatchListingBuyParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
   setAllowlist: (params: BatchListingSetAllowListParams) => Promise<BatchListingSetAllowListResult>;
-  getStatus: (params: BatchListingStatusParams) => Promise<BatchListingStatus>;
+  status: (params: BatchListingStatusParams) => Promise<BatchListingStatus>;
 }
 
 export type BatchOfferNamespace = {
   create: (params: BatchOfferCreateParams) => Promise<BatchOfferCreateResult>;
   revoke: (params: BatchOfferRevokeParams) => Promise<BatchOfferRevokeResult>;
   accept: (params: BatchOfferAcceptParams) => Promise<BatchOfferAcceptResult>;
-  getStatus: (params: BatchOfferStatusParams) => Promise<BatchOfferStatus>;
+  status: (params: BatchOfferStatusParams) => Promise<BatchOfferStatus>;
 }
 
 export type BatchAuctionNamespace = {
@@ -1150,14 +1177,14 @@ export type BatchAuctionNamespace = {
   cancel: (params: BatchAuctionCancelParams) => Promise<BatchAuctionCancelResult>;
   bid: (params: BatchAuctionBidParams) => Promise<BatchAuctionBidResult>;
   settle: (params: BatchAuctionSettleParams) => Promise<BatchAuctionSettleResult>;
-  getStatus: (params: BatchAuctionStatusParams) => Promise<BatchAuctionStatus>;
+  status: (params: BatchAuctionStatusParams) => Promise<BatchAuctionStatus>;
 }
 
 export type ListingMarketplaceNamespace = {
   create: (params: ListingCreateParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
   cancel: (params: ListingCancelParams) => Promise<TransactionResult>;
   buy: (params: ListingBuyParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
-  getStatus: (params: ListingStatusParams) => Promise<ListingStatus>;
+  status: (params: ListingStatusParams) => Promise<ListingStatus>;
 }
 
 export type ListingNamespace = ListingMarketplaceNamespace & {
@@ -1198,7 +1225,7 @@ export type RareClient = {
     getPoolInfo: (params: { contract: Address }) => Promise<LiquidEditionPoolInfo>;
     getMarketState: (params: { contract: Address }) => Promise<LiquidEditionMarketState>;
     getCurrentPrice: (params: { contract: Address }) => Promise<LiquidEditionCurrentPrice>;
-    getTelemetry: (params: { contract: Address }) => Promise<LiquidEditionTelemetry>;
+    status: (params: { contract: Address }) => Promise<LiquidEditionTelemetry>;
   };
   swap: {
     buy: (params: RouterBuyParams) => Promise<TransactionResult>;
@@ -1216,14 +1243,14 @@ export type RareClient = {
     bid: (params: AuctionBidParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
     settle: (params: AuctionSettleParams) => Promise<TransactionResult>;
     cancel: (params: AuctionCancelParams) => Promise<TransactionResult>;
-    getStatus: (params: AuctionStatusParams) => Promise<AuctionStatus>;
+    status: (params: AuctionStatusParams) => Promise<AuctionStatus>;
     batch: BatchAuctionNamespace;
   };
   offer: {
     create: (params: OfferCreateParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
     cancel: (params: OfferCancelParams) => Promise<TransactionResult>;
     accept: (params: OfferAcceptParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
-    getStatus: (params: OfferStatusParams) => Promise<OfferStatus>;
+    status: (params: OfferStatusParams) => Promise<OfferStatus>;
     batch: BatchOfferNamespace;
   };
   listing: ListingNamespace;
@@ -1238,12 +1265,12 @@ export type RareClient = {
     };
   };
   search: {
-    nfts: (params?: NftSearchParams) => Promise<SearchPageResponse<Nft>>;
-    collections: (params?: CollectionSearchParams) => Promise<SearchPageResponse<Collection>>;
-    events: (params: EventSearchParams) => Promise<SearchPageResponse<NftEvent>>;
+    nfts: (params?: RareClientNftSearchParams) => Promise<SearchPageResponse<Nft>>;
+    collections: (params?: RareClientCollectionSearchParams) => Promise<SearchPageResponse<Collection>>;
+    events: (params: RareClientEventSearchParams) => Promise<SearchPageResponse<NftEvent>>;
   };
   nft: {
-    get: (params: NftIdentityParams) => Promise<Nft>;
+    get: (params: RareClientNftGetParams) => Promise<Nft>;
   };
   collection: {
     get: (id: string) => Promise<Collection>;
@@ -1256,15 +1283,21 @@ export type RareClient = {
     mintBatch: (params: CollectionMintBatchParams) => Promise<CollectionMintBatchResult>;
     prepareLazyMint: (params: CollectionPrepareLazyMintParams) => Promise<CollectionPrepareLazyMintResult>;
     getTokenCreator: (params: CollectionTokenCreatorParams) => Promise<CollectionTokenCreatorResult>;
-    getRoyaltyInfo: (params: CollectionRoyaltyInfoParams) => Promise<CollectionRoyaltyInfoResult>;
+    royalty: {
+      status: (params: CollectionRoyaltyInfoParams) => Promise<CollectionRoyaltyInfoResult>;
+      registry: {
+        status: (params: CollectionRoyaltyRegistryStatusParams) => Promise<CollectionRoyaltyRegistryStatusResult>;
+      };
+    };
+    metadata: {
+      status: (params: CollectionMintConfigParams) => Promise<CollectionMintConfigResult>;
+    };
     setDefaultRoyaltyReceiver: (params: CollectionSetDefaultRoyaltyReceiverParams) => Promise<CollectionSetDefaultRoyaltyReceiverResult>;
     setTokenRoyaltyReceiver: (params: CollectionSetTokenRoyaltyReceiverParams) => Promise<CollectionSetTokenRoyaltyReceiverResult>;
-    getRoyaltyRegistryStatus: (params: CollectionRoyaltyRegistryStatusParams) => Promise<CollectionRoyaltyRegistryStatusResult>;
     setRoyaltyRegistryReceiverOverride: (params: CollectionRoyaltyRegistryReceiverOverrideParams) => Promise<CollectionRoyaltyRegistryReceiverOverrideResult>;
     setRoyaltyRegistryContractReceiver: (params: CollectionRoyaltyRegistryContractReceiverParams) => Promise<CollectionRoyaltyRegistryContractReceiverResult>;
     setRoyaltyRegistryTokenReceiver: (params: CollectionRoyaltyRegistryTokenReceiverParams) => Promise<CollectionRoyaltyRegistryTokenReceiverResult>;
     setRoyaltyRegistryContractPercentage: (params: CollectionRoyaltyRegistryContractPercentageParams) => Promise<CollectionRoyaltyRegistryContractPercentageResult>;
-    getMintConfig: (params: CollectionMintConfigParams) => Promise<CollectionMintConfigResult>;
     updateBaseUri: (params: CollectionUpdateBaseUriParams) => Promise<CollectionUpdateBaseUriResult>;
     updateTokenUri: (params: CollectionUpdateTokenUriParams) => Promise<CollectionUpdateTokenUriResult>;
     lockBaseUri: (params: CollectionLockBaseUriParams) => Promise<CollectionLockBaseUriResult>;
@@ -1280,8 +1313,12 @@ export type RareClient = {
     erc721: (params: ImportErc721Params) => Promise<void>;
   };
   token: {
-    getContractInfo: (params: { contract: Address }) => Promise<TokenContractInfo>;
-    getTokenInfo: (params: { contract: Address; tokenId: IntegerInput }) => Promise<TokenInfo>;
+    status: (params: { contract: Address; tokenId?: IntegerInput }) => Promise<TokenStatus>;
     getPrice: (symbol: string) => Promise<{ symbol: string; priceUsd: number; decimals: number; chainId: number; address: string }>;
+  };
+  currency: {
+    list: () => CurrencyInfo[];
+    resolve: (input: CurrencyInput) => ResolvedCurrency;
+    resolveDecimals: (input: CurrencyInput) => Promise<ResolvedCurrencyWithDecimals>;
   };
 }

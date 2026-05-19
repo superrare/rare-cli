@@ -15,6 +15,10 @@ import type {
   BatchAuctionStatusParams,
 } from './types.js';
 
+type ResolvedCurrencyParam<T extends { currency?: unknown }> = Omit<T, 'currency'> & {
+  currency?: Address;
+};
+
 export type BatchAuctionCreatePlan = {
   root: Hex;
   currency: Address;
@@ -90,7 +94,7 @@ const zeroAddress = ETH_ADDRESS;
 const marketplaceFeePercentage = 3n;
 
 export function planBatchAuctionCreate(
-  params: BatchAuctionCreateParams,
+  params: ResolvedCurrencyParam<BatchAuctionCreateParams>,
   accountAddress: Address,
 ): BatchAuctionCreatePlan {
   const price = requireInput(params.price, 'price');
@@ -112,7 +116,7 @@ export function planBatchAuctionRoot(params: BatchAuctionCancelParams): BatchAuc
   };
 }
 
-export function planBatchAuctionBid(params: BatchAuctionBidParams): BatchAuctionBidPlan {
+export function planBatchAuctionBid(params: ResolvedCurrencyParam<BatchAuctionBidParams>): BatchAuctionBidPlan {
   const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
   const root = resolveBatchAuctionProofRoot(params);
   const proof = resolveBatchAuctionProof(params);

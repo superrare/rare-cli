@@ -24,7 +24,7 @@ describe('status command token reads', () => {
 function rareClientWithTokenError(error: Error): TokenReader {
   return {
     token: {
-      getTokenInfo: (): ReturnType<TokenReader['token']['getTokenInfo']> => Promise.reject(error),
+      status: (): ReturnType<TokenReader['token']['status']> => Promise.reject(error),
     },
   };
 }

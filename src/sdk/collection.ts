@@ -173,24 +173,36 @@ export function createCollectionNamespace(
       };
     },
 
-    async getRoyaltyInfo(params): ReturnType<RareClient['collection']['getRoyaltyInfo']> {
-      const plan = planCollectionRoyaltyInfo(params);
-      const [receiver, royaltyAmount] = await readRoyaltyInfo(
-        publicClient,
-        plan.contract,
-        plan.tokenId,
-        plan.salePrice,
-      );
-      const defaultRoyalty = await readDefaultRoyalty(publicClient, plan.contract);
+    royalty: {
+      async status(params): ReturnType<RareClient['collection']['royalty']['status']> {
+        const plan = planCollectionRoyaltyInfo(params);
+        const [receiver, royaltyAmount] = await readRoyaltyInfo(
+          publicClient,
+          plan.contract,
+          plan.tokenId,
+          plan.salePrice,
+        );
+        const defaultRoyalty = await readDefaultRoyalty(publicClient, plan.contract);
 
-      return {
-        contract: plan.contract,
-        tokenId: plan.tokenId,
-        salePrice: plan.salePrice,
-        receiver,
-        royaltyAmount,
-        ...defaultRoyalty,
-      };
+        return {
+          contract: plan.contract,
+          tokenId: plan.tokenId,
+          salePrice: plan.salePrice,
+          receiver,
+          royaltyAmount,
+          ...defaultRoyalty,
+        };
+      },
+
+      registry: {
+        async status(params): ReturnType<RareClient['collection']['royalty']['registry']['status']> {
+          const plan = planCollectionRoyaltyRegistryStatus(params);
+          const registry = await resolveRoyaltyRegistryAddress(publicClient, chain, plan.registry);
+          const read = await readRoyaltyRegistryStatus(publicClient, registry, plan);
+
+          return shapeCollectionRoyaltyRegistryStatus({ ...plan, registry }, read);
+        },
+      },
     },
 
     async setDefaultRoyaltyReceiver(params): ReturnType<RareClient['collection']['setDefaultRoyaltyReceiver']> {
@@ -230,14 +242,6 @@ export function createCollectionNamespace(
         tokenId: plan.tokenId,
         receiver: plan.receiver,
       };
-    },
-
-    async getRoyaltyRegistryStatus(params): ReturnType<RareClient['collection']['getRoyaltyRegistryStatus']> {
-      const plan = planCollectionRoyaltyRegistryStatus(params);
-      const registry = await resolveRoyaltyRegistryAddress(publicClient, chain, plan.registry);
-      const read = await readRoyaltyRegistryStatus(publicClient, registry, plan);
-
-      return shapeCollectionRoyaltyRegistryStatus({ ...plan, registry }, read);
     },
 
     async setRoyaltyRegistryReceiverOverride(
@@ -336,15 +340,17 @@ export function createCollectionNamespace(
       };
     },
 
-    async getMintConfig(params): ReturnType<RareClient['collection']['getMintConfig']> {
-      const plan = planCollectionContract(params);
-      const mintConfig = await readMintConfig(publicClient, plan.contract);
-      return {
-        contract: plan.contract,
-        tokenCount: mintConfig.numberOfTokens,
-        baseUri: mintConfig.baseURI,
-        lockedMetadata: mintConfig.lockedMetadata,
-      };
+    metadata: {
+      async status(params): ReturnType<RareClient['collection']['metadata']['status']> {
+        const plan = planCollectionContract(params);
+        const mintConfig = await readMintConfig(publicClient, plan.contract);
+        return {
+          contract: plan.contract,
+          tokenCount: mintConfig.numberOfTokens,
+          baseUri: mintConfig.baseURI,
+          lockedMetadata: mintConfig.lockedMetadata,
+        };
+      },
     },
 
     async updateBaseUri(params): ReturnType<RareClient['collection']['updateBaseUri']> {

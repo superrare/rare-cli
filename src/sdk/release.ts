@@ -8,12 +8,14 @@ import {
 } from 'viem';
 import { rareMinterAbi } from '../contracts/abis/rare-minter.js';
 import { tokenAbi } from '../contracts/abis/token.js';
+import type { SupportedChain } from '../contracts/addresses.js';
 import type {
   ReleaseNamespace,
   RareClientConfig,
 } from './types.js';
 import { ETH_ADDRESS } from '../contracts/addresses.js';
 import { preparePaymentForSpender, requireWallet } from './helpers.js';
+import { resolveCurrencyForSdk } from './currency.js';
 import {
   assertReleaseContractOwner,
   assertReleaseAllowlistConfigMatches,
@@ -206,7 +208,7 @@ async function readReleaseStatus(opts: {
   rareMinter: Address;
   contract: Address;
   account?: Address;
-}): ReturnType<ReleaseNamespace['getStatus']> {
+}): ReturnType<ReleaseNamespace['status']> {
   const [
     directSale,
     allowlist,
@@ -296,6 +298,7 @@ function readMintDirectSaleTokenRange(opts: {
 export function createReleaseNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
+  chain: SupportedChain,
   addresses: { rareMinter?: Address; auction: Address },
 ): ReleaseNamespace {
   return {
@@ -492,11 +495,11 @@ export function createReleaseNamespace(
     async configure(params): ReturnType<ReleaseNamespace['configure']> {
       const rareMinter = requireRareMinterAddress(addresses.rareMinter);
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const currencyAddress = params.currency ?? ETH_ADDRESS;
+      const currencyAddress = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const currencyDecimals = currencyAddress === ETH_ADDRESS || typeof params.price === 'bigint'
         ? null
         : await readCurrencyDecimals(publicClient, currencyAddress, { required: true });
-      const plan = planReleaseConfigure(params, {
+      const plan = planReleaseConfigure({ ...params, currency: currencyAddress }, {
         accountAddress,
         currencyDecimals,
         nowSeconds: currentUnixTimestamp(),
@@ -545,7 +548,8 @@ export function createReleaseNamespace(
     async mint(params): ReturnType<ReleaseNamespace['mint']> {
       const rareMinter = requireRareMinterAddress(addresses.rareMinter);
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const plan = planReleaseDirectSaleMint(params);
+      const currency = params.currency === undefined ? undefined : resolveCurrencyForSdk(params.currency, chain).address;
+      const plan = planReleaseDirectSaleMint({ ...params, currency });
       const status = await readReleaseStatus({
         publicClient,
         rareMinter,
@@ -618,7 +622,7 @@ export function createReleaseNamespace(
       };
     },
 
-    async getStatus(params): ReturnType<ReleaseNamespace['getStatus']> {
+    async status(params): ReturnType<ReleaseNamespace['status']> {
       const rareMinter = requireRareMinterAddress(addresses.rareMinter);
       return readReleaseStatus({
         publicClient,

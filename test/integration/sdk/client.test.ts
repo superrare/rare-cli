@@ -17,21 +17,19 @@ describe('Rare SDK client API integration', () => {
       }),
     });
 
-    const nftSearch = await searchNftsOrSkip(ctx, () => rare.search.nfts({ chainId: 1, page: 1, perPage: 1 }));
+    const nftSearch = await searchNftsOrSkip(ctx, () => rare.search.nfts({ page: 1, perPage: 1 }));
     const nftSearchResult = nftSearch.data[0];
     if (nftSearchResult === undefined) {
       throw new Error('Expected at least one NFT search result.');
     }
 
     const nft = await searchNftsOrSkip(ctx, () => rare.nft.get({
-      chainId: nftSearchResult.chainId,
       contract: getAddress(nftSearchResult.contractAddress),
       tokenId: nftSearchResult.tokenId,
     }));
     expect(nft.universalTokenId).toBe(nftSearchResult.universalTokenId);
 
     const nftEvents = await searchNftsOrSkip(ctx, () => rare.search.events({
-      chainId: nftSearchResult.chainId,
       contract: getAddress(nftSearchResult.contractAddress),
       tokenId: nftSearchResult.tokenId,
       page: 1,
@@ -81,6 +79,59 @@ describe('Rare SDK client API integration', () => {
     expect('events' in rare.nft).toBe(false);
     expect('events' in rare.collection).toBe(false);
   });
+
+  it('rejects per-call chain overrides on the bound SDK client', async () => {
+    const rare = createRareClient({
+      publicClient: createPublicClient({
+        chain: mainnet,
+        transport: http('http://127.0.0.1:8545'),
+      }),
+    });
+
+    // @ts-expect-error exercising runtime validation for JavaScript callers.
+    await expect(rare.search.nfts({ chainId: 11_155_111, page: 1, perPage: 2 })).rejects.toThrow(
+      'rare.search.nfts uses the RareClient chain (mainnet).',
+    );
+    // @ts-expect-error exercising runtime validation for JavaScript callers.
+    await expect(rare.search.events({
+      chain: 'sepolia',
+      contract: '0x1000000000000000000000000000000000000000',
+    })).rejects.toThrow('rare.search.events uses the RareClient chain (mainnet).');
+    // @ts-expect-error exercising runtime validation for JavaScript callers.
+    await expect(rare.nft.get({
+      chainId: 11_155_111,
+      contract: '0x1000000000000000000000000000000000000000',
+      tokenId: 1,
+    })).rejects.toThrow('rare.nft.get uses the RareClient chain (mainnet).');
+  });
+
+  it('exposes marketplace currency alias resolution through the SDK client', async () => {
+    const rare = createRareClient({
+      publicClient: createPublicClient({
+        chain: mainnet,
+        transport: http('http://127.0.0.1:8545'),
+      }),
+    });
+
+    expect(rare.currency.list()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'eth', symbol: 'ETH', decimals: 18, isNative: true }),
+      expect.objectContaining({ name: 'rare', symbol: 'RARE', decimals: 18 }),
+      expect.objectContaining({ name: 'usdc', symbol: 'USDC', decimals: 6 }),
+    ]));
+    expect(rare.currency.resolve('usdc')).toEqual(expect.objectContaining({
+      name: 'usdc',
+      address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48',
+      decimals: 6,
+    }));
+    await expect(rare.currency.resolveDecimals('rare')).resolves.toEqual(expect.objectContaining({
+      name: 'rare',
+      decimals: 18,
+    }));
+    // @ts-expect-error exercising runtime validation for an invalid user string.
+    expect(() => rare.currency.resolve('doge')).toThrow(
+      'Unknown currency "doge". Supported: eth, rare, usdc or a 0x address.',
+    );
+  });
 });
 
 describeLive('Rare SDK client live integration', () => {
@@ -104,16 +155,6 @@ describeLive('Rare SDK client live integration', () => {
     expect(result.pagination).toMatchObject({ page: 1, perPage: 2 });
     expect(result.data.length).toBeGreaterThan(0);
     expect(result.data.every((nft) => Number(nft.chainId) === 11_155_111)).toBe(true);
-  }, 30_000);
-
-  it('does not override an explicit NFT search chain ID', async (ctx) => {
-    const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
-
-    const result = await searchNftsOrSkip(ctx, () => rare.search.nfts({ chainId: 1, page: 1, perPage: 2 }));
-
-    expect(result.pagination).toMatchObject({ page: 1, perPage: 2 });
-    expect(result.data.length).toBeGreaterThan(0);
-    expect(result.data.every((nft) => Number(nft.chainId) === 1)).toBe(true);
   }, 30_000);
 
   it('requires an owner for SDK import before posting to the API', async () => {

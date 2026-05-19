@@ -21,7 +21,7 @@ type SetRenderContractOptions = ContractOptions & {
   renderContract: string;
 };
 
-type LiquidEditionTelemetry = Awaited<ReturnType<RareClient['liquidEdition']['getTelemetry']>>;
+type LiquidEditionTelemetry = Awaited<ReturnType<RareClient['liquidEdition']['status']>>;
 
 export function liquidEditionCommand(): Command {
   const cmd = new Command('liquid-edition');
@@ -51,7 +51,7 @@ function liquidEditionStatusCommand(): Command {
       const contract = parseAddress(opts.contract, '--contract');
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient });
-      const telemetry = await rare.liquidEdition.getTelemetry({ contract });
+      const telemetry = await rare.liquidEdition.status({ contract });
 
       output(telemetry, () => {
         printLiquidEditionTelemetry(telemetry);

@@ -22,6 +22,7 @@ import {
   planOfferStatus,
   shapeOfferStatus,
 } from './marketplace-core.js';
+import { resolveCurrencyForSdk } from './currency.js';
 
 export function createOfferNamespace(
   publicClient: PublicClient,
@@ -32,7 +33,7 @@ export function createOfferNamespace(
   return {
     async create(params): ReturnType<RareClient['offer']['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const currency = params.currency ?? ETH_ADDRESS;
+      const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const price = requireInput(params.price, 'price');
       const amount = typeof price === 'bigint'
         ? price
@@ -64,7 +65,8 @@ export function createOfferNamespace(
 
     async cancel(params): ReturnType<RareClient['offer']['cancel']> {
       const { walletClient, account } = requireWallet(config);
-      const plan = planOfferCancel(params);
+      const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
+      const plan = planOfferCancel({ ...params, currency });
 
       const txHash = await walletClient.writeContract({
         address: addresses.auction,
@@ -81,7 +83,7 @@ export function createOfferNamespace(
 
     async accept(params): ReturnType<RareClient['offer']['accept']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const currency = params.currency ?? ETH_ADDRESS;
+      const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const price = requireInput(params.price, 'price');
       const amount = typeof price === 'bigint'
         ? price
@@ -118,8 +120,9 @@ export function createOfferNamespace(
       return { txHash, receipt, approvalTxHash };
     },
 
-    async getStatus(params): ReturnType<RareClient['offer']['getStatus']> {
-      const plan = planOfferStatus(params);
+    async status(params): ReturnType<RareClient['offer']['status']> {
+      const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
+      const plan = planOfferStatus({ ...params, currency });
 
       const [offerResult, ownerResult, delayResult] = await publicClient.multicall({
         contracts: [

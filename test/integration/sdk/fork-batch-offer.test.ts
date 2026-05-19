@@ -86,7 +86,7 @@ describeFork('SDK fork integration write paths', () => {
       expect(created.creator).toBe(buyer.account);
       expect(created.root).toBe(revokeTree.root);
 
-      const active = await seller.rare.offer.batch.getStatus({
+      const active = await seller.rare.offer.batch.status({
         creator: buyer.account,
         root: revokeTree.root,
       });
@@ -95,7 +95,7 @@ describeFork('SDK fork integration write paths', () => {
 
       const revoked = await buyer.rare.offer.batch.revoke({ root: revokeTree.root });
       expect(revoked.root).toBe(revokeTree.root);
-      const revokedStatus = await seller.rare.offer.batch.getStatus({
+      const revokedStatus = await seller.rare.offer.batch.status({
         creator: buyer.account,
         root: revokeTree.root,
       });
@@ -134,10 +134,14 @@ describeFork('SDK fork integration write paths', () => {
       expect(accepted.buyer).toBe(buyer.account);
       expect(accepted.root).toBe(acceptTree.root);
 
-      const token = await buyer.rare.token.getTokenInfo({
+      const { token } = await buyer.rare.token.status({
         contract: collection.contract,
         tokenId: tokens[2],
       });
+      expect(token).toBeDefined();
+      if (token === undefined) {
+        throw new Error('Expected token status after batch offer acceptance.');
+      }
       expect(isAddressEqual(token.owner, buyer.account)).toBe(true);
     } finally {
       await revertForkSnapshot(publicClient, snapshotId);
@@ -197,7 +201,7 @@ describeFork('SDK fork integration write paths', () => {
       expect(createdForCancel.creator).toBe(seller.account);
       expect(createdForCancel.root).toBe(cancelTree.root);
 
-      const configured = await seller.rare.auction.batch.getStatus({
+      const configured = await seller.rare.auction.batch.status({
         creator: seller.account,
         root: cancelTree.root,
         proof: cancelProof.proof,
@@ -244,7 +248,7 @@ describeFork('SDK fork integration write paths', () => {
       expect(bid.root).toBe(settleTree.root);
 
       await advanceForkTime(publicClient, 2);
-      const ended = await seller.rare.auction.batch.getStatus({
+      const ended = await seller.rare.auction.batch.status({
         creator: seller.account,
         root: settleTree.root,
         proof: settleProof.proof,
@@ -320,7 +324,7 @@ describeFork('SDK fork integration write paths', () => {
       });
       expect(tokenRoyalty.receiver).toBe(seller.account);
 
-      const royalty = await seller.rare.collection.getRoyaltyInfo({
+      const royalty = await seller.rare.collection.royalty.status({
         contract: collection.contract,
         tokenId: batchMint.fromTokenId,
         price: 10_000,
@@ -389,7 +393,7 @@ describeFork('SDK fork integration write paths', () => {
       expect(configured.price).toBe(0n);
       expect(configured.maxMints).toBe(2n);
 
-      const status = await buyer.rare.listing.release.getStatus({
+      const status = await buyer.rare.listing.release.status({
         contract,
         account: buyer.account,
       });
@@ -482,7 +486,11 @@ async function expectTokenOwner(
   tokenId: string,
   expectedOwner: Address,
 ): Promise<void> {
-  const token = await rare.token.getTokenInfo({ contract, tokenId });
+  const { token } = await rare.token.status({ contract, tokenId });
+  expect(token).toBeDefined();
+  if (token === undefined) {
+    throw new Error('Expected token status for owner assertion.');
+  }
   expect(isAddressEqual(token.owner, expectedOwner)).toBe(true);
 }
 

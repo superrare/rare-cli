@@ -121,11 +121,11 @@ export function auctionCommand(): Command {
         const result = await runWithNftApprovalConsent({
           commandName: 'rare auction create',
           approvalMessage: 'NFT approval is required before creating this auction.',
-          runWithoutApproval: () => rare.auction.create({
+          runWithoutApproval: async () => rare.auction.create({
             ...auctionParams,
             autoApprove: opts.yes === true,
           }),
-          runWithApproval: () => rare.auction.create({
+          runWithApproval: async () => rare.auction.create({
             ...auctionParams,
             autoApprove: true,
           }),
@@ -195,11 +195,11 @@ export function auctionCommand(): Command {
         const result = await runWithPaymentApprovalConsent({
           commandName: 'rare auction bid',
           approvalMessage: 'ERC20 approval is required before placing this bid.',
-          runWithoutApproval: () => rare.auction.bid({
+          runWithoutApproval: async () => rare.auction.bid({
             ...bidParams,
             autoApprove: opts.yes === true,
           }),
-          runWithApproval: () => rare.auction.bid({
+          runWithApproval: async () => rare.auction.bid({
             ...bidParams,
             autoApprove: true,
           }),
@@ -311,7 +311,7 @@ export function auctionCommand(): Command {
       const rare = createRareClient({ publicClient });
       const contract = parseAddress(opts.contract, '--contract');
 
-      const result = await rare.auction.getStatus({
+      const result = await rare.auction.status({
         contract,
         tokenId: opts.tokenId,
       });

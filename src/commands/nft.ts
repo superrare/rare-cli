@@ -2,9 +2,8 @@ import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
-import type { NftIdentityParams } from '../sdk/nft-core.js';
+import type { RareClientNftGetParams } from '../sdk/types.js';
 import { parseAddress } from '../sdk/validation.js';
-import { chainIds } from '../contracts/addresses.js';
 import { printError } from '../errors.js';
 import { log, output, printNft } from '../output.js';
 
@@ -29,9 +28,9 @@ export function nftCommand(): Command {
     .action(async (opts: NftReadOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const rare = createRareClient({ publicClient: getPublicClient(chain) });
-      const nft = parseNftIdentityOptions(opts, chainIds[chain]);
+      const nft = parseNftIdentityOptions(opts);
 
-      log(`Fetching NFT ${nft.contract}/${nft.tokenId.toString()} on ${nft.chainId?.toString() ?? chain}...`);
+      log(`Fetching NFT ${nft.contract}/${nft.tokenId.toString()} on ${chain}...`);
 
       try {
         const result = await rare.nft.get(nft);
@@ -48,10 +47,8 @@ export function nftCommand(): Command {
 
 function parseNftIdentityOptions(
   opts: NftReadOptions,
-  defaultChainId: number,
-): NftIdentityParams {
+): RareClientNftGetParams {
   return {
-    chainId: opts.chainId ?? defaultChainId,
     contract: parseAddress(opts.contract, '--contract'),
     tokenId: opts.tokenId,
   };

@@ -10,13 +10,57 @@ import {
   parseUnits,
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
-import { chainIds, ETH_ADDRESS, resolveCurrency, supportedChains, type SupportedChain } from '../contracts/addresses.js';
+import { chainIds, ETH_ADDRESS, listCurrencies, supportedChains, type SupportedChain } from '../contracts/addresses.js';
 import type { UniswapTransactionRequest } from '../swap/uniswap-api.js';
 import type { RareClientConfig, IntegerInput, AmountInput, TimestampInput, WalletAccount, TransactionResult } from './types.js';
 
 const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);
 const ISO_DATE_STRING_PATTERN = /^\d{4}-\d{2}-\d{2}(?:[Tt]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:[Zz]|[+-]\d{2}:?\d{2})?)?$/;
+
+type TransactionReceiptClient = {
+  waitForTransactionReceipt: (params: { hash: Hash }) => Promise<unknown>;
+};
+
+type NftApprovalReadClient = {
+  readContract: (params: {
+    address: Address;
+    abi: typeof approvalAbi;
+    functionName: 'isApprovedForAll';
+    args: readonly [Address, Address];
+  }) => Promise<boolean>;
+};
+
+type NftApprovalWriteClient = {
+  writeContract: (params: {
+    address: Address;
+    abi: typeof approvalAbi;
+    functionName: 'setApprovalForAll';
+    args: readonly [Address, boolean];
+    account: Address | WalletAccount;
+    chain: undefined;
+  }) => Promise<Hash>;
+};
+
+type PaymentAllowanceReadClient = {
+  readContract: (params: {
+    address: Address;
+    abi: typeof erc20Abi;
+    functionName: 'allowance';
+    args: readonly [Address, Address];
+  }) => Promise<bigint>;
+};
+
+type PaymentApprovalWriteClient = {
+  writeContract: (params: {
+    address: Address;
+    abi: typeof erc20Abi;
+    functionName: 'approve';
+    args: readonly [Address, bigint];
+    account: Address | WalletAccount;
+    chain: undefined;
+  }) => Promise<Hash>;
+};
 
 export const approvalAbi = [
   {
@@ -59,7 +103,7 @@ export const marketplaceSettingsAbi = [
  * contract". Poll isApprovedForAll until it reflects true, or time out.
  */
 export async function waitForApproval(
-  publicClient: PublicClient,
+  publicClient: NftApprovalReadClient,
   nftAddress: Address,
   owner: Address,
   operator: Address,
@@ -251,10 +295,7 @@ export async function getTokenDecimals(publicClient: PublicClient, token: Addres
 }
 
 export function getKnownCurrencyDecimals(currency: Address, chain: SupportedChain): number | null {
-  if (isAddressEqual(currency, ETH_ADDRESS)) return 18;
-  if (isAddressEqual(currency, resolveCurrency('rare', chain))) return 18;
-  if (isAddressEqual(currency, resolveCurrency('usdc', chain))) return 6;
-  return null;
+  return listCurrencies(chain).find((entry) => isAddressEqual(entry.address, currency))?.decimals ?? null;
 }
 
 export async function resolveCurrencyDecimals(
@@ -439,8 +480,8 @@ export class NftApprovalRequiredError extends Error {
 }
 
 export async function approveNftContractIfNeeded(opts: {
-  publicClient: PublicClient;
-  walletClient: WalletClient;
+  publicClient: NftApprovalReadClient & TransactionReceiptClient;
+  walletClient: NftApprovalWriteClient;
   account: Address | WalletAccount;
   accountAddress: Address;
   nftAddress: Address;
@@ -539,8 +580,8 @@ export async function preparePaymentForSpender(opts: {
 }
 
 export async function preparePaymentAmountForSpender(opts: {
-  publicClient: PublicClient;
-  walletClient: WalletClient;
+  publicClient: PaymentAllowanceReadClient & TransactionReceiptClient;
+  walletClient: PaymentApprovalWriteClient;
   account: Address | WalletAccount;
   accountAddress: Address;
   spenderAddress: Address;
@@ -644,7 +685,7 @@ export async function calculateMarketplacePaymentAmountFromSettings(
 }
 
 async function readAllowance(
-  publicClient: PublicClient,
+  publicClient: PaymentAllowanceReadClient,
   currency: Address,
   accountAddress: Address,
   spenderAddress: Address,

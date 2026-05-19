@@ -403,7 +403,7 @@ function createRoyaltyStatusCommand(): Command {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
         const { chain, rare } = createReadCollectionClient(opts.chain, opts.chainId);
-        const result = await rare.collection.getRoyaltyInfo({
+        const result = await rare.collection.royalty.status({
           contract,
           tokenId: opts.tokenId,
           price: opts.price,
@@ -545,7 +545,7 @@ function createRoyaltyRegistryStatusCommand(): Command {
       const contract = parseAddressOption(opts.contract, '--contract');
       const registry = parseOptionalAddressOption(opts.registry, '--registry');
       const { chain, rare } = createReadCollectionClient(opts.chain, opts.chainId);
-      const result = await rare.collection.getRoyaltyRegistryStatus({
+      const result = await rare.collection.royalty.registry.status({
         registry,
         contract,
         tokenId: opts.tokenId,
@@ -801,7 +801,7 @@ function createMetadataStatusCommand(): Command {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
         const { chain, rare } = createReadCollectionClient(opts.chain, opts.chainId);
-        const result = await rare.collection.getMintConfig({ contract });
+        const result = await rare.collection.metadata.status({ contract });
 
         output(
           {

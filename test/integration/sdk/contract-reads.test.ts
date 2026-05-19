@@ -22,17 +22,21 @@ const setup = hasTestRpcUrl()
 describeLive('SDK contract read integration', () => {
   it('reads token contract and token info through real RPC', async (ctx) => {
     const { rare, fixture } = await requireSetup(ctx, setup);
-    const contractInfo = await rare.token.getContractInfo({ contract: fixture.contract });
+    const { contract: contractInfo } = await rare.token.status({ contract: fixture.contract });
     expect(contractInfo.contract).toBe(fixture.contract);
     expect(contractInfo.chain).toBe('sepolia');
     expect(contractInfo.name).toEqual(expect.any(String));
     expect(contractInfo.symbol).toEqual(expect.any(String));
     expect(contractInfo.totalSupply === null || contractInfo.totalSupply >= 1n).toBe(true);
 
-    const tokenInfo = await rare.token.getTokenInfo({
+    const { token: tokenInfo } = await rare.token.status({
       contract: fixture.contract,
       tokenId: fixture.tokenId,
     });
+    expect(tokenInfo).toBeDefined();
+    if (tokenInfo === undefined) {
+      throw new Error('Expected token status for fixture token.');
+    }
     expect(tokenInfo.contract).toBe(fixture.contract);
     expect(tokenInfo.tokenId).toBe(BigInt(fixture.tokenId));
     expect(isAddress(tokenInfo.owner)).toBe(true);
@@ -42,10 +46,10 @@ describeLive('SDK contract read integration', () => {
   it('reads marketplace listing, offer, auction, and release status through real RPC', async (ctx) => {
     const { rare, fixture } = await requireSetup(ctx, setup);
     const [listing, offer, auction, release] = await Promise.all([
-      rare.listing.getStatus({ contract: fixture.contract, tokenId: fixture.tokenId }),
-      rare.offer.getStatus({ contract: fixture.contract, tokenId: fixture.tokenId }),
-      rare.auction.getStatus({ contract: fixture.contract, tokenId: fixture.tokenId }),
-      rare.listing.release.getStatus({ contract: fixture.contract }),
+      rare.listing.status({ contract: fixture.contract, tokenId: fixture.tokenId }),
+      rare.offer.status({ contract: fixture.contract, tokenId: fixture.tokenId }),
+      rare.auction.status({ contract: fixture.contract, tokenId: fixture.tokenId }),
+      rare.listing.release.status({ contract: fixture.contract }),
     ]);
 
     expect(isAddress(listing.seller)).toBe(true);
@@ -97,7 +101,7 @@ async function requireSetup(
 }
 
 async function findReadableSepoliaNft(rareClient: RareClient): Promise<ReadableNftFixture> {
-  const search = await rareClient.search.nfts({ chainId: 11_155_111, page: 1, perPage: 10 });
+  const search = await rareClient.search.nfts({ page: 1, perPage: 10 });
 
   for (const nft of search.data) {
     if (!isAddress(nft.contractAddress)) continue;
@@ -108,8 +112,7 @@ async function findReadableSepoliaNft(rareClient: RareClient): Promise<ReadableN
     };
 
     try {
-      await rareClient.token.getContractInfo(candidate);
-      await rareClient.token.getTokenInfo(candidate);
+      await rareClient.token.status(candidate);
       return candidate;
     } catch {
       // Keep scanning until we find an indexed Sepolia NFT with standard ERC-721 reads.
