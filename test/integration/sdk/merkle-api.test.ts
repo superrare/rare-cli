@@ -8,6 +8,7 @@ import {
 } from '../../../src/sdk/merkle-api.js';
 import { verifyBatchTokenProof } from '../../../src/sdk/batch-core.js';
 import { verifyReleaseAllowlistProof } from '../../../src/sdk/release-core.js';
+import { RareApiError } from '../../../src/data-access/errors.js';
 import { loadDotEnv } from '../../helpers/env.js';
 
 loadDotEnv();
@@ -85,14 +86,17 @@ describeRareApiMerkle('SDK rare-api Merkle integration', () => {
     }
   }, 30_000);
 
-  it('surfaces rare-api not-found proof responses as RareApiMerkleError', async () => {
-    await expect(resolveApiNftMerkleProof(config, {
+  it('surfaces rare-api not-found proof responses as RareApiError', async () => {
+    const request = resolveApiNftMerkleProof(config, {
       chainId: 11155111,
       contractAddress: testNfts[0].contractAddress,
       tokenId: testNfts[0].tokenId,
       root: `0x${'ab'.repeat(32)}`,
-    })).rejects.toMatchObject({
-      name: 'RareApiMerkleError',
+    });
+
+    await expect(request).rejects.toThrow(RareApiError);
+    await expect(request).rejects.toMatchObject({
+      name: 'RareApiError',
       status: 404,
       path: '/v1/merkle-roots/nfts/proof',
     });

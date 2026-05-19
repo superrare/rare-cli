@@ -28,8 +28,8 @@ function rareApiRootFetch(root = hex32('2')): typeof fetch {
   });
 }
 
-function parseJsonBody(init: RequestInit | undefined) {
-  const body = init?.body;
+async function parseJsonBody(input: RequestInfo | URL, init: RequestInit | undefined): Promise<unknown> {
+  const body = input instanceof Request ? await input.clone().text() : init?.body;
   if (typeof body !== 'string') {
     throw new Error('Expected request body to be a JSON string.');
   }
@@ -236,8 +236,8 @@ describe('batch listing namespace', () => {
       } as never,
       {
         publicClient: {} as never,
-        apiFetch: async (_input, init) => {
-          expect(parseJsonBody(init)).toMatchObject({
+        apiFetch: async (input, init) => {
+          await expect(parseJsonBody(input, init)).resolves.toMatchObject({
             chainId: addresses.chainId,
             contractAddress: contract,
             tokenId: '1',
@@ -283,8 +283,8 @@ describe('batch listing namespace', () => {
       } as never,
       {
         publicClient: {} as never,
-        apiFetch: async (_input, init) => {
-          expect(parseJsonBody(init)).toMatchObject({
+        apiFetch: async (input, init) => {
+          await expect(parseJsonBody(input, init)).resolves.toMatchObject({
             addresses: [accountAddress, '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
             storageTarget: 'batch-listing',
           });
