@@ -8,6 +8,7 @@ export type ConfirmationDecision = 'skip' | 'prompt' | 'reject-json' | 'reject-n
 const confirmationRequiredCommands = new Set([
   'rare swap buy',
   'rare swap sell',
+  'rare swap swap',
   'rare swap tokens',
 ]);
 

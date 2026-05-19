@@ -206,6 +206,7 @@ function swapSellCommand(): Command {
 
 function swapTokensCommand(): Command {
   const cmd = new Command('tokens');
+  cmd.alias('swap');
   cmd.description('Execute a raw router token swap');
 
   cmd

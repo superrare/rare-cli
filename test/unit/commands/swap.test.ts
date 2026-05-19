@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, beforeEach, test, vi } from 'vitest';
 import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import { swapCommand } from '../../../src/commands/swap.js';
@@ -26,6 +29,7 @@ const token = '0x197FaeF3f59eC80113e773Bb6206a17d183F97CB';
 const publicClient = { kind: 'public-client' };
 const quoteBuyToken = vi.fn();
 const quoteSellToken = vi.fn();
+const swapTokens = vi.fn();
 let consoleLog: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
@@ -35,6 +39,7 @@ beforeEach(() => {
   printError.mockReset();
   quoteBuyToken.mockReset();
   quoteSellToken.mockReset();
+  swapTokens.mockReset();
 
   getPublicClient.mockReturnValue(publicClient);
   getWalletClient.mockImplementation(() => {
@@ -45,10 +50,15 @@ beforeEach(() => {
     swap: {
       quoteBuyToken,
       quoteSellToken,
+      swapTokens,
     },
   });
   quoteBuyToken.mockResolvedValue(tokenQuote({ direction: 'buy' }));
   quoteSellToken.mockResolvedValue(tokenQuote({ direction: 'sell' }));
+  swapTokens.mockResolvedValue({
+    txHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    receipt: { blockNumber: 123n },
+  });
   consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 });
 
@@ -101,6 +111,51 @@ test('sell-token quote-only does not require a configured wallet', async () => {
     minAmountOut: undefined,
     slippageBps: undefined,
     recipient: undefined,
+  });
+});
+
+test('raw token swap supports the legacy swap alias', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'rare-cli-swap-test-'));
+  const inputsFile = join(tempDir, 'inputs.json');
+  const walletClient = { kind: 'wallet-client' };
+  getWalletClient.mockReturnValue({ client: walletClient });
+
+  try {
+    await writeFile(inputsFile, JSON.stringify(['0x1234']), 'utf8');
+
+    await swapCommand().parseAsync([
+      'swap',
+      '--token-in',
+      ETH_ADDRESS,
+      '--amount-in',
+      '0.001',
+      '--token-out',
+      token,
+      '--min-amount-out',
+      '1',
+      '--commands',
+      '0x10',
+      '--inputs-file',
+      inputsFile,
+      '--yes',
+      '--chain',
+      'sepolia',
+    ], { from: 'user' });
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+
+  assert.equal(printError.mock.calls.length, 0);
+  assert.deepEqual(createRareClient.mock.calls[0]?.[0], { publicClient, walletClient });
+  assert.deepEqual(swapTokens.mock.calls[0]?.[0], {
+    tokenIn: ETH_ADDRESS,
+    amountIn: '0.001',
+    tokenOut: token,
+    minAmountOut: '1',
+    commands: '0x10',
+    inputs: ['0x1234'],
+    recipient: undefined,
+    deadline: undefined,
   });
 });
 

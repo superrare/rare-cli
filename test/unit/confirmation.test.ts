@@ -71,6 +71,7 @@ describe('confirmation policy', () => {
     expect(requiresExplicitConfirmation(['rare', 'auction', 'batch', 'bid'])).toBe(false);
     expect(requiresExplicitConfirmation(['rare', 'listing', 'release', 'mint'])).toBe(false);
     expect(requiresExplicitConfirmation(['rare', 'swap', 'sell'])).toBe(true);
+    expect(requiresExplicitConfirmation(['rare', 'swap', 'swap'])).toBe(true);
     expect(requiresExplicitConfirmation(['rare', 'swap', 'tokens'])).toBe(true);
     expect(requiresExplicitConfirmation(['rare', 'collection', 'deploy', 'erc721'])).toBe(false);
     expect(requiresExplicitConfirmation(['rare', 'listing', 'cancel'])).toBe(false);
