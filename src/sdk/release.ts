@@ -82,7 +82,10 @@ async function readCurrencyDecimals(
     if (!opts.required) {
       return null;
     }
-    throw new Error(`Unable to read decimals for ERC20 currency ${currency}: ${errorMessage(error)}`);
+    throw new Error(
+      `Unable to read decimals for ERC20 currency ${currency}: ${errorMessage(error)}`,
+      { cause: error },
+    );
   }
 }
 
@@ -101,7 +104,10 @@ async function readReleaseCollectionOwner(
       functionName: 'owner',
     });
   } catch (error) {
-    throw new Error(`Unable to read owner() from collection ${contract}: ${errorMessage(error)}`);
+    throw new Error(
+      `Unable to read owner() from collection ${contract}: ${errorMessage(error)}`,
+      { cause: error },
+    );
   }
 }
 
@@ -128,6 +134,7 @@ async function assertConfigurableReleaseContract(opts: {
     throw new Error(
       `Collection ${contract} must expose mintTo(address) callable by RareMinter ${rareMinter}. ` +
         `Simulation failed: ${errorMessage(error)}`,
+      { cause: error },
     );
   }
 }
