@@ -565,7 +565,7 @@ export function createReleaseNamespace(
         account: accountAddress,
       });
       const block = await publicClient.getBlock();
-      const proof = plan.proof.length > 0 || status.allowlistRoot === ZERO_BYTES32 || status.allowlistEndTimestamp <= BigInt(block.timestamp)
+      const proof = plan.proofProvided || status.allowlistRoot === ZERO_BYTES32 || status.allowlistEndTimestamp <= BigInt(block.timestamp)
         ? plan.proof
         : (await resolveApiAddressMerkleProof(config, {
             root: status.allowlistRoot,

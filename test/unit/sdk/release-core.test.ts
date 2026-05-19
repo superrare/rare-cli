@@ -445,6 +445,7 @@ describe('release direct sale mint planning', () => {
       currency: undefined,
       price: '0.5',
       proof: [root],
+      proofProvided: true,
       recipient: undefined,
       autoApprove: true,
     });

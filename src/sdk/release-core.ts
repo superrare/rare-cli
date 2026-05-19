@@ -91,6 +91,7 @@ export type ReleaseDirectSaleMintPlan = {
   currency?: Address;
   price?: AmountInput;
   proof: Hex[];
+  proofProvided: boolean;
   recipient?: Address;
   autoApprove: boolean;
 };
@@ -314,6 +315,7 @@ export function planReleaseDirectSaleMint(params: ResolvedCurrencyParam<ReleaseM
     currency: params.currency,
     price: params.price,
     proof: normalizeReleaseAllowlistProof(params.proof ?? []),
+    proofProvided: params.proof !== undefined,
     recipient: params.recipient,
     autoApprove: params.autoApprove ?? true,
   };
