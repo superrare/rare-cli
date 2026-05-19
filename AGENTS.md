@@ -20,6 +20,16 @@ Tip: Compare sdk functionality against actual contract implementations in core r
 - Pass dependencies into shell code instead of burying side effects inside core logic.
 - Return structured data from core logic instead of printing, exiting, or mutating external state.
 
+## Public SDK Design
+
+Treat package exports as product APIs. Only export symbols that we intend consumers to import, document, test, and rely on across releases.
+
+- Keep `@rareprotocol/rare-cli/client` focused on the high-level SDK client: `createRareClient`, public namespace params/results, public response model types, and catchable public errors.
+- Put lower-level viem building blocks behind explicit subpaths such as `@rareprotocol/rare-cli/contracts` for addresses, chain metadata, and ABIs.
+- Put standalone pure helpers behind explicit user-intent subpaths such as `@rareprotocol/rare-cli/utils`; also expose the same flows through `rare.utils.*` when they are part of the client experience.
+- Do not export planners, write builders, shell helpers, validation internals, or implementation-shaped functions from the public client barrel. Keep those behind internal imports.
+- Before adding an export, ask: would we document this, test it as public behavior, and treat changes to it as semver-significant? If not, keep it internal.
+
 ## Error Handling
 
 The rule of thumb is: **if the caller wants to handle the failure differently in code, return it; if the failure should abort and surface to the user, throw it.**

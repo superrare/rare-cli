@@ -5,16 +5,17 @@ import { formatUnits, isAddress, zeroAddress, type Address, type Hex } from 'vie
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { printError } from '../errors.js';
+import { createRareClient, type RareClient } from '../sdk/client.js';
 import {
   buildReleaseAllowlistArtifactFromInput,
-  createRareClient,
   getReleaseAllowlistProof,
   normalizeReleaseAllowlistProof,
   parseReleaseAllowlistArtifactJson,
-  type RareClient,
-  type ReleaseAllowlistArtifact,
-  type ReleaseAllowlistInputFormat,
-} from '../sdk/index.js';
+} from '../sdk/release-core.js';
+import type {
+  ReleaseAllowlistArtifact,
+  ReleaseAllowlistInputFormat,
+} from '../sdk/types/release.js';
 import { resolveCurrency } from '../contracts/addresses.js';
 import { output, log } from '../output.js';
 import { runWithPaymentApprovalConsent } from './approval-consent.js';

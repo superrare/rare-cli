@@ -1,10 +1,111 @@
-# RARE SDK client function map
+# RARE SDK public interface
+
+The SDK exposes a small set of intentional package subpaths. Treat these exports as the supported public API.
+
+## Package subpaths
+
+### `@rareprotocol/rare-cli/client`
+
+Primary high-level SDK surface. Import this for app-level RARE workflows.
+
+Runtime exports:
+
+```ts
+createRareClient
+NftApprovalRequiredError
+PaymentApprovalRequiredError
+```
+
+Type exports include `RareClient`, `RareClientConfig`, public namespace params/results, API response model types, currency/common input types, liquid curve types, and utility types used by `rare.utils.*`.
+
+### `@rareprotocol/rare-cli/contracts`
+
+Lower-level viem building blocks for consumers who need direct contract access.
+
+Exports:
+
+```ts
+supportedChains
+viemChains
+chainIds
+defaultRpcUrls
+contractAddresses
+canonicalV4Pools
+currencyNames
+ETH_ADDRESS
+PUBLIC_LISTING_TARGET
+listCurrencies
+resolveCurrency
+resolveCurrencyInfo
+getContractAddresses
+requireContractAddress
+isSupportedChain
+getBatchListingAddress
+getErc721ApprovalManagerAddress
+getRareMinterAddress
+getLiquidFactoryAddress
+getSwapRouterAddress
+getV4QuoterAddress
+getCanonicalV4Pools
+getCanonicalRareEthPool
+getCanonicalUsdcEthPool
+```
+
+ABI exports:
+
+```ts
+auctionAbi
+batchAuctionHouseAbi
+batchListingAbi
+batchOfferAbi
+collectionMintAbi
+collectionOwnerAbi
+factoryAbi
+lazyBatchMintFactoryAbi
+lazySovereignFactoryAbi
+liquidEditionAbi
+liquidFactoryAbi
+liquidRouterAbi
+rareMinterAbi
+royaltyRegistryAbi
+royaltyRegistryResolverAbi
+sovereignFactoryAbi
+tokenAbi
+uniswapV4QuoterAbi
+```
+
+### `@rareprotocol/rare-cli/utils`
+
+Standalone pure helpers for artifact/proof workflows that do not need a configured client.
+
+Runtime exports:
+
+```ts
+buildUtilsTree(params: BuildUtilsTreeParams): UtilsTreeArtifact
+getUtilsTreeProof(params: UtilsTreeProofParams): UtilsTreeProofArtifact
+verifyUtilsTreeProof(params: UtilsTreeProofVerifyParams): boolean
+buildUtilsMerkleProof(params: UtilsMerkleProofParams): UtilsMerkleProofArtifact
+```
+
+Type exports:
+
+```ts
+BuildUtilsTreeParams
+UtilsTreeArtifact
+UtilsTreeProofParams
+UtilsTreeProofArtifact
+UtilsTreeProofVerifyParams
+UtilsMerkleProofParams
+UtilsMerkleProofArtifact
+```
+
+## Client function map
 
 This map reflects the top-level `RareClient` returned by `createRareClient(config)` in `src/sdk/client.ts` and typed in `src/sdk/types/client.ts`.
 
 Scope:
 - Includes `createRareClient` and the methods reachable from the returned client object.
-- Excludes standalone helper exports from `src/sdk/index.ts`, ABI exports, type exports, and pure planning utilities.
+- Excludes ABI exports, contract-address exports, standalone utility exports, type exports, and pure planning utilities.
 - Method signatures are listed as `rare.<namespace>.<method>(...)`.
 - CLI confirmation flags such as `--yes`, `--preview`, and `--quote-only` are not SDK concepts. SDK approval behavior is represented in the relevant typed params, such as `autoApprove?: boolean`; quote flows are explicit `quote*` methods.
 

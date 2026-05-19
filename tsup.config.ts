@@ -13,7 +13,11 @@ export default defineConfig([
     splitting: false,
   },
   {
-    entry: { client: 'src/sdk/index.ts' },
+    entry: {
+      client: 'src/sdk/index.ts',
+      contracts: 'src/sdk/contracts.ts',
+      utils: 'src/sdk/public-utils.ts',
+    },
     format: ['esm'],
     target: 'node22',
     clean: false,
