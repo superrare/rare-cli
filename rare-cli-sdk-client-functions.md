@@ -6,6 +6,7 @@ Scope:
 - Includes `createRareClient` and the methods reachable from the returned client object.
 - Excludes standalone helper exports from `src/sdk/index.ts`, ABI exports, type exports, and pure planning utilities.
 - Method signatures are listed as `rare.<namespace>.<method>(...)`.
+- CLI confirmation flags such as `--yes`, `--preview`, and `--quote-only` are not SDK concepts. SDK approval behavior is represented in the relevant typed params, such as `autoApprove?: boolean`; quote flows are explicit `quote*` methods.
 
 Client construction:
 
