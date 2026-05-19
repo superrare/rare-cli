@@ -731,6 +731,15 @@ describe('built CLI deterministic behavior', () => {
       ], { home });
       expect(invalidPage.code).toBe(1);
       expect(invalidPage.stderr).toContain('--page must be a positive integer.');
+
+      const invalidSearchPage = await runCli([
+        'search',
+        'nfts',
+        '--page',
+        '10abc',
+      ], { home });
+      expect(invalidSearchPage.code).toBe(1);
+      expect(invalidSearchPage.stderr).toContain('--page must be a positive integer.');
     });
   });
 

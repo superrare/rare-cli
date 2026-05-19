@@ -5,6 +5,7 @@ import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import type { Nft } from '../sdk/api.js';
 import { parseAddress } from '../sdk/validation.js';
+import { parsePositiveInteger } from './pagination-core.js';
 import {
   log,
   output,
@@ -243,14 +244,6 @@ function createReadClient(opts: { chain?: string; chainId?: string }): {
     chain,
     rare: createRareClient({ publicClient }),
   };
-}
-
-function parsePositiveInteger(value: string, optionName: string): number {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new Error(`${optionName} must be a positive integer.`);
-  }
-  return parsed;
 }
 
 function parseMarketSide(value: string): MarketSide {

@@ -9,6 +9,7 @@ import { parseAddress, parseOptionalAddress } from '../sdk/validation.js';
 import { printError } from '../errors.js';
 import { output, log, printNftRow, printCollectionRow, printNftEventRow, printPagination } from '../output.js';
 import { collectOption, parseNftEventSort, parseNftEventTypes } from './event-options.js';
+import { parsePositiveInteger } from './pagination-core.js';
 
 type SearchPageOptions = {
   chain?: string;
@@ -106,12 +107,14 @@ export function searchCommand(): Command {
     .option('--page <n>', 'page number', '1')
     .action(async (opts: SearchNftsOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain, opts.chainId);
-      const rare = createRareClient({ publicClient: getPublicClient(chain) });
+      const page = parsePositiveInteger(opts.page, '--page');
+      const perPage = parsePositiveInteger(opts.perPage, '--per-page');
       const auctionState = parseAuctionState(opts.auctionState);
       const auctionCreatorAddress = parseOptionalAddress(opts.auctionCreator, '--auction-creator');
       const auctionBidderAddress = parseOptionalAddress(opts.auctionBidder, '--auction-bidder');
       const listingType = parseListingType(opts.listingType);
       const offerBuyerAddress = parseOptionalAddress(opts.offerBuyer, '--offer-buyer');
+      const rare = createRareClient({ publicClient: getPublicClient(chain) });
 
       const ownerAddress = opts.mine
         ? getWalletAddress(chain)
@@ -132,8 +135,8 @@ export function searchCommand(): Command {
       try {
         const result = await rare.search.nfts({
           query: opts.query,
-          perPage: parseInt(opts.perPage, 10),
-          page: parseInt(opts.page, 10),
+          perPage,
+          page,
           ownerAddress,
           hasAuction: hasAuction ? true : undefined,
           auctionState,
@@ -172,6 +175,8 @@ export function searchCommand(): Command {
     .option('--page <n>', 'page number', '1')
     .action(async (opts: SearchCollectionsOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain, opts.chainId);
+      const page = parsePositiveInteger(opts.page, '--page');
+      const perPage = parsePositiveInteger(opts.perPage, '--per-page');
       const rare = createRareClient({ publicClient: getPublicClient(chain) });
 
       log(`Searching collections on ${chain}...`);
@@ -179,8 +184,8 @@ export function searchCommand(): Command {
       try {
         const result = await rare.search.collections({
           query: opts.query,
-          perPage: parseInt(opts.perPage, 10),
-          page: parseInt(opts.page, 10),
+          perPage,
+          page,
         });
 
         output(result, () => {
@@ -214,6 +219,8 @@ export function searchCommand(): Command {
     .option('--page <n>', 'page number', '1')
     .action(async (opts: SearchEventsOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain, opts.chainId);
+      const page = parsePositiveInteger(opts.page, '--page');
+      const perPage = parsePositiveInteger(opts.perPage, '--per-page');
       const rare = createRareClient({ publicClient: getPublicClient(chain) });
       const params: RareClientEventSearchParams = {
         collectionId: opts.collectionId,
@@ -221,8 +228,8 @@ export function searchCommand(): Command {
         tokenId: opts.tokenId,
         eventType: parseNftEventTypes(opts.eventType),
         sortBy: parseNftEventSort(opts.sortBy),
-        perPage: parseInt(opts.perPage, 10),
-        page: parseInt(opts.page, 10),
+        perPage,
+        page,
       };
 
       const label = opts.collectionId !== undefined
