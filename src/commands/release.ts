@@ -20,19 +20,18 @@ import {
 } from '../sdk/index.js';
 import { resolveCurrency } from '../contracts/addresses.js';
 import { output, log } from '../output.js';
+import { runWithPaymentApprovalConsent } from './approval-consent.js';
 
 const ETH_ADDRESS = zeroAddress;
 
 type ReleaseConfigureOptions = {
   contract: string;
   price: string;
-  amount?: string;
   maxMints?: string;
   currency?: string;
   startTime?: string;
   start?: string;
   split?: ReleaseSplitAccumulator;
-  yes?: boolean;
   chain?: string;
   chainId?: string;
 };
@@ -52,23 +51,19 @@ type AllowlistProofOptions = {
 type AllowlistSetOptions = {
   contract: string;
   endTime?: string;
-  endTimestamp?: string;
   input?: string;
   root?: string;
-  yes?: boolean;
   chain?: string;
   chainId?: string;
 };
 
 type ReleaseContractOptions = {
   contract: string;
-  yes?: boolean;
   chain?: string;
   chainId?: string;
 };
 
 type ReleaseLimitOptions = ReleaseContractOptions & {
-  amount?: string;
   limit?: string;
 };
 
@@ -77,7 +72,6 @@ type ReleaseStatusOptions = ReleaseContractOptions & {
 };
 
 type ReleaseMintOptions = ReleaseContractOptions & {
-  amount?: string;
   quantity?: string;
   currency?: string;
   price?: string;
@@ -198,8 +192,7 @@ export function releaseCommand(): Command {
     .description('Configure a RareMinter direct sale release')
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--price <amount>', 'price per mint in ETH or token units')
-    .option('--amount <number>', 'max tokens per mint transaction (1-100)')
-    .option('--max-mints <number>', 'alias for --amount')
+    .option('--max-mints <number>', 'max tokens per mint transaction (1-100)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--start-time <time>', 'sale start time as unix seconds or an ISO date (defaults to now)')
     .option(
@@ -207,16 +200,15 @@ export function releaseCommand(): Command {
       'payout split recipient (repeatable). Format: 0xADDR=RATIO. Ratios must sum to 100. If omitted, 100% goes to the connected wallet.',
       collectReleaseSplit,
     )
-    .option('--yes', 'yes to all prompts and required approvals')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: ReleaseConfigureOptions): Promise<void> => {
       try {
         const splits = finalizeReleaseSplitAccumulator(opts.split);
         assertAddressOption(opts.contract, 'contract');
-        const amount = opts.amount ?? opts.maxMints;
-        if (amount === undefined) {
-          throw new Error('release configure requires --amount.');
+        const maxMints = opts.maxMints;
+        if (maxMints === undefined) {
+          throw new Error('release configure requires --max-mints.');
         }
 
         const chain = getActiveChain(opts.chain, opts.chainId);
@@ -230,7 +222,7 @@ export function releaseCommand(): Command {
         log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
         log(`  Collection: ${opts.contract}`);
         log(`  Price:      ${opts.price} ${isEth ? 'ETH' : currency}`);
-        log(`  Amount:     ${amount}`);
+        log(`  Max mints:  ${maxMints}`);
         log(`  Start:      ${opts.startTime ?? 'now'}`);
         if (splits !== undefined) {
           log('  Splits:');
@@ -246,7 +238,7 @@ export function releaseCommand(): Command {
           currency,
           price: opts.price,
           startTime: opts.startTime,
-          amount,
+          maxMints,
           splitAddresses: splits?.addresses,
           splitRatios: splits?.ratios,
         });
@@ -278,8 +270,7 @@ export function releaseCommand(): Command {
     .command('mint')
     .description('Mint from a RareMinter direct sale release')
     .requiredOption('--contract <address>', 'collection contract address')
-    .option('--amount <number>', 'number of tokens to mint')
-    .option('--quantity <number>', 'alias for --amount')
+    .option('--quantity <number>', 'number of tokens to mint')
     .option('--currency <currency>', 'expected currency: eth, usdc, rare, or ERC20 address (defaults to configured sale currency)')
     .option('--price <amount>', 'expected per-token price in ETH or token units (defaults to configured sale price)')
     .option('--proof <file>', 'allowlist proof JSON from rare listing release allowlist proof')
@@ -297,12 +288,12 @@ export function releaseCommand(): Command {
         const chain = getActiveChain(opts.chain, opts.chainId);
         const rare = releaseWriteClient(chain);
         const currency = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain);
-        const amount = opts.amount ?? opts.quantity ?? '1';
+        const quantity = opts.quantity ?? '1';
 
         log(`Minting direct sale release on ${chain}...`);
         log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
         log(`  Collection: ${opts.contract}`);
-        log(`  Amount:     ${amount}`);
+        log(`  Quantity:   ${quantity}`);
         if (currency !== undefined) {
           log(`  Currency:   ${currency}`);
         }
@@ -313,15 +304,29 @@ export function releaseCommand(): Command {
           log(`  Proof:      ${proof.length} entries`);
         }
 
-        const result = await rare.listing.release.mintDirectSale({
+        const mintParams = {
           contract: opts.contract,
-          amount,
+          quantity,
           currency,
           price: opts.price,
           proof,
           recipient: opts.recipient,
-          autoApprove: opts.yes,
+        };
+        const result = await runWithPaymentApprovalConsent({
+          commandName: 'rare listing release mint',
+          approvalMessage: 'ERC20 approval is required before minting this release.',
+          runWithoutApproval: () => rare.listing.release.mint({
+            ...mintParams,
+            autoApprove: opts.yes === true,
+          }),
+          runWithApproval: () => rare.listing.release.mint({
+            ...mintParams,
+            autoApprove: true,
+          }),
         });
+        if (result === undefined) {
+          return;
+        }
 
         output(
           {
@@ -429,10 +434,8 @@ export function releaseCommand(): Command {
     .description('Set the RareMinter allowlist root and end time for a release')
     .requiredOption('--contract <address>', 'collection contract address')
     .option('--end-time <time>', 'allowlist end time as unix seconds or an ISO date')
-    .option('--end-timestamp <time>', 'alias for --end-time')
     .option('--input <file>', 'allowlist proof artifact JSON; uses its root')
-    .option('--root <bytes32>', 'allowlist Merkle root to set when no input is provided')
-    .option('--yes', 'yes to all prompts and required approvals')
+    .option('--root <bytes32>', 'allowlist Merkle root override')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: AllowlistSetOptions): Promise<void> => {
@@ -444,7 +447,7 @@ export function releaseCommand(): Command {
         if (opts.input !== undefined && opts.root !== undefined) {
           throw new Error('Pass either --input or --root, not both.');
         }
-        const endTime = opts.endTime ?? opts.endTimestamp;
+        const endTime = opts.endTime;
         if (endTime === undefined) {
           throw new Error('release allowlist set requires --end-time.');
         }
@@ -463,7 +466,7 @@ export function releaseCommand(): Command {
         log(`  Root:       ${artifact?.root ?? root}`);
         log(`  Ends:       ${endTime}`);
 
-        const result = await rare.listing.release.setAllowlistConfig({
+        const result = await rare.listing.release.allowlist.setConfig({
           contract: opts.contract,
           root,
           artifact,
@@ -493,7 +496,6 @@ export function releaseCommand(): Command {
     .command('clear')
     .description('Clear the RareMinter allowlist config for a release')
     .requiredOption('--contract <address>', 'collection contract address')
-    .option('--yes', 'yes to all prompts and required approvals')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: ReleaseContractOptions): Promise<void> => {
@@ -506,7 +508,7 @@ export function releaseCommand(): Command {
         log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
         log(`  Collection: ${opts.contract}`);
 
-        const result = await rare.listing.release.clearAllowlistConfig({
+        const result = await rare.listing.release.allowlist.clear({
           contract: opts.contract,
         });
 
@@ -538,17 +540,15 @@ export function releaseCommand(): Command {
     .command('set-mint')
     .description('Set the RareMinter per-wallet mint limit for a release')
     .requiredOption('--contract <address>', 'collection contract address')
-    .option('--amount <number>', 'per-wallet mint limit; 0 disables the limit')
-    .option('--limit <number>', 'alias for --amount')
-    .option('--yes', 'yes to all prompts and required approvals')
+    .option('--limit <number>', 'per-wallet mint limit; 0 disables the limit')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: ReleaseLimitOptions): Promise<void> => {
       try {
         assertAddressOption(opts.contract, 'contract');
-        const amount = opts.amount ?? opts.limit;
-        if (amount === undefined) {
-          throw new Error('release limits set-mint requires --amount.');
+        const limit = opts.limit;
+        if (limit === undefined) {
+          throw new Error('release limits set-mint requires --limit.');
         }
         const chain = getActiveChain(opts.chain, opts.chainId);
         const rare = releaseWriteClient(chain);
@@ -556,11 +556,11 @@ export function releaseCommand(): Command {
         log(`Configuring release mint limit on ${chain}...`);
         log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
         log(`  Collection: ${opts.contract}`);
-        log(`  Amount:     ${amount}`);
+        log(`  Limit:      ${limit}`);
 
-        const result = await rare.listing.release.setMintLimit({
+        const result = await rare.listing.release.limits.setMint({
           contract: opts.contract,
-          amount,
+          limit,
         });
 
         output(
@@ -585,17 +585,15 @@ export function releaseCommand(): Command {
     .command('set-tx')
     .description('Set the RareMinter per-wallet transaction limit for a release')
     .requiredOption('--contract <address>', 'collection contract address')
-    .option('--amount <number>', 'per-wallet mint transaction limit; 0 disables the limit')
-    .option('--limit <number>', 'alias for --amount')
-    .option('--yes', 'yes to all prompts and required approvals')
+    .option('--limit <number>', 'per-wallet mint transaction limit; 0 disables the limit')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: ReleaseLimitOptions): Promise<void> => {
       try {
         assertAddressOption(opts.contract, 'contract');
-        const amount = opts.amount ?? opts.limit;
-        if (amount === undefined) {
-          throw new Error('release limits set-tx requires --amount.');
+        const limit = opts.limit;
+        if (limit === undefined) {
+          throw new Error('release limits set-tx requires --limit.');
         }
         const chain = getActiveChain(opts.chain, opts.chainId);
         const rare = releaseWriteClient(chain);
@@ -603,11 +601,11 @@ export function releaseCommand(): Command {
         log(`Configuring release transaction limit on ${chain}...`);
         log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
         log(`  Collection: ${opts.contract}`);
-        log(`  Amount:     ${amount}`);
+        log(`  Limit:      ${limit}`);
 
-        const result = await rare.listing.release.setTxLimit({
+        const result = await rare.listing.release.limits.setTx({
           contract: opts.contract,
-          amount,
+          limit,
         });
 
         output(

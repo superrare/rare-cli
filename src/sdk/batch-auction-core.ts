@@ -2,10 +2,8 @@ import { isAddressEqual, type Address, type Hex } from 'viem';
 import { ETH_ADDRESS } from '../contracts/addresses.js';
 import {
   toNonNegativeInteger,
-  toPositiveInteger,
   toPositiveWei,
   requireInput,
-  resolveAliasWithField,
   toUnixTimestamp,
 } from './helpers.js';
 import { normalizeBytes32, verifyBatchTokenProof } from './batch-core.js';
@@ -95,15 +93,14 @@ export function planBatchAuctionCreate(
   params: BatchAuctionCreateParams,
   accountAddress: Address,
 ): BatchAuctionCreatePlan {
-  const resolvedPrice = resolveAliasWithField(params.price, params.reserveAmount, 'price', 'reserveAmount');
-  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
+  const price = requireInput(params.price, 'price');
   return {
     root: resolveBatchAuctionRoot(params),
     currency: params.currency ?? ETH_ADDRESS,
-    reserveAmount: toPositiveWei(price, resolvedPrice.field),
+    reserveAmount: toPositiveWei(price, 'price'),
     duration: resolveBatchAuctionDuration(params),
     ...planSplitRecipients(params.splitAddresses, params.splitRatios, accountAddress),
-    approvalContracts: params.autoApprove === false || params.artifact === undefined
+    approvalContracts: params.artifact === undefined
       ? []
       : uniqueAddresses(params.artifact.tokens.map((token) => token.contractAddress)),
   };
@@ -129,9 +126,8 @@ export function planBatchAuctionBid(params: BatchAuctionBidParams): BatchAuction
     throw new Error('Batch auction proof is not valid for the requested token.');
   }
 
-  const resolvedPrice = resolveAliasWithField(params.price, params.amount, 'price', 'amount');
-  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
-  const amount = toPositiveWei(price, resolvedPrice.field);
+  const price = requireInput(params.price, 'price');
+  const amount = toPositiveWei(price, 'price');
   return {
     creator: params.creator,
     root,
@@ -145,16 +141,12 @@ export function planBatchAuctionBid(params: BatchAuctionBidParams): BatchAuction
 }
 
 function resolveBatchAuctionDuration(params: BatchAuctionCreateParams): bigint {
-  if (params.endTime !== undefined) {
-    const endTime = toUnixTimestamp(params.endTime, 'endTime');
-    const now = BigInt(Math.floor(Date.now() / 1000));
-    if (endTime <= now) {
-      throw new Error('endTime must be in the future.');
-    }
-    return endTime - now;
+  const endTime = toUnixTimestamp(requireInput(params.endTime, 'endTime'), 'endTime');
+  const now = BigInt(Math.floor(Date.now() / 1000));
+  if (endTime <= now) {
+    throw new Error('endTime must be in the future.');
   }
-
-  return toPositiveInteger(requireInput(params.duration, 'endTime'), 'duration');
+  return endTime - now;
 }
 
 export function planBatchAuctionToken(params: BatchAuctionStatusParams): BatchAuctionTokenPlan {
@@ -330,7 +322,7 @@ export function resolveBatchAuctionRoot(params: {
   if (params.artifact !== undefined) {
     return normalizeBytes32(params.artifact.root, 'artifact root');
   }
-  throw new Error('Pass a root or batch token artifact.');
+  throw new Error('Pass a batch token artifact, or pass root as an override.');
 }
 
 function resolveBatchAuctionProofRoot(params: BatchAuctionBidParams): Hex {
@@ -347,13 +339,13 @@ function resolveBatchAuctionProofRoot(params: BatchAuctionBidParams): Hex {
   if (params.proofArtifact !== undefined) {
     return normalizeBytes32(params.proofArtifact.root, 'proof artifact root');
   }
-  throw new Error('Pass a root or batch token proof artifact.');
+  throw new Error('Pass a batch token proof artifact, or pass root as an override.');
 }
 
 function resolveBatchAuctionProof(params: BatchAuctionBidParams): Hex[] {
   const proof = params.proof ?? params.proofArtifact?.proof;
   if (proof === undefined) {
-    throw new Error('Pass a proof array or batch token proof artifact.');
+    throw new Error('Pass a batch token proof artifact, or pass proof as an override.');
   }
 
   return proof.map((entry, index) => normalizeBytes32(entry, `proof[${index}]`));

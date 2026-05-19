@@ -10,6 +10,7 @@ import { output, log } from '../output.js';
 import { createAuctionListCommand } from './account-market-list.js';
 import { resolveCurrencyDecimals } from '../sdk/helpers.js';
 import { parseAuctionTypeOption } from './auction-core.js';
+import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 import { auctionBatchCommand } from './batch.js';
 
@@ -17,9 +18,7 @@ type AuctionCreateOptions = {
   contract: string;
   tokenId: string;
   price?: string;
-  startingPrice?: string;
   endTime?: string;
-  duration?: string;
   currency?: string;
   type?: string;
   startTime?: string;
@@ -33,7 +32,6 @@ type AuctionBidOptions = {
   contract: string;
   tokenId: string;
   price?: string;
-  amount?: string;
   currency?: string;
   chain?: string;
   chainId?: string;
@@ -45,7 +43,6 @@ type AuctionTokenOptions = {
   tokenId: string;
   chain?: string;
   chainId?: string;
-  yes?: boolean;
 };
 
 export function auctionCommand(): Command {
@@ -61,9 +58,7 @@ export function auctionCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID to auction')
     .option('--price <amount>', 'starting/reserve price in ETH (or token units)')
-    .option('--starting-price <amount>', 'alias for --price')
     .option('--end-time <time>', 'auction end time as unix seconds or an ISO date')
-    .option('--duration <seconds>', 'alias for --end-time as a relative duration in seconds')
     .option('--type <type>', 'auction type: reserve or scheduled (defaults to reserve)')
     .option('--start-time <seconds>', 'unix timestamp for scheduled auctions; implies --type scheduled')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
@@ -76,11 +71,11 @@ export function auctionCommand(): Command {
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .option('--yes', 'yes to all prompts, including approval and transaction submission')
     .action(async (opts: AuctionCreateOptions): Promise<void> => {
-      const price = opts.price ?? opts.startingPrice;
+      const price = opts.price;
       if (price === undefined) {
         throw new Error('auction create requires --price.');
       }
-      if (opts.endTime === undefined && opts.duration === undefined) {
+      if (opts.endTime === undefined) {
         throw new Error('auction create requires --end-time.');
       }
       const auctionType = parseAuctionTypeOption(opts.type, opts.startTime);
@@ -99,7 +94,7 @@ export function auctionCommand(): Command {
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Type: ${auctionType}`);
       log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
-      log(`  End time: ${opts.endTime ?? opts.duration}`);
+      log(`  End time: ${opts.endTime}`);
       if (opts.startTime !== undefined) {
         log(`  Start time: ${opts.startTime}`);
       }
@@ -112,19 +107,32 @@ export function auctionCommand(): Command {
       }
 
       try {
-        const result = await rare.auction.create({
+        const auctionParams = {
           contract,
           tokenId: opts.tokenId,
           price,
           endTime: opts.endTime,
-          duration: opts.duration,
           currency,
           auctionType,
           startTime: opts.startTime,
           splitAddresses: splits?.addresses,
           splitRatios: splits?.ratios,
-          autoApprove: opts.yes,
+        };
+        const result = await runWithNftApprovalConsent({
+          commandName: 'rare auction create',
+          approvalMessage: 'NFT approval is required before creating this auction.',
+          runWithoutApproval: () => rare.auction.create({
+            ...auctionParams,
+            autoApprove: opts.yes === true,
+          }),
+          runWithApproval: () => rare.auction.create({
+            ...auctionParams,
+            autoApprove: true,
+          }),
         });
+        if (result === undefined) {
+          return;
+        }
 
         output(
           {
@@ -154,13 +162,12 @@ export function auctionCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
     .option('--price <amount>', 'bid price in ETH (or token units)')
-    .option('--amount <amount>', 'alias for --price')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .option('--yes', 'yes to all prompts, including approval and transaction submission')
     .action(async (opts: AuctionBidOptions): Promise<void> => {
-      const price = opts.price ?? opts.amount;
+      const price = opts.price;
       if (price === undefined) {
         throw new Error('auction bid requires --price.');
       }
@@ -179,16 +186,38 @@ export function auctionCommand(): Command {
       log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
 
       try {
-        const result = await rare.auction.bid({
+        const bidParams = {
           contract,
           tokenId: opts.tokenId,
           price,
           currency,
+        };
+        const result = await runWithPaymentApprovalConsent({
+          commandName: 'rare auction bid',
+          approvalMessage: 'ERC20 approval is required before placing this bid.',
+          runWithoutApproval: () => rare.auction.bid({
+            ...bidParams,
+            autoApprove: opts.yes === true,
+          }),
+          runWithApproval: () => rare.auction.bid({
+            ...bidParams,
+            autoApprove: true,
+          }),
         });
+        if (result === undefined) {
+          return;
+        }
 
         output(
-          { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            approvalTxHash: result.approvalTxHash ?? null,
+          },
           () => {
+            if (result.approvalTxHash) {
+              console.log(`Approval tx sent: ${result.approvalTxHash}`);
+            }
             console.log(`\nTransaction sent: ${result.txHash}`);
             console.log(`Bid placed! Block: ${result.receipt.blockNumber}`);
           },
@@ -206,7 +235,6 @@ export function auctionCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
-    .option('--yes', 'yes to all prompts, including transaction submission')
     .action(async (opts: AuctionTokenOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
@@ -242,7 +270,6 @@ export function auctionCommand(): Command {
     .requiredOption('--token-id <id>', 'token ID')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
-    .option('--yes', 'yes to all prompts, including transaction submission')
     .action(async (opts: AuctionTokenOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);

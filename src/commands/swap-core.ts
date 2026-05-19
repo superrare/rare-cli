@@ -42,19 +42,6 @@ export function parseOptionalAddress(value: string | undefined, label: string): 
   return value === undefined ? undefined : parseAddress(value, label);
 }
 
-export function isAffirmativeResponse(value: string): boolean {
-  const normalized = value.trim().toLowerCase();
-  return normalized === 'y' || normalized === 'yes';
-}
-
-export function shouldPromptForConfirmation(
-  opts: { yes?: boolean; quoteOnly?: boolean },
-  isTty: boolean,
-  jsonMode: boolean,
-): boolean {
-  return isTty && !jsonMode && !opts.yes && !opts.quoteOnly;
-}
-
 export function formatBuyRareQuoteLines(params: {
   chain: string;
   router?: string;

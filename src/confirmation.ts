@@ -6,9 +6,14 @@ export type ConfirmationOptions = {
 
 export type ConfirmationDecision = 'skip' | 'prompt' | 'reject-json';
 
+const confirmationRequiredCommands = new Set([
+  'rare swap buy',
+  'rare swap sell',
+  'rare swap swap',
+]);
+
 export function getConfirmationDecision(params: {
   commandPath: readonly string[];
-  hasYesOption: boolean;
   options: ConfirmationOptions;
   stdinIsTty: boolean;
   skipConfirmation: boolean;
@@ -17,10 +22,7 @@ export function getConfirmationDecision(params: {
   if (params.options.yes === true || params.options.preview === true || params.options.quoteOnly === true) {
     return 'skip';
   }
-  if (!params.hasYesOption) {
-    return 'skip';
-  }
-  if (params.commandPath.join(' ') === 'rare configure delete') {
+  if (!requiresExplicitConfirmation(params.commandPath)) {
     return 'skip';
   }
   if (params.jsonMode) {
@@ -31,4 +33,8 @@ export function getConfirmationDecision(params: {
   }
 
   return 'prompt';
+}
+
+export function requiresExplicitConfirmation(commandPath: readonly string[]): boolean {
+  return confirmationRequiredCommands.has(commandPath.join(' '));
 }

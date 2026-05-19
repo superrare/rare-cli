@@ -201,33 +201,6 @@ export function requireInput<T>(value: T | undefined, field: string): T {
   return value;
 }
 
-export function resolveAlias<T>(
-  primary: T | undefined,
-  legacy: T | undefined,
-  primaryField: string,
-  legacyField: string,
-): T | undefined {
-  return resolveAliasWithField(primary, legacy, primaryField, legacyField).value;
-}
-
-export function resolveAliasWithField<T>(
-  primary: T | undefined,
-  legacy: T | undefined,
-  primaryField: string,
-  legacyField: string,
-): { value: T | undefined; field: string } {
-  if (primary !== undefined && legacy !== undefined && primary !== legacy) {
-    throw new Error(`${primaryField} and deprecated ${legacyField} cannot both be provided.`);
-  }
-  if (primary !== undefined) {
-    return { value: primary, field: primaryField };
-  }
-  if (legacy !== undefined) {
-    return { value: legacy, field: legacyField };
-  }
-  return { value: undefined, field: primaryField };
-}
-
 export function toUnixTimestamp(value: TimestampInput, field: string): bigint {
   if (value instanceof Date) {
     const millis = value.getTime();
@@ -439,6 +412,74 @@ export function toPositiveWei(value: AmountInput, field: string): bigint {
   return normalized;
 }
 
+export class PaymentApprovalRequiredError extends Error {
+  readonly requiredAmount: bigint;
+  readonly spenderAddress: Address;
+
+  constructor(params: { requiredAmount: bigint; spenderAddress: Address }) {
+    super(
+      `ERC20 allowance is below the required payment of ${params.requiredAmount.toString()} raw units for spender ${params.spenderAddress}.`,
+    );
+    this.name = 'PaymentApprovalRequiredError';
+    this.requiredAmount = params.requiredAmount;
+    this.spenderAddress = params.spenderAddress;
+  }
+}
+
+export class NftApprovalRequiredError extends Error {
+  readonly nftAddress: Address;
+  readonly operator: Address;
+
+  constructor(params: { nftAddress: Address; operator: Address }) {
+    super(`NFT approval is required for contract ${params.nftAddress} and operator ${params.operator}.`);
+    this.name = 'NftApprovalRequiredError';
+    this.nftAddress = params.nftAddress;
+    this.operator = params.operator;
+  }
+}
+
+export async function approveNftContractIfNeeded(opts: {
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  account: Address | WalletAccount;
+  accountAddress: Address;
+  nftAddress: Address;
+  operator: Address;
+  autoApprove?: boolean;
+}): Promise<Hash | undefined> {
+  const isApproved = await opts.publicClient.readContract({
+    address: opts.nftAddress,
+    abi: approvalAbi,
+    functionName: 'isApprovedForAll',
+    args: [opts.accountAddress, opts.operator],
+  });
+
+  if (isApproved) {
+    return undefined;
+  }
+
+  if (opts.autoApprove === false) {
+    throw new NftApprovalRequiredError({
+      nftAddress: opts.nftAddress,
+      operator: opts.operator,
+    });
+  }
+
+  const approvalTxHash = await opts.walletClient.writeContract({
+    address: opts.nftAddress,
+    abi: approvalAbi,
+    functionName: 'setApprovalForAll',
+    args: [opts.operator, true],
+    account: opts.account,
+    chain: undefined,
+  });
+
+  await opts.publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
+  await waitForApproval(opts.publicClient, opts.nftAddress, opts.accountAddress, opts.operator);
+
+  return approvalTxHash;
+}
+
 /**
  * Handles ETH fee calculation or ERC20 allowance approval before a payment transaction.
  * Returns the `value` to attach to the transaction (non-zero only for ETH payments).
@@ -546,9 +587,7 @@ export async function preparePaymentAmountForSpender(opts: {
   }
 
   if (!autoApprove) {
-    throw new Error(
-      `ERC20 allowance is below the required payment of ${requiredAmount.toString()} raw units for spender ${spenderAddress}.`,
-    );
+    throw new PaymentApprovalRequiredError({ requiredAmount, spenderAddress });
   }
 
   const approvalTxHash = await walletClient.writeContract({

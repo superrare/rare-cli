@@ -8,9 +8,9 @@ export function createDeployNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
   addresses: { factory: Address; lazyBatchMintFactory?: Address },
-): RareClient['deploy'] {
+): Pick<RareClient['collection']['deploy'], 'erc721' | 'lazyBatchMint'> {
   return {
-    async erc721(params): ReturnType<RareClient['deploy']['erc721']> {
+    async erc721(params): ReturnType<RareClient['collection']['deploy']['erc721']> {
       const { walletClient, account } = requireWallet(config);
       const txHash = params.maxTokens !== undefined
         ? await walletClient.writeContract({
@@ -49,7 +49,7 @@ export function createDeployNamespace(
       };
     },
 
-    async lazyBatchMint(params): ReturnType<RareClient['deploy']['lazyBatchMint']> {
+    async lazyBatchMint(params): ReturnType<RareClient['collection']['deploy']['lazyBatchMint']> {
       if (!addresses.lazyBatchMintFactory) {
         throw new Error(
           'Lazy batch mint factory is not deployed on this chain. Supported chains: mainnet, sepolia.',

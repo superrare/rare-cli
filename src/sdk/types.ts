@@ -2,16 +2,11 @@ import type { Address, Hash, Hex, PublicClient, TransactionReceipt, WalletClient
 import type { SupportedChain } from '../contracts/addresses.js';
 import type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
 import type { LiquidFactoryConfig } from '../liquid/factory-config.js';
-import type {
-  LazySovereignCollectionContractType,
-  SovereignCollectionContractType,
-} from './collection-core.js';
+import type { LazySovereignCollectionContractType } from './collection-core.js';
+import type { NftIdentityParams } from './nft-core.js';
 import type {
   BatchTokenListArtifact,
   BatchTokenProofArtifact,
-  BatchTokenProofParams,
-  BatchTokenProofVerifyParams,
-  BuildBatchTokenTreeParams,
   BuildUtilsTreeParams,
   UtilsTreeArtifact,
   UtilsTreeProofArtifact,
@@ -20,6 +15,7 @@ import type {
 } from './batch-core.js';
 import type {
   CollectionSearchParams,
+  EventSearchParams,
   ImportErc721Params,
   NftMediaEntry,
   NftSearchParams,
@@ -28,8 +24,6 @@ import type {
   Nft,
   Collection,
   NftEvent,
-  NftEventOptions,
-  CollectionEventOptions,
   UserProfile,
 } from './api.js';
 
@@ -71,27 +65,14 @@ export type DeployLazyBatchMintResult = {
   contract: Address;
 } & TransactionResult
 
-export type CreateSovereignCollectionParams = {
-  name: string;
-  symbol: string;
-  maxTokens?: IntegerInput;
-  contractType?: SovereignCollectionContractType;
-}
-
-export type CreateSovereignCollectionResult = {
-  contract: Address;
-  factory: Address;
-  contractType: SovereignCollectionContractType;
-} & TransactionResult
-
-export type CreateLazySovereignCollectionParams = {
+export type DeployLazyErc721Params = {
   name: string;
   symbol: string;
   maxTokens: IntegerInput;
   contractType?: LazySovereignCollectionContractType;
 }
 
-export type CreateLazySovereignCollectionResult = {
+export type DeployLazyErc721Result = {
   contract: Address;
   factory: Address;
   contractType: LazySovereignCollectionContractType;
@@ -101,9 +82,7 @@ export type CreateLazySovereignCollectionResult = {
 export type CollectionMintBatchParams = {
   contract: Address;
   baseUri: string;
-  amount?: IntegerInput;
-  /** @deprecated use amount */
-  tokenCount?: IntegerInput;
+  amount: IntegerInput;
 }
 
 export type CollectionMintBatchResult = {
@@ -118,9 +97,7 @@ export type CollectionMintBatchResult = {
 export type CollectionPrepareLazyMintParams = {
   contract: Address;
   baseUri: string;
-  amount?: IntegerInput;
-  /** @deprecated use amount */
-  tokenCount?: IntegerInput;
+  amount: IntegerInput;
   minter?: Address;
 }
 
@@ -148,8 +125,6 @@ export type CollectionRoyaltyInfoParams = {
   contract: Address;
   tokenId: IntegerInput;
   price?: IntegerInput;
-  /** @deprecated use price */
-  salePrice?: IntegerInput;
 }
 
 export type CollectionRoyaltyInfoResult = {
@@ -189,8 +164,6 @@ export type CollectionRoyaltyRegistryStatusParams = {
   contract: Address;
   tokenId: IntegerInput;
   price?: IntegerInput;
-  /** @deprecated use price */
-  salePrice?: IntegerInput;
 }
 
 export type CollectionRoyaltyRegistryStatusResult = {
@@ -297,26 +270,22 @@ export type CollectionLockBaseUriResult = {
   baseUri: string;
 } & TransactionResult
 
-export type MintToParams = {
+export type CollectionMintParams = {
   contract: Address;
   tokenUri: string;
   to?: Address;
   royaltyReceiver?: Address;
 }
 
-export type MintToResult = {
+export type CollectionMintResult = {
   tokenId: bigint;
 } & TransactionResult
 
 export type AuctionCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
-  price?: AmountInput;
-  endTime?: TimestampInput;
-  /** @deprecated use price */
-  startingPrice?: AmountInput;
-  /** @deprecated use endTime */
-  duration?: IntegerInput;
+  price: AmountInput;
+  endTime: TimestampInput;
   currency?: Address;
   auctionType?: 'reserve' | 'scheduled';
   startTime?: TimestampInput;
@@ -328,10 +297,9 @@ export type AuctionCreateParams = {
 export type AuctionBidParams = {
   contract: Address;
   tokenId: IntegerInput;
-  price?: AmountInput;
-  /** @deprecated use price */
-  amount?: AmountInput;
+  price: AmountInput;
   currency?: Address;
+  autoApprove?: boolean;
 }
 
 export type AuctionSettleParams = {
@@ -378,9 +346,8 @@ export type OfferCreateParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
-  price?: AmountInput;
-  /** @deprecated use price */
-  amount?: AmountInput;
+  price: AmountInput;
+  autoApprove?: boolean;
 }
 
 export type OfferCancelParams = {
@@ -393,11 +360,10 @@ export type OfferAcceptParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
-  price?: AmountInput;
-  /** @deprecated use price */
-  amount?: AmountInput;
+  price: AmountInput;
   splitAddresses?: Address[];
   splitRatios?: number[];
+  autoApprove?: boolean;
 }
 
 export type OfferStatusParams = {
@@ -440,9 +406,8 @@ export type ListingBuyParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
-  price?: AmountInput;
-  /** @deprecated use price */
-  amount?: AmountInput;
+  price: AmountInput;
+  autoApprove?: boolean;
 }
 
 export type ListingStatusParams = {
@@ -509,8 +474,19 @@ export type BatchListingCreateResult = {
 } & TransactionResult
 
 export type BatchListingCancelParams = {
-  root: `0x${string}`;
+  /**
+   * Direct root override. When omitted, pass an artifact or token identity so
+   * the SDK can resolve the batch listing root through the Rare API.
+   */
+  root?: `0x${string}`;
+  artifact?: BatchListingRootArtifact;
+  contract?: Address;
+  tokenId?: IntegerInput;
 }
+
+export type BatchListingCancelResult = {
+  root: `0x${string}`;
+} & TransactionResult
 
 export type BatchListingBuyParams = {
   proofArtifact?: BatchListingProofArtifact;
@@ -520,17 +496,32 @@ export type BatchListingBuyParams = {
   creator: Address;
   currency: Address;
   price: AmountInput;
-  /** @deprecated use price */
-  amount?: AmountInput;
+  autoApprove?: boolean;
 }
 
 export type BatchListingSetAllowListParams = {
+  /**
+   * Direct root override. When omitted, pass an artifact or token identity so
+   * the SDK can resolve the batch listing root through the Rare API.
+   */
+  root?: `0x${string}`;
+  artifact?: BatchListingRootArtifact;
+  contract?: Address;
+  tokenId?: IntegerInput;
+  /**
+   * Direct allowlist root override. When omitted and artifact.allowList is
+   * present, the SDK registers those wallets with the Rare API and uses the
+   * API-returned canonical root.
+   */
+  allowListRoot?: `0x${string}`;
+  endTime?: TimestampInput;
+}
+
+export type BatchListingSetAllowListResult = {
   root: `0x${string}`;
   allowListRoot: `0x${string}`;
-  endTime?: TimestampInput;
-  /** @deprecated use endTime */
-  endTimestamp?: IntegerInput;
-}
+  endTime: bigint;
+} & TransactionResult
 
 export type BatchListingStatusParams = {
   root?: `0x${string}`;
@@ -560,9 +551,7 @@ export type ReleaseConfigureParams = {
   currency?: Address;
   price: AmountInput;
   startTime?: TimestampInput;
-  amount?: IntegerInput;
-  /** @deprecated use amount */
-  maxMints?: IntegerInput;
+  maxMints: IntegerInput;
   splitAddresses?: Address[];
   splitRatios?: number[];
 }
@@ -580,8 +569,6 @@ export type ReleaseConfigureResult = {
 
 export type ReleaseMintDirectSaleParams = {
   contract: Address;
-  amount?: IntegerInput;
-  /** @deprecated use amount */
   quantity?: IntegerInput;
   currency?: Address;
   price?: AmountInput;
@@ -649,11 +636,9 @@ export type ReleaseSetAllowlistConfigParams = {
    * Locally reproducible allowlist proof artifact. When root is omitted, the
    * SDK registers the artifact wallets with the Rare API and configures the
    * API-returned canonical root on-chain.
-   */
+  */
   artifact?: ReleaseAllowlistArtifact;
-  endTime?: TimestampInput;
-  /** @deprecated use endTime */
-  endTimestamp?: TimestampInput;
+  endTime: TimestampInput;
 }
 
 export type ReleaseSetAllowlistConfigResult = {
@@ -662,9 +647,7 @@ export type ReleaseSetAllowlistConfigResult = {
 
 export type ReleaseSetLimitParams = {
   contract: Address;
-  amount?: IntegerInput;
-  /** @deprecated use amount */
-  limit?: IntegerInput;
+  limit: IntegerInput;
 }
 
 export type ReleaseSetLimitResult = {
@@ -710,13 +693,10 @@ export type ReleaseStatus = {
 export type BatchOfferCreateParams = {
   root?: Hex;
   artifact?: BatchTokenListArtifact;
-  price?: AmountInput;
-  /** @deprecated use price */
-  amount?: AmountInput;
+  price: AmountInput;
   currency?: Address;
-  endTime?: TimestampInput;
-  /** @deprecated use endTime */
-  expiry?: IntegerInput;
+  endTime: TimestampInput;
+  autoApprove?: boolean;
 }
 
 export type BatchOfferCreateResult = {
@@ -792,13 +772,9 @@ export type BatchOfferStatus = {
 export type BatchAuctionCreateParams = {
   root?: Hex;
   artifact?: BatchTokenListArtifact;
-  price?: AmountInput;
-  /** @deprecated use price */
-  reserveAmount?: AmountInput;
+  price: AmountInput;
   currency?: Address;
-  endTime?: TimestampInput;
-  /** @deprecated use endTime */
-  duration?: IntegerInput;
+  endTime: TimestampInput;
   splitAddresses?: Address[];
   splitRatios?: number[];
   autoApprove?: boolean;
@@ -834,9 +810,7 @@ export type BatchAuctionBidParams = {
   contract: Address;
   tokenId: IntegerInput;
   currency?: Address;
-  price?: AmountInput;
-  /** @deprecated use price */
-  amount?: AmountInput;
+  price: AmountInput;
   autoApprove?: boolean;
 }
 
@@ -1020,12 +994,8 @@ export type SetLiquidEditionRenderContractResult = {
 
 export type RouterBuyParams = {
   token: Address;
-  ethAmountIn?: AmountInput;
-  minAmountOut?: AmountInput;
-  /** @deprecated use ethAmountIn */
-  ethAmount?: AmountInput;
-  /** @deprecated use minAmountOut */
-  minTokensOut?: AmountInput;
+  amountIn: AmountInput;
+  minAmountOut: AmountInput;
   commands: `0x${string}`;
   inputs: readonly `0x${string}`[];
   recipient?: Address;
@@ -1034,12 +1004,8 @@ export type RouterBuyParams = {
 
 export type RouterSellParams = {
   token: Address;
-  amountIn?: AmountInput;
-  minAmountOut?: AmountInput;
-  /** @deprecated use amountIn */
-  tokenAmount?: AmountInput;
-  /** @deprecated use minAmountOut */
-  minEthOut?: AmountInput;
+  amountIn: AmountInput;
+  minAmountOut: AmountInput;
   commands: `0x${string}`;
   inputs: readonly `0x${string}`[];
   recipient?: Address;
@@ -1058,12 +1024,8 @@ export type RouterSwapParams = {
 }
 
 export type BuyRareParams = {
-  ethAmountIn?: AmountInput;
+  amountIn: AmountInput;
   minAmountOut?: AmountInput;
-  /** @deprecated use ethAmountIn */
-  ethAmount?: AmountInput;
-  /** @deprecated use minAmountOut */
-  minRareOut?: AmountInput;
   slippageBps?: IntegerInput;
   recipient?: Address;
   deadline?: IntegerInput;
@@ -1071,12 +1033,8 @@ export type BuyRareParams = {
 
 export type BuyTokenParams = {
   token: Address;
-  ethAmountIn?: AmountInput;
+  amountIn: AmountInput;
   minAmountOut?: AmountInput;
-  /** @deprecated use ethAmountIn */
-  ethAmount?: AmountInput;
-  /** @deprecated use minAmountOut */
-  minTokensOut?: AmountInput;
   slippageBps?: IntegerInput;
   recipient?: Address;
   deadline?: IntegerInput;
@@ -1084,12 +1042,8 @@ export type BuyTokenParams = {
 
 export type SellTokenParams = {
   token: Address;
-  amountIn?: AmountInput;
+  amountIn: AmountInput;
   minAmountOut?: AmountInput;
-  /** @deprecated use amountIn */
-  tokenAmount?: AmountInput;
-  /** @deprecated use minAmountOut */
-  minEthOut?: AmountInput;
   slippageBps?: IntegerInput;
   recipient?: Address;
   deadline?: IntegerInput;
@@ -1152,31 +1106,63 @@ export type BuyRareResult = {
   inputs: readonly `0x${string}`[];
 } & TransactionResult
 
+export type ReleaseAllowlistNamespace = {
+  build: (params: { input: string; format: 'csv' | 'json' }) => ReleaseAllowlistArtifact;
+  parse: (params: { input: string }) => ReleaseAllowlistArtifact;
+  proof: (params: { artifact: ReleaseAllowlistArtifact; address: Address }) => ReleaseAllowlistWalletProof | null;
+  getConfig: (params: { contract: Address }) => Promise<ReleaseAllowlistConfig>;
+  setConfig: (params: ReleaseSetAllowlistConfigParams) => Promise<ReleaseSetAllowlistConfigResult>;
+  clear: (params: { contract: Address }) => Promise<ReleaseSetAllowlistConfigResult>;
+}
+
+export type ReleaseLimitsNamespace = {
+  getMint: (params: { contract: Address }) => Promise<ReleaseLimitConfig>;
+  setMint: (params: ReleaseSetLimitParams) => Promise<ReleaseSetLimitResult>;
+  getTx: (params: { contract: Address }) => Promise<ReleaseLimitConfig>;
+  setTx: (params: ReleaseSetLimitParams) => Promise<ReleaseSetLimitResult>;
+}
+
 export type ReleaseNamespace = {
-  buildAllowlistArtifact: (params: { input: string; format: 'csv' | 'json' }) => ReleaseAllowlistArtifact;
-  parseAllowlistArtifact: (params: { input: string }) => ReleaseAllowlistArtifact;
-  getAllowlistProof: (params: { artifact: ReleaseAllowlistArtifact; address: Address }) => ReleaseAllowlistWalletProof | null;
+  allowlist: ReleaseAllowlistNamespace;
+  limits: ReleaseLimitsNamespace;
   configure: (params: ReleaseConfigureParams) => Promise<ReleaseConfigureResult>;
-  getAllowlistConfig: (params: { contract: Address }) => Promise<ReleaseAllowlistConfig>;
-  setAllowlistConfig: (params: ReleaseSetAllowlistConfigParams) => Promise<ReleaseSetAllowlistConfigResult>;
-  clearAllowlistConfig: (params: { contract: Address }) => Promise<ReleaseSetAllowlistConfigResult>;
-  getMintLimit: (params: { contract: Address }) => Promise<ReleaseLimitConfig>;
-  setMintLimit: (params: ReleaseSetLimitParams) => Promise<ReleaseSetLimitResult>;
-  getTxLimit: (params: { contract: Address }) => Promise<ReleaseLimitConfig>;
-  setTxLimit: (params: ReleaseSetLimitParams) => Promise<ReleaseSetLimitResult>;
-  mintDirectSale: (params: ReleaseMintDirectSaleParams) => Promise<ReleaseMintDirectSaleResult>;
+  mint: (params: ReleaseMintDirectSaleParams) => Promise<ReleaseMintDirectSaleResult>;
   getStatus: (params: ReleaseStatusParams) => Promise<ReleaseStatus>;
+}
+
+export type BatchListingNamespace = {
+  create: (params: BatchListingCreateParams) => Promise<BatchListingCreateResult>;
+  cancel: (params: BatchListingCancelParams) => Promise<BatchListingCancelResult>;
+  buy: (params: BatchListingBuyParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
+  setAllowlist: (params: BatchListingSetAllowListParams) => Promise<BatchListingSetAllowListResult>;
+  getStatus: (params: BatchListingStatusParams) => Promise<BatchListingStatus>;
+}
+
+export type BatchOfferNamespace = {
+  create: (params: BatchOfferCreateParams) => Promise<BatchOfferCreateResult>;
+  revoke: (params: BatchOfferRevokeParams) => Promise<BatchOfferRevokeResult>;
+  accept: (params: BatchOfferAcceptParams) => Promise<BatchOfferAcceptResult>;
+  getStatus: (params: BatchOfferStatusParams) => Promise<BatchOfferStatus>;
+}
+
+export type BatchAuctionNamespace = {
+  create: (params: BatchAuctionCreateParams) => Promise<BatchAuctionCreateResult>;
+  cancel: (params: BatchAuctionCancelParams) => Promise<BatchAuctionCancelResult>;
+  bid: (params: BatchAuctionBidParams) => Promise<BatchAuctionBidResult>;
+  settle: (params: BatchAuctionSettleParams) => Promise<BatchAuctionSettleResult>;
+  getStatus: (params: BatchAuctionStatusParams) => Promise<BatchAuctionStatus>;
 }
 
 export type ListingMarketplaceNamespace = {
   create: (params: ListingCreateParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
   cancel: (params: ListingCancelParams) => Promise<TransactionResult>;
-  buy: (params: ListingBuyParams) => Promise<TransactionResult>;
+  buy: (params: ListingBuyParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
   getStatus: (params: ListingStatusParams) => Promise<ListingStatus>;
 }
 
 export type ListingNamespace = ListingMarketplaceNamespace & {
   release: ReleaseNamespace;
+  batch: BatchListingNamespace;
 }
 
 export type RareClient = {
@@ -1199,15 +1185,13 @@ export type RareClient = {
     swapRouter?: Address;
     v4Quoter?: Address;
   };
-  deploy: {
-    erc721: (params: DeployErc721Params) => Promise<DeployErc721Result>;
-    lazyBatchMint: (params: DeployLazyBatchMintParams) => Promise<DeployLazyBatchMintResult>;
-  };
-  liquid: {
+  liquidEdition: {
     getFactoryConfig: () => Promise<LiquidFactoryConfig>;
     generatePresetCurves: (params: GeneratePresetCurvesParams) => Promise<GeneratePresetCurvesResult>;
     validateCurves: (params: ValidateLiquidCurvesParams) => Promise<LiquidCurvePreview>;
-    deployMultiCurve: (params: DeployLiquidEditionParams) => Promise<DeployLiquidEditionResult>;
+    deploy: {
+      multiCurve: (params: DeployLiquidEditionParams) => Promise<DeployLiquidEditionResult>;
+    };
     getTokenUri: (params: { contract: Address }) => Promise<string>;
     getRenderContract: (params: { contract: Address }) => Promise<Address>;
     setRenderContract: (params: SetLiquidEditionRenderContractParams) => Promise<SetLiquidEditionRenderContractResult>;
@@ -1215,9 +1199,6 @@ export type RareClient = {
     getMarketState: (params: { contract: Address }) => Promise<LiquidEditionMarketState>;
     getCurrentPrice: (params: { contract: Address }) => Promise<LiquidEditionCurrentPrice>;
     getTelemetry: (params: { contract: Address }) => Promise<LiquidEditionTelemetry>;
-  };
-  mint: {
-    mintTo: (params: MintToParams) => Promise<MintToResult>;
   };
   swap: {
     buy: (params: RouterBuyParams) => Promise<TransactionResult>;
@@ -1232,43 +1213,20 @@ export type RareClient = {
   };
   auction: {
     create: (params: AuctionCreateParams) => Promise<TransactionResult & { approvalTxHash?: Hash; auctionType: 'reserve' | 'scheduled'; startTime: bigint }>;
-    bid: (params: AuctionBidParams) => Promise<TransactionResult>;
+    bid: (params: AuctionBidParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
     settle: (params: AuctionSettleParams) => Promise<TransactionResult>;
     cancel: (params: AuctionCancelParams) => Promise<TransactionResult>;
     getStatus: (params: AuctionStatusParams) => Promise<AuctionStatus>;
+    batch: BatchAuctionNamespace;
   };
   offer: {
-    create: (params: OfferCreateParams) => Promise<TransactionResult>;
+    create: (params: OfferCreateParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
     cancel: (params: OfferCancelParams) => Promise<TransactionResult>;
-    accept: (params: OfferAcceptParams) => Promise<TransactionResult>;
+    accept: (params: OfferAcceptParams) => Promise<TransactionResult & { approvalTxHash?: Hash }>;
     getStatus: (params: OfferStatusParams) => Promise<OfferStatus>;
+    batch: BatchOfferNamespace;
   };
   listing: ListingNamespace;
-  batchListing: {
-    create: (params: BatchListingCreateParams) => Promise<BatchListingCreateResult>;
-    cancel: (params: BatchListingCancelParams) => Promise<TransactionResult>;
-    buy: (params: BatchListingBuyParams) => Promise<TransactionResult>;
-    setAllowList: (params: BatchListingSetAllowListParams) => Promise<TransactionResult>;
-    getStatus: (params: BatchListingStatusParams) => Promise<BatchListingStatus>;
-  };
-  batch: {
-    buildTree: (params: BuildBatchTokenTreeParams) => BatchTokenListArtifact;
-    getTreeProof: (params: BatchTokenProofParams) => BatchTokenProofArtifact;
-    verifyTreeProof: (params: BatchTokenProofVerifyParams) => boolean;
-    offer: {
-      create: (params: BatchOfferCreateParams) => Promise<BatchOfferCreateResult>;
-      revoke: (params: BatchOfferRevokeParams) => Promise<BatchOfferRevokeResult>;
-      accept: (params: BatchOfferAcceptParams) => Promise<BatchOfferAcceptResult>;
-      getStatus: (params: BatchOfferStatusParams) => Promise<BatchOfferStatus>;
-    };
-    auction: {
-      create: (params: BatchAuctionCreateParams) => Promise<BatchAuctionCreateResult>;
-      cancel: (params: BatchAuctionCancelParams) => Promise<BatchAuctionCancelResult>;
-      bid: (params: BatchAuctionBidParams) => Promise<BatchAuctionBidResult>;
-      settle: (params: BatchAuctionSettleParams) => Promise<BatchAuctionSettleResult>;
-      getStatus: (params: BatchAuctionStatusParams) => Promise<BatchAuctionStatus>;
-    };
-  };
   utils: {
     tree: {
       build: (params: BuildUtilsTreeParams) => UtilsTreeArtifact;
@@ -1282,16 +1240,19 @@ export type RareClient = {
   search: {
     nfts: (params?: NftSearchParams) => Promise<SearchPageResponse<Nft>>;
     collections: (params?: CollectionSearchParams) => Promise<SearchPageResponse<Collection>>;
+    events: (params: EventSearchParams) => Promise<SearchPageResponse<NftEvent>>;
   };
   nft: {
-    get: (universalTokenId: string) => Promise<Nft>;
-    events: (universalTokenId: string, opts?: NftEventOptions) => Promise<SearchPageResponse<NftEvent>>;
+    get: (params: NftIdentityParams) => Promise<Nft>;
   };
   collection: {
     get: (id: string) => Promise<Collection>;
-    events: (id: string, opts?: CollectionEventOptions) => Promise<SearchPageResponse<NftEvent>>;
-    createSovereign: (params: CreateSovereignCollectionParams) => Promise<CreateSovereignCollectionResult>;
-    createLazySovereign: (params: CreateLazySovereignCollectionParams) => Promise<CreateLazySovereignCollectionResult>;
+    deploy: {
+      erc721: (params: DeployErc721Params) => Promise<DeployErc721Result>;
+      lazyErc721: (params: DeployLazyErc721Params) => Promise<DeployLazyErc721Result>;
+      lazyBatchMint: (params: DeployLazyBatchMintParams) => Promise<DeployLazyBatchMintResult>;
+    };
+    mint: (params: CollectionMintParams) => Promise<CollectionMintResult>;
     mintBatch: (params: CollectionMintBatchParams) => Promise<CollectionMintBatchResult>;
     prepareLazyMint: (params: CollectionPrepareLazyMintParams) => Promise<CollectionPrepareLazyMintResult>;
     getTokenCreator: (params: CollectionTokenCreatorParams) => Promise<CollectionTokenCreatorResult>;

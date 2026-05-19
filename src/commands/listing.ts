@@ -6,9 +6,10 @@ import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '../contracts/addresses.js';
 import { parseAddress } from '../sdk/validation.js';
+import { resolveCurrencyDecimals } from '../sdk/helpers.js';
 import { output, log } from '../output.js';
 import { createListingListCommand } from './account-market-list.js';
-import { resolveCurrencyDecimals } from '../sdk/helpers.js';
+import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 import { listingBatchCommand } from './batch.js';
 import { releaseCommand } from './release.js';
@@ -17,7 +18,6 @@ type ListingCreateOptions = {
   contract?: string;
   tokenId?: string;
   price?: string;
-  amount?: string;
   currency?: string;
   target?: string;
   split?: SplitAccumulator;
@@ -38,8 +38,8 @@ type ListingBuyOptions = {
   contract?: string;
   tokenId: string;
   price?: string;
-  amount?: string;
   currency?: string;
+  yes?: boolean;
   chain?: string;
   chainId?: string;
 };
@@ -65,7 +65,6 @@ export function listingCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
     .option('--price <amount>', 'listing price in ETH or token units')
-    .option('--amount <amount>', 'alias for --price')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--target <address>', 'target buyer address (defaults to public listing)')
     .option(
@@ -79,7 +78,7 @@ export function listingCommand(): Command {
     .action(async (opts: ListingCreateOptions): Promise<void> => {
       try {
         requireTokenScopeOptions(opts, 'create');
-        const price = opts.price ?? opts.amount;
+        const price = opts.price;
         if (!hasOption(price)) {
           throw new Error('rare listing create requires --price.');
         }
@@ -106,7 +105,7 @@ export function listingCommand(): Command {
           });
         }
 
-        const result = await rare.listing.create({
+        const listingParams = {
           contract,
           tokenId: opts.tokenId,
           price,
@@ -114,8 +113,22 @@ export function listingCommand(): Command {
           target,
           splitAddresses: splits?.addresses,
           splitRatios: splits?.ratios,
-          autoApprove: opts.yes,
+        };
+        const result = await runWithNftApprovalConsent({
+          commandName: 'rare listing create',
+          approvalMessage: 'NFT approval is required before creating this listing.',
+          runWithoutApproval: () => rare.listing.create({
+            ...listingParams,
+            autoApprove: opts.yes === true,
+          }),
+          runWithApproval: () => rare.listing.create({
+            ...listingParams,
+            autoApprove: true,
+          }),
         });
+        if (result === undefined) {
+          return;
+        }
 
         output(
           {
@@ -180,8 +193,8 @@ export function listingCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID to buy')
     .option('--price <amount>', 'purchase price in ETH or token units')
-    .option('--amount <amount>', 'alias for --price')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
+    .option('--yes', 'yes to all prompts and required approvals')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ListingBuyOptions): Promise<void> => {
@@ -195,7 +208,7 @@ export function listingCommand(): Command {
         if (!hasOption(opts.contract)) {
           throw new Error('rare listing buy requires --contract.');
         }
-        const price = opts.price ?? opts.amount;
+        const price = opts.price;
         if (!hasOption(price)) {
           throw new Error('rare listing buy requires --price.');
         }
@@ -207,16 +220,39 @@ export function listingCommand(): Command {
         log(`  Token ID: ${opts.tokenId}`);
         log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
 
-        const result = await rare.listing.buy({
+        const buyParams = {
           contract,
           tokenId: opts.tokenId,
           price,
           currency,
+        };
+
+        const result = await runWithPaymentApprovalConsent({
+          commandName: 'rare listing buy',
+          approvalMessage: 'ERC20 approval is required before buying this listing.',
+          runWithoutApproval: () => rare.listing.buy({
+            ...buyParams,
+            autoApprove: opts.yes === true,
+          }),
+          runWithApproval: () => rare.listing.buy({
+            ...buyParams,
+            autoApprove: true,
+          }),
         });
+        if (result === undefined) {
+          return;
+        }
 
         output(
-          { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            approvalTxHash: result.approvalTxHash ?? null,
+          },
           () => {
+            if (result.approvalTxHash) {
+              console.log(`Approval tx sent: ${result.approvalTxHash}`);
+            }
             console.log(`\nTransaction sent: ${result.txHash}`);
             console.log(`Token purchased! Block: ${result.receipt.blockNumber}`);
           },

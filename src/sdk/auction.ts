@@ -1,20 +1,16 @@
 import {
   type Address,
-  type Hash,
   type PublicClient,
-  type WalletClient,
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
 import { ETH_ADDRESS, type SupportedChain } from '../contracts/addresses.js';
-import type { RareClientConfig, RareClient, WalletAccount } from './types.js';
+import type { RareClientConfig, RareClient } from './types.js';
 import {
-  approvalAbi,
-  preparePayment,
+  approveNftContractIfNeeded,
+  preparePaymentForSpender,
   requireWallet,
   requireInput,
-  resolveAlias,
   toCurrencyAmount,
-  waitForApproval,
 } from './helpers.js';
 import {
   planAuctionBid,
@@ -29,25 +25,23 @@ export function createAuctionNamespace(
   config: RareClientConfig,
   chain: SupportedChain,
   addresses: { auction: Address },
-): RareClient['auction'] {
+): Omit<RareClient['auction'], 'batch'> {
   return {
     async create(params): ReturnType<RareClient['auction']['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency ?? ETH_ADDRESS;
-      const price = requireInput(resolveAlias(params.price, params.startingPrice, 'price', 'startingPrice'), 'price');
+      const price = requireInput(params.price, 'price');
       const startingPrice = await toCurrencyAmount(publicClient, chain, currency, price, 'price');
-      const { startingPrice: _deprecatedStartingPrice, ...canonicalParams } = params;
-      const plan = planAuctionCreate({ ...canonicalParams, price: startingPrice, currency }, accountAddress);
-      const approvalTxHash = params.autoApprove === false
-        ? undefined
-        : await approveMarketplaceIfNeeded({
-          publicClient,
-          walletClient,
-          account,
-          accountAddress,
-          nftAddress: plan.nftAddress,
-          operator: addresses.auction,
-        });
+      const plan = planAuctionCreate({ ...params, price: startingPrice, currency }, accountAddress);
+      const approvalTxHash = await approveNftContractIfNeeded({
+        publicClient,
+        walletClient,
+        account,
+        accountAddress,
+        nftAddress: plan.nftAddress,
+        operator: addresses.auction,
+        autoApprove: params.autoApprove,
+      });
 
       const auctionType = await publicClient.readContract({
         address: addresses.auction,
@@ -88,14 +82,17 @@ export function createAuctionNamespace(
     async bid(params): ReturnType<RareClient['auction']['bid']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency ?? ETH_ADDRESS;
-      const price = requireInput(resolveAlias(params.price, params.amount, 'price', 'amount'), 'price');
+      const price = requireInput(params.price, 'price');
       const amount = await toCurrencyAmount(publicClient, chain, currency, price, 'price');
-      const { amount: _deprecatedAmount, ...canonicalParams } = params;
-      const plan = planAuctionBid({ ...canonicalParams, price: amount, currency });
+      const plan = planAuctionBid({ ...params, price: amount, currency });
 
-      const value = await preparePayment({
+      const payment = await preparePaymentForSpender({
         publicClient, walletClient, account, accountAddress,
-        auctionAddress: addresses.auction, currency: plan.currency, amount: plan.amount,
+        marketplaceSettingsSource: addresses.auction,
+        spenderAddress: addresses.auction,
+        currency: plan.currency,
+        amount: plan.amount,
+        autoApprove: params.autoApprove,
       });
 
       const txHash = await walletClient.writeContract({
@@ -105,11 +102,11 @@ export function createAuctionNamespace(
         args: [params.contract, plan.tokenId, plan.currency, plan.amount],
         account,
         chain: undefined,
-        value,
+        value: payment.value,
       });
 
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return { txHash, receipt };
+      return { txHash, receipt, approvalTxHash: payment.approvalTxHash };
     },
 
     async settle(params): ReturnType<RareClient['auction']['settle']> {
@@ -194,38 +191,4 @@ export function createAuctionNamespace(
       });
     },
   };
-}
-
-async function approveMarketplaceIfNeeded(opts: {
-  publicClient: PublicClient;
-  walletClient: WalletClient;
-  account: Address | WalletAccount;
-  accountAddress: Address;
-  nftAddress: Address;
-  operator: Address;
-}): Promise<Hash | undefined> {
-  const isApproved = await opts.publicClient.readContract({
-    address: opts.nftAddress,
-    abi: approvalAbi,
-    functionName: 'isApprovedForAll',
-    args: [opts.accountAddress, opts.operator],
-  });
-
-  if (isApproved) {
-    return undefined;
-  }
-
-  const approvalTxHash = await opts.walletClient.writeContract({
-    address: opts.nftAddress,
-    abi: approvalAbi,
-    functionName: 'setApprovalForAll',
-    args: [opts.operator, true],
-    account: opts.account,
-    chain: undefined,
-  });
-
-  await opts.publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
-  await waitForApproval(opts.publicClient, opts.nftAddress, opts.accountAddress, opts.operator);
-
-  return approvalTxHash;
 }

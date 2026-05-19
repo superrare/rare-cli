@@ -1,5 +1,5 @@
 import { formatEther } from 'viem';
-import type { Nft, Collection, Pagination } from './sdk/api.js';
+import type { Nft, Collection, NftEvent, Pagination, UserProfile } from './sdk/api.js';
 
 export function isJsonMode(): boolean {
   return process.argv.includes('--json');
@@ -158,6 +158,47 @@ export function printCollectionRow(col: Collection): void {
   const tokens = `${col.stats.tokenCount} tokens`;
   const floor = col.stats.floorPriceUsd != null ? `floor: $${col.stats.floorPriceUsd}` : '';
   console.log(`  ${col.collectionId}  ${name}  ${tokens}${floor.length > 0 ? `  ${floor}` : ''}`);
+}
+
+// --- User pretty-printing ---
+
+export function printUser(user: UserProfile): void {
+  console.log(`\n${user.username}`);
+  console.log(`  Address:   ${user.address}`);
+  if (user.fullName) console.log(`  Name:      ${user.fullName}`);
+  console.log(`  Created:   ${user.stats.created}`);
+  console.log(`  Owned:     ${user.stats.owned}`);
+  console.log(`  Followers: ${user.stats.followerCount}`);
+  console.log(`  Creator:   ${user.stats.isCreator ? 'yes' : 'no'}`);
+  console.log(`  Collector: ${user.stats.isCollector ? 'yes' : 'no'}`);
+}
+
+// --- Event pretty-printing ---
+
+export function printNftEventRow(event: NftEvent): void {
+  const tx = event.transactionHash === null ? '' : ` tx:${shortValue(event.transactionHash)}`;
+  const block = event.blockNumber === null ? '' : ` block:${event.blockNumber}`;
+  const actor = eventActorSummary(event);
+  const price = 'price' in event
+    ? ` ${formatCryptoValue(event.price)}`
+    : '';
+  console.log(`  ${event.createdAt}  ${event.eventType}${price}${actor}${tx}${block}`);
+}
+
+function eventActorSummary(event: NftEvent): string {
+  const labels = [
+    ['buyer', 'buyer' in event ? event.buyer : undefined],
+    ['seller', 'seller' in event ? event.seller : undefined],
+    ['from', 'from' in event ? event.from : undefined],
+    ['to', 'to' in event ? event.to : undefined],
+    ['creator', 'creator' in event ? event.creator : undefined],
+    ['bidder', 'bidder' in event ? event.bidder : undefined],
+  ] as const;
+  const parts = labels
+    .map(([label, user]) => user === undefined ? undefined : `${label}:${user.username ?? shortValue(user.address)}`)
+    .filter((part): part is string => part !== undefined);
+
+  return parts.length === 0 ? '' : ` ${parts.join(' ')}`;
 }
 
 // --- Pagination ---

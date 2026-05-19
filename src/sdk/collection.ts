@@ -1,5 +1,4 @@
 import { type Address, type Hash, type PublicClient, parseEventLogs } from 'viem';
-import { sovereignFactoryAbi } from '../contracts/abis/sovereign-factory.js';
 import { lazySovereignFactoryAbi } from '../contracts/abis/lazy-sovereign-factory.js';
 import { collectionMintAbi } from '../contracts/abis/collection-mint.js';
 import { collectionOwnerAbi } from '../contracts/abis/collection-owner.js';
@@ -15,7 +14,6 @@ import {
   buildCollectionRoyaltyRegistryReceiverOverrideWrite,
   buildCollectionRoyaltyRegistryTokenReceiverWrite,
   buildCreateLazySovereignCollectionWrite,
-  buildCreateSovereignCollectionWrite,
   planCollectionBaseUri,
   planCollectionContract,
   planCollectionMintBatch,
@@ -31,7 +29,6 @@ import {
   planCollectionTokenReceiver,
   planCollectionTokenUri,
   planCreateLazySovereignCollection,
-  planCreateSovereignCollection,
   shapeCollectionPrepareMintEvent,
   shapeCollectionRoyaltyRegistryStatus,
   type CollectionRoyaltyRegistryStatusRead,
@@ -41,81 +38,56 @@ export function createCollectionNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
   chain: SupportedChain,
-  baseCollection: Pick<RareClient['collection'], 'get' | 'events'>,
+  baseCollection: Pick<RareClient['collection'], 'get'>,
+  collectionDeploy: Pick<RareClient['collection']['deploy'], 'erc721' | 'lazyBatchMint'>,
+  collectionMint: RareClient['collection']['mint'],
 ): RareClient['collection'] {
   return {
     ...baseCollection,
+    mint: collectionMint,
 
-    async createSovereign(params): ReturnType<RareClient['collection']['createSovereign']> {
-      const plan = planCreateSovereignCollection(params);
-      const factoryAddress = requireContractAddress(chain, 'sovereignFactory');
-      const { walletClient, account } = requireWallet(config);
-      const txHash = await writeCreateSovereignCollection({
-        publicClient,
-        walletClient,
-        account,
-        factoryAddress,
-        plan,
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const logs = parseEventLogs({
-        abi: sovereignFactoryAbi,
-        logs: receipt.logs,
-        eventName: 'SovereignNFTContractCreated',
-      });
-      const [createdLog] = logs;
+    deploy: {
+      ...collectionDeploy,
 
-      if (!createdLog) {
-        throw new Error('Sovereign collection transaction succeeded but SovereignNFTContractCreated was not found in logs.');
-      }
+      async lazyErc721(params): ReturnType<RareClient['collection']['deploy']['lazyErc721']> {
+        const plan = planCreateLazySovereignCollection(params);
+        const factoryAddress = requireContractAddress(chain, 'lazySovereignFactory');
+        const { walletClient, account } = requireWallet(config);
+        const contractType = await publicClient.readContract({
+          address: factoryAddress,
+          abi: lazySovereignFactoryAbi,
+          functionName: plan.contractTypeReadName,
+        });
+        const write = buildCreateLazySovereignCollectionWrite(plan, contractType);
+        const txHash = await walletClient.writeContract({
+          address: factoryAddress,
+          abi: lazySovereignFactoryAbi,
+          functionName: write.functionName,
+          args: write.args,
+          account,
+          chain: undefined,
+        });
+        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        const logs = parseEventLogs({
+          abi: lazySovereignFactoryAbi,
+          logs: receipt.logs,
+          eventName: 'SovereignNFTContractCreated',
+        });
+        const [createdLog] = logs;
 
-      return {
-        txHash,
-        receipt,
-        contract: createdLog.args.contractAddress,
-        factory: factoryAddress,
-        contractType: plan.contractType,
-      };
-    },
+        if (!createdLog) {
+          throw new Error('Lazy ERC-721 collection transaction succeeded but SovereignNFTContractCreated was not found in logs.');
+        }
 
-    async createLazySovereign(params): ReturnType<RareClient['collection']['createLazySovereign']> {
-      const plan = planCreateLazySovereignCollection(params);
-      const factoryAddress = requireContractAddress(chain, 'lazySovereignFactory');
-      const { walletClient, account } = requireWallet(config);
-      const contractType = await publicClient.readContract({
-        address: factoryAddress,
-        abi: lazySovereignFactoryAbi,
-        functionName: plan.contractTypeReadName,
-      });
-      const write = buildCreateLazySovereignCollectionWrite(plan, contractType);
-      const txHash = await walletClient.writeContract({
-        address: factoryAddress,
-        abi: lazySovereignFactoryAbi,
-        functionName: write.functionName,
-        args: write.args,
-        account,
-        chain: undefined,
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const logs = parseEventLogs({
-        abi: lazySovereignFactoryAbi,
-        logs: receipt.logs,
-        eventName: 'SovereignNFTContractCreated',
-      });
-      const [createdLog] = logs;
-
-      if (!createdLog) {
-        throw new Error('Lazy Sovereign collection transaction succeeded but SovereignNFTContractCreated was not found in logs.');
-      }
-
-      return {
-        txHash,
-        receipt,
-        contract: createdLog.args.contractAddress,
-        factory: factoryAddress,
-        contractType: plan.contractType,
-        nextStep: 'Configure release sale and mint settings for this collection before collector minting.',
-      };
+        return {
+          txHash,
+          receipt,
+          contract: createdLog.args.contractAddress,
+          factory: factoryAddress,
+          contractType: plan.contractType,
+          nextStep: 'Configure release sale and mint settings for this collection before collector minting.',
+        };
+      },
     },
 
     async mintBatch(params): ReturnType<RareClient['collection']['mintBatch']> {
@@ -451,56 +423,6 @@ export function createCollectionNamespace(
       };
     },
   };
-}
-
-async function writeCreateSovereignCollection(
-  opts: {
-    publicClient: PublicClient;
-    walletClient: NonNullable<RareClientConfig['walletClient']>;
-    account: ReturnType<typeof requireWallet>['account'];
-    factoryAddress: Address;
-    plan: ReturnType<typeof planCreateSovereignCollection>;
-  },
-): Promise<Hash> {
-  if (opts.plan.maxTokens === undefined) {
-    const write = buildCreateSovereignCollectionWrite(opts.plan);
-    return opts.walletClient.writeContract({
-      address: opts.factoryAddress,
-      abi: sovereignFactoryAbi,
-      functionName: write.functionName,
-      args: write.args,
-      account: opts.account,
-      chain: undefined,
-    });
-  }
-
-  if (opts.plan.contractTypeReadName === undefined) {
-    const write = buildCreateSovereignCollectionWrite(opts.plan);
-    return opts.walletClient.writeContract({
-      address: opts.factoryAddress,
-      abi: sovereignFactoryAbi,
-      functionName: write.functionName,
-      args: write.args,
-      account: opts.account,
-      chain: undefined,
-    });
-  }
-
-  const contractType = await opts.publicClient.readContract({
-    address: opts.factoryAddress,
-    abi: sovereignFactoryAbi,
-    functionName: opts.plan.contractTypeReadName,
-  });
-
-  const write = buildCreateSovereignCollectionWrite(opts.plan, contractType);
-  return opts.walletClient.writeContract({
-    address: opts.factoryAddress,
-    abi: sovereignFactoryAbi,
-    functionName: write.functionName,
-    args: write.args,
-    account: opts.account,
-    chain: undefined,
-  });
 }
 
 async function writeCollectionBatchMint(

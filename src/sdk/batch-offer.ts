@@ -3,23 +3,20 @@ import {
   parseUnits,
   parseEventLogs,
   type Address,
-  type Hash,
   type PublicClient,
 } from 'viem';
 import { batchOfferAbi } from '../contracts/abis/batch-offer.js';
 import { tokenAbi } from '../contracts/abis/token.js';
 import { ETH_ADDRESS, chainIds, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
 import {
-  approvalAbi,
+  approveNftContractIfNeeded,
   preparePaymentForSpender,
   requireInput,
   requireWallet,
   resolveCurrencyDecimals,
-  resolveAlias,
   stringifyAmountInput,
-  waitForApproval,
 } from './helpers.js';
-import type { RareClient, RareClientConfig, WalletAccount } from './types.js';
+import type { RareClient, RareClientConfig } from './types.js';
 import {
   planBatchOfferAccept,
   planBatchOfferCreate,
@@ -36,21 +33,20 @@ export function createBatchOfferNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
   chain: SupportedChain,
-): RareClient['batch']['offer'] {
+): RareClient['offer']['batch'] {
   return {
-    async create(params): ReturnType<RareClient['batch']['offer']['create']> {
+    async create(params): ReturnType<RareClient['offer']['batch']['create']> {
       const batchOfferCreator = requireContractAddress(chain, 'batchOfferCreator');
       const marketplaceSettingsSource = requireContractAddress(chain, 'auction');
       const { walletClient, account, accountAddress } = requireWallet(config);
       const block = await publicClient.getBlock();
       const resolvedParams = await resolveBatchOfferCreateParams(config, params);
       const currency = resolvedParams.currency ?? ETH_ADDRESS;
-      const price = requireInput(resolveAlias(resolvedParams.price, resolvedParams.amount, 'price', 'amount'), 'price');
+      const price = requireInput(resolvedParams.price, 'price');
       const amount = typeof price === 'bigint'
         ? price
         : parseUnits(stringifyAmountInput(price, 'price'), await resolveCurrencyDecimals(publicClient, chain, currency));
-      const { amount: _deprecatedAmount, ...canonicalParams } = resolvedParams;
-      const plan = planBatchOfferCreate({ ...canonicalParams, price: amount, currency }, block.timestamp);
+      const plan = planBatchOfferCreate({ ...resolvedParams, price: amount, currency }, block.timestamp);
       const payment = await preparePaymentForSpender({
         publicClient,
         walletClient,
@@ -60,6 +56,7 @@ export function createBatchOfferNamespace(
         spenderAddress: batchOfferCreator,
         currency: plan.currency,
         amount: plan.amount,
+        autoApprove: params.autoApprove,
       });
 
       const txHash = await walletClient.writeContract({
@@ -97,7 +94,7 @@ export function createBatchOfferNamespace(
       };
     },
 
-    async revoke(params): ReturnType<RareClient['batch']['offer']['revoke']> {
+    async revoke(params): ReturnType<RareClient['offer']['batch']['revoke']> {
       const batchOfferCreator = requireContractAddress(chain, 'batchOfferCreator');
       const { walletClient, account } = requireWallet(config);
       const plan = planBatchOfferRoot(params);
@@ -133,7 +130,7 @@ export function createBatchOfferNamespace(
       };
     },
 
-    async accept(params): ReturnType<RareClient['batch']['offer']['accept']> {
+    async accept(params): ReturnType<RareClient['offer']['batch']['accept']> {
       const batchOfferCreator = requireContractAddress(chain, 'batchOfferCreator');
       const { walletClient, account, accountAddress } = requireWallet(config);
       const resolvedParams = await resolveBatchOfferAcceptParams(config, chainIds[chain], params);
@@ -149,16 +146,15 @@ export function createBatchOfferNamespace(
         throw new Error(`Connected wallet ${accountAddress} does not own token ${plan.contract} #${plan.tokenId.toString()}.`);
       }
 
-      const approvalTxHash = plan.autoApprove
-        ? await approveNftContractIfNeeded({
+      const approvalTxHash = await approveNftContractIfNeeded({
           publicClient,
           walletClient,
           account,
           accountAddress,
           nftAddress: plan.contract,
           operator: batchOfferCreator,
-        })
-        : undefined;
+          autoApprove: plan.autoApprove,
+        });
 
       const txHash = await walletClient.writeContract({
         address: batchOfferCreator,
@@ -204,7 +200,7 @@ export function createBatchOfferNamespace(
       };
     },
 
-    async getStatus(params): ReturnType<RareClient['batch']['offer']['getStatus']> {
+    async getStatus(params): ReturnType<RareClient['offer']['batch']['getStatus']> {
       const batchOfferCreator = requireContractAddress(chain, 'batchOfferCreator');
       const plan = planBatchOfferRoot(params);
       const [offer, block] = await Promise.all([
@@ -227,8 +223,8 @@ export function createBatchOfferNamespace(
 
 async function resolveBatchOfferCreateParams(
   config: RareClientConfig,
-  params: Parameters<RareClient['batch']['offer']['create']>[0],
-): Promise<Parameters<RareClient['batch']['offer']['create']>[0]> {
+  params: Parameters<RareClient['offer']['batch']['create']>[0],
+): Promise<Parameters<RareClient['offer']['batch']['create']>[0]> {
   if (params.root !== undefined || params.artifact === undefined) {
     return params;
   }
@@ -244,8 +240,8 @@ async function resolveBatchOfferCreateParams(
 async function resolveBatchOfferAcceptParams(
   config: RareClientConfig,
   chainId: number,
-  params: Parameters<RareClient['batch']['offer']['accept']>[0],
-): Promise<Parameters<RareClient['batch']['offer']['accept']>[0]> {
+  params: Parameters<RareClient['offer']['batch']['accept']>[0],
+): Promise<Parameters<RareClient['offer']['batch']['accept']>[0]> {
   if (
     params.proofArtifact !== undefined ||
     (params.root !== undefined && params.proof !== undefined)
@@ -267,36 +263,4 @@ async function resolveBatchOfferAcceptParams(
     root: proof.root,
     proof: proof.proof,
   };
-}
-
-async function approveNftContractIfNeeded(opts: {
-  publicClient: PublicClient;
-  walletClient: NonNullable<RareClientConfig['walletClient']>;
-  account: Address | WalletAccount;
-  accountAddress: Address;
-  nftAddress: Address;
-  operator: Address;
-}): Promise<Hash | undefined> {
-  const isApproved = await opts.publicClient.readContract({
-    address: opts.nftAddress,
-    abi: approvalAbi,
-    functionName: 'isApprovedForAll',
-    args: [opts.accountAddress, opts.operator],
-  });
-
-  if (isApproved) {
-    return undefined;
-  }
-
-  const approvalTxHash = await opts.walletClient.writeContract({
-    address: opts.nftAddress,
-    abi: approvalAbi,
-    functionName: 'setApprovalForAll',
-    args: [opts.operator, true],
-    account: opts.account,
-    chain: undefined,
-  });
-  await opts.publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
-  await waitForApproval(opts.publicClient, opts.nftAddress, opts.accountAddress, opts.operator);
-  return approvalTxHash;
 }

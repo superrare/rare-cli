@@ -3,10 +3,11 @@ import { getActiveChain } from '../config.js';
 import { getConfiguredAccountAddress, getPublicClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
 import type { SupportedChain } from '../contracts/addresses.js';
-import type { NftSearchParams } from '../sdk/api.js';
-import { parseOptionalAddress } from '../sdk/validation.js';
+import type { EventSearchParams, NftSearchParams } from '../sdk/api.js';
+import { parseAddress, parseOptionalAddress } from '../sdk/validation.js';
 import { printError } from '../errors.js';
-import { output, log, printNftRow, printCollectionRow, printPagination } from '../output.js';
+import { output, log, printNftRow, printCollectionRow, printNftEventRow, printPagination } from '../output.js';
+import { collectOption, parseNftEventSort, parseNftEventTypes } from './event-options.js';
 
 type SearchPageOptions = {
   chain?: string;
@@ -16,7 +17,7 @@ type SearchPageOptions = {
   page: string;
 };
 
-type SearchTokensOptions = SearchPageOptions & {
+type SearchNftsOptions = SearchPageOptions & {
   owner?: string;
   mine?: boolean;
   hasAuction?: boolean;
@@ -30,6 +31,18 @@ type SearchTokensOptions = SearchPageOptions & {
 };
 
 type SearchCollectionsOptions = SearchPageOptions;
+
+type SearchEventsOptions = {
+  chain?: string;
+  chainId?: string;
+  collectionId?: string;
+  contract?: string;
+  tokenId?: string;
+  eventType?: string[];
+  sortBy?: string;
+  perPage: string;
+  page: string;
+};
 
 const auctionStates = ['PENDING', 'RUNNING', 'UNSETTLED'] as const;
 const listingTypes = ['SALE_PRICE', 'BATCH_SALE_PRICE'] as const;
@@ -71,9 +84,9 @@ export function searchCommand(): Command {
   const cmd = new Command('search');
   cmd.description('Search NFTs and collections via the RARE Protocol API');
 
-  // --- rare search tokens ---
+  // --- rare search nfts ---
   cmd
-    .command('tokens')
+    .command('nfts')
     .description('Search NFTs')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
@@ -90,7 +103,7 @@ export function searchCommand(): Command {
     .option('--offer-buyer <address>', 'filter by offer buyer address')
     .option('--per-page <n>', 'number of results per page', '24')
     .option('--page <n>', 'page number', '1')
-    .action(async (opts: SearchTokensOptions): Promise<void> => {
+    .action(async (opts: SearchNftsOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const rare = createRareClient({ publicClient: getPublicClient(chain) });
       const auctionState = parseAuctionState(opts.auctionState);
@@ -177,6 +190,59 @@ export function searchCommand(): Command {
           }
           for (const col of result.data) {
             printCollectionRow(col);
+          }
+          printPagination(result.pagination);
+        });
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  // --- rare search events ---
+  cmd
+    .command('events')
+    .description('Search NFT events')
+    .option('--chain <chain>', 'chain to use for contract filters (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID to use for contract filters (1, 11155111, 8453, 84532)')
+    .option('--collection-id <id>', 'filter by collection ID')
+    .option('--contract <address>', 'filter by collection or NFT contract address')
+    .option('--token-id <id>', 'filter by NFT token ID; requires --contract')
+    .option('--event-type <type>', 'event type filter (repeatable)', collectOption)
+    .option('--sort-by <field>', 'sort order (newest, oldest)')
+    .option('--per-page <n>', 'number of results per page', '24')
+    .option('--page <n>', 'page number', '1')
+    .action(async (opts: SearchEventsOptions): Promise<void> => {
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const rare = createRareClient({ publicClient: getPublicClient(chain) });
+      const params: EventSearchParams = {
+        collectionId: opts.collectionId,
+        chainId: opts.collectionId === undefined ? opts.chainId ?? rare.chainId : undefined,
+        contract: opts.contract === undefined ? undefined : parseAddress(opts.contract, '--contract'),
+        tokenId: opts.tokenId,
+        eventType: parseNftEventTypes(opts.eventType),
+        sortBy: parseNftEventSort(opts.sortBy),
+        perPage: parseInt(opts.perPage, 10),
+        page: parseInt(opts.page, 10),
+      };
+
+      const label = opts.collectionId !== undefined
+        ? `collection ${opts.collectionId}`
+        : opts.tokenId !== undefined
+          ? `NFT ${opts.contract ?? '<missing contract>'}/${opts.tokenId}`
+          : `collection contract ${opts.contract ?? '<missing contract>'}`;
+
+      log(`Searching events for ${label}...`);
+
+      try {
+        const result = await rare.search.events(params);
+        output(result, () => {
+          console.log(`\nEvents (${result.pagination.totalCount} total):`);
+          if (result.data.length === 0) {
+            console.log('  No events found.');
+            return;
+          }
+          for (const event of result.data) {
+            printNftEventRow(event);
           }
           printPagination(result.pagination);
         });

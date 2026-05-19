@@ -81,7 +81,7 @@ export function mintCommand(): Command {
         }
 
         log('Waiting for confirmation...');
-        const result = await rare.mint.mintTo({
+        const result = await rare.collection.mint({
           contract: contractAddress,
           tokenUri,
           to,

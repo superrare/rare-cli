@@ -22,8 +22,6 @@ import type {
 import { ETH_ADDRESS } from '../contracts/addresses.js';
 import {
   requireInput,
-  resolveAlias,
-  resolveAliasWithField,
   toInteger,
   toNonNegativeInteger,
   toPositiveInteger,
@@ -290,8 +288,8 @@ export function planReleaseConfigure(
   });
   const startTime = normalizeReleaseStartTime(params.startTime, opts.nowSeconds);
   const maxMints = toInteger(
-    requireInput(resolveAlias(params.amount, params.maxMints, 'amount', 'maxMints'), 'amount'),
-    'amount',
+    requireInput(params.maxMints, 'maxMints'),
+    'maxMints',
   );
   if (maxMints < 1n || maxMints > 100n) {
     throw new Error('maxMints must be an integer between 1 and 100.');
@@ -317,15 +315,14 @@ export function planReleaseAllowlistConfig(params: {
   contract: Address;
   root?: Hex;
   artifact?: ReleaseAllowlistArtifact;
-  endTime?: TimestampInput;
-  endTimestamp?: TimestampInput;
+  endTime: TimestampInput;
 }): ReleaseAllowlistConfigPlan {
   const root = params.root ?? params.artifact?.root;
   if (!root) {
-    throw new Error('allowlist root is required. Pass a root or allowlist artifact.');
+    throw new Error('Pass an allowlist artifact, or pass root as an override.');
   }
 
-  const endTime = requireInput(resolveAlias(params.endTime, params.endTimestamp, 'endTime', 'endTimestamp'), 'endTime');
+  const endTime = requireInput(params.endTime, 'endTime');
   return {
     contract: params.contract,
     root: normalizeBytes32(root, 'allowlist root'),
@@ -345,23 +342,19 @@ export function planReleaseClearAllowlistConfig(params: {
 
 export function planReleaseLimitConfig(params: {
   contract: Address;
-  amount?: IntegerInput;
-  limit?: IntegerInput;
+  limit: IntegerInput;
 }): ReleaseLimitConfigPlan {
-  const resolvedAmount = resolveAliasWithField(params.amount, params.limit, 'amount', 'limit');
-  const amount = requireInput(resolvedAmount.value, resolvedAmount.field);
+  const limit = requireInput(params.limit, 'limit');
   return {
     contract: params.contract,
-    limit: toNonNegativeInteger(amount, resolvedAmount.field),
+    limit: toNonNegativeInteger(limit, 'limit'),
   };
 }
 
 export function planReleaseDirectSaleMint(params: ReleaseMintDirectSaleParams): ReleaseDirectSaleMintPlan {
-  const resolvedAmount = resolveAliasWithField(params.amount, params.quantity, 'amount', 'quantity');
-  const quantityField = resolvedAmount.value === undefined ? 'amount' : resolvedAmount.field;
-  const quantity = toPositiveInteger(resolvedAmount.value ?? 1, quantityField);
+  const quantity = toPositiveInteger(params.quantity ?? 1, 'quantity');
   if (quantity > MAX_DIRECT_SALE_MINT_QUANTITY) {
-    throw new Error(`${quantityField} must be less than or equal to 255.`);
+    throw new Error('quantity must be less than or equal to 255.');
   }
 
   return {

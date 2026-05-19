@@ -1,20 +1,23 @@
 import { getContractAddresses, chainIds } from '../contracts/addresses.js';
+import type { Address } from 'viem';
 import { createRareApi } from './api.js';
 import type { RareClientConfig, RareClient } from './types.js';
 import { resolveChainFromPublicClient } from './helpers.js';
 import { createDeployNamespace } from './deploy.js';
-import { createMintNamespace } from './mint.js';
+import { createCollectionMint } from './mint.js';
 import { createAuctionNamespace } from './auction.js';
 import { createOfferNamespace } from './offer.js';
 import { createListingNamespace } from './listing.js';
 import { createBatchListingNamespace } from './batch-listing.js';
+import { createBatchAuctionNamespace } from './batch-auction.js';
+import { createBatchOfferNamespace } from './batch-offer.js';
 import { createTokenNamespace } from './token.js';
 import { createLiquidNamespace } from './liquid.js';
 import { createSwapNamespace } from './swap.js';
 import { createReleaseNamespace } from './release.js';
 import { createCollectionNamespace } from './collection.js';
-import { createBatchNamespace } from './batch.js';
 import { createUtilsNamespace } from './utils.js';
+import { buildNftUniversalTokenId } from './nft-core.js';
 
 export type { RareClientConfig, RareClient } from './types.js';
 
@@ -28,9 +31,55 @@ export function createRareClient(config: RareClientConfig): RareClient {
     fetch: config.apiFetch,
   });
   const release = createReleaseNamespace(publicClient, config, addresses);
+  const collectionDeploy = createDeployNamespace(publicClient, config, addresses);
+  const collectionMint = createCollectionMint(publicClient, config);
+  const batchListingAddresses = {
+    get batchListing(): Address {
+      if (!addresses.batchListing) {
+        throw new Error(
+          `Batch listing marketplace is not deployed on "${chain}". Available on: mainnet, sepolia.`,
+        );
+      }
+      return addresses.batchListing;
+    },
+    get marketplaceSettings(): Address {
+      if (!addresses.marketplaceSettings) {
+        throw new Error(
+          `Marketplace settings is not configured for batch listings on "${chain}". Available on: mainnet, sepolia.`,
+        );
+      }
+      return addresses.marketplaceSettings;
+    },
+    get erc20ApprovalManager(): Address {
+      if (!addresses.erc20ApprovalManager) {
+        throw new Error(
+          `ERC20 approval manager is not deployed on "${chain}". Available on: mainnet, sepolia.`,
+        );
+      }
+      return addresses.erc20ApprovalManager;
+    },
+    get erc721ApprovalManager(): Address {
+      if (!addresses.erc721ApprovalManager) {
+        throw new Error(
+          `ERC721 approval manager is not deployed on "${chain}". Available on: mainnet, sepolia.`,
+        );
+      }
+      return addresses.erc721ApprovalManager;
+    },
+    chainId,
+  };
+  const auction = {
+    ...createAuctionNamespace(publicClient, config, chain, addresses),
+    batch: createBatchAuctionNamespace(publicClient, config, chain),
+  };
+  const offer = {
+    ...createOfferNamespace(publicClient, config, chain, addresses),
+    batch: createBatchOfferNamespace(publicClient, config, chain),
+  };
   const listing = {
     ...createListingNamespace(publicClient, config, chain, addresses),
     release,
+    batch: createBatchListingNamespace(publicClient, config, batchListingAddresses),
   };
 
   return {
@@ -53,49 +102,11 @@ export function createRareClient(config: RareClientConfig): RareClient {
       swapRouter: addresses.swapRouter,
       v4Quoter: addresses.v4Quoter,
     },
-    deploy: createDeployNamespace(publicClient, config, addresses),
-    liquid: createLiquidNamespace(config, chain, addresses),
-    mint: createMintNamespace(publicClient, config),
+    liquidEdition: createLiquidNamespace(config, chain, addresses),
     swap: createSwapNamespace(config, chain, chainId, addresses),
-    auction: createAuctionNamespace(publicClient, config, chain, addresses),
-    offer: createOfferNamespace(publicClient, config, chain, addresses),
+    auction,
+    offer,
     listing,
-    batchListing: createBatchListingNamespace(publicClient, config, {
-      get batchListing() {
-        if (!addresses.batchListing) {
-          throw new Error(
-            `Batch listing marketplace is not deployed on "${chain}". Available on: mainnet, sepolia.`,
-          );
-        }
-        return addresses.batchListing;
-      },
-      get marketplaceSettings() {
-        if (!addresses.marketplaceSettings) {
-          throw new Error(
-            `Marketplace settings is not configured for batch listings on "${chain}". Available on: mainnet, sepolia.`,
-          );
-        }
-        return addresses.marketplaceSettings;
-      },
-      get erc20ApprovalManager() {
-        if (!addresses.erc20ApprovalManager) {
-          throw new Error(
-            `ERC20 approval manager is not deployed on "${chain}". Available on: mainnet, sepolia.`,
-          );
-        }
-        return addresses.erc20ApprovalManager;
-      },
-      get erc721ApprovalManager() {
-        if (!addresses.erc721ApprovalManager) {
-          throw new Error(
-            `ERC721 approval manager is not deployed on "${chain}". Available on: mainnet, sepolia.`,
-          );
-        }
-        return addresses.erc721ApprovalManager;
-      },
-      chainId,
-    }),
-    batch: createBatchNamespace(publicClient, config, chain),
     utils: createUtilsNamespace(),
     token: createTokenNamespace(publicClient, chain),
     search: {
@@ -108,23 +119,30 @@ export function createRareClient(config: RareClientConfig): RareClient {
         const requestParams = params.chainId ? params : { ...params, chainId };
         return api.searchCollections(requestParams);
       },
+      async events(params): ReturnType<RareClient['search']['events']> {
+        const requestParams = params.collectionId !== undefined || params.chainId !== undefined || params.chain !== undefined
+          ? params
+          : { ...params, chainId };
+        return api.searchEvents(requestParams);
+      },
     },
     nft: {
-      async get(universalTokenId): ReturnType<RareClient['nft']['get']> {
-        return api.getNft(universalTokenId);
-      },
-      async events(universalTokenId, opts): ReturnType<RareClient['nft']['events']> {
-        return api.getNftEvents(universalTokenId, opts);
+      async get(params): ReturnType<RareClient['nft']['get']> {
+        return api.getNft(buildNftUniversalTokenId(params));
       },
     },
-    collection: createCollectionNamespace(publicClient, config, chain, {
-      async get(id) {
-        return api.getCollection(id);
+    collection: createCollectionNamespace(
+      publicClient,
+      config,
+      chain,
+      {
+        async get(id) {
+          return api.getCollection(id);
+        },
       },
-      async events(id, opts): ReturnType<RareClient['collection']['events']> {
-        return api.getCollectionEvents(id, opts);
-      },
-    }),
+      collectionDeploy,
+      collectionMint,
+    ),
     user: {
       async get(address): ReturnType<RareClient['user']['get']> {
         return api.getUser(address);

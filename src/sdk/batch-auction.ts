@@ -10,14 +10,12 @@ import {
 import { batchAuctionHouseAbi } from '../contracts/abis/batch-auctionhouse.js';
 import { ETH_ADDRESS, chainIds, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
 import {
-  approvalAbi,
+  approveNftContractIfNeeded,
   preparePaymentAmountForSpender,
   requireInput,
   requireWallet,
   resolveCurrencyDecimals,
-  resolveAlias,
   stringifyAmountInput,
-  waitForApproval,
 } from './helpers.js';
 import type { RareClient, RareClientConfig, WalletAccount } from './types.js';
 import {
@@ -41,19 +39,18 @@ export function createBatchAuctionNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
   chain: SupportedChain,
-): RareClient['batch']['auction'] {
+): RareClient['auction']['batch'] {
   return {
-    async create(params): ReturnType<RareClient['batch']['auction']['create']> {
+    async create(params): ReturnType<RareClient['auction']['batch']['create']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account, accountAddress } = requireWallet(config);
       const resolvedParams = await resolveBatchAuctionCreateParams(config, params);
       const currency = resolvedParams.currency ?? ETH_ADDRESS;
-      const price = requireInput(resolveAlias(resolvedParams.price, resolvedParams.reserveAmount, 'price', 'reserveAmount'), 'price');
+      const price = requireInput(resolvedParams.price, 'price');
       const reserveAmount = typeof price === 'bigint'
         ? price
         : parseUnits(stringifyAmountInput(price, 'price'), await resolveCurrencyDecimals(publicClient, chain, currency));
-      const { reserveAmount: _deprecatedReserveAmount, ...canonicalParams } = resolvedParams;
-      const plan = planBatchAuctionCreate({ ...canonicalParams, price: reserveAmount, currency }, accountAddress);
+      const plan = planBatchAuctionCreate({ ...resolvedParams, price: reserveAmount, currency }, accountAddress);
       const erc721ApprovalManager = plan.approvalContracts.length === 0
         ? undefined
         : requireContractAddress(chain, 'erc721ApprovalManager');
@@ -64,6 +61,7 @@ export function createBatchAuctionNamespace(
         walletClient,
         operator: erc721ApprovalManager,
         nftAddresses: plan.approvalContracts,
+        autoApprove: params.autoApprove,
       });
 
       const txHash = await walletClient.writeContract({
@@ -107,7 +105,7 @@ export function createBatchAuctionNamespace(
       };
     },
 
-    async cancel(params): ReturnType<RareClient['batch']['auction']['cancel']> {
+    async cancel(params): ReturnType<RareClient['auction']['batch']['cancel']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account } = requireWallet(config);
       const plan = planBatchAuctionRoot(params);
@@ -141,17 +139,16 @@ export function createBatchAuctionNamespace(
       };
     },
 
-    async bid(params): ReturnType<RareClient['batch']['auction']['bid']> {
+    async bid(params): ReturnType<RareClient['auction']['batch']['bid']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account, accountAddress } = requireWallet(config);
       const resolvedParams = await resolveBatchAuctionBidParams(config, chainIds[chain], params);
       const currency = resolvedParams.currency ?? ETH_ADDRESS;
-      const price = requireInput(resolveAlias(resolvedParams.price, resolvedParams.amount, 'price', 'amount'), 'price');
+      const price = requireInput(resolvedParams.price, 'price');
       const amount = typeof price === 'bigint'
         ? price
         : parseUnits(stringifyAmountInput(price, 'price'), await resolveCurrencyDecimals(publicClient, chain, currency));
-      const { amount: _deprecatedAmount, ...canonicalParams } = resolvedParams;
-      const plan = planBatchAuctionBid({ ...canonicalParams, currency, price: amount });
+      const plan = planBatchAuctionBid({ ...resolvedParams, currency, price: amount });
       const erc20ApprovalManager = isAddressEqual(plan.currency, ETH_ADDRESS)
         ? batchAuctionHouse
         : requireContractAddress(chain, 'erc20ApprovalManager');
@@ -212,7 +209,7 @@ export function createBatchAuctionNamespace(
       };
     },
 
-    async settle(params): ReturnType<RareClient['batch']['auction']['settle']> {
+    async settle(params): ReturnType<RareClient['auction']['batch']['settle']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account } = requireWallet(config);
       const plan = planBatchAuctionStatus(params);
@@ -251,7 +248,7 @@ export function createBatchAuctionNamespace(
       };
     },
 
-    async getStatus(params): ReturnType<RareClient['batch']['auction']['getStatus']> {
+    async getStatus(params): ReturnType<RareClient['auction']['batch']['getStatus']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const resolvedParams = await resolveBatchAuctionStatusParams(config, chainIds[chain], params);
       const plan = planBatchAuctionStatus(resolvedParams);
@@ -301,8 +298,8 @@ export function createBatchAuctionNamespace(
 
 async function resolveBatchAuctionCreateParams(
   config: RareClientConfig,
-  params: Parameters<RareClient['batch']['auction']['create']>[0],
-): Promise<Parameters<RareClient['batch']['auction']['create']>[0]> {
+  params: Parameters<RareClient['auction']['batch']['create']>[0],
+): Promise<Parameters<RareClient['auction']['batch']['create']>[0]> {
   if (params.root !== undefined || params.artifact === undefined) {
     return params;
   }
@@ -321,8 +318,8 @@ async function resolveBatchAuctionCreateParams(
 async function resolveBatchAuctionBidParams(
   config: RareClientConfig,
   chainId: number,
-  params: Parameters<RareClient['batch']['auction']['bid']>[0],
-): Promise<Parameters<RareClient['batch']['auction']['bid']>[0]> {
+  params: Parameters<RareClient['auction']['batch']['bid']>[0],
+): Promise<Parameters<RareClient['auction']['batch']['bid']>[0]> {
   if (
     params.proofArtifact !== undefined ||
     (params.root !== undefined && params.proof !== undefined)
@@ -349,8 +346,8 @@ async function resolveBatchAuctionBidParams(
 async function resolveBatchAuctionStatusParams(
   config: RareClientConfig,
   chainId: number,
-  params: Parameters<RareClient['batch']['auction']['getStatus']>[0],
-): Promise<Parameters<RareClient['batch']['auction']['getStatus']>[0]> {
+  params: Parameters<RareClient['auction']['batch']['getStatus']>[0],
+): Promise<Parameters<RareClient['auction']['batch']['getStatus']>[0]> {
   if (params.root !== undefined || params.creator === undefined) {
     return params;
   }
@@ -378,6 +375,7 @@ async function approveNftContracts(opts: {
   accountAddress: Address;
   operator: Address | undefined;
   nftAddresses: readonly Address[];
+  autoApprove?: boolean;
 }): Promise<Hash[]> {
   if (opts.walletClient === undefined) {
     throw new Error('walletClient is required for write operations.');
@@ -399,6 +397,7 @@ async function approveNftContracts(opts: {
       accountAddress: opts.accountAddress,
       operator,
       nftAddress,
+      autoApprove: opts.autoApprove,
     });
     return txHash === undefined ? hashes : [...hashes, txHash];
   }, Promise.resolve([]));
@@ -411,29 +410,9 @@ async function approveNftContract(opts: {
   accountAddress: Address;
   operator: Address;
   nftAddress: Address;
+  autoApprove?: boolean;
 }): Promise<Hash | undefined> {
-  const isApproved = await opts.publicClient.readContract({
-    address: opts.nftAddress,
-    abi: approvalAbi,
-    functionName: 'isApprovedForAll',
-    args: [opts.accountAddress, opts.operator],
-  });
-
-  if (isApproved) {
-    return undefined;
-  }
-
-  const txHash = await opts.walletClient.writeContract({
-    address: opts.nftAddress,
-    abi: approvalAbi,
-    functionName: 'setApprovalForAll',
-    args: [opts.operator, true],
-    account: opts.account,
-    chain: undefined,
-  });
-  await opts.publicClient.waitForTransactionReceipt({ hash: txHash });
-  await waitForApproval(opts.publicClient, opts.nftAddress, opts.accountAddress, opts.operator);
-  return txHash;
+  return approveNftContractIfNeeded(opts);
 }
 
 async function resolveEventContext(opts: {

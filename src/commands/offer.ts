@@ -9,6 +9,7 @@ import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
 import { createOfferListCommand } from './account-market-list.js';
 import { resolveCurrencyDecimals } from '../sdk/helpers.js';
+import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 import { offerBatchCommand } from './batch.js';
 
@@ -16,7 +17,6 @@ type OfferCreateOptions = {
   contract?: string;
   tokenId?: string;
   price?: string;
-  amount?: string;
   currency?: string;
   yes?: boolean;
   chain?: string;
@@ -35,7 +35,6 @@ type OfferAcceptOptions = {
   contract?: string;
   tokenId: string;
   price?: string;
-  amount?: string;
   currency?: string;
   split?: SplitAccumulator;
   chain?: string;
@@ -63,7 +62,6 @@ export function offerCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
     .option('--price <amount>', 'offer price in ETH or token units')
-    .option('--amount <amount>', 'alias for --price')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
@@ -71,7 +69,7 @@ export function offerCommand(): Command {
     .action(async (opts: OfferCreateOptions) => {
       try {
         requireTokenScopeOptions(opts, 'create');
-        const price = opts.price ?? opts.amount;
+        const price = opts.price;
         if (!hasOption(price)) {
           throw new Error('rare offer create requires --price.');
         }
@@ -89,16 +87,38 @@ export function offerCommand(): Command {
         log(`  Token ID: ${opts.tokenId}`);
         log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
 
-        const result = await rare.offer.create({
+        const offerParams = {
           contract,
           tokenId: opts.tokenId,
           price,
           currency,
+        };
+        const result = await runWithPaymentApprovalConsent({
+          commandName: 'rare offer create',
+          approvalMessage: 'ERC20 approval is required before creating this offer.',
+          runWithoutApproval: () => rare.offer.create({
+            ...offerParams,
+            autoApprove: opts.yes === true,
+          }),
+          runWithApproval: () => rare.offer.create({
+            ...offerParams,
+            autoApprove: true,
+          }),
         });
+        if (result === undefined) {
+          return;
+        }
 
         output(
-          { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            approvalTxHash: result.approvalTxHash ?? null,
+          },
           () => {
+            if (result.approvalTxHash) {
+              console.log(`Approval tx sent: ${result.approvalTxHash}`);
+            }
             console.log(`\nTransaction sent: ${result.txHash}`);
             console.log(`Offer created! Block: ${result.receipt.blockNumber}`);
           },
@@ -116,7 +136,6 @@ export function offerCommand(): Command {
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
-    .option('--yes', 'yes to all prompts, including transaction submission')
     .action(async (opts: OfferCancelOptions) => {
       try {
         requireTokenScopeOptions(opts, 'cancel');
@@ -153,7 +172,6 @@ export function offerCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID to sell')
     .option('--price <amount>', 'offer price to accept in ETH or token units')
-    .option('--amount <amount>', 'alias for --price')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option(
       '--split <addr=ratio>',
@@ -172,7 +190,7 @@ export function offerCommand(): Command {
         const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
         const isEth = currency === ETH_ADDRESS;
         const splits = finalizeSplits(opts.split);
-        const price = opts.price ?? opts.amount;
+        const price = opts.price;
         if (!hasOption(price)) {
           throw new Error('rare offer accept requires --price.');
         }
@@ -192,18 +210,40 @@ export function offerCommand(): Command {
           });
         }
 
-        const result = await rare.offer.accept({
+        const acceptParams = {
           contract,
           tokenId: opts.tokenId,
           price,
           currency,
           splitAddresses: splits?.addresses,
           splitRatios: splits?.ratios,
+        };
+        const result = await runWithNftApprovalConsent({
+          commandName: 'rare offer accept',
+          approvalMessage: 'NFT approval is required before accepting this offer.',
+          runWithoutApproval: () => rare.offer.accept({
+            ...acceptParams,
+            autoApprove: opts.yes === true,
+          }),
+          runWithApproval: () => rare.offer.accept({
+            ...acceptParams,
+            autoApprove: true,
+          }),
         });
+        if (result === undefined) {
+          return;
+        }
 
         output(
-          { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            approvalTxHash: result.approvalTxHash ?? null,
+          },
           () => {
+            if (result.approvalTxHash) {
+              console.log(`Approval tx sent: ${result.approvalTxHash}`);
+            }
             console.log(`\nTransaction sent: ${result.txHash}`);
             console.log(`Offer accepted! Block: ${result.receipt.blockNumber}`);
           },

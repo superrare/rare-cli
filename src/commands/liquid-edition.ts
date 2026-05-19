@@ -21,14 +21,15 @@ type SetRenderContractOptions = ContractOptions & {
   renderContract: string;
 };
 
-type LiquidEditionTelemetry = Awaited<ReturnType<RareClient['liquid']['getTelemetry']>>;
+type LiquidEditionTelemetry = Awaited<ReturnType<RareClient['liquidEdition']['getTelemetry']>>;
 
 export function liquidEditionCommand(): Command {
   const cmd = new Command('liquid-edition');
   cmd.description('Inspect and manage Liquid Edition tokens');
 
-  const deploy = deployLiquidEditionCommand();
-  deploy.name('deploy');
+  const deploy = new Command('deploy');
+  deploy.description('Deploy Liquid Edition contracts');
+  deploy.addCommand(deployLiquidEditionCommand());
   cmd.addCommand(deploy);
   cmd.addCommand(liquidEditionStatusCommand());
   cmd.addCommand(liquidEditionTokenUriCommand());
@@ -50,7 +51,7 @@ function liquidEditionStatusCommand(): Command {
       const contract = parseAddress(opts.contract, '--contract');
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient });
-      const telemetry = await rare.liquid.getTelemetry({ contract });
+      const telemetry = await rare.liquidEdition.getTelemetry({ contract });
 
       output(telemetry, () => {
         printLiquidEditionTelemetry(telemetry);
@@ -73,7 +74,7 @@ function liquidEditionTokenUriCommand(): Command {
       const contract = parseAddress(opts.contract, '--contract');
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient });
-      const tokenUri = await rare.liquid.getTokenUri({ contract });
+      const tokenUri = await rare.liquidEdition.getTokenUri({ contract });
 
       output(
         { contract, tokenUri },
@@ -93,7 +94,6 @@ function liquidEditionSetRenderContractCommand(): Command {
   cmd
     .requiredOption('--contract <address>', 'Liquid Edition token contract address')
     .requiredOption('--render-contract <address>', 'render contract address')
-    .option('--yes', 'yes to all prompts, including transaction submission')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: SetRenderContractOptions): Promise<void> => {
@@ -108,7 +108,7 @@ function liquidEditionSetRenderContractCommand(): Command {
       log(`  Token:           ${contract}`);
       log(`  Render contract: ${renderContract}`);
 
-      const result = await rare.liquid.setRenderContract({ contract, renderContract });
+      const result = await rare.liquidEdition.setRenderContract({ contract, renderContract });
 
       output(
         {

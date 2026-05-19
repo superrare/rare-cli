@@ -3,19 +3,18 @@ import { tokenAbi } from '../contracts/abis/token.js';
 import type { RareClientConfig, RareClient } from './types.js';
 import { requireWallet } from './helpers.js';
 
-export function createMintNamespace(
+export function createCollectionMint(
   publicClient: PublicClient,
   config: RareClientConfig,
-): RareClient['mint'] {
-  return {
-    async mintTo(params): ReturnType<RareClient['mint']['mintTo']> {
-      const { walletClient, account, accountAddress } = requireWallet(config);
-      const useMintTo = params.to !== undefined || params.royaltyReceiver !== undefined;
+): RareClient['collection']['mint'] {
+  return async function mint(params): ReturnType<RareClient['collection']['mint']> {
+    const { walletClient, account, accountAddress } = requireWallet(config);
+    const useMintTo = params.to !== undefined || params.royaltyReceiver !== undefined;
 
-      const receiver = params.to ?? accountAddress;
-      const royaltyReceiver = params.royaltyReceiver ?? accountAddress;
-      const txHash = useMintTo
-        ? await walletClient.writeContract({
+    const receiver = params.to ?? accountAddress;
+    const royaltyReceiver = params.royaltyReceiver ?? accountAddress;
+    const txHash = useMintTo
+      ? await walletClient.writeContract({
           address: params.contract,
           abi: tokenAbi,
           functionName: 'mintTo',
@@ -23,7 +22,7 @@ export function createMintNamespace(
           account,
           chain: undefined,
         })
-        : await walletClient.writeContract({
+      : await walletClient.writeContract({
           address: params.contract,
           abi: tokenAbi,
           functionName: 'addNewToken',
@@ -32,23 +31,22 @@ export function createMintNamespace(
           chain: undefined,
         });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const logs = parseEventLogs({
-        abi: tokenAbi,
-        logs: receipt.logs,
-        eventName: 'Transfer',
-      });
+    const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+    const logs = parseEventLogs({
+      abi: tokenAbi,
+      logs: receipt.logs,
+      eventName: 'Transfer',
+    });
 
-      const log = logs[0];
-      if (log === undefined) {
-        throw new Error('Mint transaction succeeded but Transfer event was not found in logs.');
-      }
+    const log = logs[0];
+    if (log === undefined) {
+      throw new Error('Mint transaction succeeded but Transfer event was not found in logs.');
+    }
 
-      return {
-        txHash,
-        receipt,
-        tokenId: log.args.tokenId,
-      };
-    },
+    return {
+      txHash,
+      receipt,
+      tokenId: log.args.tokenId,
+    };
   };
 }

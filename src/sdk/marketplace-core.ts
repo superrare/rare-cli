@@ -20,10 +20,8 @@ import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '../contracts/addresses.js';
 import {
   toNonNegativeInteger,
   toNonNegativeWei,
-  toPositiveInteger,
   toPositiveWei,
   requireInput,
-  resolveAliasWithField,
   toUnixTimestamp,
 } from './helpers.js';
 import { parseAddress } from './validation.js';
@@ -112,12 +110,11 @@ export function planListingCancel(params: ListingCancelParams): { tokenId: bigin
 }
 
 export function planListingBuy(params: ListingBuyParams): ListingBuyPlan {
-  const resolvedPrice = resolveAliasWithField(params.price, params.amount, 'price', 'amount');
-  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
+  const price = requireInput(params.price, 'price');
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
-    amount: toPositiveWei(price, resolvedPrice.field),
+    amount: toPositiveWei(price, 'price'),
   };
 }
 
@@ -170,12 +167,11 @@ export function shapeListingStatus(
 }
 
 export function planOfferCreate(params: OfferCreateParams): OfferCreatePlan {
-  const resolvedPrice = resolveAliasWithField(params.price, params.amount, 'price', 'amount');
-  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
+  const price = requireInput(params.price, 'price');
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
-    amount: toPositiveWei(price, resolvedPrice.field),
+    amount: toPositiveWei(price, 'price'),
   };
 }
 
@@ -188,13 +184,12 @@ export function planOfferCancel(params: OfferCancelParams): { tokenId: bigint; c
 
 export function planOfferAccept(params: OfferAcceptParams, accountAddress: Address): OfferAcceptPlan {
   const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
-  const resolvedPrice = resolveAliasWithField(params.price, params.amount, 'price', 'amount');
-  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
+  const price = requireInput(params.price, 'price');
 
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
-    amount: toPositiveWei(price, resolvedPrice.field),
+    amount: toPositiveWei(price, 'price'),
     splitAddresses: splits.addresses,
     splitRatios: splits.ratios,
   };
@@ -311,8 +306,7 @@ export function planProvidedSplits(
 export function planAuctionCreate(params: AuctionCreateParams, accountAddress: Address): AuctionCreatePlan {
   const auctionType = normalizeAuctionType(params);
   const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
-  const resolvedPrice = resolveAliasWithField(params.price, params.startingPrice, 'price', 'startingPrice');
-  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
+  const price = requireInput(params.price, 'price');
   const startTime = auctionType === 'scheduled' ? toUnixTimestamp(params.startTime ?? 0, 'startTime') : 0n;
   const duration = resolveAuctionDuration(params, startTime);
 
@@ -321,8 +315,8 @@ export function planAuctionCreate(params: AuctionCreateParams, accountAddress: A
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
     startingPrice: auctionType === 'scheduled'
-      ? toNonNegativeWei(price, resolvedPrice.field)
-      : toPositiveWei(price, resolvedPrice.field),
+      ? toNonNegativeWei(price, 'price')
+      : toPositiveWei(price, 'price'),
     duration,
     auctionType,
     startTime,
@@ -332,26 +326,21 @@ export function planAuctionCreate(params: AuctionCreateParams, accountAddress: A
 }
 
 export function planAuctionBid(params: AuctionBidParams): AuctionBidPlan {
-  const resolvedPrice = resolveAliasWithField(params.price, params.amount, 'price', 'amount');
-  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
+  const price = requireInput(params.price, 'price');
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     currency: params.currency ?? ETH_ADDRESS,
-    amount: toPositiveWei(price, resolvedPrice.field),
+    amount: toPositiveWei(price, 'price'),
   };
 }
 
 function resolveAuctionDuration(params: AuctionCreateParams, startTime: bigint): bigint {
-  if (params.endTime !== undefined) {
-    const endTime = toUnixTimestamp(params.endTime, 'endTime');
-    const beginsAt = startTime > 0n ? startTime : BigInt(Math.floor(Date.now() / 1000));
-    if (endTime <= beginsAt) {
-      throw new Error('endTime must be after the auction start time.');
-    }
-    return endTime - beginsAt;
+  const endTime = toUnixTimestamp(requireInput(params.endTime, 'endTime'), 'endTime');
+  const beginsAt = startTime > 0n ? startTime : BigInt(Math.floor(Date.now() / 1000));
+  if (endTime <= beginsAt) {
+    throw new Error('endTime must be after the auction start time.');
   }
-
-  return toPositiveInteger(requireInput(params.duration, 'endTime'), 'duration');
+  return endTime - beginsAt;
 }
 
 export function planAuctionTokenAction(params: AuctionSettleParams | AuctionCancelParams): { tokenId: bigint } {

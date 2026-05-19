@@ -1,5 +1,6 @@
 import { createApiClient, type ApiClient } from '../data-access/index.js';
 import type { components, paths } from '../data-access/schema.js';
+import { resolveEventSearchTarget, type EventSearchTargetParams } from './event-search-core.js';
 import {
   buildCollectionSearchQuery,
   buildGeneratedMediaEntry,
@@ -28,6 +29,7 @@ export type RareApi = {
   importErc721: (opts: ImportErc721RequestParams) => Promise<void>;
   searchNfts: (params?: NftSearchParams) => Promise<SearchPageResponse<Nft>>;
   searchCollections: (params?: CollectionSearchParams) => Promise<SearchPageResponse<Collection>>;
+  searchEvents: (params: EventSearchParams) => Promise<SearchPageResponse<NftEvent>>;
   getNft: (universalTokenId: string) => Promise<Nft>;
   getNftEvents: (universalTokenId: string, opts?: NftEventOptions) => Promise<SearchPageResponse<NftEvent>>;
   getCollection: (id: string) => Promise<Collection>;
@@ -59,9 +61,11 @@ export type SearchPageResponse<T> = {
 
 type NftEventQuery = NonNullable<paths['/v1/nfts/{universalTokenId}/events']['get']['parameters']['query']>;
 type CollectionEventQuery = NonNullable<paths['/v1/collections/{id}/events']['get']['parameters']['query']>;
-type EventType = NonNullable<NftEventQuery['eventType']>;
-export type NftEventOptions = { page?: number; perPage?: number; eventType?: EventType; sortBy?: NftEventQuery['sortBy'] };
-export type CollectionEventOptions = { page?: number; perPage?: number; eventType?: CollectionEventQuery['eventType']; sortBy?: CollectionEventQuery['sortBy'] };
+type NftEventType = NonNullable<NftEventQuery['eventType']>[number];
+type CollectionEventType = NonNullable<CollectionEventQuery['eventType']>[number];
+export type NftEventOptions = { page?: number; perPage?: number; eventType?: NftEventType | NftEventType[]; sortBy?: NftEventQuery['sortBy'] };
+export type CollectionEventOptions = { page?: number; perPage?: number; eventType?: CollectionEventType | CollectionEventType[]; sortBy?: CollectionEventQuery['sortBy'] };
+export type EventSearchParams = EventSearchTargetParams & NftEventOptions;
 
 // --- Multipart upload (uses presigned URLs directly, not via openapi-fetch) ---
 
@@ -106,6 +110,7 @@ export function createRareApi(options: RareApiOptions = {}): RareApi {
     importErc721: async (opts) => importErc721WithClient(client, opts),
     searchNfts: async (params = {}) => searchNftsWithClient(client, params),
     searchCollections: async (params = {}) => searchCollectionsWithClient(client, params),
+    searchEvents: async (params) => searchEventsWithClient(client, params),
     getNft: async (universalTokenId) => getNftWithClient(client, universalTokenId),
     getNftEvents: async (universalTokenId, opts) => getNftEventsWithClient(client, universalTokenId, opts),
     getCollection: async (id) => getCollectionWithClient(client, id),
@@ -198,6 +203,10 @@ export async function searchCollections(params: CollectionSearchParams = {}): Pr
   return createDefaultRareApi().searchCollections(params);
 }
 
+export async function searchEvents(params: EventSearchParams): Promise<SearchPageResponse<NftEvent>> {
+  return createDefaultRareApi().searchEvents(params);
+}
+
 async function searchCollectionsWithClient(
   client: ApiClient,
   params: CollectionSearchParams = {},
@@ -210,6 +219,25 @@ async function searchCollectionsWithClient(
   if (!data) throw new Error('Failed to search collections');
 
   return data;
+}
+
+async function searchEventsWithClient(
+  client: ApiClient,
+  params: EventSearchParams,
+): Promise<SearchPageResponse<NftEvent>> {
+  const target = resolveEventSearchTarget(params);
+  const opts: NftEventOptions = {
+    page: params.page,
+    perPage: params.perPage,
+    eventType: params.eventType,
+    sortBy: params.sortBy,
+  };
+
+  if (target.kind === 'nft') {
+    return getNftEventsWithClient(client, target.universalTokenId, opts);
+  }
+
+  return getCollectionEventsWithClient(client, target.collectionId, opts);
 }
 
 export async function getNft(universalTokenId: string): Promise<Nft> {
@@ -243,7 +271,7 @@ async function getNftEventsWithClient(
       query: {
         page: opts?.page,
         perPage: opts?.perPage,
-        eventType: opts?.eventType,
+        eventType: normalizeNftEventType(opts?.eventType),
         sortBy: opts?.sortBy,
       },
     },
@@ -284,7 +312,7 @@ async function getCollectionEventsWithClient(
       query: {
         page: opts?.page,
         perPage: opts?.perPage,
-        eventType: opts?.eventType,
+        eventType: normalizeCollectionEventType(opts?.eventType),
         sortBy: opts?.sortBy,
       },
     },
@@ -292,6 +320,24 @@ async function getCollectionEventsWithClient(
   if (!data) throw new Error(`Failed to get events for collection: ${id}`);
 
   return data;
+}
+
+function normalizeNftEventType(
+  eventType: NftEventOptions['eventType'] | undefined,
+): NftEventQuery['eventType'] | undefined {
+  if (eventType === undefined) {
+    return undefined;
+  }
+  return Array.isArray(eventType) ? eventType : [eventType];
+}
+
+function normalizeCollectionEventType(
+  eventType: CollectionEventOptions['eventType'] | undefined,
+): CollectionEventQuery['eventType'] | undefined {
+  if (eventType === undefined) {
+    return undefined;
+  }
+  return Array.isArray(eventType) ? eventType : [eventType];
 }
 
 export async function getUser(address: string): Promise<UserProfile> {

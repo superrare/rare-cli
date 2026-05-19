@@ -4,8 +4,6 @@ import {
   toNonNegativeInteger,
   toPositiveWei,
   requireInput,
-  resolveAlias,
-  resolveAliasWithField,
   toUnixTimestamp,
 } from './helpers.js';
 import { normalizeBytes32, verifyBatchTokenProof } from './batch-core.js';
@@ -58,19 +56,18 @@ export function planBatchOfferCreate(
   nowSeconds?: bigint,
 ): BatchOfferCreatePlan {
   const expiry = toUnixTimestamp(
-    requireInput(resolveAlias(params.endTime, params.expiry, 'endTime', 'expiry'), 'endTime'),
+    requireInput(params.endTime, 'endTime'),
     'endTime',
   );
   if (nowSeconds !== undefined && expiry <= nowSeconds) {
     throw new Error('expiry must be in the future.');
   }
 
-  const resolvedPrice = resolveAliasWithField(params.price, params.amount, 'price', 'amount');
-  const price = requireInput(resolvedPrice.value, resolvedPrice.field);
+  const price = requireInput(params.price, 'price');
 
   return {
     root: resolveBatchOfferRoot(params),
-    amount: toPositiveWei(price, resolvedPrice.field),
+    amount: toPositiveWei(price, 'price'),
     currency: params.currency ?? ETH_ADDRESS,
     expiry,
   };
@@ -179,7 +176,7 @@ export function resolveBatchOfferRoot(params: {
   if (params.artifact !== undefined) {
     return normalizeBytes32(params.artifact.root, 'artifact root');
   }
-  throw new Error('Pass a root or batch token artifact.');
+  throw new Error('Pass a batch token artifact, or pass root as an override.');
 }
 
 function resolveBatchOfferProofRoot(params: BatchOfferAcceptParams): Hex {
@@ -196,13 +193,13 @@ function resolveBatchOfferProofRoot(params: BatchOfferAcceptParams): Hex {
   if (params.proofArtifact !== undefined) {
     return normalizeBytes32(params.proofArtifact.root, 'proof artifact root');
   }
-  throw new Error('Pass a root or batch token proof artifact.');
+  throw new Error('Pass a batch token proof artifact, or pass root as an override.');
 }
 
 function resolveBatchOfferProof(params: BatchOfferAcceptParams): Hex[] {
   const proof = params.proof ?? params.proofArtifact?.proof;
   if (proof === undefined) {
-    throw new Error('Pass a proof array or batch token proof artifact.');
+    throw new Error('Pass a batch token proof artifact, or pass proof as an override.');
   }
 
   return proof.map((entry, index) => normalizeBytes32(entry, `proof[${index}]`));

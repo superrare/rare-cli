@@ -93,9 +93,9 @@ function collectRepeatedString(value: string, previous: string[]): string[] {
 }
 
 function resolveFactoryConfigForSupplyOrThrow(
-  factoryConfig: Awaited<ReturnType<ReturnType<typeof createRareClient>['liquid']['getFactoryConfig']>>,
+  factoryConfig: Awaited<ReturnType<ReturnType<typeof createRareClient>['liquidEdition']['getFactoryConfig']>>,
   totalSupply?: string,
-): Awaited<ReturnType<ReturnType<typeof createRareClient>['liquid']['getFactoryConfig']>> {
+): Awaited<ReturnType<ReturnType<typeof createRareClient>['liquidEdition']['getFactoryConfig']>> {
   const result = resolveLiquidFactoryConfigForSupply(factoryConfig, totalSupply);
   if (!result.isValid) {
     throw new Error(result.errorMessage);
@@ -125,12 +125,12 @@ async function resolveCurves(
       throw new Error('--curves-file is required for file curve source.');
     }
     const factoryConfig = resolveFactoryConfigForSupplyOrThrow(
-      await rare.liquid.getFactoryConfig(),
+      await rare.liquidEdition.getFactoryConfig(),
       opts.totalSupply,
     );
     const raw = await readFile(opts.curvesFile, 'utf-8');
     const curves = parseCurveConfig(raw, factoryConfig.curvePoolSupplyTokens, factoryConfig.poolTickSpacing);
-    const preview = await rare.liquid.validateCurves({ curves, totalSupply: opts.totalSupply });
+    const preview = await rare.liquidEdition.validateCurves({ curves, totalSupply: opts.totalSupply });
     return {
       source: `file:${opts.curvesFile}`,
       curves,
@@ -143,7 +143,7 @@ async function resolveCurves(
     if (!opts.curvePreset || !isCurvePresetKey(opts.curvePreset)) {
       throw new Error(`Unsupported curve preset "${opts.curvePreset}". Use low-demand, medium-demand, or high-demand.`);
     }
-    const generated = await rare.liquid.generatePresetCurves({
+    const generated = await rare.liquidEdition.generatePresetCurves({
       preset: opts.curvePreset,
       totalSupply: opts.totalSupply,
     });
@@ -158,7 +158,7 @@ async function resolveCurves(
 
   const wizard = await runLiquidCurveWizard({
     skipConfirmation: opts.yes,
-    generatePresetCurves: async (preset) => rare.liquid.generatePresetCurves({ preset, totalSupply: opts.totalSupply }),
+    generatePresetCurves: async (preset) => rare.liquidEdition.generatePresetCurves({ preset, totalSupply: opts.totalSupply }),
   });
   await writeGeneratedCurves(opts.writeCurvesFile, wizard.curves);
   return {
@@ -179,7 +179,6 @@ export function deployErc721Command(): Command {
     .option('--max-tokens <number>', 'maximum number of tokens (optional)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
-    .option('--yes', 'yes to all prompts, including transaction submission')
     .action(async (
       name: string,
       symbol: string,
@@ -198,7 +197,7 @@ export function deployErc721Command(): Command {
       log('Waiting for confirmation...');
 
       try {
-        const result = await rare.deploy.erc721({
+        const result = await rare.collection.deploy.erc721({
           name,
           symbol,
           maxTokens: opts.maxTokens,
@@ -224,8 +223,8 @@ export function deployErc721Command(): Command {
 }
 
 export function deployLiquidEditionCommand(): Command {
-  const cmd = new Command('liquid-edition');
-  cmd.description('Deploy a new Liquid Edition via the liquid factory');
+  const cmd = new Command('multicurve');
+  cmd.description('Deploy a new multicurve Liquid Edition via the liquid factory');
 
   cmd
     .argument('<name>', 'name of the liquid edition')
@@ -273,7 +272,7 @@ export function deployLiquidEditionCommand(): Command {
 
         try {
           const curves = await resolveCurves(opts, readOnlyRare);
-          if (opts.preview) {
+          if (opts.preview || !opts.yes) {
             output(
               {
                 source: curves.source,
@@ -305,7 +304,7 @@ export function deployLiquidEditionCommand(): Command {
           }
           log('Waiting for confirmation...');
 
-          const result = await rare.liquid.deployMultiCurve({
+          const result = await rare.liquidEdition.deploy.multiCurve({
             name,
             symbol,
             tokenUri,
@@ -339,16 +338,6 @@ export function deployLiquidEditionCommand(): Command {
         }
       },
     );
-
-  return cmd;
-}
-
-export function deployCommand(): Command {
-  const cmd = new Command('deploy');
-  cmd.description('Deploy a new contract via the RARE protocol');
-
-  cmd.addCommand(deployErc721Command());
-  cmd.addCommand(deployLiquidEditionCommand());
 
   return cmd;
 }
