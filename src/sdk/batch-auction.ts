@@ -53,7 +53,11 @@ export function createBatchAuctionNamespace(
       const reserveAmount = typeof price === 'bigint'
         ? price
         : parseUnits(stringifyAmountInput(price, 'price'), await resolveCurrencyDecimals(publicClient, chain, currency));
-      const plan = planBatchAuctionCreate({ ...resolvedParams, price: reserveAmount, currency }, accountAddress);
+      const plan = planBatchAuctionCreate(
+        { ...resolvedParams, price: reserveAmount, currency },
+        accountAddress,
+        currentUnixTimestamp(),
+      );
       const erc721ApprovalManager = plan.approvalContracts.length === 0
         ? undefined
         : requireContractAddress(chain, 'erc721ApprovalManager');
@@ -299,6 +303,10 @@ export function createBatchAuctionNamespace(
       );
     },
   };
+}
+
+function currentUnixTimestamp(): bigint {
+  return BigInt(Math.floor(Date.now() / 1000));
 }
 
 async function resolveBatchAuctionCreateParams(

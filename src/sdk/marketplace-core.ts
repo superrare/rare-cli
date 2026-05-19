@@ -307,12 +307,16 @@ export function planProvidedSplits(
   return { addresses: normalizedAddresses, ratios: [...splitRatios] };
 }
 
-export function planAuctionCreate(params: ResolvedCurrencyParam<AuctionCreateParams>, accountAddress: Address): AuctionCreatePlan {
+export function planAuctionCreate(
+  params: ResolvedCurrencyParam<AuctionCreateParams>,
+  accountAddress: Address,
+  nowSeconds: bigint,
+): AuctionCreatePlan {
   const auctionType = normalizeAuctionType(params);
   const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
   const price = requireInput(params.price, 'price');
   const startTime = auctionType === 'scheduled' ? toUnixTimestamp(params.startTime ?? 0, 'startTime') : 0n;
-  const duration = resolveAuctionDuration(params, startTime);
+  const duration = resolveAuctionDuration(params, startTime, nowSeconds);
 
   return {
     nftAddress: params.contract,
@@ -338,9 +342,9 @@ export function planAuctionBid(params: ResolvedCurrencyParam<AuctionBidParams>):
   };
 }
 
-function resolveAuctionDuration(params: AuctionCreateParams, startTime: bigint): bigint {
+function resolveAuctionDuration(params: AuctionCreateParams, startTime: bigint, nowSeconds: bigint): bigint {
   const endTime = toUnixTimestamp(requireInput(params.endTime, 'endTime'), 'endTime');
-  const beginsAt = startTime > 0n ? startTime : BigInt(Math.floor(Date.now() / 1000));
+  const beginsAt = startTime > 0n ? startTime : nowSeconds;
   if (endTime <= beginsAt) {
     throw new Error('endTime must be after the auction start time.');
   }

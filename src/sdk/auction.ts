@@ -33,7 +33,11 @@ export function createAuctionNamespace(
       const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const price = requireInput(params.price, 'price');
       const startingPrice = await toCurrencyAmount(publicClient, chain, currency, price, 'price');
-      const plan = planAuctionCreate({ ...params, price: startingPrice, currency }, accountAddress);
+      const plan = planAuctionCreate(
+        { ...params, price: startingPrice, currency },
+        accountAddress,
+        currentUnixTimestamp(),
+      );
       const approvalTxHash = await approveNftContractIfNeeded({
         publicClient,
         walletClient,
@@ -182,7 +186,7 @@ export function createAuctionNamespace(
         }),
       ]);
 
-      return shapeAuctionStatus(result, BigInt(Math.floor(Date.now() / 1000)), {
+      return shapeAuctionStatus(result, currentUnixTimestamp(), {
         currentBid: shapeAuctionBidRead(currentBid),
         minimumBidIncreasePercentage,
         auctionTypeIds: {
@@ -192,4 +196,8 @@ export function createAuctionNamespace(
       });
     },
   };
+}
+
+function currentUnixTimestamp(): bigint {
+  return BigInt(Math.floor(Date.now() / 1000));
 }

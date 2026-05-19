@@ -96,13 +96,14 @@ const marketplaceFeePercentage = 3n;
 export function planBatchAuctionCreate(
   params: ResolvedCurrencyParam<BatchAuctionCreateParams>,
   accountAddress: Address,
+  nowSeconds: bigint,
 ): BatchAuctionCreatePlan {
   const price = requireInput(params.price, 'price');
   return {
     root: resolveBatchAuctionRoot(params),
     currency: params.currency ?? ETH_ADDRESS,
     reserveAmount: toPositiveWei(price, 'price'),
-    duration: resolveBatchAuctionDuration(params),
+    duration: resolveBatchAuctionDuration(params, nowSeconds),
     ...planSplitRecipients(params.splitAddresses, params.splitRatios, accountAddress),
     approvalContracts: params.artifact === undefined
       ? []
@@ -144,13 +145,12 @@ export function planBatchAuctionBid(params: ResolvedCurrencyParam<BatchAuctionBi
   };
 }
 
-function resolveBatchAuctionDuration(params: BatchAuctionCreateParams): bigint {
+function resolveBatchAuctionDuration(params: BatchAuctionCreateParams, nowSeconds: bigint): bigint {
   const endTime = toUnixTimestamp(requireInput(params.endTime, 'endTime'), 'endTime');
-  const now = BigInt(Math.floor(Date.now() / 1000));
-  if (endTime <= now) {
+  if (endTime <= nowSeconds) {
     throw new Error('endTime must be in the future.');
   }
-  return endTime - now;
+  return endTime - nowSeconds;
 }
 
 export function planBatchAuctionToken(params: BatchAuctionStatusParams): BatchAuctionTokenPlan {
