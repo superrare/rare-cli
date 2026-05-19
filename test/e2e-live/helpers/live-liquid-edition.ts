@@ -75,8 +75,9 @@ export async function deployLiquidEdition(
   const liquidityArgs = initialRareLiquidity ? ['--initial-rare-liquidity', initialRareLiquidity] : [];
   return step(`deploy Liquid Edition on ${live.chain}`, () =>
     jsonCommand<DeployLiquidEditionResult>(live.sellerHome, [
-      'deploy',
       'liquid-edition',
+      'deploy',
+      'multicurve',
       name,
       symbol,
       '--curves-file',

@@ -61,7 +61,7 @@ test('buy-token quote-only does not require a configured wallet', async () => {
     'buy-token',
     '--token',
     token,
-    '--eth',
+    '--amount-in',
     '0.001',
     '--quote-only',
     '--chain',
@@ -73,7 +73,7 @@ test('buy-token quote-only does not require a configured wallet', async () => {
   assert.deepEqual(createRareClient.mock.calls[0]?.[0], { publicClient });
   assert.deepEqual(quoteBuyToken.mock.calls[0]?.[0], {
     token,
-    ethAmountIn: '0.001',
+    amountIn: '0.001',
     minAmountOut: undefined,
     slippageBps: undefined,
     recipient: undefined,
@@ -85,7 +85,7 @@ test('sell-token quote-only does not require a configured wallet', async () => {
     'sell-token',
     '--token',
     token,
-    '--amount',
+    '--amount-in',
     '1',
     '--quote-only',
     '--chain',

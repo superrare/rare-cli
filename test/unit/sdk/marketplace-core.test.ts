@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parseEther } from 'viem';
 import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '../../../src/contracts/addresses.js';
 import {
@@ -22,6 +22,10 @@ const buyerAddress = '0x0000000000000000000000000000000000000002' as const;
 const nftContract = '0x1000000000000000000000000000000000000000' as const;
 const erc20Currency = '0x3000000000000000000000000000000000000000' as const;
 const AUCTION_TYPE = `0x${'11'.repeat(32)}` as const;
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('marketplace transaction planning', () => {
   it('plans listing create defaults and normalized values', () => {
@@ -94,7 +98,7 @@ describe('marketplace transaction planning', () => {
       tokenId: 3n,
       target: PUBLIC_LISTING_TARGET,
     });
-    expect(planListingBuy({ contract: nftContract, tokenId: '4', amount: '1', currency: erc20Currency })).toEqual({
+    expect(planListingBuy({ contract: nftContract, tokenId: '4', price: '1', currency: erc20Currency })).toEqual({
       tokenId: 4n,
       currency: erc20Currency,
       amount: parseEther('1'),
@@ -102,13 +106,15 @@ describe('marketplace transaction planning', () => {
   });
 
   it('plans auction create, bid, and token actions', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
     expect(
       planAuctionCreate(
         {
           contract: nftContract,
           tokenId: '3',
-          startingPrice: '2',
-          duration: '3600',
+          price: '2',
+          endTime: '1767229200',
         },
         accountAddress,
       ),
@@ -123,7 +129,7 @@ describe('marketplace transaction planning', () => {
       splitAddresses: [accountAddress],
       splitRatios: [100],
     });
-    expect(planAuctionBid({ contract: nftContract, tokenId: '8', amount: '1' })).toEqual({
+    expect(planAuctionBid({ contract: nftContract, tokenId: '8', price: '1' })).toEqual({
       tokenId: 8n,
       currency: ETH_ADDRESS,
       amount: parseEther('1'),
@@ -132,13 +138,15 @@ describe('marketplace transaction planning', () => {
   });
 
   it('plans scheduled auctions and validates seller splits', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
     expect(
       planAuctionCreate(
         {
           contract: nftContract,
           tokenId: '3',
-          startingPrice: '0',
-          duration: '3600',
+          price: '0',
+          endTime: '1778503600',
           startTime: '1778500000',
           splitAddresses: [accountAddress, buyerAddress],
           splitRatios: [75, 25],
@@ -160,8 +168,8 @@ describe('marketplace transaction planning', () => {
     expect(() => planAuctionCreate({
       contract: nftContract,
       tokenId: '1',
-      startingPrice: '1',
-      duration: '60',
+      price: '1',
+      endTime: '1767229200',
       splitAddresses: [accountAddress, buyerAddress],
       splitRatios: [50],
     }, accountAddress)).toThrow('splitAddresses and splitRatios must have the same length.');
@@ -169,8 +177,8 @@ describe('marketplace transaction planning', () => {
     expect(() => planAuctionCreate({
       contract: nftContract,
       tokenId: '1',
-      startingPrice: '1',
-      duration: '60',
+      price: '1',
+      endTime: '1767229200',
       splitAddresses: [accountAddress, buyerAddress],
       splitRatios: [50, 40],
     }, accountAddress)).toThrow('splitRatios must sum to 100 (got 90).');
@@ -178,15 +186,15 @@ describe('marketplace transaction planning', () => {
     expect(() => planAuctionCreate({
       contract: nftContract,
       tokenId: '1',
-      startingPrice: '0',
-      duration: '3600',
+      price: '0',
+      endTime: '1778503600',
       auctionType: 'scheduled',
       startTime: '-1',
     }, accountAddress)).toThrow('startTime must be greater than 0.');
   });
 
   it('plans offer create, cancel, and accept inputs', () => {
-    expect(planOfferCreate({ contract: nftContract, tokenId: '5', amount: '2', currency: erc20Currency })).toEqual({
+    expect(planOfferCreate({ contract: nftContract, tokenId: '5', price: '2', currency: erc20Currency })).toEqual({
       tokenId: 5n,
       currency: erc20Currency,
       amount: parseEther('2'),
@@ -195,7 +203,7 @@ describe('marketplace transaction planning', () => {
       tokenId: 11n,
       currency: ETH_ADDRESS,
     });
-    expect(planOfferAccept({ contract: nftContract, tokenId: '12', amount: '1' }, accountAddress)).toEqual({
+    expect(planOfferAccept({ contract: nftContract, tokenId: '12', price: '1' }, accountAddress)).toEqual({
       tokenId: 12n,
       currency: ETH_ADDRESS,
       amount: parseEther('1'),
@@ -207,7 +215,7 @@ describe('marketplace transaction planning', () => {
         {
           contract: nftContract,
           tokenId: '12',
-          amount: '1',
+          price: '1',
           splitAddresses: [accountAddress, buyerAddress],
           splitRatios: [70, 30],
         },
@@ -220,16 +228,18 @@ describe('marketplace transaction planning', () => {
   });
 
   it('rejects unsafe money and token inputs before shell code can read or write', () => {
-    expect(() => planListingBuy({ contract: nftContract, tokenId: '1', amount: '0' })).toThrow(
-      'amount must be greater than 0.',
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+    expect(() => planListingBuy({ contract: nftContract, tokenId: '1', price: '0' })).toThrow(
+      'price must be greater than 0.',
     );
-    expect(() => planAuctionCreate({ contract: nftContract, tokenId: '1', startingPrice: '0', duration: '60' }, accountAddress)).toThrow(
-      'startingPrice must be greater than 0.',
+    expect(() => planAuctionCreate({ contract: nftContract, tokenId: '1', price: '0', endTime: '1767229200' }, accountAddress)).toThrow(
+      'price must be greater than 0.',
     );
-    expect(() => planAuctionCreate({ contract: nftContract, tokenId: '1', startingPrice: '1', duration: '0' }, accountAddress)).toThrow(
-      'duration must be greater than 0.',
+    expect(() => planAuctionCreate({ contract: nftContract, tokenId: '1', price: '1', endTime: '1767225600' }, accountAddress)).toThrow(
+      'endTime must be after the auction start time.',
     );
-    expect(() => planOfferCreate({ contract: nftContract, tokenId: '-1', amount: '1' })).toThrow(
+    expect(() => planOfferCreate({ contract: nftContract, tokenId: '-1', price: '1' })).toThrow(
       'tokenId must be greater than or equal to 0.',
     );
   });
@@ -237,7 +247,7 @@ describe('marketplace transaction planning', () => {
   it('validates offer accept splits before contract writes', () => {
     expect(() =>
       planOfferAccept(
-        { contract: nftContract, tokenId: '1', amount: '1', splitAddresses: [], splitRatios: [] },
+        { contract: nftContract, tokenId: '1', price: '1', splitAddresses: [], splitRatios: [] },
         accountAddress,
       ),
     ).toThrow('splitAddresses must include at least 1 address.');
@@ -246,7 +256,7 @@ describe('marketplace transaction planning', () => {
         {
           contract: nftContract,
           tokenId: '1',
-          amount: '1',
+          price: '1',
           splitAddresses: [accountAddress, buyerAddress],
           splitRatios: [100],
         },
@@ -258,7 +268,7 @@ describe('marketplace transaction planning', () => {
         {
           contract: nftContract,
           tokenId: '1',
-          amount: '1',
+          price: '1',
           splitAddresses: [accountAddress, buyerAddress],
           splitRatios: [60, 20],
         },

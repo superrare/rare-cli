@@ -188,7 +188,7 @@ describe('Sovereign collection core', () => {
     expect(planCollectionMintBatch({
       contract: COLLECTION_ADDRESS,
       baseUri: 'ipfs://batch',
-      tokenCount: '25',
+      amount: '25',
     })).toEqual({
       contract: COLLECTION_ADDRESS,
       baseUri: 'ipfs://batch',
@@ -200,15 +200,15 @@ describe('Sovereign collection core', () => {
     expect(() => planCollectionMintBatch({
       contract: COLLECTION_ADDRESS,
       baseUri: 'ipfs://batch',
-      tokenCount: 0,
-    })).toThrow('tokenCount must be greater than 0.');
+      amount: 0,
+    })).toThrow('amount must be greater than 0.');
   });
 
   it('plans lazy prepare mint with optional minter', () => {
     expect(planCollectionPrepareLazyMint({
       contract: COLLECTION_ADDRESS,
       baseUri: 'ipfs://lazy',
-      tokenCount: 3,
+      amount: 3,
     })).toEqual({
       contract: COLLECTION_ADDRESS,
       baseUri: 'ipfs://lazy',
@@ -218,7 +218,7 @@ describe('Sovereign collection core', () => {
     expect(planCollectionPrepareLazyMint({
       contract: COLLECTION_ADDRESS,
       baseUri: 'ipfs://lazy',
-      tokenCount: '3',
+      amount: '3',
       minter: MINTER_ADDRESS,
     })).toEqual({
       contract: COLLECTION_ADDRESS,
@@ -232,15 +232,15 @@ describe('Sovereign collection core', () => {
     expect(() => planCollectionPrepareLazyMint({
       contract: COLLECTION_ADDRESS,
       baseUri: 'ipfs://lazy',
-      tokenCount: '-1',
-    })).toThrow('tokenCount must be greater than 0.');
+      amount: '-1',
+    })).toThrow('amount must be greater than 0.');
   });
 
   it('builds collection mint write arguments in core', () => {
     const batchPlan = planCollectionMintBatch({
       contract: COLLECTION_ADDRESS,
       baseUri: 'ipfs://batch',
-      tokenCount: '25',
+      amount: '25',
     });
     expect(buildCollectionMintBatchWrite(batchPlan)).toEqual({
       functionName: 'batchMint',
@@ -250,7 +250,7 @@ describe('Sovereign collection core', () => {
     const lazyPlan = planCollectionPrepareLazyMint({
       contract: COLLECTION_ADDRESS,
       baseUri: 'ipfs://lazy',
-      tokenCount: 3,
+      amount: 3,
     });
     expect(buildCollectionPrepareLazyMintWrite(lazyPlan)).toEqual({
       functionName: 'prepareMint',
@@ -260,7 +260,7 @@ describe('Sovereign collection core', () => {
     const minterPlan = planCollectionPrepareLazyMint({
       contract: COLLECTION_ADDRESS,
       baseUri: 'ipfs://lazy',
-      tokenCount: 3,
+      amount: 3,
       minter: MINTER_ADDRESS,
     });
     expect(buildCollectionPrepareLazyMintWrite(minterPlan)).toEqual({
@@ -324,7 +324,7 @@ describe('Sovereign collection core', () => {
     expect(planCollectionRoyaltyInfo({
       contract: COLLECTION_ADDRESS,
       tokenId: 1,
-      salePrice: '500',
+      price: '500',
     }).salePrice).toBe(500n);
   });
 
@@ -391,7 +391,7 @@ describe('Sovereign collection core', () => {
       registry: REGISTRY_ADDRESS,
       contract: COLLECTION_ADDRESS,
       tokenId: '2',
-      salePrice: '500',
+      price: '500',
     });
 
     expect(shapeCollectionRoyaltyRegistryStatus(

@@ -26,6 +26,7 @@ export async function deployErc721Collection(
 ): Promise<DeployErc721Result> {
   const collection = await step(`deploy ERC-721 collection on ${live.chain}`, () =>
     jsonCommand<DeployErc721Result>(live.sellerHome, [
+      'collection',
       'deploy',
       'erc721',
       uniqueTokenName('Rare CLI E2E'),

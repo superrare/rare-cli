@@ -12,7 +12,7 @@ describeLive('Swap SDK live integration', () => {
     const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
 
     const quote = await rare.swap.quoteBuyRare({
-      ethAmount: '0.001',
+      amountIn: '0.001',
       slippageBps: 100,
     });
 
@@ -30,12 +30,12 @@ describeLive('Swap SDK live integration', () => {
 
     const buy = await rare.swap.quoteBuyToken({
       token: rareAddress,
-      ethAmount: '0.001',
+      amountIn: '0.001',
       slippageBps: 100,
     });
     const sell = await rare.swap.quoteSellToken({
       token: rareAddress,
-      tokenAmount: '1',
+      amountIn: '1',
       slippageBps: 100,
     });
 

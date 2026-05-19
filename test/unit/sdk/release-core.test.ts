@@ -225,7 +225,7 @@ describe('release allowlist and limit planning', () => {
       planReleaseAllowlistConfig({
         contract: collection,
         artifact,
-        endTimestamp: '2026-01-01T00:00:00.000Z',
+        endTime: '2026-01-01T00:00:00.000Z',
       }),
     ).toEqual({
       contract: collection,

@@ -87,56 +87,50 @@ Batch listing marketplace support is currently deployed on `mainnet` and `sepoli
 ### Deploy an NFT Collection
 
 ```bash
-rare deploy erc721 "My Collection" "MC"
-rare deploy erc721 "My Collection" "MC" --max-tokens 1000
+rare collection deploy erc721 "My Collection" "MC"
+rare collection deploy erc721 "My Collection" "MC" --max-tokens 1000
 ```
 
-### Create a Lazy Batch Mint Collection
+### Deploy a Lazy ERC-721 Collection
+
+For RareMinter release flows, deploy a Lazy ERC-721 collection. Buyers mint sequential token IDs through release sale settings.
+
+```bash
+rare collection deploy lazy-erc721 "My Release" "MR" --max-tokens 1000
+rare collection deploy lazy-erc721 "Guarded Release" "GR" --max-tokens 1000 --contract-type lazy-royalty-guard
+```
+
+### Deploy a Lazy Batch Mint Collection
 
 For lazy minting flows, use the lazy batch mint factory instead. Tokens in a lazy collection aren't pre-minted — they're prepared and claimed/redeemed by buyers later.
 
 ```bash
 # Uncapped lazy collection (typical — leaves room for incremental lazy mints)
-rare collection create lazy-batch-mint "My Lazy Collection" "MLC"
+rare collection deploy lazy-batch-mint "My Lazy Collection" "MLC"
 
 # Capped lazy collection (immutable supply ceiling)
-rare collection create lazy-batch-mint "My Lazy Collection" "MLC" --max-tokens 100
+rare collection deploy lazy-batch-mint "My Lazy Collection" "MLC" --max-tokens 100
 ```
 
 **Lazy vs standard batch mint**:
 
-- `rare deploy erc721` deploys a SovereignBatchMint contract — tokens are minted directly via `rare mint` in the same tx as their creation. Use this for traditional editions where the artist mints up front.
-- `rare collection create lazy-batch-mint` deploys a LazySovereignBatchMint contract — designed to feed the lazy mint preparation/redemption pipeline. Use this when buyers (not the artist) trigger the on-chain mint at purchase time.
+- `rare collection deploy erc721` deploys a SovereignBatchMint contract — tokens are minted directly via `rare mint` in the same tx as their creation. Use this for traditional editions where the artist mints up front.
+- `rare collection deploy lazy-erc721` deploys a LazySovereignNFT contract — designed for RareMinter direct sale releases where buyers mint sequential token IDs.
+- `rare collection deploy lazy-batch-mint` deploys a LazySovereignBatchMint contract — designed to feed the lazy mint preparation/redemption pipeline. Use this when buyers (not the artist) trigger the on-chain mint at purchase time.
 
 The lazy factory is currently deployed on **mainnet** and **sepolia** only.
-
-### Create a Sovereign Collection
-
-Use `collection create sovereign` for the newer Sovereign NFT factory flow. The default contract type is `standard`; use `royalty-guard` or `deadman-royalty-guard` when you need those factory variants.
-
-```bash
-rare collection create sovereign "My Collection" "MC" --max-tokens 1000
-rare collection create sovereign "Guarded Collection" "GC" --max-tokens 1000 --contract-type royalty-guard
-```
-
-Use `collection create lazy-sovereign` when the collection will be configured as a release and minted through release sale settings after deployment.
-
-```bash
-rare collection create lazy-sovereign "My Release" "MR" --max-tokens 1000
-rare collection create lazy-sovereign "Guarded Release" "GR" --max-tokens 1000 --contract-type lazy-royalty-guard
-```
 
 Batch mint an owned Sovereign collection by passing the metadata base URI. Token metadata resolves as `baseUri/tokenId.json` on supported contracts.
 
 ```bash
-rare collection mint-batch --contract 0x... --base-uri ipfs://... --token-count 100
+rare collection mint-batch --contract 0x... --base-uri ipfs://... --amount 100
 ```
 
 Prepare a Lazy Sovereign collection for collector minting. Pass `--minter` when a separate release or minting contract should be approved to mint from the prepared batch.
 
 ```bash
-rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token-count 100
-rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --token-count 100 --minter 0x...
+rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --amount 100
+rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --amount 100 --minter 0x...
 ```
 
 Build token-list Merkle artifacts for later batch offer, batch listing, and batch auction flows. CSV files should include contract and token ID columns such as `contract_address,token_id`; JSON files can be an array of `{ "contractAddress": "0x...", "tokenId": "1" }` objects or a generated artifact. Pass `--chain-id` or include a `chain_id` column when the artifact should carry chain context.
@@ -244,7 +238,7 @@ rare listing release configure \
   --contract 0x... \
   --price 100 \
   --currency rare \
-  --start 2026-06-01T16:00:00Z \
+  --start-time 2026-06-01T16:00:00Z \
   --max-mints 5 \
   --split 0x...artist=80 \
   --split 0x...collaborator=20
@@ -292,13 +286,13 @@ The artifact contains the locally reproducible Merkle root plus one proof per wa
 rare listing release allowlist set \
   --contract 0x... \
   --input ./allowlist-artifact.json \
-  --end-timestamp 2026-06-01T16:00:00Z
+  --end-time 2026-06-01T16:00:00Z
 
 # Or bypass artifact registration and set a known root directly
 rare listing release allowlist set \
   --contract 0x... \
   --root 0x... \
-  --end-timestamp 1767283200
+  --end-time 1767283200
 
 # Read a reusable proof for an account
 rare listing release allowlist proof \
@@ -328,8 +322,8 @@ rare listing release status --contract 0x... --account 0x...
 rare auction create \
   --contract 0x... \
   --token-id 1 \
-  --starting-price 0.1 \
-  --duration 86400
+  --price 0.1 \
+  --end-time 1778586400
 
 # Create a scheduled auction with explicit seller splits
 rare auction create \
@@ -337,13 +331,13 @@ rare auction create \
   --token-id 1 \
   --type scheduled \
   --start-time 1778500000 \
-  --starting-price 0.1 \
-  --duration 86400 \
+  --price 0.1 \
+  --end-time 1778586400 \
   --split 0x...artist=70 \
   --split 0x...collaborator=30
 
 # Place a bid
-rare auction bid --contract 0x... --token-id 1 --amount 0.5
+rare auction bid --contract 0x... --token-id 1 --price 0.5
 
 # Settle after the auction ends
 rare auction settle --contract 0x... --token-id 1
@@ -361,16 +355,16 @@ Reserve auctions start when the first valid bid meets the reserve. Scheduled auc
 
 ```bash
 # Create an offer on a token
-rare offer create --contract 0x... --token-id 1 --amount 0.5
+rare offer create --contract 0x... --token-id 1 --price 0.5
 
 # Create an offer with ERC20 currency
-rare offer create --contract 0x... --token-id 1 --amount 100 --currency usdc
+rare offer create --contract 0x... --token-id 1 --price 100 --currency usdc
 
 # Accept an offer on a token you own
-rare offer accept --contract 0x... --token-id 1 --amount 0.5
+rare offer accept --contract 0x... --token-id 1 --price 0.5
 
 # Accept with payout splits (must sum to 100; caller is NOT auto-included)
-rare offer accept --contract 0x... --token-id 1 --amount 0.5 \
+rare offer accept --contract 0x... --token-id 1 --price 0.5 \
   --split 0xCollab=30 --split 0xMyWallet=70
 
 # Cancel your offer
@@ -380,11 +374,11 @@ rare offer cancel --contract 0x... --token-id 1
 rare offer status --contract 0x... --token-id 1
 ```
 
-`--amount` on `accept` is a slippage assertion: the on-chain offer must still match the value you pass, otherwise the tx reverts. Re-run `offer status` if you suspect drift.
+`--price` on `accept` is a slippage assertion: the on-chain offer must still match the value you pass, otherwise the tx reverts. Re-run `offer status` if you suspect drift.
 
 `--split <ADDR=RATIO>` is repeatable for up to 5 recipients. Ratios must sum to exactly 100. If you omit `--split`, the SDK defaults to `[caller, 100]` (100% to your wallet). If you pass any `--split`, you must specify the complete list — the caller is **not** auto-appended.
 
-NFT approval (`setApprovalForAll`) is auto-handled by `offer accept` when needed, just like `auction create` and `listing create`.
+NFT approval (`setApprovalForAll`) is checked by `offer accept`, `auction create`, and `listing create`. If approval is already in place, the command continues without a prompt; if approval is required, pass `--yes` or confirm the interactive `[y/N]` prompt.
 
 ### Listings
 
@@ -400,7 +394,7 @@ rare listing create --contract 0x... --token-id 1 --price 1.0 \
   --split 0xCollab=30 --split 0xMyWallet=70
 
 # Buy a listed token
-rare listing buy --contract 0x... --token-id 1 --amount 1.0
+rare listing buy --contract 0x... --token-id 1 --price 1.0
 
 # Cancel a listing
 rare listing cancel --contract 0x... --token-id 1
@@ -441,7 +435,7 @@ rare listing batch buy \
   --proof ./proof.json \
   --creator 0x...seller \
   --currency usdc \
-  --amount 25
+  --price 25
 
 # Inspect the listing config
 rare listing batch status --root ./root.json --creator 0x...seller
@@ -456,16 +450,16 @@ rare listing batch status \
 
 # Attach an allowlist config to an existing root
 rare listing batch set-allowlist \
-  --root ./root.json
+  --input ./root.json
 
-# Or pass explicit values when using a hex root instead of an artifact path
+# Or pass explicit override values
 rare listing batch set-allowlist \
   --root 0x... \
   --allowlist-root 0x... \
-  --end-timestamp 1735689600
+  --end-time 1735689600
 
 # Cancel the listing root
-rare listing batch cancel --root ./root.json
+rare listing batch cancel --input ./root.json
 ```
 
 Named currencies are parsed with chain-aware decimals. Arbitrary ERC20 addresses are supported and their `decimals()` values are resolved from chain RPC when sending buys.
@@ -486,20 +480,27 @@ rare currencies --chain mainnet
 
 ```bash
 # Search all NFTs
-rare search tokens --query "portrait"
+rare search nfts --query "portrait"
 
 # Search your own NFTs
-rare search tokens --mine
+rare search nfts --mine
 
 # Search NFTs by owner
-rare search tokens --owner 0x...
+rare search nfts --owner 0x...
 
 # Find NFTs with running auctions
-rare search tokens --auction-state RUNNING
+rare search nfts --auction-state RUNNING
 
 # Find NFTs with listings or offers
-rare search tokens --has-listing
-rare search tokens --has-offer
+rare search nfts --has-listing
+rare search nfts --has-offer
+
+# Search NFT events by token
+rare search events --chain-id 1 --contract 0x... --token-id 1 --event-type CREATE_NFT
+
+# Search collection events by collection ID or by chain + contract
+rare search events --collection-id 1-0x...
+rare search events --chain-id 1 --contract 0x...
 
 # Search collections
 rare search collections
@@ -550,11 +551,22 @@ const rare = createRareClient({ publicClient, walletClient });
 
 ### Search
 
-`search.nfts` auto-applies the client chain unless you pass `chainIds`.
+`search.nfts` auto-applies the client chain unless you pass `chainId`.
 
 ```ts
 const nfts = await rare.search.nfts({ query: 'portrait', take: 10 });
 const collections = await rare.search.collections({ ownerAddresses: [account.address] });
+const events = await rare.search.events({
+  chain: 'mainnet',
+  contract: '0x...',
+  tokenId: '1',
+  eventType: ['CREATE_NFT', 'SETTLE_AUCTION'],
+});
+const nft = await rare.nft.get({
+  chain: 'mainnet',
+  contract: '0x...',
+  tokenId: '1',
+});
 ```
 
 ### Upload media and mint
@@ -574,7 +586,7 @@ const tokenUri = await rare.media.pinMetadata({
   tags: ['art'],
 });
 
-const minted = await rare.mint.mintTo({
+const minted = await rare.collection.mint({
   contract: '0xYourContractAddress',
   tokenUri,
   to: '0xRecipientAddress',
@@ -583,23 +595,22 @@ const minted = await rare.mint.mintTo({
 console.log(minted.tokenId);
 ```
 
-### Create a Sovereign collection
+### Deploy an ERC-721 collection
 
 ```ts
-const created = await rare.collection.createSovereign({
+const created = await rare.collection.deploy.erc721({
   name: 'My Collection',
   symbol: 'MC',
   maxTokens: 1000,
-  contractType: 'standard',
 });
 
 console.log(created.contract);
 ```
 
-### Create a Lazy Sovereign collection
+### Deploy a Lazy ERC-721 collection
 
 ```ts
-const release = await rare.collection.createLazySovereign({
+const release = await rare.collection.deploy.lazyErc721({
   name: 'My Release',
   symbol: 'MR',
   maxTokens: 1000,
@@ -726,7 +737,7 @@ rare configure delete --yes
 Merkle root and proof flows use `https://api.superrare.com` by default. Set `RARE_API_BASE_URL` to point the SDK and CLI at another rare-api deployment.
 
 ```bash
-RARE_API_BASE_URL=https://rare-api.example.com rare batch buy --contract 0x... --token-id 1 --creator 0x... --currency eth --amount 1
+RARE_API_BASE_URL=https://rare-api.example.com rare listing batch buy --contract 0x... --token-id 1 --creator 0x... --currency eth --price 1
 ```
 
 ## Best Practices
@@ -762,10 +773,10 @@ If you want to inspect the on-chain contracts used by this CLI:
 
 - Token contract used when minting NFTs: [`SovereignBatchMint.sol`](https://github.com/superrare/core/blob/main/src/v2/token/ERC721/sovereign/SovereignBatchMint.sol)
 - Factory used for collection deployments: [`SovereignBatchMintFactory.sol`](https://github.com/superrare/core/blob/main/src/v2/token/ERC721/sovereign/SovereignBatchMintFactory.sol)
-- Token contract used for newer Sovereign batch minting: [`SovereignNFT.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/SovereignNFT.sol)
-- Factory used for Sovereign collection creation: [`SovereignNFTContractFactory.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/SovereignNFTContractFactory.sol)
-- Token contract used for Lazy Sovereign mint preparation: [`LazySovereignNFT.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/lazy/LazySovereignNFT.sol)
-- Factory used for Lazy Sovereign release collection creation: [`LazySovereignNFTFactory.sol`](https://github.com/rareprotocol/core/blob/main/src/token/ERC721/sovereign/lazy/LazySovereignNFTFactory.sol)
+- Token contract used for RareMinter releases: [`LazySovereignNFT.sol`](https://github.com/superrare/core/blob/main/src/token/ERC721/sovereign/lazy/LazySovereignNFT.sol)
+- Factory used for Lazy ERC-721 release collection deployments: [`LazySovereignNFTFactory.sol`](https://github.com/superrare/core/blob/main/src/token/ERC721/sovereign/lazy/LazySovereignNFTFactory.sol)
+- Token contract used for lazy batch mint drops: [`LazySovereignBatchMint.sol`](https://github.com/superrare/core/blob/main/src/v2/token/ERC721/sovereign/LazySovereignBatchMint.sol)
+- Factory used for lazy batch mint collection deployments: [`LazySovereignBatchMintFactory.sol`](https://github.com/superrare/core/blob/main/src/v2/token/ERC721/sovereign/LazySovereignBatchMintFactory.sol)
 - Auction/market contract used for auction operations: [`SuperRareBazaar.sol`](https://github.com/superrare/core/blob/main/src/bazaar/SuperRareBazaar.sol)
 
 ## Development (Optional)

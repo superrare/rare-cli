@@ -55,7 +55,7 @@ describeFork('SDK fork integration write paths', () => {
       const seller = createForkRareClient(chain, forkSellerPrivateKey);
       const buyer = createForkRareClient(chain, forkBuyerPrivateKey);
 
-      const collection = await seller.rare.deploy.erc721({
+      const collection = await seller.rare.collection.deploy.erc721({
         name: `Rare SDK Fork Batch ${Date.now().toString(36)}`,
         symbol: 'RSFB',
         maxTokens: 4,
@@ -69,7 +69,7 @@ describeFork('SDK fork integration write paths', () => {
         await mintToken(seller.rare, collection.contract),
       ] as const;
 
-      const revokeTree = seller.rare.batch.buildTree({
+      const revokeTree = seller.rare.utils.tree.build({
         content: JSON.stringify([
           { contractAddress: collection.contract, tokenId: tokens[0] },
           { contractAddress: collection.contract, tokenId: tokens[1] },
@@ -78,24 +78,24 @@ describeFork('SDK fork integration write paths', () => {
         chainId: chainIds[chain],
       });
       const expiry = Math.floor(Date.now() / 1000) + 3_600;
-      const created = await buyer.rare.batch.offer.create({
+      const created = await buyer.rare.offer.batch.create({
         root: revokeTree.root,
-        amount: '0.000001',
-        expiry,
+        price: '0.000001',
+        endTime: expiry,
       });
       expect(created.creator).toBe(buyer.account);
       expect(created.root).toBe(revokeTree.root);
 
-      const active = await seller.rare.batch.offer.getStatus({
+      const active = await seller.rare.offer.batch.getStatus({
         creator: buyer.account,
         root: revokeTree.root,
       });
       expect(active.state).toBe('ACTIVE');
       expect(active.fillable).toBe(true);
 
-      const revoked = await buyer.rare.batch.offer.revoke({ root: revokeTree.root });
+      const revoked = await buyer.rare.offer.batch.revoke({ root: revokeTree.root });
       expect(revoked.root).toBe(revokeTree.root);
-      const revokedStatus = await seller.rare.batch.offer.getStatus({
+      const revokedStatus = await seller.rare.offer.batch.getStatus({
         creator: buyer.account,
         root: revokeTree.root,
       });
@@ -103,7 +103,7 @@ describeFork('SDK fork integration write paths', () => {
       expect(revokedStatus.revoked).toBeNull();
       expect(revokedStatus.fillable).toBe(false);
 
-      const acceptTree = seller.rare.batch.buildTree({
+      const acceptTree = seller.rare.utils.tree.build({
         content: JSON.stringify([
           { contractAddress: collection.contract, tokenId: tokens[2] },
           { contractAddress: collection.contract, tokenId: tokens[3] },
@@ -111,19 +111,19 @@ describeFork('SDK fork integration write paths', () => {
         format: 'json',
         chainId: chainIds[chain],
       });
-      const proof = seller.rare.batch.getTreeProof({
+      const proof = seller.rare.utils.tree.proof({
         artifact: acceptTree,
         contractAddress: collection.contract,
         tokenId: tokens[2],
         chainId: chainIds[chain],
       });
 
-      await buyer.rare.batch.offer.create({
+      await buyer.rare.offer.batch.create({
         root: acceptTree.root,
-        amount: '0.000001',
-        expiry,
+        price: '0.000001',
+        endTime: expiry,
       });
-      const accepted = await seller.rare.batch.offer.accept({
+      const accepted = await seller.rare.offer.batch.accept({
         creator: buyer.account,
         root: proof.root,
         proof: proof.proof,
@@ -161,7 +161,7 @@ describeFork('SDK fork integration write paths', () => {
       const seller = createForkRareClient(chain, forkSellerPrivateKey);
       const buyer = createForkRareClient(chain, forkBuyerPrivateKey);
 
-      const collection = await seller.rare.deploy.erc721({
+      const collection = await seller.rare.collection.deploy.erc721({
         name: `Rare SDK Fork Batch Auction ${Date.now().toString(36)}`,
         symbol: 'RSFBA',
         maxTokens: 4,
@@ -173,7 +173,7 @@ describeFork('SDK fork integration write paths', () => {
         await mintToken(seller.rare, collection.contract),
       ] as const;
 
-      const cancelTree = seller.rare.batch.buildTree({
+      const cancelTree = seller.rare.utils.tree.build({
         content: JSON.stringify([
           { contractAddress: collection.contract, tokenId: tokens[0] },
           { contractAddress: collection.contract, tokenId: tokens[1] },
@@ -181,23 +181,23 @@ describeFork('SDK fork integration write paths', () => {
         format: 'json',
         chainId: chainIds[chain],
       });
-      const cancelProof = seller.rare.batch.getTreeProof({
+      const cancelProof = seller.rare.utils.tree.proof({
         artifact: cancelTree,
         contractAddress: collection.contract,
         tokenId: tokens[0],
         chainId: chainIds[chain],
       });
 
-      const createdForCancel = await seller.rare.batch.auction.create({
+      const createdForCancel = await seller.rare.auction.batch.create({
         root: cancelTree.root,
         artifact: cancelTree,
-        reserveAmount: '0.000001',
-        duration: 60,
+        price: '0.000001',
+        endTime: Math.floor(Date.now() / 1000) + 60,
       });
       expect(createdForCancel.creator).toBe(seller.account);
       expect(createdForCancel.root).toBe(cancelTree.root);
 
-      const configured = await seller.rare.batch.auction.getStatus({
+      const configured = await seller.rare.auction.batch.getStatus({
         creator: seller.account,
         root: cancelTree.root,
         proof: cancelProof.proof,
@@ -206,11 +206,11 @@ describeFork('SDK fork integration write paths', () => {
       });
       expectConfiguredBatchAuction(configured, seller.account, cancelTree.root);
 
-      const cancelled = await seller.rare.batch.auction.cancel({ root: cancelTree.root });
+      const cancelled = await seller.rare.auction.batch.cancel({ root: cancelTree.root });
       expect(cancelled.creator).toBe(seller.account);
       expect(cancelled.root).toBe(cancelTree.root);
 
-      const settleTree = seller.rare.batch.buildTree({
+      const settleTree = seller.rare.utils.tree.build({
         content: JSON.stringify([
           { contractAddress: collection.contract, tokenId: tokens[2] },
           { contractAddress: collection.contract, tokenId: tokens[3] },
@@ -218,33 +218,33 @@ describeFork('SDK fork integration write paths', () => {
         format: 'json',
         chainId: chainIds[chain],
       });
-      const settleProof = seller.rare.batch.getTreeProof({
+      const settleProof = seller.rare.utils.tree.proof({
         artifact: settleTree,
         contractAddress: collection.contract,
         tokenId: tokens[2],
         chainId: chainIds[chain],
       });
 
-      await seller.rare.batch.auction.create({
+      await seller.rare.auction.batch.create({
         root: settleTree.root,
         artifact: settleTree,
-        reserveAmount: '0.000001',
-        duration: 1,
+        price: '0.000001',
+        endTime: Math.floor(Date.now() / 1000) + 1,
       });
-      const bid = await buyer.rare.batch.auction.bid({
+      const bid = await buyer.rare.auction.batch.bid({
         creator: seller.account,
         root: settleProof.root,
         proof: settleProof.proof,
         contract: collection.contract,
         tokenId: tokens[2],
-        amount: '0.000001',
+        price: '0.000001',
       });
       expect(bid.bidder).toBe(buyer.account);
       expect(bid.creator).toBe(seller.account);
       expect(bid.root).toBe(settleTree.root);
 
       await advanceForkTime(publicClient, 2);
-      const ended = await seller.rare.batch.auction.getStatus({
+      const ended = await seller.rare.auction.batch.getStatus({
         creator: seller.account,
         root: settleTree.root,
         proof: settleProof.proof,
@@ -254,7 +254,7 @@ describeFork('SDK fork integration write paths', () => {
       expect(ended.state).toBe('ENDED');
       expect(ended.settlementEligible).toBe(true);
 
-      const settled = await seller.rare.batch.auction.settle({
+      const settled = await seller.rare.auction.batch.settle({
         contract: collection.contract,
         tokenId: tokens[2],
       });
@@ -285,7 +285,7 @@ describeFork('SDK fork integration write paths', () => {
       const seller = createForkRareClient(chain, forkSellerPrivateKey);
       const buyer = createForkRareClient(chain, forkBuyerPrivateKey);
 
-      const collection = await seller.rare.collection.createSovereign({
+      const collection = await seller.rare.collection.deploy.erc721({
         name: `Rare SDK Fork Sovereign ${Date.now().toString(36)}`,
         symbol: 'RSFS',
         maxTokens: 8,
@@ -295,7 +295,7 @@ describeFork('SDK fork integration write paths', () => {
       const batchMint = await seller.rare.collection.mintBatch({
         contract: collection.contract,
         baseUri: 'ipfs://rare-sdk-fork/batch/',
-        tokenCount: 2,
+        amount: 2,
       });
       expect(batchMint.contract).toBe(collection.contract);
       expect(batchMint.tokenCount).toBe(2n);
@@ -323,12 +323,12 @@ describeFork('SDK fork integration write paths', () => {
       const royalty = await seller.rare.collection.getRoyaltyInfo({
         contract: collection.contract,
         tokenId: batchMint.fromTokenId,
-        salePrice: 10_000,
+        price: 10_000,
       });
       expect(royalty.receiver).toBe(seller.account);
       expect(royalty.royaltyAmount).toBeGreaterThanOrEqual(0n);
 
-      const lazyCollection = await seller.rare.collection.createLazySovereign({
+      const lazyCollection = await seller.rare.collection.deploy.lazyErc721({
         name: `Rare SDK Fork Lazy ${Date.now().toString(36)}`,
         symbol: 'RSFL',
         maxTokens: 4,
@@ -336,7 +336,7 @@ describeFork('SDK fork integration write paths', () => {
       const prepared = await seller.rare.collection.prepareLazyMint({
         contract: lazyCollection.contract,
         baseUri: 'ipfs://rare-sdk-fork/lazy/',
-        tokenCount: 2,
+        amount: 2,
         minter: buyer.account,
       });
       expect(prepared.baseUri).toBe('ipfs://rare-sdk-fork/lazy/');
@@ -397,7 +397,7 @@ describeFork('SDK fork integration write paths', () => {
       expect(status.currentlyMintable).toBe(true);
       expect(status.account).toBe(buyer.account);
 
-      const minted = await buyer.rare.listing.release.mintDirectSale({
+      const minted = await buyer.rare.listing.release.mint({
         contract,
         quantity: 2,
       });
@@ -472,7 +472,7 @@ async function fundForkAccounts(publicClient: PublicClient): Promise<void> {
 }
 
 async function mintToken(rare: RareClient, contract: Address): Promise<string> {
-  const minted = await rare.mint.mintTo({ contract, tokenUri });
+  const minted = await rare.collection.mint({ contract, tokenUri });
   return minted.tokenId.toString();
 }
 

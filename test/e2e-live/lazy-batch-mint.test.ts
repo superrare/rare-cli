@@ -38,7 +38,7 @@ describeLive('live lazy batch mint CLI write command', () => {
     const deployed = await step(`deploy lazy batch mint collection on ${fixture.chain}`, () =>
       jsonCommand<LazyBatchMintDeployResult>(fixture.sellerHome, [
         'collection',
-        'create',
+        'deploy',
         'lazy-batch-mint',
         uniqueTokenName('Rare CLI Lazy E2E'),
         uniqueSymbol('LZY'),

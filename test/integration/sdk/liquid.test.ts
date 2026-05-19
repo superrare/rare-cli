@@ -9,13 +9,13 @@ describeLive('Liquid Editions SDK live integration', () => {
   it('reads the live factory config and validates curves against it', async () => {
     const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
 
-    const factoryConfig = await rare.liquid.getFactoryConfig();
+    const factoryConfig = await rare.liquidEdition.getFactoryConfig();
     expect(factoryConfig.baseToken).toBe(resolveCurrency('rare', 'sepolia'));
     expect(factoryConfig.maxTotalSupplyWei).toBeGreaterThan(0n);
     expect(factoryConfig.curvePoolSupplyWei).toBeGreaterThan(0n);
     expect(factoryConfig.poolTickSpacing).toBeGreaterThan(0);
 
-    const preview = await rare.liquid.validateCurves({
+    const preview = await rare.liquidEdition.validateCurves({
       curves: [{ tickLower: -60_000, tickUpper: 60_000, numPositions: 1, shares: '1' }],
     });
 
@@ -28,7 +28,7 @@ describeLive('Liquid Editions SDK live integration', () => {
   it('generates preset curves from live factory config and the Rare price API', async () => {
     const rare = createRareClient({ publicClient: createTestSepoliaPublicClient() });
 
-    const generated = await rare.liquid.generatePresetCurves({ preset: 'medium-demand' });
+    const generated = await rare.liquidEdition.generatePresetCurves({ preset: 'medium-demand' });
 
     expect(generated.preset).toBe('medium-demand');
     expect(generated.rarePriceUsd).toBeGreaterThan(0);

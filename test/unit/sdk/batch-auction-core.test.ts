@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { zeroAddress } from 'viem';
 import {
   addMarketplaceFee,
@@ -21,6 +21,12 @@ const CREATOR = '0x2222222222222222222222222222222222222222';
 const CONTRACT = '0x3333333333333333333333333333333333333333';
 const ROOT = '0xc9ea7316e48c69cf113a1746956da366068e750940ab24ae2633c3c55291f0cf';
 const ZERO_ADDRESS = zeroAddress;
+const NOW = new Date('2026-01-01T00:00:00.000Z');
+const END_TIME = '1767229200';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 function buildArtifact(): ReturnType<typeof buildBatchTokenTreeArtifact> {
   return buildBatchTokenTreeArtifact({
@@ -34,12 +40,14 @@ function buildArtifact(): ReturnType<typeof buildBatchTokenTreeArtifact> {
 
 describe('batch auction core', () => {
   it('plans create inputs with artifact-backed approvals', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
     const artifact = buildArtifact();
 
     expect(planBatchAuctionCreate({
       artifact,
-      reserveAmount: '0.5',
-      duration: 3600,
+      price: '0.5',
+      endTime: END_TIME,
     }, ACCOUNT)).toEqual({
       root: ROOT,
       currency: ZERO_ADDRESS,
@@ -53,28 +61,30 @@ describe('batch auction core', () => {
     expect(planBatchAuctionRoot({ root: ROOT })).toEqual({ root: ROOT });
   });
 
-  it('honors disabled auto approval and validates create inputs', () => {
+  it('plans approval contracts independently from auto approval and validates create inputs', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
     const artifact = buildArtifact();
 
     expect(planBatchAuctionCreate({
       artifact,
-      reserveAmount: '0.5',
-      duration: 3600,
+      price: '0.5',
+      endTime: END_TIME,
       autoApprove: false,
-    }, ACCOUNT).approvalContracts).toEqual([]);
+    }, ACCOUNT).approvalContracts).toEqual([CONTRACT]);
 
     expect(() => planBatchAuctionCreate({
       artifact,
       root: '0x1111111111111111111111111111111111111111111111111111111111111111',
-      reserveAmount: '0.5',
-      duration: 3600,
+      price: '0.5',
+      endTime: END_TIME,
     }, ACCOUNT)).toThrow('root does not match artifact root.');
 
     expect(() => planBatchAuctionCreate({
       root: ROOT,
-      reserveAmount: '0',
-      duration: 3600,
-    }, ACCOUNT)).toThrow('reserveAmount must be greater than 0.');
+      price: '0',
+      endTime: END_TIME,
+    }, ACCOUNT)).toThrow('price must be greater than 0.');
   });
 
   it('plans proof-backed bids and fee-inclusive payment', () => {
@@ -90,7 +100,7 @@ describe('batch auction core', () => {
       proofArtifact: proof,
       contract: CONTRACT,
       tokenId: '2',
-      amount: '1',
+      price: '1',
     })).toEqual({
       creator: CREATOR,
       root: ROOT,
@@ -117,7 +127,7 @@ describe('batch auction core', () => {
       proofArtifact: proof,
       contract: CONTRACT,
       tokenId: '1',
-      amount: '1',
+      price: '1',
     })).toThrow('Batch auction proof is not valid for the requested token.');
 
     expect(() => planBatchAuctionStatus({

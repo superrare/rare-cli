@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { getConfirmationDecision } from '../../src/confirmation.js';
+import { getConfirmationDecision, requiresExplicitConfirmation } from '../../src/confirmation.js';
 
 const confirmableCommand = {
-  commandPath: ['rare', 'listing', 'create'],
-  hasYesOption: true,
+  commandPath: ['rare', 'swap', 'sell'],
   options: {},
   stdinIsTty: true,
   skipConfirmation: false,
@@ -40,10 +39,10 @@ describe('confirmation policy', () => {
     })).toBe('skip');
   });
 
-  it('does not prompt for non-confirmable commands or non-interactive execution', () => {
+  it('does not prompt for commands without extra confirmation policy or non-interactive execution', () => {
     expect(getConfirmationDecision({
       ...confirmableCommand,
-      hasYesOption: false,
+      commandPath: ['rare', 'collection', 'deploy', 'erc721'],
     })).toBe('skip');
     expect(getConfirmationDecision({
       ...confirmableCommand,
@@ -51,10 +50,22 @@ describe('confirmation policy', () => {
     })).toBe('skip');
   });
 
-  it('leaves configure delete to its command-specific confirmation', () => {
-    expect(getConfirmationDecision({
-      ...confirmableCommand,
-      commandPath: ['rare', 'configure', 'delete'],
-    })).toBe('skip');
+  it('only marks commands with approvals or surprising state changes as confirmable', () => {
+    expect(requiresExplicitConfirmation(['rare', 'listing', 'create'])).toBe(false);
+    expect(requiresExplicitConfirmation(['rare', 'auction', 'create'])).toBe(false);
+    expect(requiresExplicitConfirmation(['rare', 'listing', 'buy'])).toBe(false);
+    expect(requiresExplicitConfirmation(['rare', 'auction', 'bid'])).toBe(false);
+    expect(requiresExplicitConfirmation(['rare', 'offer', 'create'])).toBe(false);
+    expect(requiresExplicitConfirmation(['rare', 'offer', 'accept'])).toBe(false);
+    expect(requiresExplicitConfirmation(['rare', 'listing', 'batch', 'create'])).toBe(false);
+    expect(requiresExplicitConfirmation(['rare', 'listing', 'batch', 'buy'])).toBe(false);
+    expect(requiresExplicitConfirmation(['rare', 'offer', 'batch', 'create'])).toBe(false);
+    expect(requiresExplicitConfirmation(['rare', 'offer', 'batch', 'accept'])).toBe(false);
+    expect(requiresExplicitConfirmation(['rare', 'auction', 'batch', 'create'])).toBe(false);
+    expect(requiresExplicitConfirmation(['rare', 'auction', 'batch', 'bid'])).toBe(false);
+    expect(requiresExplicitConfirmation(['rare', 'listing', 'release', 'mint'])).toBe(false);
+    expect(requiresExplicitConfirmation(['rare', 'swap', 'sell'])).toBe(true);
+    expect(requiresExplicitConfirmation(['rare', 'collection', 'deploy', 'erc721'])).toBe(false);
+    expect(requiresExplicitConfirmation(['rare', 'listing', 'cancel'])).toBe(false);
   });
 });

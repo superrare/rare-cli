@@ -65,15 +65,15 @@ describeLive('live collection CLI writes', () => {
     expect(fixture.buyerMintToken.tokenId).toMatch(/^\d+$/);
   });
 
-  it('creates a standard Sovereign collection through the newer factory', async () => {
+  it('deploys an ERC-721 collection and batch mints through the active factory', async () => {
     const fixture = live.value;
     const suffix = Date.now().toString(36);
-    const created = await step('create standard Sovereign collection', () =>
-      jsonCommand<CreateSovereignResult>(fixture.sellerHome, [
+    const created = await step('deploy ERC-721 collection', () =>
+      jsonCommand<DeployResult>(fixture.sellerHome, [
         'collection',
-        'create',
-        'sovereign',
-        `Rare CLI Sovereign E2E ${suffix}`,
+        'deploy',
+        'erc721',
+        `Rare CLI ERC721 E2E ${suffix}`,
         `RCS${suffix.slice(-4).toUpperCase()}`,
         '--max-tokens',
         '3',
@@ -84,10 +84,8 @@ describeLive('live collection CLI writes', () => {
 
     expectTx(created);
     expect(created.contract).toMatch(/^0x[0-9a-fA-F]{40}$/);
-    expect(created.factory).toBe(getContractAddresses(fixture.chain).sovereignFactory);
-    expect(created.contractType).toBe('standard');
 
-    const minted = await step('batch mint standard Sovereign collection', () =>
+    const minted = await step('batch mint ERC-721 collection', () =>
       jsonCommand<CollectionMintBatchResult>(fixture.sellerHome, [
         'collection',
         'mint-batch',
@@ -95,7 +93,7 @@ describeLive('live collection CLI writes', () => {
         created.contract,
         '--base-uri',
         E2E_BATCH_BASE_URI,
-        '--token-count',
+        '--amount',
         '2',
         '--chain',
         fixture.chain,
@@ -110,7 +108,7 @@ describeLive('live collection CLI writes', () => {
     expect(minted.toTokenId).toBe('2');
     expect(minted.owner.toLowerCase()).toBe(fixture.sellerAddress.toLowerCase());
 
-    const creator = await step('read Sovereign token creator', () =>
+    const creator = await step('read token creator', () =>
       jsonCommand<CollectionTokenCreatorResult>(fixture.sellerHome, [
         'collection',
         'creator',
@@ -236,14 +234,14 @@ describeLive('live collection CLI writes', () => {
     expect(registryStatus.tokenReceiver?.toLowerCase()).toBe(fixture.sellerAddress.toLowerCase());
   });
 
-  it('creates a Lazy Sovereign release collection through the lazy factory', async () => {
+  it('deploys a Lazy ERC-721 release collection through the lazy factory', async () => {
     const fixture = live.value;
     const suffix = Date.now().toString(36);
-    const created = await step('create Lazy Sovereign collection', () =>
+    const created = await step('deploy Lazy ERC-721 collection', () =>
       jsonCommand<CreateSovereignResult>(fixture.sellerHome, [
         'collection',
-        'create',
-        'lazy-sovereign',
+        'deploy',
+        'lazy-erc721',
         `Rare CLI Lazy E2E ${suffix}`,
         `RCL${suffix.slice(-4).toUpperCase()}`,
         '--max-tokens',
@@ -267,7 +265,7 @@ describeLive('live collection CLI writes', () => {
         created.contract,
         '--base-uri',
         E2E_LAZY_BASE_URI,
-        '--token-count',
+        '--amount',
         '2',
         '--minter',
         fixture.buyerAddress,

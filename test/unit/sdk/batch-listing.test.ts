@@ -150,7 +150,7 @@ describe('batch listing namespace', () => {
     await namespace.buy({
       creator: accountAddress,
       currency: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-      amount: 1n,
+      price: 1n,
       proofArtifact: {
         root: hex32('4'),
         contract: '0x1111111111111111111111111111111111111111',
@@ -214,6 +214,110 @@ describe('batch listing namespace', () => {
     expect(writeCalls[0]?.args).toEqual([approvalManagerAddress, true]);
     expect(writeCalls[1]?.functionName).toBe('registerSalePriceMerkleRoot');
     expect(result.approvalTxHashes).toEqual([hex32('6')]);
+  });
+
+  it('resolves the cancel root from rare-api when token identity is provided', async () => {
+    const contract = '0x1111111111111111111111111111111111111111' as Address;
+    const root = hex32('8') as `0x${string}`;
+    const writeCalls: Array<{ functionName: string; args: unknown[] }> = [];
+    const namespace = createBatchListingNamespace(
+      {
+        async waitForTransactionReceipt() {
+          return receipt();
+        },
+      } as never,
+      {
+        publicClient: {} as never,
+        apiFetch: async (_input, init) => {
+          expect(JSON.parse(String(init?.body))).toMatchObject({
+            chainId: addresses.chainId,
+            contractAddress: contract,
+            tokenId: '1',
+            context: 'batch-listing',
+            creator: accountAddress,
+          });
+          return new Response(JSON.stringify({
+            root,
+            contractAddress: contract,
+            tokenId: '1',
+            leaf: hex32('9'),
+            proof: [hex32('a')],
+          }), { headers: { 'Content-Type': 'application/json' } });
+        },
+        walletClient: {
+          account: { address: accountAddress },
+          async writeContract(params: { functionName: string; args: unknown[] }) {
+            writeCalls.push(params);
+            return hex32('b');
+          },
+        } as never,
+      },
+      addresses,
+    );
+
+    const result = await namespace.cancel({ contract, tokenId: '1' });
+
+    expect(result.root).toBe(root);
+    expect(writeCalls).toHaveLength(1);
+    expect(writeCalls[0]?.functionName).toBe('cancelSalePriceMerkleRoot');
+    expect(writeCalls[0]?.args).toEqual([root]);
+  });
+
+  it('sets an allowlist from artifact data without requiring root inputs', async () => {
+    const root = hex32('c') as `0x${string}`;
+    const allowListRoot = hex32('d') as `0x${string}`;
+    const writeCalls: Array<{ functionName: string; args: unknown[] }> = [];
+    const namespace = createBatchListingNamespace(
+      {
+        async waitForTransactionReceipt() {
+          return receipt();
+        },
+      } as never,
+      {
+        publicClient: {} as never,
+        apiFetch: async (_input, init) => {
+          expect(JSON.parse(String(init?.body))).toMatchObject({
+            addresses: [accountAddress, '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
+            storageTarget: 'batch-listing',
+          });
+          return new Response(JSON.stringify({ merkleRoot: allowListRoot }), {
+            headers: { 'Content-Type': 'application/json' },
+          });
+        },
+        walletClient: {
+          account: { address: accountAddress },
+          async writeContract(params: { functionName: string; args: unknown[] }) {
+            writeCalls.push(params);
+            return hex32('e');
+          },
+        } as never,
+      },
+      addresses,
+    );
+
+    const result = await namespace.setAllowlist({
+      artifact: {
+        root,
+        currency: '0x0000000000000000000000000000000000000000',
+        amount: '1',
+        splitAddresses: [],
+        splitRatios: [],
+        tokens: [
+          { contract: accountAddress, tokenId: '1' },
+          { contract: accountAddress, tokenId: '2' },
+        ],
+        allowList: {
+          root: hex32('f') as `0x${string}`,
+          addresses: [accountAddress, '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
+          endTimestamp: '123',
+        },
+      },
+    });
+
+    expect(result).toMatchObject({ root, allowListRoot, endTime: 123n });
+    expect(writeCalls).toHaveLength(1);
+    expect(writeCalls[0]?.functionName).toBe('setAllowListConfig');
+    expect(writeCalls[0]?.args).toEqual([root, allowListRoot, 123n]);
   });
 });
 

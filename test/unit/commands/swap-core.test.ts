@@ -5,9 +5,7 @@ import {
   ensureHex,
   formatBuyRareQuoteLines,
   formatTokenTradeQuoteLines,
-  isAffirmativeResponse,
   parseInputsJson,
-  shouldPromptForConfirmation,
 } from '../../../src/commands/swap-core.js';
 
 test('parseInputsJson accepts a JSON array of hex strings', () => {
@@ -78,19 +76,4 @@ test('formatTokenTradeQuoteLines prints execution and route source details', () 
   assert.ok(lines.some((line) => line.includes('Route source: liquid-edition')));
   assert.ok(lines.some((line) => line.includes('Execution: liquid-router')));
   assert.ok(lines.some((line) => line.includes('Estimated token out: 125')));
-});
-
-test('isAffirmativeResponse accepts y and yes', () => {
-  assert.equal(isAffirmativeResponse('y'), true);
-  assert.equal(isAffirmativeResponse('YES'), true);
-  assert.equal(isAffirmativeResponse(' n '), false);
-  assert.equal(isAffirmativeResponse(''), false);
-});
-
-test('shouldPromptForConfirmation only prompts in interactive mode', () => {
-  assert.equal(shouldPromptForConfirmation({}, true, false), true);
-  assert.equal(shouldPromptForConfirmation({ yes: true }, true, false), false);
-  assert.equal(shouldPromptForConfirmation({ quoteOnly: true }, true, false), false);
-  assert.equal(shouldPromptForConfirmation({}, false, false), false);
-  assert.equal(shouldPromptForConfirmation({}, true, true), false);
 });

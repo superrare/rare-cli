@@ -138,7 +138,7 @@ describeLive('live RareMinter release settings', () => {
         contract,
         '--input',
         allowlistArtifact,
-        '--end-timestamp',
+        '--end-time',
         endTimestamp.toString(),
         '--chain',
         live.chain,

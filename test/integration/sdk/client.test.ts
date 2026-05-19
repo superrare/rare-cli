@@ -1,12 +1,87 @@
 import { describe, expect, it, type TestContext } from 'vitest';
-import { createPublicClient, http } from 'viem';
-import { baseSepolia } from 'viem/chains';
+import { createPublicClient, getAddress, http } from 'viem';
+import { baseSepolia, mainnet } from 'viem/chains';
 import { getContractAddresses } from '../../../src/contracts/addresses.js';
 import { RareApiError } from '../../../src/data-access/errors.js';
 import { createRareClient } from '../../../src/sdk/client.js';
 import { createTestSepoliaPublicClient, hasTestRpcUrl } from '../../helpers/liveViem.js';
 
 const describeLive = hasTestRpcUrl() ? describe : describe.skip;
+
+describe('Rare SDK client API integration', () => {
+  it('exposes read API methods through the client using public inputs', async (ctx) => {
+    const rare = createRareClient({
+      publicClient: createPublicClient({
+        chain: mainnet,
+        transport: http('http://127.0.0.1:8545'),
+      }),
+    });
+
+    const nftSearch = await searchNftsOrSkip(ctx, () => rare.search.nfts({ chainId: 1, page: 1, perPage: 1 }));
+    const nftSearchResult = nftSearch.data[0];
+    if (nftSearchResult === undefined) {
+      throw new Error('Expected at least one NFT search result.');
+    }
+
+    const nft = await searchNftsOrSkip(ctx, () => rare.nft.get({
+      chainId: nftSearchResult.chainId,
+      contract: getAddress(nftSearchResult.contractAddress),
+      tokenId: nftSearchResult.tokenId,
+    }));
+    expect(nft.universalTokenId).toBe(nftSearchResult.universalTokenId);
+
+    const nftEvents = await searchNftsOrSkip(ctx, () => rare.search.events({
+      chainId: nftSearchResult.chainId,
+      contract: getAddress(nftSearchResult.contractAddress),
+      tokenId: nftSearchResult.tokenId,
+      page: 1,
+      perPage: 1,
+      eventType: ['CREATE_NFT'],
+    }));
+    expect(nftEvents.pagination).toMatchObject({ page: 1, perPage: 1 });
+    expect(Array.isArray(nftEvents.data)).toBe(true);
+
+    const collectionSearch = await searchNftsOrSkip(ctx, () => rare.search.collections({ page: 1, perPage: 1 }));
+    const collectionSearchResult = collectionSearch.data[0];
+    if (collectionSearchResult === undefined) {
+      throw new Error('Expected at least one collection search result.');
+    }
+
+    const collection = await searchNftsOrSkip(ctx, () => rare.collection.get(collectionSearchResult.collectionId));
+    expect(collection.collectionId).toBe(collectionSearchResult.collectionId);
+
+    const collectionEvents = await searchNftsOrSkip(ctx, () => rare.search.events({
+      collectionId: collectionSearchResult.collectionId,
+      page: 1,
+      perPage: 1,
+      eventType: ['CREATE_NFT'],
+    }));
+    expect(collectionEvents.pagination).toMatchObject({ page: 1, perPage: 1 });
+    expect(Array.isArray(collectionEvents.data)).toBe(true);
+
+    const user = await searchNftsOrSkip(ctx, () => rare.user.get('0x510FF10EFfd8b645D177b04541544DD54067C839'));
+    expect(user.address.toLowerCase()).toBe('0x510ff10effd8b645d177b04541544dd54067c839');
+  }, 30_000);
+
+  it('exposes the canonical batch and release namespaces without old aliases', () => {
+    const rare = createRareClient({
+      publicClient: createPublicClient({
+        chain: mainnet,
+        transport: http('http://127.0.0.1:8545'),
+      }),
+    });
+
+    expect(rare.listing.batch).toBeDefined();
+    expect(rare.offer.batch).toBeDefined();
+    expect(rare.auction.batch).toBeDefined();
+    expect(rare.listing.release.allowlist).toBeDefined();
+    expect(rare.listing.release.limits).toBeDefined();
+    expect('batch' in rare).toBe(false);
+    expect('batchListing' in rare).toBe(false);
+    expect('events' in rare.nft).toBe(false);
+    expect('events' in rare.collection).toBe(false);
+  });
+});
 
 describeLive('Rare SDK client live integration', () => {
   it('uses a real viem Sepolia public client for chain and contract resolution', async () => {
@@ -58,7 +133,7 @@ describeLive('Rare SDK client live integration', () => {
     });
 
     await expect(
-      rare.deploy.lazyBatchMint({ name: 'Unsupported Lazy Collection', symbol: 'ULC' }),
+      rare.collection.deploy.lazyBatchMint({ name: 'Unsupported Lazy Collection', symbol: 'ULC' }),
     ).rejects.toThrow('Lazy batch mint factory is not deployed on this chain.');
   });
 });

@@ -3,7 +3,11 @@ import { createPublicClient, createWalletClient, http, type PublicClient, type W
 import { privateKeyToAccount } from 'viem/accounts';
 import { mainnet } from 'viem/chains';
 import {
+  approveNftContractIfNeeded,
   getKnownCurrencyDecimals,
+  NftApprovalRequiredError,
+  PaymentApprovalRequiredError,
+  preparePaymentAmountForSpender,
   requireWallet,
   resolveCurrencyDecimals,
   resolveChainFromPublicClient,
@@ -99,6 +103,69 @@ describe('SDK helper normalization', () => {
     expect(toPositiveWei('1', 'amount')).toBe(1_000_000_000_000_000_000n);
     expect(() => toPositiveWei('0', 'amount')).toThrow('amount must be greater than 0.');
     expect(() => toPositiveWei('-0.1', 'amount')).toThrow('amount must be greater than 0.');
+  });
+});
+
+describe('payment approval planning', () => {
+  it('returns a typed approval-required error before writing when auto approval is disabled', async () => {
+    const currency = '0x9999999999999999999999999999999999999999';
+    const spender = '0x8888888888888888888888888888888888888888';
+    const payment = preparePaymentAmountForSpender({
+      publicClient: {
+        async readContract(params: { functionName: string }): Promise<bigint> {
+          expect(params.functionName).toBe('allowance');
+          return 4n;
+        },
+      } as never,
+      walletClient: {
+        async writeContract(): Promise<never> {
+          throw new Error('unexpected approval write');
+        },
+      } as never,
+      account: sellerAddress,
+      accountAddress: sellerAddress,
+      spenderAddress: spender,
+      currency,
+      requiredAmount: 5n,
+      autoApprove: false,
+    });
+
+    await expect(payment).rejects.toBeInstanceOf(PaymentApprovalRequiredError);
+    await expect(payment).rejects.toMatchObject({
+      requiredAmount: 5n,
+      spenderAddress: spender,
+    });
+  });
+});
+
+describe('NFT approval planning', () => {
+  it('returns a typed approval-required error before writing when auto approval is disabled', async () => {
+    const nftAddress = '0x7777777777777777777777777777777777777777';
+    const operator = '0x8888888888888888888888888888888888888888';
+    const approval = approveNftContractIfNeeded({
+      publicClient: {
+        async readContract(params: { functionName: string }): Promise<boolean> {
+          expect(params.functionName).toBe('isApprovedForAll');
+          return false;
+        },
+      } as never,
+      walletClient: {
+        async writeContract(): Promise<never> {
+          throw new Error('unexpected approval write');
+        },
+      } as never,
+      account: sellerAddress,
+      accountAddress: sellerAddress,
+      nftAddress,
+      operator,
+      autoApprove: false,
+    });
+
+    await expect(approval).rejects.toBeInstanceOf(NftApprovalRequiredError);
+    await expect(approval).rejects.toMatchObject({
+      nftAddress,
+      operator,
+    });
   });
 });
 

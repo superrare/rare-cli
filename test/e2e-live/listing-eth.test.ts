@@ -158,7 +158,7 @@ describeLive('live ETH listing CLI write commands', () => {
         fixture.collection.contract,
         '--token-id',
         fixture.listingBuyToken.tokenId,
-        '--amount',
+        '--price',
         LISTING_PRICE,
         '--chain',
         fixture.chain,

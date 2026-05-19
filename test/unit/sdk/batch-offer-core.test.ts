@@ -35,8 +35,8 @@ describe('batch offer core', () => {
 
     expect(planBatchOfferCreate({
       artifact,
-      amount: '0.5',
-      expiry: 200,
+      price: '0.5',
+      endTime: 200,
     }, 100n)).toEqual({
       root: ROOT,
       amount: 500000000000000000n,
@@ -53,14 +53,14 @@ describe('batch offer core', () => {
     expect(() => planBatchOfferCreate({
       artifact,
       root: '0x1111111111111111111111111111111111111111111111111111111111111111',
-      amount: '0.5',
-      expiry: 200,
+      price: '0.5',
+      endTime: 200,
     }, 100n)).toThrow('root does not match artifact root.');
 
     expect(() => planBatchOfferCreate({
       root: ROOT,
-      amount: '0.5',
-      expiry: 100,
+      price: '0.5',
+      endTime: 100,
     }, 100n)).toThrow('expiry must be in the future.');
   });
 

@@ -109,7 +109,7 @@ describeLive('live ERC20 listing CLI write command', () => {
         fixture.collection.contract,
         '--token-id',
         fixture.rareListingBuyToken.tokenId,
-        '--amount',
+        '--price',
         amount,
         '--currency',
         E2E_RARE_CURRENCY,

@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   getCollection,
+  getCollectionEvents,
   getNft,
   getNftEvents,
   getTokenPrice,
+  getUser,
   searchCollections,
+  searchEvents,
   searchNfts,
 } from '../../../src/sdk/api.js';
 
@@ -23,9 +26,20 @@ describe('SDK API live integration', () => {
     const events = await getNftEvents(nft.universalTokenId, { page: 1, perPage: 1 });
     expect(events.pagination).toMatchObject({ page: 1, perPage: 1 });
     expect(Array.isArray(events.data)).toBe(true);
+
+    const searchedEvents = await searchEvents({
+      chainId: nft.chainId,
+      contract: nft.contractAddress,
+      tokenId: nft.tokenId,
+      eventType: ['CREATE_NFT', 'SETTLE_AUCTION'],
+      page: 1,
+      perPage: 1,
+    });
+    expect(searchedEvents.pagination).toMatchObject({ page: 1, perPage: 1 });
+    expect(Array.isArray(searchedEvents.data)).toBe(true);
   }, 30_000);
 
-  it('searches collections from the SuperRare API', async () => {
+  it('searches and fetches collections from the SuperRare API', async () => {
     const search = await searchCollections({ page: 1, perPage: 1 });
 
     expect(search.pagination).toMatchObject({ page: 1, perPage: 1 });
@@ -35,6 +49,33 @@ describe('SDK API live integration', () => {
 
     const collection = await getCollection(firstCollection!.collectionId);
     expect(collection.collectionId).toBe(firstCollection!.collectionId);
+
+    const events = await getCollectionEvents(collection.collectionId, { page: 1, perPage: 1 });
+    expect(events.pagination).toMatchObject({ page: 1, perPage: 1 });
+    expect(Array.isArray(events.data)).toBe(true);
+
+    const searchedEvents = await searchEvents({
+      collectionId: collection.collectionId,
+      eventType: ['CREATE_NFT', 'SETTLE_AUCTION'],
+      page: 1,
+      perPage: 1,
+    });
+    expect(searchedEvents.pagination).toMatchObject({ page: 1, perPage: 1 });
+    expect(Array.isArray(searchedEvents.data)).toBe(true);
+  }, 30_000);
+
+  it('fetches users from the SuperRare API', async () => {
+    const user = await getUser('0x510FF10EFfd8b645D177b04541544DD54067C839');
+
+    expect(user.address.toLowerCase()).toBe('0x510ff10effd8b645d177b04541544dd54067c839');
+    expect(user.username).toEqual(expect.any(String));
+    expect(user.stats).toEqual(expect.objectContaining({
+      created: expect.any(Number),
+      owned: expect.any(Number),
+      followerCount: expect.any(Number),
+      isCollector: expect.any(Boolean),
+      isCreator: expect.any(Boolean),
+    }));
   }, 30_000);
 
   it('accepts account market filters from the configured Rare API', async () => {
