@@ -138,7 +138,7 @@ async function uploadMetadataMedia(upload: { role: MintMetadataUploadRole; path:
 async function readFileOrThrow(path: string, role: MintMetadataUploadRole): Promise<Buffer> {
   try {
     return await readFile(path);
-  } catch {
-    throw new Error(`Could not read ${role} file: ${path}`);
+  } catch (error) {
+    throw new Error(`Could not read ${role} file: ${path}`, { cause: error });
   }
 }

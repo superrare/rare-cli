@@ -102,7 +102,7 @@ function readTextFile(filePath: string, label: string): string {
   try {
     return readFileSync(filePath, 'utf8');
   } catch (error) {
-    throw new Error(`Unable to read ${label} "${filePath}": ${errorMessage(error)}`);
+    throw new Error(`Unable to read ${label} "${filePath}": ${errorMessage(error)}`, { cause: error });
   }
 }
 
@@ -110,7 +110,7 @@ function writeJsonFile(filePath: string, data: unknown): void {
   try {
     writeFileSync(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
   } catch (error) {
-    throw new Error(`Unable to write allowlist artifact "${filePath}": ${errorMessage(error)}`);
+    throw new Error(`Unable to write allowlist artifact "${filePath}": ${errorMessage(error)}`, { cause: error });
   }
 }
 
@@ -172,7 +172,7 @@ function parseProofJson(content: string): unknown {
   try {
     return JSON.parse(content);
   } catch (error) {
-    throw new Error(`Unable to parse allowlist proof JSON: ${errorMessage(error)}`);
+    throw new Error(`Unable to parse allowlist proof JSON: ${errorMessage(error)}`, { cause: error });
   }
 }
 

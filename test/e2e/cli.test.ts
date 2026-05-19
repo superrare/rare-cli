@@ -1078,6 +1078,32 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('reports release file read failures with cause details in JSON mode', async () => {
+    await withTempHome(async (home) => {
+      const missing = join(home, 'missing-allowlist.csv');
+
+      const result = await runCli([
+        '--json',
+        'listing',
+        'release',
+        'allowlist',
+        'build',
+        '--input',
+        missing,
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      const error: unknown = JSON.parse(result.stderr);
+      expect(isErrorJson(error)).toBe(true);
+      if (!isErrorJson(error)) {
+        throw new Error('Expected JSON error output.');
+      }
+      expect(error.message).toContain(`Unable to read allowlist input "${missing}"`);
+      expect(error.causes?.some((cause) => cause.includes('ENOENT'))).toBe(true);
+    });
+  });
+
   it('builds and consumes release allowlist artifacts without RPC setup', async () => {
     await withTempHome(async (home) => {
       const input = join(home, 'allowlist.csv');
@@ -1327,6 +1353,16 @@ function isConfigWithSepoliaPrivateKey(value: unknown): value is {
     value.chains.sepolia !== null &&
     'privateKey' in value.chains.sepolia &&
     typeof value.chains.sepolia.privateKey === 'string'
+  );
+}
+
+function isErrorJson(value: unknown): value is { message: string; causes?: string[] } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'message' in value &&
+    typeof value.message === 'string' &&
+    (!('causes' in value) || (Array.isArray(value.causes) && value.causes.every((cause) => typeof cause === 'string')))
   );
 }
 
