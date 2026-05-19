@@ -1,5 +1,6 @@
 import { createInterface } from 'node:readline/promises';
-import { NftApprovalRequiredError, PaymentApprovalRequiredError } from '../sdk/helpers.js';
+import { NftApprovalRequiredError } from '../sdk/approvals-shell.js';
+import { PaymentApprovalRequiredError } from '../sdk/payments-shell.js';
 import { isJsonMode, log } from '../output.js';
 
 export async function runWithPaymentApprovalConsent<Result>(params: {

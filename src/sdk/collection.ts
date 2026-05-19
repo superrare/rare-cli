@@ -6,7 +6,7 @@ import { royaltyRegistryAbi, royaltyRegistryResolverAbi } from '../contracts/abi
 import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
 import type { RareClientConfig } from './types/client.js';
 import type { CollectionNamespace } from './types/collection.js';
-import { requireWallet } from './helpers.js';
+import { requireWallet } from './wallet-shell.js';
 import {
   buildCollectionRoyaltyRegistryContractPercentageWrite,
   buildCollectionRoyaltyRegistryContractReceiverWrite,

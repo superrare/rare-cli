@@ -10,7 +10,10 @@ import {
   type Address,
   type Hex,
 } from 'viem';
-import { toNonNegativeInteger, toPositiveInteger } from './helpers.js';
+import {
+  toNonNegativeInteger,
+  toPositiveInteger,
+} from './amounts-core.js';
 import type { IntegerInput } from './types/common.js';
 
 export type BatchTokenListInputFormat = 'csv' | 'json';

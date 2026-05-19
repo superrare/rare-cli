@@ -1,11 +1,11 @@
 import { isAddressEqual, zeroAddress, type Address, type Hex } from 'viem';
 import type { IntegerInput } from './types/common.js';
+import { requireInput } from './validation-core.js';
 import {
-  requireInput,
   toNonNegativeInteger,
   toPositiveInteger,
   toSafeIntegerNumber,
-} from './helpers.js';
+} from './amounts-core.js';
 
 export const sovereignCollectionContractTypes = [
   'standard',

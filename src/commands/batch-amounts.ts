@@ -1,6 +1,6 @@
 import { formatUnits, parseUnits, type Address, type PublicClient } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
-import { resolveCurrencyDecimals } from '../sdk/helpers.js';
+import { resolveCurrencyDecimals } from '../sdk/payments-shell.js';
 
 type BatchAmountClient = Pick<PublicClient, 'readContract'>;
 

@@ -3,7 +3,8 @@ import { factoryAbi } from '../contracts/abis/factory.js';
 import { lazyBatchMintFactoryAbi } from '../contracts/abis/lazy-batch-mint-factory.js';
 import type { RareClientConfig } from './types/client.js';
 import type { CollectionDeployNamespace } from './types/collection.js';
-import { requireWallet, toInteger } from './helpers.js';
+import { requireWallet } from './wallet-shell.js';
+import { toInteger } from './amounts-core.js';
 
 export function createDeployNamespace(
   publicClient: PublicClient,

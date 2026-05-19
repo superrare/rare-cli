@@ -8,7 +8,7 @@ import { tokenAbi } from '../contracts/abis/token.js';
 import { type SupportedChain } from '../contracts/addresses.js';
 import { getTokenPrice as getTokenPriceApi } from './api.js';
 import type { TokenContractInfo, TokenInfo, TokenNamespace } from './types/token.js';
-import { toInteger } from './helpers.js';
+import { toInteger } from './amounts-core.js';
 
 export type * from './types/token.js';
 

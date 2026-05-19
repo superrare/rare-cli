@@ -6,13 +6,13 @@ import { auctionAbi } from '../contracts/abis/auction.js';
 import { ETH_ADDRESS, type SupportedChain } from '../contracts/addresses.js';
 import type { RareClientConfig } from './types/client.js';
 import type { AuctionMarketplaceNamespace } from './types/auction.js';
+import { approveNftContractIfNeeded } from './approvals-shell.js';
 import {
-  approveNftContractIfNeeded,
   preparePaymentForSpender,
-  requireWallet,
-  requireInput,
   toCurrencyAmount,
-} from './helpers.js';
+} from './payments-shell.js';
+import { requireWallet } from './wallet-shell.js';
+import { requireInput } from './validation-core.js';
 import {
   planAuctionBid,
   planAuctionCreate,

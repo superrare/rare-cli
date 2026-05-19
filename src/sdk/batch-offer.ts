@@ -7,14 +7,14 @@ import {
 import { batchOfferAbi } from '../contracts/abis/batch-offer.js';
 import { tokenAbi } from '../contracts/abis/token.js';
 import { ETH_ADDRESS, chainIds, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
+import { approveNftContractIfNeeded } from './approvals-shell.js';
 import {
-  approveNftContractIfNeeded,
   preparePaymentForSpender,
-  requireInput,
-  requireWallet,
   resolveCurrencyDecimals,
-  stringifyAmountInput,
-} from './helpers.js';
+} from './payments-shell.js';
+import { requireInput } from './validation-core.js';
+import { requireWallet } from './wallet-shell.js';
+import { stringifyAmountInput } from './amounts-core.js';
 import type { RareClientConfig } from './types/client.js';
 import type { BatchOfferNamespace } from './types/batch-offer.js';
 import {

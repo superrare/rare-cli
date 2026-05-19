@@ -2,7 +2,7 @@ import { type PublicClient, parseEventLogs } from 'viem';
 import { tokenAbi } from '../contracts/abis/token.js';
 import type { RareClientConfig } from './types/client.js';
 import type { CollectionNamespace } from './types/collection.js';
-import { requireWallet } from './helpers.js';
+import { requireWallet } from './wallet-shell.js';
 
 export function createCollectionMint(
   publicClient: PublicClient,

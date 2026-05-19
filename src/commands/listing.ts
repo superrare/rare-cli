@@ -6,7 +6,7 @@ import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '../contracts/addresses.js';
 import { parseAddress } from '../sdk/validation.js';
-import { resolveCurrencyDecimals } from '../sdk/helpers.js';
+import { resolveCurrencyDecimals } from '../sdk/payments-shell.js';
 import { output, log } from '../output.js';
 import { createListingListCommand } from './account-market-list.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';

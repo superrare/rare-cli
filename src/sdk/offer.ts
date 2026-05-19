@@ -8,14 +8,14 @@ import { tokenAbi } from '../contracts/abis/token.js';
 import { ETH_ADDRESS, type SupportedChain } from '../contracts/addresses.js';
 import type { RareClientConfig } from './types/client.js';
 import type { OfferMarketplaceNamespace } from './types/offer.js';
+import { approveNftContractIfNeeded } from './approvals-shell.js';
 import {
-  approveNftContractIfNeeded,
   preparePaymentForSpender,
-  requireWallet,
-  requireInput,
   resolveCurrencyDecimals,
-  stringifyAmountInput,
-} from './helpers.js';
+} from './payments-shell.js';
+import { requireWallet } from './wallet-shell.js';
+import { requireInput } from './validation-core.js';
+import { stringifyAmountInput } from './amounts-core.js';
 import {
   planOfferAccept,
   planOfferCancel,

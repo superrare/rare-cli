@@ -6,7 +6,7 @@ import {
   type ResolvedCurrency,
   type SupportedChain,
 } from '../contracts/addresses.js';
-import { resolveCurrencyDecimals } from './helpers.js';
+import { resolveCurrencyDecimals } from './payments-shell.js';
 import type { CurrencyNamespace } from './types/client.js';
 import type { ResolvedCurrencyWithDecimals } from './types/common.js';
 

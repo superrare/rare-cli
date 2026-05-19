@@ -29,12 +29,12 @@ type ResolvedCurrencyParam<T extends { currency?: unknown }> = Omit<T, 'currency
   currency?: Address;
 };
 import { ETH_ADDRESS } from '../contracts/addresses.js';
+import { requireInput } from './validation-core.js';
 import {
-  requireInput,
   toInteger,
   toNonNegativeInteger,
   toPositiveInteger,
-} from './helpers.js';
+} from './amounts-core.js';
 import { planPayoutSplits } from './splits-core.js';
 
 export const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;

@@ -9,7 +9,7 @@ import {
   keccak256,
   type Address,
 } from 'viem';
-import { toInteger } from './helpers.js';
+import { toInteger } from './amounts-core.js';
 import type { IntegerInput } from './types/common.js';
 import type {
   BatchListingProofArtifact,

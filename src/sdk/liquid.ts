@@ -8,10 +8,10 @@ import { resolveLiquidFactoryConfigForSupply } from '../liquid/factory-config-co
 import { getTokenPrice } from './api.js';
 import {
   ensureTokenAllowance,
-  requireConfiguredAddress,
-  requireWallet,
   toTokenAmount,
-} from './helpers.js';
+} from './payments-shell.js';
+import { requireConfiguredAddress } from './validation-core.js';
+import { requireWallet } from './wallet-shell.js';
 import type {
   DeployLiquidEditionResult,
   GeneratePresetCurvesResult,

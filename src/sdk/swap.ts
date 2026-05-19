@@ -14,18 +14,24 @@ import {
 import type { ResolvedRoute } from '../swap/route-types.js';
 import {
   ensureTokenAllowance,
-  getConfiguredAccountAddress,
   getTokenDecimals,
-  requireConfiguredAddress,
-  requireInput,
+  toTokenAmount,
+} from './payments-shell.js';
+import {
+  getConfiguredAccountAddress,
   requireWallet,
   resolveDeadline,
   sendPreparedTransaction,
-  toSafeIntegerNumber,
-  toTokenAmount,
-  toWei,
+} from './wallet-shell.js';
+import {
+  requireConfiguredAddress,
+  requireInput,
   validateRouterPayload,
-} from './helpers.js';
+} from './validation-core.js';
+import {
+  toSafeIntegerNumber,
+  toWei,
+} from './amounts-core.js';
 import {
   assertRecipientSupportedForUniswapFallback,
   assertRequotedMinAmountOut,

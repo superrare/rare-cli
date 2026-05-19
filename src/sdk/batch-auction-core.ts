@@ -3,9 +3,11 @@ import { ETH_ADDRESS } from '../contracts/addresses.js';
 import {
   toNonNegativeInteger,
   toPositiveWei,
+} from './amounts-core.js';
+import {
   requireInput,
   toUnixTimestamp,
-} from './helpers.js';
+} from './validation-core.js';
 import { normalizeBytes32, verifyBatchTokenProof } from './batch-core.js';
 import { planPayoutSplits } from './splits-core.js';
 import type {

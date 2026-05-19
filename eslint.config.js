@@ -265,6 +265,46 @@ export default defineConfig([
     },
   },
   {
+    files: ['src/**/*-core.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              regex: 'commands[/\\\\]',
+              message: 'SDK/core must not import CLI command modules.',
+            },
+            {
+              group: [
+                '**/output.js',
+                '**/errors.js',
+                '**/config.js',
+                '../client.js',
+              ],
+              message:
+                'SDK/core must not import CLI shell modules (output, errors, config, client).',
+            },
+            {
+              group: [
+                './helpers.js',
+                '../sdk/helpers.js',
+                './wallet-shell.js',
+                '../sdk/wallet-shell.js',
+                './approvals-shell.js',
+                '../sdk/approvals-shell.js',
+                './payments-shell.js',
+                '../sdk/payments-shell.js',
+              ],
+              message:
+                'Core modules must import pure helpers from amounts-core or validation-core, not shell helpers.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ['test/**/*.ts'],
     rules: {
       '@typescript-eslint/consistent-type-definitions': 'off',

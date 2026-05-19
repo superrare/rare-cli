@@ -12,7 +12,8 @@ import type { SupportedChain } from '../contracts/addresses.js';
 import type { ReleaseNamespace } from './types/release.js';
 import type { RareClientConfig } from './types/client.js';
 import { ETH_ADDRESS } from '../contracts/addresses.js';
-import { preparePaymentForSpender, requireWallet } from './helpers.js';
+import { preparePaymentForSpender } from './payments-shell.js';
+import { requireWallet } from './wallet-shell.js';
 import { resolveCurrencyForSdk } from './currency.js';
 import {
   assertReleaseContractOwner,

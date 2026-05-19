@@ -8,7 +8,7 @@ import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
 import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
 import { createOfferListCommand } from './account-market-list.js';
-import { resolveCurrencyDecimals } from '../sdk/helpers.js';
+import { resolveCurrencyDecimals } from '../sdk/payments-shell.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 import { offerBatchCommand } from './batch.js';

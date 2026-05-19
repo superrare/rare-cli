@@ -8,13 +8,13 @@ import type {
   ListingMarketplaceNamespace,
 } from './types/listing.js';
 import type { RareClientConfig } from './types/client.js';
+import { approveNftContractIfNeeded } from './approvals-shell.js';
 import {
-  approveNftContractIfNeeded,
   preparePaymentForSpender,
-  requireWallet,
-  requireInput,
   toCurrencyAmount,
-} from './helpers.js';
+} from './payments-shell.js';
+import { requireWallet } from './wallet-shell.js';
+import { requireInput } from './validation-core.js';
 import {
   planListingBuy,
   planListingCancel,

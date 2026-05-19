@@ -9,14 +9,14 @@ import {
 } from 'viem';
 import { batchAuctionHouseAbi } from '../contracts/abis/batch-auctionhouse.js';
 import { ETH_ADDRESS, chainIds, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
+import { approveNftContractIfNeeded } from './approvals-shell.js';
 import {
-  approveNftContractIfNeeded,
   preparePaymentAmountForSpender,
-  requireInput,
-  requireWallet,
   resolveCurrencyDecimals,
-  stringifyAmountInput,
-} from './helpers.js';
+} from './payments-shell.js';
+import { requireInput } from './validation-core.js';
+import { requireWallet } from './wallet-shell.js';
+import { stringifyAmountInput } from './amounts-core.js';
 import type { RareClientConfig } from './types/client.js';
 import type { WalletAccount } from './types/common.js';
 import type { BatchAuctionNamespace } from './types/batch-auction.js';
