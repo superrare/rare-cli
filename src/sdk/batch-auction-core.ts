@@ -17,6 +17,7 @@ import type {
   BatchAuctionStatus,
   BatchAuctionStatusParams,
 } from './types/batch-auction.js';
+import type { TimestampInput } from './types/common.js';
 
 type ResolvedCurrencyParam<T extends { currency?: unknown }> = Omit<T, 'currency'> & {
   currency?: Address;
@@ -148,7 +149,7 @@ export function planBatchAuctionBid(params: ResolvedCurrencyParam<BatchAuctionBi
   };
 }
 
-function resolveBatchAuctionDuration(params: BatchAuctionCreateParams, nowSeconds: bigint): bigint {
+function resolveBatchAuctionDuration(params: { endTime: TimestampInput }, nowSeconds: bigint): bigint {
   const endTime = toUnixTimestamp(requireInput(params.endTime, 'endTime'), 'endTime');
   if (endTime <= nowSeconds) {
     throw new Error('endTime must be in the future.');

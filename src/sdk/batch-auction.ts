@@ -118,8 +118,14 @@ export function createBatchAuctionNamespace(
 
     async cancel(params): ReturnType<BatchAuctionNamespace['cancel']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
-      const { walletClient, account } = requireWallet(config);
-      const plan = planBatchAuctionRoot(params);
+      const { walletClient, account, accountAddress } = requireWallet(config);
+      const resolvedParams = await resolveBatchAuctionCancelParams(
+        publicClient,
+        batchAuctionHouse,
+        accountAddress,
+        params,
+      );
+      const plan = planBatchAuctionRoot(resolvedParams);
 
       const txHash = await walletClient.writeContract({
         address: batchAuctionHouse,
@@ -148,6 +154,17 @@ export function createBatchAuctionNamespace(
         creator: cancelled.args.creator,
         root: cancelled.args.merkleRoot,
       };
+    },
+
+    async roots(params): ReturnType<BatchAuctionNamespace['roots']> {
+      const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
+      const creator = params?.creator ?? requireWallet(config).accountAddress;
+      return [...await publicClient.readContract({
+        address: batchAuctionHouse,
+        abi: batchAuctionHouseAbi,
+        functionName: 'getUserAuctionMerkleRoots',
+        args: [creator],
+      })];
     },
 
     async bid(params): ReturnType<BatchAuctionNamespace['bid']> {
@@ -317,7 +334,7 @@ async function resolveBatchAuctionCreateParams(
   config: RareClientConfig,
   params: Parameters<BatchAuctionNamespace['create']>[0],
 ): Promise<Parameters<BatchAuctionNamespace['create']>[0]> {
-  if (params.root !== undefined || params.artifact === undefined) {
+  if (params.root !== undefined) {
     return params;
   }
 
@@ -330,6 +347,35 @@ async function resolveBatchAuctionCreateParams(
       root,
     },
   };
+}
+
+async function resolveBatchAuctionCancelParams(
+  publicClient: PublicClient,
+  batchAuctionHouse: Address,
+  accountAddress: Address,
+  params: Parameters<BatchAuctionNamespace['cancel']>[0],
+): Promise<Parameters<BatchAuctionNamespace['cancel']>[0]> {
+  if (params.root !== undefined || params.artifact !== undefined) {
+    return params;
+  }
+
+  const roots = await publicClient.readContract({
+    address: batchAuctionHouse,
+    abi: batchAuctionHouseAbi,
+    functionName: 'getUserAuctionMerkleRoots',
+    args: [accountAddress],
+  });
+
+  if (roots.length === 0) {
+    throw new Error(`No active batch auction roots found for ${accountAddress}. Pass root or artifact to cancel a specific root.`);
+  }
+  if (roots.length > 1) {
+    throw new Error(
+      `Multiple active batch auction roots found for ${accountAddress}. Pass one of these roots: ${roots.join(', ')}`,
+    );
+  }
+
+  return { root: roots[0] };
 }
 
 async function resolveBatchAuctionBidParams(

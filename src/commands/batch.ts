@@ -1,12 +1,13 @@
 import { existsSync } from 'node:fs';
 import { readFile, writeFile } from 'node:fs/promises';
+import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
 import { getAddress, isAddress, isAddressEqual, isHex, type Address, type Hex, type PublicClient } from 'viem';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
 import { ETH_ADDRESS, chainIds, resolveCurrency, type SupportedChain } from '../contracts/addresses.js';
 import { printError } from '../errors.js';
-import { output, log } from '../output.js';
+import { output, log, isJsonMode } from '../output.js';
 import { createRareClient } from '../sdk/client.js';
 import type { RareClient } from '../sdk/client.js';
 import {
@@ -148,6 +149,8 @@ type OfferCreateOptions = OfferRootOptions & {
 };
 
 type OfferRevokeOptions = OfferRootOptions & {
+  contract?: string;
+  tokenId?: string;
   chain?: string;
   chainId?: string;
 };
@@ -477,19 +480,25 @@ function createOfferRevokeCommand(): Command {
     .option('--root <bytes32>', 'batch token Merkle root override')
     .option('--input <path>', 'batch token artifact, CSV, or JSON token list')
     .option('--format <format>', 'input format for --input (csv, json)')
+    .option('--contract <address>', 'token contract used to resolve the active offer root through rare-api')
+    .option('--token-id <id>', 'token ID used to resolve the active offer root through rare-api')
     .option('--chain-id <id>', 'chain ID to use when building --input')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts: OfferRevokeOptions) => {
       try {
-        const root = await resolveOfferRoot(opts);
+        const revokeParams = await resolveOfferRevokeParams(opts);
         const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
 
         log(`Revoking batch offer on ${chain}...`);
         log(`  BatchOfferCreator: ${rare.contracts.batchOfferCreator}`);
-        log(`  Root: ${root}`);
+        if ('root' in revokeParams) {
+          log(`  Root: ${revokeParams.root}`);
+        } else {
+          log(`  Token: ${revokeParams.contract} #${revokeParams.tokenId}`);
+        }
         log('Waiting for confirmation...');
 
-        const result = await rare.offer.batch.revoke({ root });
+        const result = await rare.offer.batch.revoke(revokeParams);
 
         output(
           {
@@ -766,8 +775,8 @@ function createAuctionCancelCommand(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts: AuctionCancelOptions) => {
       try {
-        const root = await resolveOfferRoot(opts);
         const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
+        const root = await resolveAuctionCancelRoot(rare, opts);
 
         log(`Cancelling batch auction on ${chain}...`);
         log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse}`);
@@ -1416,6 +1425,80 @@ function resolveTreeChainId(opts: { chain?: string; chainId?: string }): string 
 
 async function resolveOfferRoot(opts: OfferRootOptions): Promise<Hex> {
   return (await resolveAuctionRootInput(opts)).root;
+}
+
+async function resolveOfferRevokeParams(opts: OfferRevokeOptions): Promise<
+  | { root: Hex }
+  | { contract: Address; tokenId: string }
+> {
+  if (opts.root !== undefined || opts.input !== undefined) {
+    return { root: await resolveOfferRoot(opts) };
+  }
+
+  if (opts.contract !== undefined && opts.tokenId !== undefined) {
+    return {
+      contract: parseAddressOption(opts.contract, '--contract'),
+      tokenId: opts.tokenId,
+    };
+  }
+
+  if (opts.contract !== undefined || opts.tokenId !== undefined) {
+    throw new Error('Pass both --contract and --token-id to resolve the active batch offer root through rare-api.');
+  }
+
+  throw new Error('Pass --input, pass --root, or pass --contract and --token-id to resolve the active batch offer root through rare-api.');
+}
+
+async function resolveAuctionCancelRoot(rare: RareClient, opts: AuctionCancelOptions): Promise<Hex> {
+  if (opts.root !== undefined || opts.input !== undefined) {
+    return resolveOfferRoot(opts);
+  }
+
+  const roots = await rare.auction.batch.roots();
+  return selectRootCandidate({
+    roots,
+    emptyMessage: 'No active batch auction roots found for the connected wallet. Pass --root or --input to cancel a specific root.',
+    prompt: 'Select batch auction root to cancel',
+  });
+}
+
+async function selectRootCandidate(params: {
+  roots: readonly Hex[];
+  emptyMessage: string;
+  prompt: string;
+}): Promise<Hex> {
+  if (params.roots.length === 0) {
+    throw new Error(params.emptyMessage);
+  }
+  if (params.roots.length === 1) {
+    const [root] = params.roots;
+    if (root === undefined) {
+      throw new Error(params.emptyMessage);
+    }
+    return root;
+  }
+
+  const choices = params.roots.map((root, index) => `${index + 1}. ${root}`).join('\n');
+  if (isJsonMode() || !process.stdin.isTTY) {
+    throw new Error(`${params.prompt}:\n${choices}\nPass --root with the root to cancel.`);
+  }
+
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  try {
+    const answer = (await rl.question(`${params.prompt}:\n${choices}\nRoot number: `)).trim();
+    const index = Number.parseInt(answer, 10) - 1;
+    const root = params.roots[index];
+    if (!Number.isInteger(index) || root === undefined) {
+      throw new Error('Invalid root selection.');
+    }
+    return root;
+  } finally {
+    rl.close();
+  }
 }
 
 async function resolveAuctionRootInput(opts: OfferRootOptions): Promise<AuctionRootInput> {

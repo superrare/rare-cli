@@ -2,9 +2,11 @@ import type { Address, Hash, Hex } from 'viem';
 import type { BatchTokenListArtifact, BatchTokenProofArtifact } from '../batch-core.js';
 import type { AmountInput, CurrencyInput, IntegerInput, TimestampInput, TransactionResult } from './common.js';
 
-export type BatchOfferCreateParams = {
-  root?: Hex;
-  artifact?: BatchTokenListArtifact;
+export type BatchOfferRootSource =
+  | { root: Hex; artifact?: BatchTokenListArtifact }
+  | { artifact: BatchTokenListArtifact; root?: Hex };
+
+export type BatchOfferCreateParams = BatchOfferRootSource & {
   price: AmountInput;
   currency?: CurrencyInput;
   endTime: TimestampInput;
@@ -22,10 +24,14 @@ export type BatchOfferCreateResult = {
   approvalTxHash?: Hash;
 } & TransactionResult
 
-export type BatchOfferRevokeParams = {
-  root?: Hex;
-  artifact?: BatchTokenListArtifact;
-}
+export type BatchOfferRevokeParams =
+  | BatchOfferRootSource
+  | {
+    contract: Address;
+    tokenId: IntegerInput;
+    root?: Hex;
+    artifact?: BatchTokenListArtifact;
+  };
 
 export type BatchOfferRevokeResult = {
   batchOfferCreator: Address;

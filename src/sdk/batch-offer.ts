@@ -2,6 +2,7 @@ import {
   isAddressEqual,
   parseUnits,
   parseEventLogs,
+  type Address,
   type PublicClient,
 } from 'viem';
 import { batchOfferAbi } from '../contracts/abis/batch-offer.js';
@@ -101,8 +102,9 @@ export function createBatchOfferNamespace(
 
     async revoke(params): ReturnType<BatchOfferNamespace['revoke']> {
       const batchOfferCreator = requireContractAddress(chain, 'batchOfferCreator');
-      const { walletClient, account } = requireWallet(config);
-      const plan = planBatchOfferRoot(params);
+      const { walletClient, account, accountAddress } = requireWallet(config);
+      const resolvedParams = await resolveBatchOfferRevokeParams(config, chainIds[chain], accountAddress, params);
+      const plan = planBatchOfferRoot(resolvedParams);
 
       const txHash = await walletClient.writeContract({
         address: batchOfferCreator,
@@ -230,7 +232,7 @@ async function resolveBatchOfferCreateParams(
   config: RareClientConfig,
   params: Parameters<BatchOfferNamespace['create']>[0],
 ): Promise<Parameters<BatchOfferNamespace['create']>[0]> {
-  if (params.root !== undefined || params.artifact === undefined) {
+  if (params.root !== undefined) {
     return params;
   }
 
@@ -240,6 +242,34 @@ async function resolveBatchOfferCreateParams(
     root,
     artifact: undefined,
   };
+}
+
+async function resolveBatchOfferRevokeParams(
+  config: RareClientConfig,
+  chainId: number,
+  accountAddress: Address,
+  params: Parameters<BatchOfferNamespace['revoke']>[0],
+): Promise<{ root: `0x${string}` }> {
+  if (params.root !== undefined || params.artifact !== undefined) {
+    return {
+      root: planBatchOfferRoot(params).root,
+    };
+  }
+
+  if ('contract' in params && 'tokenId' in params) {
+    const proof = await resolveApiNftMerkleProof(config, {
+      chainId,
+      contractAddress: params.contract,
+      tokenId: params.tokenId,
+      context: 'batch-offer',
+      creator: accountAddress,
+    });
+    return { root: proof.root };
+  }
+
+  throw new Error(
+    'Pass a batch token artifact, pass root as an override, or pass contract and tokenId to resolve the active batch offer root through rare-api.',
+  );
 }
 
 async function resolveBatchOfferAcceptParams(

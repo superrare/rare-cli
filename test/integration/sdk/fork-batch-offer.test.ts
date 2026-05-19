@@ -208,7 +208,7 @@ describeFork('SDK fork integration write paths', () => {
       });
       expectConfiguredBatchAuction(configured, seller.account, cancelTree.root);
 
-      const cancelled = await seller.rare.auction.batch.cancel({ root: cancelTree.root });
+      const cancelled = await seller.rare.auction.batch.cancel({});
       expect(cancelled.creator).toBe(seller.account);
       expect(cancelled.root).toBe(cancelTree.root);
 
