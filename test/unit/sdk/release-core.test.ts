@@ -87,12 +87,24 @@ describe('release configure planning', () => {
   });
 
   it('rejects invalid release business inputs before shell writes', () => {
-    expect(() =>
+    expect(
       planReleaseConfigure(
         { contract: collection, price: '1', maxMints: 0 },
         { accountAddress, currencyDecimals: null, nowSeconds: 1n },
+      ).maxMints,
+    ).toBe(0n);
+    expect(() =>
+      planReleaseConfigure(
+        { contract: collection, price: '1', maxMints: -1 },
+        { accountAddress, currencyDecimals: null, nowSeconds: 1n },
       ),
-    ).toThrow('maxMints must be an integer between 1 and 100.');
+    ).toThrow('maxMints must be an integer between 0 and 100.');
+    expect(() =>
+      planReleaseConfigure(
+        { contract: collection, price: '1', maxMints: 101 },
+        { accountAddress, currencyDecimals: null, nowSeconds: 1n },
+      ),
+    ).toThrow('maxMints must be an integer between 0 and 100.');
     expect(() => normalizeReleaseStartTime('-1', 1n)).toThrow(
       'startTime must be greater than or equal to 0.',
     );
@@ -316,6 +328,44 @@ describe('release status shaping', () => {
       currentlyMintable: true,
       now: 1_000n,
     });
+  });
+
+  it('treats zero collection max supply as sold out, not uncapped', () => {
+    const status = shapeReleaseStatus({
+      rareMinter,
+      contract: collection,
+      directSale: {
+        seller: accountAddress,
+        currencyAddress: ETH_ADDRESS,
+        price: parseEther('1'),
+        startTime: 900n,
+        maxMints: 0n,
+        splitRecipients: [accountAddress],
+        splitRatios: [100],
+      },
+      allowlist: { root: ZERO_BYTES32, endTimestamp: 0n },
+      mintLimit: 0n,
+      txLimit: 0n,
+      account: accountAddress,
+      accountMints: 0n,
+      accountTxs: 0n,
+      totalSupply: 0n,
+      maxSupply: 0n,
+      currencyDecimals: 18,
+      nowSeconds: 1_000n,
+    });
+
+    expect(status).toMatchObject({
+      remainingSupply: 0n,
+      soldOut: true,
+      currentlyMintable: false,
+    });
+    expect(() => preflightReleaseDirectSaleMint({
+      status,
+      plan: planReleaseDirectSaleMint({ contract: collection, quantity: 1 }),
+      buyer: accountAddress,
+      nowSeconds: 1_000n,
+    })).toThrow('Release collection is sold out.');
   });
 
   it('uses limits and unconfigured seller state to mark releases unavailable', () => {

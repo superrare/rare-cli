@@ -267,7 +267,7 @@ rare listing release mint \
 ```
 
 Release configuration uses `RareMinter.prepareMintDirectSale`. It does not mint or modify protocol-admin settings.
-`--max-mints` must be between 1 and 100 because direct sale mint transactions cannot mint more than 100 tokens.
+`--max-mints 0` disables the per-transaction mint cap. Nonzero values must be between 1 and 100.
 Release minting uses `RareMinter.mintDirectSale`; the contract mints to the connected wallet.
 
 #### Release allowlists and limits

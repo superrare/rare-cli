@@ -242,8 +242,8 @@ export function planReleaseConfigure(
     requireInput(params.maxMints, 'maxMints'),
     'maxMints',
   );
-  if (maxMints < 1n || maxMints > 100n) {
-    throw new Error('maxMints must be an integer between 1 and 100.');
+  if (maxMints < 0n || maxMints > 100n) {
+    throw new Error('maxMints must be an integer between 0 and 100.');
   }
   const { splitRecipients, splitRatios } = resolveReleaseSplits({
     splitAddresses: params.splitAddresses,
@@ -659,7 +659,7 @@ export function shapeReleaseStatus(opts: {
       : null;
   const soldOut =
     opts.totalSupply !== null && opts.maxSupply !== null
-      ? opts.maxSupply > 0n && opts.totalSupply >= opts.maxSupply
+      ? opts.totalSupply >= opts.maxSupply
       : null;
 
   const accountMintLimitReached =
