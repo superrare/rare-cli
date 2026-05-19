@@ -7,7 +7,7 @@ import {
   shouldResolveBatchListingAllowListProof,
   uniqueAddresses,
 } from '../../../src/sdk/batch-listing-core.js';
-import type { BatchListingRootArtifact } from '../../../src/sdk/types.js';
+import type { BatchListingRootArtifact } from '../../../src/sdk/batch-listing.js';
 
 const seller = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' satisfies Address;
 const collaborator = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' satisfies Address;

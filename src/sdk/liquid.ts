@@ -15,15 +15,17 @@ import {
 import type {
   DeployLiquidEditionResult,
   GeneratePresetCurvesResult,
+  LiquidEditionNamespace,
   LiquidEditionMarketState,
   LiquidEditionPoolKey,
   LiquidEditionPoolInfo,
   LiquidEditionCurrentPrice,
   LiquidEditionTelemetry,
-  RareClient,
-  RareClientConfig,
   SetLiquidEditionRenderContractResult,
-} from './types.js';
+} from './types/liquid.js';
+import type { RareClientConfig } from './types/client.js';
+
+export type * from './types/liquid.js';
 
 const LIQUID_EDITION_ADDRESS_LOG_RETRY_ATTEMPTS = 3;
 const LIQUID_EDITION_ADDRESS_LOG_RETRY_DELAY_MS = 1_000;
@@ -94,11 +96,8 @@ function toLiquidEditionMarketState(
 }
 
 function missingLiquidEditionAddressError(txHash: Hash, receipt: TransactionReceipt, cause?: unknown): Error {
-  const statusPhrase = receipt.status === 'success'
-    ? 'succeeded'
-    : `was confirmed with status "${receipt.status}"`;
   const message =
-    `Liquid Edition deploy transaction ${statusPhrase}, but the deployed contract address could not be read ` +
+    'Liquid Edition deploy transaction succeeded, but the deployed contract address could not be read ' +
     `from the LiquidTokenCreated event logs after ${LIQUID_EDITION_ADDRESS_LOG_RETRY_ATTEMPTS + 1} attempts. ` +
     `Transaction hash: ${txHash}. Block: ${receipt.blockNumber}. The connected RPC may be delayed or returning ` +
     'incomplete receipt logs; retry with a synced RPC or inspect the transaction hash.';
@@ -106,11 +105,21 @@ function missingLiquidEditionAddressError(txHash: Hash, receipt: TransactionRece
   return cause instanceof Error ? new Error(message, { cause }) : new Error(message);
 }
 
+function liquidEditionDeployRevertedError(txHash: Hash, receipt: TransactionReceipt): Error {
+  return new Error(
+    `Liquid Edition deploy transaction reverted before emitting LiquidTokenCreated. ` +
+      `Transaction hash: ${txHash}. Block: ${receipt.blockNumber}.`,
+  );
+}
+
 async function waitForLiquidEditionAddress(
   publicClient: PublicClient,
   txHash: Hash,
 ): Promise<{ receipt: TransactionReceipt; contract: Address }> {
   const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+  if (receipt.status === 'reverted') {
+    throw liquidEditionDeployRevertedError(txHash, receipt);
+  }
   const contract = getLiquidEditionAddressFromReceipt(receipt);
   if (contract !== undefined) {
     return { receipt, contract };
@@ -131,22 +140,28 @@ async function retryLiquidEditionAddress(
   }
 
   await sleep(LIQUID_EDITION_ADDRESS_LOG_RETRY_DELAY_MS);
-  try {
-    const receipt = await publicClient.getTransactionReceipt({ hash: txHash });
-    const contract = getLiquidEditionAddressFromReceipt(receipt);
-    return contract !== undefined
-      ? { receipt, contract }
-      : await retryLiquidEditionAddress(publicClient, txHash, receipt, attempt + 1);
-  } catch (error) {
-    return retryLiquidEditionAddress(publicClient, txHash, previousReceipt, attempt + 1, error);
+  const receiptResult = await publicClient.getTransactionReceipt({ hash: txHash })
+    .then((receipt) => ({ ok: true as const, receipt }))
+    .catch((error: unknown) => ({ ok: false as const, error }));
+  if (!receiptResult.ok) {
+    return retryLiquidEditionAddress(publicClient, txHash, previousReceipt, attempt + 1, receiptResult.error);
   }
+
+  const { receipt } = receiptResult;
+  if (receipt.status === 'reverted') {
+    throw liquidEditionDeployRevertedError(txHash, receipt);
+  }
+  const contract = getLiquidEditionAddressFromReceipt(receipt);
+  return contract !== undefined
+    ? { receipt, contract }
+    : await retryLiquidEditionAddress(publicClient, txHash, receipt, attempt + 1);
 }
 
 export function createLiquidNamespace(
   config: RareClientConfig,
   chain: SupportedChain,
   addresses: { liquidFactory?: Address },
-): RareClient['liquidEdition'] {
+): LiquidEditionNamespace {
   const { publicClient } = config;
 
   return {

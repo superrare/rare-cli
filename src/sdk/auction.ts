@@ -4,7 +4,8 @@ import {
 } from 'viem';
 import { auctionAbi } from '../contracts/abis/auction.js';
 import { ETH_ADDRESS, type SupportedChain } from '../contracts/addresses.js';
-import type { RareClientConfig, RareClient } from './types.js';
+import type { RareClientConfig } from './types/client.js';
+import type { AuctionMarketplaceNamespace } from './types/auction.js';
 import {
   approveNftContractIfNeeded,
   preparePaymentForSpender,
@@ -21,14 +22,16 @@ import {
 } from './marketplace-core.js';
 import { resolveCurrencyForSdk } from './currency.js';
 
+export type * from './types/auction.js';
+
 export function createAuctionNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
   chain: SupportedChain,
   addresses: { auction: Address },
-): Omit<RareClient['auction'], 'batch'> {
+): AuctionMarketplaceNamespace {
   return {
-    async create(params): ReturnType<RareClient['auction']['create']> {
+    async create(params): ReturnType<AuctionMarketplaceNamespace['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const price = requireInput(params.price, 'price');
@@ -84,7 +87,7 @@ export function createAuctionNamespace(
       };
     },
 
-    async bid(params): ReturnType<RareClient['auction']['bid']> {
+    async bid(params): ReturnType<AuctionMarketplaceNamespace['bid']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const price = requireInput(params.price, 'price');
@@ -114,7 +117,7 @@ export function createAuctionNamespace(
       return { txHash, receipt, approvalTxHash: payment.approvalTxHash };
     },
 
-    async settle(params): ReturnType<RareClient['auction']['settle']> {
+    async settle(params): ReturnType<AuctionMarketplaceNamespace['settle']> {
       const { walletClient, account } = requireWallet(config);
       const plan = planAuctionTokenAction(params);
 
@@ -131,7 +134,7 @@ export function createAuctionNamespace(
       return { txHash, receipt };
     },
 
-    async cancel(params): ReturnType<RareClient['auction']['cancel']> {
+    async cancel(params): ReturnType<AuctionMarketplaceNamespace['cancel']> {
       const { walletClient, account } = requireWallet(config);
       const plan = planAuctionTokenAction(params);
 
@@ -148,7 +151,7 @@ export function createAuctionNamespace(
       return { txHash, receipt };
     },
 
-    async status(params): ReturnType<RareClient['auction']['status']> {
+    async status(params): ReturnType<AuctionMarketplaceNamespace['status']> {
       const plan = planAuctionTokenAction(params);
       const [
         result,

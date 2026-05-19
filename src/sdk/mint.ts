@@ -1,13 +1,14 @@
 import { type PublicClient, parseEventLogs } from 'viem';
 import { tokenAbi } from '../contracts/abis/token.js';
-import type { RareClientConfig, RareClient } from './types.js';
+import type { RareClientConfig } from './types/client.js';
+import type { CollectionNamespace } from './types/collection.js';
 import { requireWallet } from './helpers.js';
 
 export function createCollectionMint(
   publicClient: PublicClient,
   config: RareClientConfig,
-): RareClient['collection']['mint'] {
-  return async function mint(params): ReturnType<RareClient['collection']['mint']> {
+): CollectionNamespace['mint'] {
+  return async function mint(params): ReturnType<CollectionNamespace['mint']> {
     const { walletClient, account, accountAddress } = requireWallet(config);
     const useMintTo = params.to !== undefined || params.royaltyReceiver !== undefined;
 

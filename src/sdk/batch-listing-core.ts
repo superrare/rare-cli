@@ -4,7 +4,7 @@ import type {
   BatchListingProofArtifact,
   BatchListingRootArtifact,
   BatchListingStatus,
-} from './types.js';
+} from './types/batch-listing.js';
 import { planPayoutSplits } from './splits-core.js';
 
 export type BatchListingReadConfig = {

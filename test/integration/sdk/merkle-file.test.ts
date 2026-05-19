@@ -10,7 +10,7 @@ import {
 import {
   validateRootArtifact,
 } from '../../../src/sdk/merkle-core.js';
-import type { BatchListingRootArtifact } from '../../../src/sdk/types.js';
+import type { BatchListingRootArtifact } from '../../../src/sdk/batch-listing.js';
 
 const contract = '0x1111111111111111111111111111111111111111' satisfies Address;
 const buyer = '0x1000000000000000000000000000000000000000' satisfies Address;

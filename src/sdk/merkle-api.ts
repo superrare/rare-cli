@@ -1,5 +1,5 @@
 import { getAddress, type Address, type Hex } from 'viem';
-import type { RareClientConfig } from './types.js';
+import type { RareClientConfig } from './types/client.js';
 import { normalizeBytes32 } from './batch-core.js';
 import { resolveRareApiBaseUrl as resolveConfiguredRareApiBaseUrl } from '../data-access/base-url.js';
 

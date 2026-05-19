@@ -7,15 +7,17 @@ import {
 import { tokenAbi } from '../contracts/abis/token.js';
 import { type SupportedChain } from '../contracts/addresses.js';
 import { getTokenPrice as getTokenPriceApi } from './api.js';
-import type { RareClient, TokenContractInfo, TokenInfo } from './types.js';
+import type { TokenContractInfo, TokenInfo, TokenNamespace } from './types/token.js';
 import { toInteger } from './helpers.js';
+
+export type * from './types/token.js';
 
 export function createTokenNamespace(
   publicClient: PublicClient,
   chain: SupportedChain,
-): RareClient['token'] {
+): TokenNamespace {
   return {
-    async status(params): ReturnType<RareClient['token']['status']> {
+    async status(params): ReturnType<TokenNamespace['status']> {
       const contract = await readContractInfo(publicClient, chain, params.contract);
       const token = params.tokenId === undefined
         ? undefined
@@ -24,7 +26,7 @@ export function createTokenNamespace(
       return token === undefined ? { contract } : { contract, token };
     },
 
-    async getPrice(symbol): ReturnType<RareClient['token']['getPrice']> {
+    async getPrice(symbol): ReturnType<TokenNamespace['getPrice']> {
       return getTokenPriceApi(symbol);
     },
   };
@@ -61,7 +63,7 @@ async function readContractInfo(
 async function readTokenInfo(
   publicClient: PublicClient,
   contract: `0x${string}`,
-  tokenIdInput: NonNullable<Parameters<RareClient['token']['status']>[0]['tokenId']>,
+  tokenIdInput: NonNullable<Parameters<TokenNamespace['status']>[0]['tokenId']>,
 ): Promise<TokenInfo> {
   const tokenId = toInteger(tokenIdInput, 'tokenId');
   const [owner, tokenUri] = await Promise.all([

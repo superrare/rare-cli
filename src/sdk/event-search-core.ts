@@ -2,7 +2,7 @@ import { getAddress, type Address } from 'viem';
 import { chainIds, isSupportedChain, type SupportedChain } from '../contracts/addresses.js';
 import { toInteger } from './helpers.js';
 import { buildNftUniversalTokenId } from './nft-core.js';
-import type { IntegerInput } from './types.js';
+import type { IntegerInput } from './types/common.js';
 
 export type EventSearchTargetParams = {
   chain?: SupportedChain;

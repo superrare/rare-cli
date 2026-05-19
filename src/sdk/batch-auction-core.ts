@@ -14,7 +14,7 @@ import type {
   BatchAuctionCreateParams,
   BatchAuctionStatus,
   BatchAuctionStatusParams,
-} from './types.js';
+} from './types/batch-auction.js';
 
 type ResolvedCurrencyParam<T extends { currency?: unknown }> = Omit<T, 'currency'> & {
   currency?: Address;

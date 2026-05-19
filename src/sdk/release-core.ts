@@ -11,14 +11,19 @@ import {
 } from 'viem';
 import type {
   AmountInput,
-  ReleaseAllowlistConfig,
   IntegerInput,
+  TimestampInput,
+} from './types/common.js';
+import type {
+  ReleaseAllowlistArtifact,
+  ReleaseAllowlistConfig,
   ReleaseConfigureParams,
   ReleaseLimitConfig,
+  ReleaseAllowlistInputFormat,
+  ReleaseAllowlistWalletProof,
   ReleaseMintDirectSaleParams,
   ReleaseStatus,
-  TimestampInput,
-} from './types.js';
+} from './types/release.js';
 
 type ResolvedCurrencyParam<T extends { currency?: unknown }> = Omit<T, 'currency'> & {
   currency?: Address;
@@ -38,22 +43,11 @@ const RELEASE_ALLOWLIST_LEAF_ENCODING = 'keccak256(address)' as const;
 const RELEASE_ALLOWLIST_TREE = 'sorted-addresses-sort-pairs' as const;
 const MAX_DIRECT_SALE_MINT_QUANTITY = 255n;
 
-export type ReleaseAllowlistInputFormat = 'csv' | 'json';
-
-export type ReleaseAllowlistWalletProof = {
-  address: Address;
-  leaf: Hex;
-  proof: Hex[];
-};
-
-export type ReleaseAllowlistArtifact = {
-  kind: typeof RELEASE_ALLOWLIST_ARTIFACT_KIND;
-  version: 1;
-  leafEncoding: typeof RELEASE_ALLOWLIST_LEAF_ENCODING;
-  tree: typeof RELEASE_ALLOWLIST_TREE;
-  root: Hex;
-  wallets: ReleaseAllowlistWalletProof[];
-};
+export type {
+  ReleaseAllowlistArtifact,
+  ReleaseAllowlistInputFormat,
+  ReleaseAllowlistWalletProof,
+} from './types/release.js';
 
 export type ReleaseAllowlistConfigPlan = {
   contract: Address;

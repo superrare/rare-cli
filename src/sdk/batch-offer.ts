@@ -15,7 +15,8 @@ import {
   resolveCurrencyDecimals,
   stringifyAmountInput,
 } from './helpers.js';
-import type { RareClient, RareClientConfig } from './types.js';
+import type { RareClientConfig } from './types/client.js';
+import type { BatchOfferNamespace } from './types/batch-offer.js';
 import {
   planBatchOfferAccept,
   planBatchOfferCreate,
@@ -29,13 +30,15 @@ import {
 } from './merkle-api.js';
 import { resolveCurrencyForSdk } from './currency.js';
 
+export type * from './types/batch-offer.js';
+
 export function createBatchOfferNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
   chain: SupportedChain,
-): RareClient['offer']['batch'] {
+): BatchOfferNamespace {
   return {
-    async create(params): ReturnType<RareClient['offer']['batch']['create']> {
+    async create(params): ReturnType<BatchOfferNamespace['create']> {
       const batchOfferCreator = requireContractAddress(chain, 'batchOfferCreator');
       const marketplaceSettingsSource = requireContractAddress(chain, 'auction');
       const { walletClient, account, accountAddress } = requireWallet(config);
@@ -96,7 +99,7 @@ export function createBatchOfferNamespace(
       };
     },
 
-    async revoke(params): ReturnType<RareClient['offer']['batch']['revoke']> {
+    async revoke(params): ReturnType<BatchOfferNamespace['revoke']> {
       const batchOfferCreator = requireContractAddress(chain, 'batchOfferCreator');
       const { walletClient, account } = requireWallet(config);
       const plan = planBatchOfferRoot(params);
@@ -132,7 +135,7 @@ export function createBatchOfferNamespace(
       };
     },
 
-    async accept(params): ReturnType<RareClient['offer']['batch']['accept']> {
+    async accept(params): ReturnType<BatchOfferNamespace['accept']> {
       const batchOfferCreator = requireContractAddress(chain, 'batchOfferCreator');
       const { walletClient, account, accountAddress } = requireWallet(config);
       const resolvedParams = await resolveBatchOfferAcceptParams(config, chainIds[chain], params);
@@ -202,7 +205,7 @@ export function createBatchOfferNamespace(
       };
     },
 
-    async status(params): ReturnType<RareClient['offer']['batch']['status']> {
+    async status(params): ReturnType<BatchOfferNamespace['status']> {
       const batchOfferCreator = requireContractAddress(chain, 'batchOfferCreator');
       const plan = planBatchOfferRoot(params);
       const [offer, block] = await Promise.all([
@@ -225,8 +228,8 @@ export function createBatchOfferNamespace(
 
 async function resolveBatchOfferCreateParams(
   config: RareClientConfig,
-  params: Parameters<RareClient['offer']['batch']['create']>[0],
-): Promise<Parameters<RareClient['offer']['batch']['create']>[0]> {
+  params: Parameters<BatchOfferNamespace['create']>[0],
+): Promise<Parameters<BatchOfferNamespace['create']>[0]> {
   if (params.root !== undefined || params.artifact === undefined) {
     return params;
   }
@@ -242,8 +245,8 @@ async function resolveBatchOfferCreateParams(
 async function resolveBatchOfferAcceptParams(
   config: RareClientConfig,
   chainId: number,
-  params: Parameters<RareClient['offer']['batch']['accept']>[0],
-): Promise<Parameters<RareClient['offer']['batch']['accept']>[0]> {
+  params: Parameters<BatchOfferNamespace['accept']>[0],
+): Promise<Parameters<BatchOfferNamespace['accept']>[0]> {
   if (
     params.proofArtifact !== undefined ||
     (params.root !== undefined && params.proof !== undefined)

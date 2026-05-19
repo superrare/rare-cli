@@ -14,7 +14,7 @@ import type {
   BatchOfferStatus,
   BatchOfferStatusParams,
   BatchOfferRevokeParams,
-} from './types.js';
+} from './types/batch-offer.js';
 
 type ResolvedCurrencyParam<T extends { currency?: unknown }> = Omit<T, 'currency'> & {
   currency?: Address;

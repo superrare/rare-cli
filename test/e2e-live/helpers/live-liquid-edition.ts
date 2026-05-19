@@ -73,7 +73,7 @@ export async function deployLiquidEdition(
   initialRareLiquidity?: string,
 ): Promise<DeployLiquidEditionResult> {
   const liquidityArgs = initialRareLiquidity ? ['--initial-rare-liquidity', initialRareLiquidity] : [];
-  return step(`deploy Liquid Edition on ${live.chain}`, () =>
+  const deploy = (): Promise<DeployLiquidEditionResult> =>
     jsonCommand<DeployLiquidEditionResult>(live.sellerHome, [
       'liquid-edition',
       'deploy',
@@ -88,7 +88,24 @@ export async function deployLiquidEdition(
       ...liquidityArgs,
       '--chain',
       live.chain,
-    ], 300_000),
+    ], 300_000);
+
+  try {
+    return await step(`deploy Liquid Edition on ${live.chain}`, deploy);
+  } catch (error) {
+    if (!isRetryableLiquidEditionDeployError(error)) {
+      throw error;
+    }
+
+    console.error('[live e2e] Liquid Edition deploy reverted; retrying once');
+    return step(`retry Liquid Edition deploy on ${live.chain}`, deploy);
+  }
+}
+
+function isRetryableLiquidEditionDeployError(error: unknown): boolean {
+  return error instanceof Error && (
+    error.message.includes('Liquid Edition deploy transaction reverted') ||
+    error.message.includes('Liquid Edition deploy transaction was confirmed with status "reverted"')
   );
 }
 

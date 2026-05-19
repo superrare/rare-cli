@@ -4,7 +4,8 @@ import { collectionMintAbi } from '../contracts/abis/collection-mint.js';
 import { collectionOwnerAbi } from '../contracts/abis/collection-owner.js';
 import { royaltyRegistryAbi, royaltyRegistryResolverAbi } from '../contracts/abis/royalty-registry.js';
 import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
-import type { RareClientConfig, RareClient } from './types.js';
+import type { RareClientConfig } from './types/client.js';
+import type { CollectionNamespace } from './types/collection.js';
 import { requireWallet } from './helpers.js';
 import {
   buildCollectionRoyaltyRegistryContractPercentageWrite,
@@ -34,14 +35,16 @@ import {
   type CollectionRoyaltyRegistryStatusRead,
 } from './collection-core.js';
 
+export type * from './types/collection.js';
+
 export function createCollectionNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
   chain: SupportedChain,
-  baseCollection: Pick<RareClient['collection'], 'get'>,
-  collectionDeploy: Pick<RareClient['collection']['deploy'], 'erc721' | 'lazyBatchMint'>,
-  collectionMint: RareClient['collection']['mint'],
-): RareClient['collection'] {
+  baseCollection: Pick<CollectionNamespace, 'get'>,
+  collectionDeploy: Pick<CollectionNamespace['deploy'], 'erc721' | 'lazyBatchMint'>,
+  collectionMint: CollectionNamespace['mint'],
+): CollectionNamespace {
   return {
     ...baseCollection,
     mint: collectionMint,
@@ -49,7 +52,7 @@ export function createCollectionNamespace(
     deploy: {
       ...collectionDeploy,
 
-      async lazyErc721(params): ReturnType<RareClient['collection']['deploy']['lazyErc721']> {
+      async lazyErc721(params): ReturnType<CollectionNamespace['deploy']['lazyErc721']> {
         const plan = planCreateLazySovereignCollection(params);
         const factoryAddress = requireContractAddress(chain, 'lazySovereignFactory');
         const { walletClient, account } = requireWallet(config);
@@ -90,7 +93,7 @@ export function createCollectionNamespace(
       },
     },
 
-    async mintBatch(params): ReturnType<RareClient['collection']['mintBatch']> {
+    async mintBatch(params): ReturnType<CollectionNamespace['mintBatch']> {
       const plan = planCollectionMintBatch(params);
       const { walletClient, account } = requireWallet(config);
       const txHash = await writeCollectionBatchMint({
@@ -123,7 +126,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async prepareLazyMint(params): ReturnType<RareClient['collection']['prepareLazyMint']> {
+    async prepareLazyMint(params): ReturnType<CollectionNamespace['prepareLazyMint']> {
       const plan = planCollectionPrepareLazyMint(params);
       const { walletClient, account } = requireWallet(config);
       const txHash = await writeCollectionPrepareLazyMint({
@@ -163,7 +166,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async getTokenCreator(params): ReturnType<RareClient['collection']['getTokenCreator']> {
+    async getTokenCreator(params): ReturnType<CollectionNamespace['getTokenCreator']> {
       const plan = planCollectionToken(params);
       const creator = await readTokenCreator(publicClient, plan.contract, plan.tokenId);
       return {
@@ -174,7 +177,7 @@ export function createCollectionNamespace(
     },
 
     royalty: {
-      async status(params): ReturnType<RareClient['collection']['royalty']['status']> {
+      async status(params): ReturnType<CollectionNamespace['royalty']['status']> {
         const plan = planCollectionRoyaltyInfo(params);
         const [receiver, royaltyAmount] = await readRoyaltyInfo(
           publicClient,
@@ -195,7 +198,7 @@ export function createCollectionNamespace(
       },
 
       registry: {
-        async status(params): ReturnType<RareClient['collection']['royalty']['registry']['status']> {
+        async status(params): ReturnType<CollectionNamespace['royalty']['registry']['status']> {
           const plan = planCollectionRoyaltyRegistryStatus(params);
           const registry = await resolveRoyaltyRegistryAddress(publicClient, chain, plan.registry);
           const read = await readRoyaltyRegistryStatus(publicClient, registry, plan);
@@ -205,7 +208,7 @@ export function createCollectionNamespace(
       },
     },
 
-    async setDefaultRoyaltyReceiver(params): ReturnType<RareClient['collection']['setDefaultRoyaltyReceiver']> {
+    async setDefaultRoyaltyReceiver(params): ReturnType<CollectionNamespace['setDefaultRoyaltyReceiver']> {
       const plan = planCollectionReceiver(params);
       const { walletClient, account } = requireWallet(config);
       const txHash = await writeSetDefaultRoyaltyReceiver({
@@ -224,7 +227,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async setTokenRoyaltyReceiver(params): ReturnType<RareClient['collection']['setTokenRoyaltyReceiver']> {
+    async setTokenRoyaltyReceiver(params): ReturnType<CollectionNamespace['setTokenRoyaltyReceiver']> {
       const plan = planCollectionTokenReceiver(params);
       const { walletClient, account } = requireWallet(config);
       const txHash = await writeSetTokenRoyaltyReceiver({
@@ -246,7 +249,7 @@ export function createCollectionNamespace(
 
     async setRoyaltyRegistryReceiverOverride(
       params,
-    ): ReturnType<RareClient['collection']['setRoyaltyRegistryReceiverOverride']> {
+    ): ReturnType<CollectionNamespace['setRoyaltyRegistryReceiverOverride']> {
       const plan = planCollectionRoyaltyRegistryReceiverOverride(params);
       const registry = await resolveRoyaltyRegistryAddress(publicClient, chain, plan.registry);
       const { walletClient, account } = requireWallet(config);
@@ -269,7 +272,7 @@ export function createCollectionNamespace(
 
     async setRoyaltyRegistryContractReceiver(
       params,
-    ): ReturnType<RareClient['collection']['setRoyaltyRegistryContractReceiver']> {
+    ): ReturnType<CollectionNamespace['setRoyaltyRegistryContractReceiver']> {
       const plan = planCollectionRoyaltyRegistryContractReceiver(params);
       const registry = await resolveRoyaltyRegistryAddress(publicClient, chain, plan.registry);
       const { walletClient, account } = requireWallet(config);
@@ -293,7 +296,7 @@ export function createCollectionNamespace(
 
     async setRoyaltyRegistryTokenReceiver(
       params,
-    ): ReturnType<RareClient['collection']['setRoyaltyRegistryTokenReceiver']> {
+    ): ReturnType<CollectionNamespace['setRoyaltyRegistryTokenReceiver']> {
       const plan = planCollectionRoyaltyRegistryTokenReceiver(params);
       const registry = await resolveRoyaltyRegistryAddress(publicClient, chain, plan.registry);
       const { walletClient, account } = requireWallet(config);
@@ -318,7 +321,7 @@ export function createCollectionNamespace(
 
     async setRoyaltyRegistryContractPercentage(
       params,
-    ): ReturnType<RareClient['collection']['setRoyaltyRegistryContractPercentage']> {
+    ): ReturnType<CollectionNamespace['setRoyaltyRegistryContractPercentage']> {
       const plan = planCollectionRoyaltyRegistryContractPercentage(params);
       const registry = await resolveRoyaltyRegistryAddress(publicClient, chain, plan.registry);
       const { walletClient, account } = requireWallet(config);
@@ -341,7 +344,7 @@ export function createCollectionNamespace(
     },
 
     metadata: {
-      async status(params): ReturnType<RareClient['collection']['metadata']['status']> {
+      async status(params): ReturnType<CollectionNamespace['metadata']['status']> {
         const plan = planCollectionContract(params);
         const mintConfig = await readMintConfig(publicClient, plan.contract);
         return {
@@ -353,7 +356,7 @@ export function createCollectionNamespace(
       },
     },
 
-    async updateBaseUri(params): ReturnType<RareClient['collection']['updateBaseUri']> {
+    async updateBaseUri(params): ReturnType<CollectionNamespace['updateBaseUri']> {
       const plan = planCollectionBaseUri(params);
       const { walletClient, account } = requireWallet(config);
       const txHash = await writeUpdateBaseUri({
@@ -378,7 +381,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async updateTokenUri(params): ReturnType<RareClient['collection']['updateTokenUri']> {
+    async updateTokenUri(params): ReturnType<CollectionNamespace['updateTokenUri']> {
       const plan = planCollectionTokenUri(params);
       const { walletClient, account } = requireWallet(config);
       const txHash = await writeUpdateTokenUri({
@@ -404,7 +407,7 @@ export function createCollectionNamespace(
       };
     },
 
-    async lockBaseUri(params): ReturnType<RareClient['collection']['lockBaseUri']> {
+    async lockBaseUri(params): ReturnType<CollectionNamespace['lockBaseUri']> {
       const plan = planCollectionContract(params);
       const { walletClient, account } = requireWallet(config);
       const txHash = await writeLockBaseUri({

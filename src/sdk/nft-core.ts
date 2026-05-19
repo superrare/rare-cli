@@ -1,6 +1,6 @@
 import { getAddress, type Address } from 'viem';
 import { chainIds, isSupportedChain, type SupportedChain } from '../contracts/addresses.js';
-import type { IntegerInput } from './types.js';
+import type { IntegerInput } from './types/common.js';
 import { toInteger } from './helpers.js';
 
 export type NftIdentityParams = {

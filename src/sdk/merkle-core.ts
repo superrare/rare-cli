@@ -10,12 +10,12 @@ import {
   type Address,
 } from 'viem';
 import { toInteger } from './helpers.js';
+import type { IntegerInput } from './types/common.js';
 import type {
   BatchListingProofArtifact,
   BatchListingRootArtifact,
   BatchListingTokenEntry,
-  IntegerInput,
-} from './types.js';
+} from './types/batch-listing.js';
 
 type BuildBatchListingTreeResult = {
   root: `0x${string}`;

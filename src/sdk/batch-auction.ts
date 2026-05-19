@@ -17,7 +17,9 @@ import {
   resolveCurrencyDecimals,
   stringifyAmountInput,
 } from './helpers.js';
-import type { RareClient, RareClientConfig, WalletAccount } from './types.js';
+import type { RareClientConfig } from './types/client.js';
+import type { WalletAccount } from './types/common.js';
+import type { BatchAuctionNamespace } from './types/batch-auction.js';
 import {
   planBatchAuctionBid,
   planBatchAuctionCreate,
@@ -36,13 +38,15 @@ import {
 } from './merkle-api.js';
 import { resolveCurrencyForSdk } from './currency.js';
 
+export type * from './types/batch-auction.js';
+
 export function createBatchAuctionNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
   chain: SupportedChain,
-): RareClient['auction']['batch'] {
+): BatchAuctionNamespace {
   return {
-    async create(params): ReturnType<RareClient['auction']['batch']['create']> {
+    async create(params): ReturnType<BatchAuctionNamespace['create']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account, accountAddress } = requireWallet(config);
       const resolvedParams = await resolveBatchAuctionCreateParams(config, params);
@@ -112,7 +116,7 @@ export function createBatchAuctionNamespace(
       };
     },
 
-    async cancel(params): ReturnType<RareClient['auction']['batch']['cancel']> {
+    async cancel(params): ReturnType<BatchAuctionNamespace['cancel']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account } = requireWallet(config);
       const plan = planBatchAuctionRoot(params);
@@ -146,7 +150,7 @@ export function createBatchAuctionNamespace(
       };
     },
 
-    async bid(params): ReturnType<RareClient['auction']['batch']['bid']> {
+    async bid(params): ReturnType<BatchAuctionNamespace['bid']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account, accountAddress } = requireWallet(config);
       const resolvedParams = await resolveBatchAuctionBidParams(config, chainIds[chain], params);
@@ -218,7 +222,7 @@ export function createBatchAuctionNamespace(
       };
     },
 
-    async settle(params): ReturnType<RareClient['auction']['batch']['settle']> {
+    async settle(params): ReturnType<BatchAuctionNamespace['settle']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account } = requireWallet(config);
       const plan = planBatchAuctionStatus(params);
@@ -257,7 +261,7 @@ export function createBatchAuctionNamespace(
       };
     },
 
-    async status(params): ReturnType<RareClient['auction']['batch']['status']> {
+    async status(params): ReturnType<BatchAuctionNamespace['status']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const resolvedParams = await resolveBatchAuctionStatusParams(config, chainIds[chain], params);
       const plan = planBatchAuctionStatus(resolvedParams);
@@ -311,8 +315,8 @@ function currentUnixTimestamp(): bigint {
 
 async function resolveBatchAuctionCreateParams(
   config: RareClientConfig,
-  params: Parameters<RareClient['auction']['batch']['create']>[0],
-): Promise<Parameters<RareClient['auction']['batch']['create']>[0]> {
+  params: Parameters<BatchAuctionNamespace['create']>[0],
+): Promise<Parameters<BatchAuctionNamespace['create']>[0]> {
   if (params.root !== undefined || params.artifact === undefined) {
     return params;
   }
@@ -331,8 +335,8 @@ async function resolveBatchAuctionCreateParams(
 async function resolveBatchAuctionBidParams(
   config: RareClientConfig,
   chainId: number,
-  params: Parameters<RareClient['auction']['batch']['bid']>[0],
-): Promise<Parameters<RareClient['auction']['batch']['bid']>[0]> {
+  params: Parameters<BatchAuctionNamespace['bid']>[0],
+): Promise<Parameters<BatchAuctionNamespace['bid']>[0]> {
   if (
     params.proofArtifact !== undefined ||
     (params.root !== undefined && params.proof !== undefined)
@@ -359,8 +363,8 @@ async function resolveBatchAuctionBidParams(
 async function resolveBatchAuctionStatusParams(
   config: RareClientConfig,
   chainId: number,
-  params: Parameters<RareClient['auction']['batch']['status']>[0],
-): Promise<Parameters<RareClient['auction']['batch']['status']>[0]> {
+  params: Parameters<BatchAuctionNamespace['status']>[0],
+): Promise<Parameters<BatchAuctionNamespace['status']>[0]> {
   if (params.root !== undefined || params.creator === undefined) {
     return params;
   }

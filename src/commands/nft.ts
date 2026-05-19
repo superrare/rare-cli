@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
-import type { RareClientNftGetParams } from '../sdk/types.js';
+import type { RareClientNftGetParams } from '../sdk/client.js';
 import { parseAddress } from '../sdk/validation.js';
 import { printError } from '../errors.js';
 import { log, output, printNft } from '../output.js';

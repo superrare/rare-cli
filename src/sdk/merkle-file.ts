@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import type {
   BatchListingProofArtifact,
   BatchListingRootArtifact,
-} from './types.js';
+} from './types/batch-listing.js';
 import {
   validateProofArtifact,
   validateRootArtifact,

@@ -9,10 +9,8 @@ import {
 import { rareMinterAbi } from '../contracts/abis/rare-minter.js';
 import { tokenAbi } from '../contracts/abis/token.js';
 import type { SupportedChain } from '../contracts/addresses.js';
-import type {
-  ReleaseNamespace,
-  RareClientConfig,
-} from './types.js';
+import type { ReleaseNamespace } from './types/release.js';
+import type { RareClientConfig } from './types/client.js';
 import { ETH_ADDRESS } from '../contracts/addresses.js';
 import { preparePaymentForSpender, requireWallet } from './helpers.js';
 import { resolveCurrencyForSdk } from './currency.js';
@@ -43,6 +41,8 @@ import {
   generateApiAddressMerkleRoot,
   resolveApiAddressMerkleProof,
 } from './merkle-api.js';
+
+export type * from './types/release.js';
 
 const releaseCollectionAbi = [
   {

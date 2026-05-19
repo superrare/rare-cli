@@ -6,8 +6,8 @@ import { auctionAbi } from '../contracts/abis/auction.js';
 import { ETH_ADDRESS, type SupportedChain } from '../contracts/addresses.js';
 import type {
   ListingMarketplaceNamespace,
-  RareClientConfig,
-} from './types.js';
+} from './types/listing.js';
+import type { RareClientConfig } from './types/client.js';
 import {
   approveNftContractIfNeeded,
   preparePaymentForSpender,
@@ -23,6 +23,8 @@ import {
   shapeListingStatus,
 } from './marketplace-core.js';
 import { resolveCurrencyForSdk } from './currency.js';
+
+export type * from './types/listing.js';
 
 export function createListingNamespace(
   publicClient: PublicClient,

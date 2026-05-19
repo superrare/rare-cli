@@ -1,7 +1,7 @@
 import { getContractAddresses, chainIds } from '../contracts/addresses.js';
 import type { Address } from 'viem';
 import { createRareApi } from './api.js';
-import type { RareClientConfig, RareClient } from './types.js';
+import type { RareClientConfig, RareClient } from './types/client.js';
 import { resolveChainFromPublicClient } from './helpers.js';
 import { createDeployNamespace } from './deploy.js';
 import { createCollectionMint } from './mint.js';
@@ -20,7 +20,7 @@ import { createCollectionNamespace } from './collection.js';
 import { createUtilsNamespace } from './utils.js';
 import { buildNftUniversalTokenId } from './nft-core.js';
 
-export type { RareClientConfig, RareClient } from './types.js';
+export type * from './types/client.js';
 
 export function createRareClient(config: RareClientConfig): RareClient {
   const { publicClient } = config;

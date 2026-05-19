@@ -6,7 +6,8 @@ import {
 import { auctionAbi } from '../contracts/abis/auction.js';
 import { tokenAbi } from '../contracts/abis/token.js';
 import { ETH_ADDRESS, type SupportedChain } from '../contracts/addresses.js';
-import type { RareClientConfig, RareClient } from './types.js';
+import type { RareClientConfig } from './types/client.js';
+import type { OfferMarketplaceNamespace } from './types/offer.js';
 import {
   approveNftContractIfNeeded,
   preparePaymentForSpender,
@@ -24,14 +25,16 @@ import {
 } from './marketplace-core.js';
 import { resolveCurrencyForSdk } from './currency.js';
 
+export type * from './types/offer.js';
+
 export function createOfferNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
   chain: SupportedChain,
   addresses: { auction: Address },
-): Omit<RareClient['offer'], 'batch'> {
+): OfferMarketplaceNamespace {
   return {
-    async create(params): ReturnType<RareClient['offer']['create']> {
+    async create(params): ReturnType<OfferMarketplaceNamespace['create']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const price = requireInput(params.price, 'price');
@@ -63,7 +66,7 @@ export function createOfferNamespace(
       return { txHash, receipt, approvalTxHash: payment.approvalTxHash };
     },
 
-    async cancel(params): ReturnType<RareClient['offer']['cancel']> {
+    async cancel(params): ReturnType<OfferMarketplaceNamespace['cancel']> {
       const { walletClient, account } = requireWallet(config);
       const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const plan = planOfferCancel({ ...params, currency });
@@ -81,7 +84,7 @@ export function createOfferNamespace(
       return { txHash, receipt };
     },
 
-    async accept(params): ReturnType<RareClient['offer']['accept']> {
+    async accept(params): ReturnType<OfferMarketplaceNamespace['accept']> {
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const price = requireInput(params.price, 'price');
@@ -120,7 +123,7 @@ export function createOfferNamespace(
       return { txHash, receipt, approvalTxHash };
     },
 
-    async status(params): ReturnType<RareClient['offer']['status']> {
+    async status(params): ReturnType<OfferMarketplaceNamespace['status']> {
       const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const plan = planOfferStatus({ ...params, currency });
 

@@ -4,16 +4,14 @@ import type { SupportedChain } from '../contracts/addresses.js';
 import type {
   BatchListingCancelResult,
   BatchListingCreateResult,
+  BatchListingNamespace,
   BatchListingProofArtifact,
   BatchListingRootArtifact,
   BatchListingSetAllowListResult,
   BatchListingStatus,
-  IntegerInput,
-  RareClient,
-  RareClientConfig,
-  TransactionResult,
-  WalletAccount,
-} from './types.js';
+} from './types/batch-listing.js';
+import type { RareClientConfig } from './types/client.js';
+import type { IntegerInput, TransactionResult, WalletAccount } from './types/common.js';
 import {
   approveNftContractIfNeeded,
   calculateMarketplacePaymentAmountFromSettings,
@@ -39,6 +37,8 @@ import {
 import { normalizeBytes32 } from './batch-core.js';
 import { resolveCurrencyForSdk } from './currency.js';
 
+export type * from './types/batch-listing.js';
+
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
 export function createBatchListingNamespace(
@@ -52,7 +52,7 @@ export function createBatchListingNamespace(
     chain: SupportedChain;
     chainId: number;
   },
-): RareClient['listing']['batch'] {
+): BatchListingNamespace {
   return {
     async create(params): Promise<BatchListingCreateResult> {
       const { walletClient, account, accountAddress } = requireWallet(config);
@@ -359,7 +359,7 @@ async function resolveBatchListingBuyProofArtifact(opts: {
   config: RareClientConfig;
   batchListingAddress: Address;
   chainId: number;
-  params: Parameters<RareClient['listing']['batch']['buy']>[0];
+  params: Parameters<BatchListingNamespace['buy']>[0];
   accountAddress: Address;
 }): Promise<BatchListingProofArtifact> {
   const tokenProof = opts.params.proofArtifact ?? await resolveBatchListingTokenProof(opts);
@@ -401,7 +401,7 @@ async function resolveBatchListingBuyProofArtifact(opts: {
 async function resolveBatchListingTokenProof(opts: {
   config: RareClientConfig;
   chainId: number;
-  params: Parameters<RareClient['listing']['batch']['buy']>[0];
+  params: Parameters<BatchListingNamespace['buy']>[0];
 }): Promise<BatchListingProofArtifact> {
   if (opts.params.contract === undefined || opts.params.tokenId === undefined) {
     throw new Error('Pass contract and tokenId so rare-api can resolve the batch listing proof, or pass a proofArtifact override.');
@@ -425,14 +425,14 @@ async function resolveBatchListingTokenProof(opts: {
 }
 
 type ResolvedBatchListingStatusParams =
-  Parameters<RareClient['listing']['batch']['status']>[0] & {
+  Parameters<BatchListingNamespace['status']>[0] & {
     root: `0x${string}`;
   };
 
 async function resolveBatchListingStatusParams(opts: {
   config: RareClientConfig;
   chainId: number;
-  params: Parameters<RareClient['listing']['batch']['status']>[0];
+  params: Parameters<BatchListingNamespace['status']>[0];
 }): Promise<ResolvedBatchListingStatusParams> {
   const { root } = opts.params;
   if (root !== undefined) {

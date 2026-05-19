@@ -7,22 +7,26 @@ import {
   type SupportedChain,
 } from '../contracts/addresses.js';
 import { resolveCurrencyDecimals } from './helpers.js';
-import type { RareClient, ResolvedCurrencyWithDecimals } from './types.js';
+import type { CurrencyNamespace } from './types/client.js';
+import type { ResolvedCurrencyWithDecimals } from './types/common.js';
+
+export type { CurrencyNamespace } from './types/client.js';
+export type { ResolvedCurrencyWithDecimals } from './types/common.js';
 
 export function createCurrencyNamespace(
   publicClient: PublicClient,
   chain: SupportedChain,
-): RareClient['currency'] {
+): CurrencyNamespace {
   return {
-    list(): ReturnType<RareClient['currency']['list']> {
+    list(): ReturnType<CurrencyNamespace['list']> {
       return listCurrencies(chain);
     },
 
-    resolve(input): ReturnType<RareClient['currency']['resolve']> {
+    resolve(input): ReturnType<CurrencyNamespace['resolve']> {
       return resolveCurrencyForSdk(input, chain);
     },
 
-    async resolveDecimals(input): ReturnType<RareClient['currency']['resolveDecimals']> {
+    async resolveDecimals(input): ReturnType<CurrencyNamespace['resolveDecimals']> {
       const currency = resolveCurrencyForSdk(input, chain);
       if (currency.decimals !== null) {
         return currency;

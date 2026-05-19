@@ -1,4 +1,4 @@
-import type { RareClient } from './types.js';
+import type { UtilsNamespace } from './types/utils.js';
 import {
   buildBatchTokenTreeArtifact,
   getBatchTokenProof,
@@ -6,24 +6,26 @@ import {
 } from './batch-core.js';
 import { buildMerkleProofArtifact } from './merkle-core.js';
 
-export function createUtilsNamespace(): RareClient['utils'] {
+export type * from './types/utils.js';
+
+export function createUtilsNamespace(): UtilsNamespace {
   return {
     tree: {
-      build(params): ReturnType<RareClient['utils']['tree']['build']> {
+      build(params): ReturnType<UtilsNamespace['tree']['build']> {
         return buildBatchTokenTreeArtifact(params);
       },
 
-      proof(params): ReturnType<RareClient['utils']['tree']['proof']> {
+      proof(params): ReturnType<UtilsNamespace['tree']['proof']> {
         return getBatchTokenProof(params);
       },
 
-      verify(params): ReturnType<RareClient['utils']['tree']['verify']> {
+      verify(params): ReturnType<UtilsNamespace['tree']['verify']> {
         return verifyBatchTokenProof(params);
       },
     },
 
     merkle: {
-      proof(params): ReturnType<RareClient['utils']['merkle']['proof']> {
+      proof(params): ReturnType<UtilsNamespace['merkle']['proof']> {
         return buildMerkleProofArtifact(params.artifact, params.contract, params.tokenId, params.buyer);
       },
     },

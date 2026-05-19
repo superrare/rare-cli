@@ -1,4 +1,4 @@
-import type { AuctionCreateParams } from '../sdk/types.js';
+import type { AuctionCreateParams } from '../sdk/auction.js';
 
 export type AuctionTypeOption = NonNullable<AuctionCreateParams['auctionType']>;
 

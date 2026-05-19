@@ -1,5 +1,5 @@
 import { isAddressEqual, zeroAddress, type Address, type Hex } from 'viem';
-import type { IntegerInput } from './types.js';
+import type { IntegerInput } from './types/common.js';
 import {
   requireInput,
   toNonNegativeInteger,

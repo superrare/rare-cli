@@ -1,6 +1,6 @@
 # RARE SDK client function map
 
-This map reflects the top-level `RareClient` returned by `createRareClient(config)` in `src/sdk/client.ts` and typed in `src/sdk/types.ts`.
+This map reflects the top-level `RareClient` returned by `createRareClient(config)` in `src/sdk/client.ts` and typed in `src/sdk/types/client.ts`.
 
 Scope:
 - Includes `createRareClient` and the methods reachable from the returned client object.

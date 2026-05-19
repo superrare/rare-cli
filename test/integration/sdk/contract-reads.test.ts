@@ -3,7 +3,7 @@ import { isAddress, type Address } from 'viem';
 import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '../../../src/contracts/addresses.js';
 import { RareApiError } from '../../../src/data-access/errors.js';
 import { createRareClient } from '../../../src/sdk/client.js';
-import type { RareClient } from '../../../src/sdk/types.js';
+import type { RareClient } from '../../../src/sdk/client.js';
 import { createTestSepoliaPublicClient, hasTestRpcUrl } from '../../helpers/liveViem.js';
 
 type ReadableNftFixture = {

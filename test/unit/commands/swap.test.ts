@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test, vi } from 'vitest';
 import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import { swapCommand } from '../../../src/commands/swap.js';
-import type { TokenTradeQuote } from '../../../src/sdk/types.js';
+import type { TokenTradeQuote } from '../../../src/sdk/swap.js';
 
 const getPublicClient = vi.hoisted(() => vi.fn());
 const getWalletClient = vi.hoisted(() => vi.fn());

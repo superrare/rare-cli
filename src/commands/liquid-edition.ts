@@ -5,7 +5,8 @@ import { getActiveChain } from '../config.js';
 import { createRareClient } from '../sdk/client.js';
 import { parseAddress } from '../sdk/validation.js';
 import { log, output } from '../output.js';
-import type { LiquidEditionPoolKey, RareClient } from '../sdk/types.js';
+import type { RareClient } from '../sdk/client.js';
+import type { LiquidEditionPoolKey } from '../sdk/liquid.js';
 import { deployLiquidEditionCommand } from './deploy.js';
 
 type ChainOptions = {

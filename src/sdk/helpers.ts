@@ -12,7 +12,8 @@ import {
 import { auctionAbi } from '../contracts/abis/auction.js';
 import { chainIds, ETH_ADDRESS, listCurrencies, supportedChains, type SupportedChain } from '../contracts/addresses.js';
 import type { UniswapTransactionRequest } from '../swap/uniswap-api.js';
-import type { RareClientConfig, IntegerInput, AmountInput, TimestampInput, WalletAccount, TransactionResult } from './types.js';
+import type { RareClientConfig } from './types/client.js';
+import type { IntegerInput, AmountInput, TimestampInput, WalletAccount, TransactionResult } from './types/common.js';
 
 const MAX_SAFE_INTEGER_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
 const MIN_SAFE_INTEGER_BIGINT = BigInt(Number.MIN_SAFE_INTEGER);

@@ -8,7 +8,7 @@ import { ETH_ADDRESS, chainIds, resolveCurrency, type SupportedChain } from '../
 import { printError } from '../errors.js';
 import { output, log } from '../output.js';
 import { createRareClient } from '../sdk/client.js';
-import type { RareClient } from '../sdk/types.js';
+import type { RareClient } from '../sdk/client.js';
 import {
   getBatchTokenProof,
   normalizeBytes32,

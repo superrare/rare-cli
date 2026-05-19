@@ -18,10 +18,8 @@ import {
   type SupportedChain,
 } from '../../../src/contracts/addresses.js';
 import { createRareClient } from '../../../src/sdk/client.js';
-import type {
-  BatchAuctionStatus,
-  RareClient,
-} from '../../../src/sdk/types.js';
+import type { RareClient } from '../../../src/sdk/client.js';
+import type { BatchAuctionStatus } from '../../../src/sdk/batch-auction.js';
 import { loadDotEnv } from '../../helpers/env.js';
 
 loadDotEnv();

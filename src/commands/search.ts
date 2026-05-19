@@ -4,7 +4,7 @@ import { getConfiguredAccountAddress, getPublicClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
 import type { SupportedChain } from '../contracts/addresses.js';
 import type { NftSearchParams } from '../sdk/api.js';
-import type { RareClientEventSearchParams } from '../sdk/types.js';
+import type { RareClientEventSearchParams } from '../sdk/client.js';
 import { parseAddress, parseOptionalAddress } from '../sdk/validation.js';
 import { printError } from '../errors.js';
 import { output, log, printNftRow, printCollectionRow, printNftEventRow, printPagination } from '../output.js';

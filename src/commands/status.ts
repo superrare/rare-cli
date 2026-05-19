@@ -5,7 +5,7 @@ import { createRareClient } from '../sdk/client.js';
 import { parseAddress } from '../sdk/validation.js';
 import { printError } from '../errors.js';
 import { output } from '../output.js';
-import type { RareClient } from '../sdk/types.js';
+import type { RareClient } from '../sdk/client.js';
 
 type StatusOptions = {
   contract: string;

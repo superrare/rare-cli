@@ -1,16 +1,17 @@
 import { type Address, type PublicClient, parseEventLogs } from 'viem';
 import { factoryAbi } from '../contracts/abis/factory.js';
 import { lazyBatchMintFactoryAbi } from '../contracts/abis/lazy-batch-mint-factory.js';
-import type { RareClientConfig, RareClient } from './types.js';
+import type { RareClientConfig } from './types/client.js';
+import type { CollectionDeployNamespace } from './types/collection.js';
 import { requireWallet, toInteger } from './helpers.js';
 
 export function createDeployNamespace(
   publicClient: PublicClient,
   config: RareClientConfig,
   addresses: { factory: Address; lazyBatchMintFactory?: Address },
-): Pick<RareClient['collection']['deploy'], 'erc721' | 'lazyBatchMint'> {
+): Pick<CollectionDeployNamespace, 'erc721' | 'lazyBatchMint'> {
   return {
-    async erc721(params): ReturnType<RareClient['collection']['deploy']['erc721']> {
+    async erc721(params): ReturnType<CollectionDeployNamespace['erc721']> {
       const { walletClient, account } = requireWallet(config);
       const txHash = params.maxTokens !== undefined
         ? await walletClient.writeContract({
@@ -49,7 +50,7 @@ export function createDeployNamespace(
       };
     },
 
-    async lazyBatchMint(params): ReturnType<RareClient['collection']['deploy']['lazyBatchMint']> {
+    async lazyBatchMint(params): ReturnType<CollectionDeployNamespace['lazyBatchMint']> {
       if (!addresses.lazyBatchMintFactory) {
         throw new Error(
           'Lazy batch mint factory is not deployed on this chain. Supported chains: mainnet, sepolia.',

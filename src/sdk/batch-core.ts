@@ -11,7 +11,7 @@ import {
   type Hex,
 } from 'viem';
 import { toNonNegativeInteger, toPositiveInteger } from './helpers.js';
-import type { IntegerInput } from './types.js';
+import type { IntegerInput } from './types/common.js';
 
 export type BatchTokenListInputFormat = 'csv' | 'json';
 

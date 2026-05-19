@@ -4,18 +4,22 @@ import type {
   AuctionCancelParams,
   AuctionCreateParams,
   AuctionSettleParams,
+  AuctionStatus,
+} from './types/auction.js';
+import type {
   ListingBuyParams,
   ListingCancelParams,
   ListingCreateParams,
   ListingStatus,
   ListingStatusParams,
+} from './types/listing.js';
+import type {
   OfferAcceptParams,
   OfferCancelParams,
   OfferCreateParams,
   OfferStatus,
   OfferStatusParams,
-  AuctionStatus,
-} from './types.js';
+} from './types/offer.js';
 import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '../contracts/addresses.js';
 import {
   toNonNegativeInteger,

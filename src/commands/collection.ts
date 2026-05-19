@@ -4,7 +4,7 @@ import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
 import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
-import type { RareClient } from '../sdk/types.js';
+import type { RareClient } from '../sdk/client.js';
 import {
   lazySovereignCollectionContractTypes,
   normalizeLazySovereignCollectionContractType,

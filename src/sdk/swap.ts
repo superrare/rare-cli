@@ -42,16 +42,20 @@ import {
 } from '../swap/trade-core.js';
 import type {
   AmountInput,
+  IntegerInput,
+  TransactionResult,
+} from './types/common.js';
+import type { RareClientConfig } from './types/client.js';
+import type {
   BuyRareParams,
   BuyRareQuote,
   BuyRareResult,
-  IntegerInput,
-  RareClient,
+  SwapNamespace,
   TokenTradeResult,
   TokenTradeQuote,
-  RareClientConfig,
-  TransactionResult,
-} from './types.js';
+} from './types/swap.js';
+
+export type * from './types/swap.js';
 
 type TokenTradeDirection = 'buy' | 'sell';
 type LocalTokenTradeQuote = Extract<TokenTradeQuote, { execution: 'liquid-router' }>;
@@ -315,7 +319,7 @@ export function createSwapNamespace(
   chain: SupportedChain,
   chainId: number,
   addresses: { swapRouter?: Address; v4Quoter?: Address },
-): RareClient['swap'] {
+): SwapNamespace {
   const { publicClient } = config;
 
   return {
