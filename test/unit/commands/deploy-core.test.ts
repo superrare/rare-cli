@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   formatCurvePreview,
   resolveCurveSourceMode,
+  validateLiquidEditionDeployMetadataOptions,
 } from '../../../src/commands/deploy-core.js';
 
 test('resolveCurveSourceMode rejects omitted curves outside a TTY', () => {
@@ -11,6 +12,24 @@ test('resolveCurveSourceMode rejects omitted curves outside a TTY', () => {
 
 test('resolveCurveSourceMode prefers files over presets', () => {
   assert.equal(resolveCurveSourceMode({ curvesFile: './curves.json', curvePreset: 'medium-demand' }, false), 'file');
+});
+
+test('validateLiquidEditionDeployMetadataOptions requires metadata inputs before deploy', () => {
+  assert.deepEqual(validateLiquidEditionDeployMetadataOptions({}), {
+    isValid: false,
+    missingOptions: ['--description', '--image'],
+    errorMessage: '--description and --image are required when not using --token-uri.',
+  });
+  assert.deepEqual(validateLiquidEditionDeployMetadataOptions({ description: 'Example' }), {
+    isValid: false,
+    missingOptions: ['--image'],
+    errorMessage: '--image is required when not using --token-uri.',
+  });
+});
+
+test('validateLiquidEditionDeployMetadataOptions allows token URI and preview flows', () => {
+  assert.deepEqual(validateLiquidEditionDeployMetadataOptions({ tokenUri: 'ipfs://metadata' }), { isValid: true });
+  assert.deepEqual(validateLiquidEditionDeployMetadataOptions({ preview: true }), { isValid: true });
 });
 
 test('formatCurvePreview prints source and segment details', () => {
@@ -35,8 +54,10 @@ test('formatCurvePreview prints source and segment details', () => {
       ],
     },
     'preset:medium-demand',
+    'sepolia',
   );
 
   assert.ok(lines.some((line) => line.includes('preset:medium-demand')));
+  assert.ok(lines.some((line) => line.includes('Target chain: sepolia')));
   assert.ok(lines.some((line) => line.includes('ticks -60 -> 60')));
 });

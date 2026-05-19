@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
@@ -12,16 +13,17 @@ import {
 } from '../liquid/curve-config.js';
 import { resolveLiquidFactoryConfigForSupply } from '../liquid/factory-config-core.js';
 import { runLiquidCurveWizard } from '../liquid/wizard.js';
-import { output, log } from '../output.js';
+import { output, log, isJsonMode } from '../output.js';
 import {
   formatLiquidEditionUrl,
   formatCurvePreview,
   isCurvePresetKey,
   parseAttribute,
   resolveCurveSourceMode,
+  validateLiquidEditionDeployMetadataOptions,
 } from './deploy-core.js';
 
-export { formatCurvePreview, formatLiquidEditionUrl, resolveCurveSourceMode } from './deploy-core.js';
+export { formatCurvePreview, formatLiquidEditionUrl, resolveCurveSourceMode, validateLiquidEditionDeployMetadataOptions } from './deploy-core.js';
 
 async function resolveTokenUri(
   rare: ReturnType<typeof createRareClient>,
@@ -82,14 +84,39 @@ async function writeGeneratedCurves(path: string | undefined, curves: LiquidCurv
   log(`Wrote generated curves to ${path}`);
 }
 
-function printCurvePreview(preview: LiquidCurvePreview, source: string): void {
-  for (const line of formatCurvePreview(preview, source)) {
+function printCurvePreview(preview: LiquidCurvePreview, source: string, targetChain?: string): void {
+  for (const line of formatCurvePreview(preview, source, targetChain)) {
     console.log(line);
   }
 }
 
 function collectRepeatedString(value: string, previous: string[]): string[] {
   return [...previous, value];
+}
+
+async function confirmLiquidEditionDeploy(chain: string, yes?: boolean): Promise<void> {
+  if (yes || !process.stdin.isTTY) {
+    return;
+  }
+  if (isJsonMode()) {
+    throw new Error('rare liquid-edition deploy multicurve requires --yes when --json is enabled.');
+  }
+
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  try {
+    const answer = (await rl.question(`Submit liquid edition deployment transaction on ${chain}? [y/N] `)).trim().toLowerCase();
+    if (answer === 'y' || answer === 'yes') {
+      return;
+    }
+  } finally {
+    rl.close();
+  }
+
+  throw new Error('Aborted.');
 }
 
 function resolveFactoryConfigForSupplyOrThrow(
@@ -110,6 +137,7 @@ async function resolveCurves(
     writeCurvesFile?: string;
     totalSupply?: string;
     yes?: boolean;
+    targetChain?: string;
   },
   rare: ReturnType<typeof createRareClient>,
 ): Promise<{
@@ -158,6 +186,7 @@ async function resolveCurves(
 
   const wizard = await runLiquidCurveWizard({
     skipConfirmation: opts.yes,
+    targetChain: opts.targetChain,
     generatePresetCurves: async (preset) => rare.liquidEdition.generatePresetCurves({ preset, totalSupply: opts.totalSupply }),
   });
   await writeGeneratedCurves(opts.writeCurvesFile, wizard.curves);
@@ -267,21 +296,27 @@ export function deployLiquidEditionCommand(): Command {
         },
       ) => {
         const chain = getActiveChain(opts.chain, opts.chainId);
+        const metadataValidation = validateLiquidEditionDeployMetadataOptions(opts);
+        if (!metadataValidation.isValid) {
+          throw new Error(metadataValidation.errorMessage);
+        }
+
         const publicClient = getPublicClient(chain);
         const readOnlyRare = createRareClient({ publicClient });
 
         try {
-          const curves = await resolveCurves(opts, readOnlyRare);
-          if (opts.preview || !opts.yes) {
+          const curves = await resolveCurves({ ...opts, targetChain: chain }, readOnlyRare);
+          if (opts.preview) {
             output(
               {
+                chain,
                 source: curves.source,
                 rarePriceUsd: curves.rarePriceUsd ?? null,
                 preview: curves.preview,
                 curves: curves.curves,
               },
               () => {
-                printCurvePreview(curves.preview, curves.source);
+                printCurvePreview(curves.preview, curves.source, chain);
               },
             );
             return;
@@ -302,6 +337,7 @@ export function deployLiquidEditionCommand(): Command {
           if (opts.totalSupply) {
             log(`  Total supply: ${opts.totalSupply}`);
           }
+          await confirmLiquidEditionDeploy(chain, opts.yes);
           log('Waiting for confirmation...');
 
           const result = await rare.liquidEdition.deploy.multiCurve({

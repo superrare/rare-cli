@@ -109,13 +109,48 @@ export function resolveCurveSourceMode(
   throw new Error('When --curves-file is omitted, provide --curve-preset or run the command in a TTY for the interactive curve wizard.');
 }
 
+export type LiquidEditionDeployMetadataValidationResult =
+  | { isValid: true }
+  | { isValid: false; missingOptions: string[]; errorMessage: string };
+
+export function validateLiquidEditionDeployMetadataOptions(opts: {
+  preview?: boolean;
+  tokenUri?: string;
+  description?: string;
+  image?: string;
+}): LiquidEditionDeployMetadataValidationResult {
+  if (opts.preview || opts.tokenUri) {
+    return { isValid: true };
+  }
+
+  const missingOptions = [
+    opts.description ? undefined : '--description',
+    opts.image ? undefined : '--image',
+  ].filter((option): option is string => option !== undefined);
+
+  if (missingOptions.length === 0) {
+    return { isValid: true };
+  }
+
+  const formattedOptions = missingOptions.length === 1
+    ? missingOptions[0]
+    : `${missingOptions.slice(0, -1).join(', ')} and ${missingOptions.at(-1)}`;
+
+  return {
+    isValid: false,
+    missingOptions,
+    errorMessage: `${formattedOptions} ${missingOptions.length === 1 ? 'is' : 'are'} required when not using --token-uri.`,
+  };
+}
+
 export function formatLiquidEditionUrl(chainId: number, contractAddress: string): string {
   return `https://superrare.com/liquid-editions/${chainId}/${contractAddress}`;
 }
 
-export function formatCurvePreview(preview: LiquidCurvePreview, source: string): string[] {
+export function formatCurvePreview(preview: LiquidCurvePreview, source: string, targetChain?: string): string[] {
   const baseLines = [
     `Curve source: ${source}`,
+    ...(targetChain === undefined ? [] : [`Target chain: ${targetChain}`]),
     `Curve pool supply: ${preview.curvePoolSupplyTokens}`,
     `Max total supply: ${preview.maxTotalSupplyTokens}`,
     `Creator launch reward: ${preview.creatorLaunchRewardTokens}`,

@@ -24,13 +24,17 @@ export type LiquidCurveWizardOptions = {
   stdin?: Readable;
   stdout?: Writable;
   skipConfirmation?: boolean;
+  targetChain?: string;
   generatePresetCurves: (preset: CurvePresetKey) => Promise<LiquidCurveWizardResult>;
 }
 
-function printPreview(preview: LiquidCurvePreview): void {
+function printPreview(preview: LiquidCurvePreview, targetChain?: string): void {
   console.log('\nGenerated multicurve config:');
   console.log(JSON.stringify(preview.segments.map(({ tickLower, tickUpper, numPositions, shares }) => ({ tickLower, tickUpper, numPositions, shares })), null, 2));
   console.log('\nCurve summary:');
+  if (targetChain) {
+    console.log(`  Target chain: ${targetChain}`);
+  }
   console.log(`  Total positions: ${preview.totalPositions}`);
   console.log(`  Curve share sum: ${preview.totalShare}`);
   console.log(`  Curve pool supply: ${preview.curvePoolSupplyTokens}`);
@@ -77,9 +81,10 @@ async function promptForPreset(rl: ReturnType<typeof createInterface>): Promise<
   }
 }
 
-async function promptForConfirmation(rl: ReturnType<typeof createInterface>): Promise<boolean> {
+async function promptForConfirmation(rl: ReturnType<typeof createInterface>, targetChain?: string): Promise<boolean> {
   for (;;) {
-    const answer = (await rl.question('\nUse these curves? [y/n]: ')).trim().toLowerCase();
+    const prompt = targetChain === undefined ? '\nUse these curves? [y/n]: ' : `\nUse these curves for ${targetChain}? [y/n]: `;
+    const answer = (await rl.question(prompt)).trim().toLowerCase();
     if (answer === 'y' || answer === 'yes') return true;
     if (answer === 'n' || answer === 'no') return false;
     console.log('Please answer "y" or "n".');
@@ -97,9 +102,9 @@ export async function runLiquidCurveWizard(opts: LiquidCurveWizardOptions): Prom
     const generated = await opts.generatePresetCurves(preset);
     console.log(`\nUsing fetched RARE/USD price: ${generated.rarePriceUsd}`);
 
-    printPreview(generated.preview);
+    printPreview(generated.preview, opts.targetChain);
     if (!opts.skipConfirmation) {
-      const confirmed = await promptForConfirmation(rl);
+      const confirmed = await promptForConfirmation(rl, opts.targetChain);
       if (!confirmed) {
         throw new Error('Curve generation cancelled.');
       }
