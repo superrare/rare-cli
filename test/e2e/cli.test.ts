@@ -1298,9 +1298,6 @@ function skipIfRareApiUnavailable<T extends { code: number | null; stderr: strin
   ctx: TestContext,
   result: T,
 ): T {
-  if (result.code !== 0 && result.stderr.includes('"message": "fetch failed"')) {
-    ctx.skip('Rare API fetch failed.');
-  }
   if (result.code !== 0 && result.stderr.includes('"Status: 500"') && result.stderr.includes('"Path: /v1/nfts"')) {
     ctx.skip('Rare API /v1/nfts returned 500.');
   }
