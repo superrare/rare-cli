@@ -6,6 +6,7 @@ import {
   cleanupLiveCliFixture,
   createLiveCliFixture,
   deployErc721Collection,
+  expectAuctionListContains,
   expectAuctionStatus,
   liveAuctionDurationSeconds,
   mintToken,
@@ -165,20 +166,41 @@ describeLive('live auction CLI writes', () => {
         fixture.chain,
       ]),
     ));
-    await step('wait for auction to end', waitForAuctionToEnd);
-    await expectAuctionStatus(fixture, fixture.sellerHome, fixture.collection.contract, fixture.auctionSettleToken.tokenId, 'ENDED');
-    expectTx(await step('settle auction', () =>
-      jsonCommand<TxResult>(fixture.sellerHome, [
-        'auction',
-        'settle',
-        '--contract',
-        fixture.collection.contract,
-        '--token-id',
-        fixture.auctionSettleToken.tokenId,
-        '--chain',
-        fixture.chain,
-      ]),
-    ));
+    try {
+      await step('wait for taker auction list entry', () =>
+        expectAuctionListContains(fixture, fixture.buyerHome, {
+          account: fixture.buyerAddress,
+          side: 'taker',
+          contract: fixture.collection.contract,
+          tokenId: fixture.auctionSettleToken.tokenId,
+          type: 'RESERVE_AUCTION',
+        }),
+      );
+      await step('wait for maker auction list entry', () =>
+        expectAuctionListContains(fixture, fixture.sellerHome, {
+          account: fixture.sellerAddress,
+          side: 'maker',
+          contract: fixture.collection.contract,
+          tokenId: fixture.auctionSettleToken.tokenId,
+          type: 'RESERVE_AUCTION',
+        }),
+      );
+    } finally {
+      await step('wait for auction to end', waitForAuctionToEnd);
+      await expectAuctionStatus(fixture, fixture.sellerHome, fixture.collection.contract, fixture.auctionSettleToken.tokenId, 'ENDED');
+      expectTx(await step('settle auction', () =>
+        jsonCommand<TxResult>(fixture.sellerHome, [
+          'auction',
+          'settle',
+          '--contract',
+          fixture.collection.contract,
+          '--token-id',
+          fixture.auctionSettleToken.tokenId,
+          '--chain',
+          fixture.chain,
+        ]),
+      ));
+    }
   });
 
   it('creates, bids, and settles a RARE auction', async () => {

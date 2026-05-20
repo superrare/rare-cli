@@ -86,6 +86,12 @@ describeLive('live auction parity CLI write command', () => {
     expect(status.startingTime).toBe(startTime.toString());
     expectAddressList(status.splitAddresses, [fixture.sellerAddress, fixture.buyerAddress]);
     expect(status.splitRatios).toEqual([70, 30]);
+    await step('wait for scheduled maker auction list entry', () =>
+      expectAuctionListContains(fixture, fixture.sellerHome, {
+        account: fixture.sellerAddress,
+        tokenId: fixture.scheduledAuctionToken.tokenId,
+      }),
+    );
 
     expectTx(await step('cancel scheduled auction', () =>
       jsonCommand<TxResult>(fixture.sellerHome, [
@@ -170,4 +176,64 @@ function expectAddressList(actual: Address[], expected: Address[]): void {
 
 function liveAuctionDurationSeconds(): number {
   return Number.parseInt(process.env.E2E_AUCTION_DURATION_SECONDS ?? '60', 10);
+}
+
+type AuctionListResult = {
+  data: {
+    contractAddress: string;
+    tokenId: string;
+    market: {
+      auctions: {
+        sellerAddress: string;
+        type: string;
+      }[];
+    };
+  }[];
+};
+
+async function expectAuctionListContains(
+  fixture: AuctionParityFixture,
+  home: string,
+  opts: { account: Address; tokenId: string },
+): Promise<void> {
+  const timeoutAt = Date.now() + 180_000;
+  let latest: AuctionListResult | undefined;
+
+  while (Date.now() < timeoutAt) {
+    latest = await jsonCommand<AuctionListResult>(home, [
+      'auction',
+      'list',
+      '--account',
+      opts.account,
+      '--side',
+      'maker',
+      '--chain',
+      fixture.chain,
+      '--per-page',
+      '10',
+    ]);
+
+    if (latest.data.some((nft) =>
+      nft.contractAddress.toLowerCase() === fixture.collection.contract.toLowerCase() &&
+      nft.tokenId === opts.tokenId &&
+      nft.market.auctions.some((auction) =>
+        auction.type === 'SCHEDULED_AUCTION' &&
+        auction.sellerAddress.toLowerCase() === opts.account.toLowerCase(),
+      ),
+    )) {
+      expect(latest.data.length).toBeGreaterThan(0);
+      return;
+    }
+
+    await sleep(5_000);
+  }
+
+  throw new Error(
+    `Timed out waiting for scheduled maker auction list entry for token ${fixture.collection.contract} #${opts.tokenId}. ` +
+    `Latest result count: ${String(latest?.data.length ?? 0)}.`,
+  );
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }

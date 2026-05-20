@@ -270,6 +270,90 @@ export async function expectAuctionStatus(
   expect(status.status).toBe(expectedStatus);
 }
 
+type AuctionListSide = 'maker' | 'taker';
+
+type AuctionListResult = {
+  data: {
+    contractAddress: string;
+    tokenId: string;
+    market: {
+      auctions: {
+        sellerAddress: string;
+        highestBidder: {
+          address: string;
+        } | null;
+        type: string;
+      }[];
+    };
+  }[];
+};
+
+export async function expectAuctionListContains(
+  fixture: LiveCliFixture,
+  home: string,
+  opts: {
+    account: Address;
+    side: AuctionListSide;
+    contract: Address;
+    tokenId: string;
+    type?: 'RESERVE_AUCTION' | 'SCHEDULED_AUCTION';
+  },
+): Promise<void> {
+  const timeoutAt = Date.now() + 180_000;
+  let latest: AuctionListResult | undefined;
+
+  while (Date.now() < timeoutAt) {
+    latest = await jsonCommand<AuctionListResult>(home, [
+      'auction',
+      'list',
+      '--account',
+      opts.account,
+      '--side',
+      opts.side,
+      '--chain',
+      fixture.chain,
+      '--per-page',
+      '10',
+    ]);
+
+    if (hasAuctionListEntry(latest, opts)) {
+      expect(latest.data.length).toBeGreaterThan(0);
+      return;
+    }
+
+    await sleep(5_000);
+  }
+
+  throw new Error(
+    `Timed out waiting for ${opts.side} auction list entry for token ${opts.contract} #${opts.tokenId}. ` +
+    `Latest result count: ${String(latest?.data.length ?? 0)}.`,
+  );
+}
+
+function hasAuctionListEntry(
+  result: AuctionListResult,
+  opts: {
+    account: Address;
+    side: AuctionListSide;
+    contract: Address;
+    tokenId: string;
+    type?: 'RESERVE_AUCTION' | 'SCHEDULED_AUCTION';
+  },
+): boolean {
+  return result.data.some((nft) =>
+    nft.contractAddress.toLowerCase() === opts.contract.toLowerCase() &&
+    nft.tokenId === opts.tokenId &&
+    nft.market.auctions.some((auction) =>
+      (opts.type === undefined || auction.type === opts.type) &&
+      (
+        opts.side === 'maker'
+          ? auction.sellerAddress.toLowerCase() === opts.account.toLowerCase()
+          : auction.highestBidder?.address.toLowerCase() === opts.account.toLowerCase()
+      ),
+    ),
+  );
+}
+
 export async function readCollectionRoyalty(
   fixture: LiveCliFixture,
   home: string,
@@ -374,5 +458,9 @@ export function liveAuctionDurationSeconds(): number {
 
 export async function waitForAuctionToEnd(): Promise<void> {
   const duration = liveAuctionDurationSeconds();
-  await new Promise((resolve) => setTimeout(resolve, (duration + 10) * 1000));
+  await sleep((duration + 10) * 1000);
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }

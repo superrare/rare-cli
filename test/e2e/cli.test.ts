@@ -1,4 +1,6 @@
 import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createServer, type ServerResponse } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { delimiter, join } from 'node:path';
 import { describe, expect, it, type TestContext } from 'vitest';
 import { isAddress, zeroAddress } from 'viem';
@@ -702,6 +704,119 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('lists auctions for an account as maker and taker', async (ctx) => {
+    await withTempHome(async (home) => {
+      await withRareApiFixture(async ({ baseUrl, requests }) => {
+        const account = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
+        const baseArgs = [
+          '--json',
+          'auction',
+          'list',
+          '--account',
+          account,
+          '--chain',
+          'mainnet',
+          '--per-page',
+          '1',
+        ];
+
+        for (const side of ['maker', 'taker']) {
+          const result = parseJsonStdout<{ pagination: { page: number; perPage: number; totalCount: number }; data: { universalTokenId: string }[] }>(
+            skipIfRareApiUnavailable(ctx, await runCli([...baseArgs, '--side', side], {
+              home,
+              env: { RARE_API_BASE_URL: baseUrl },
+              timeoutMs: 30_000,
+            })),
+          );
+
+          expect(result.pagination).toMatchObject({ page: 1, perPage: 1, totalCount: 1 });
+          expect(result.data).toHaveLength(1);
+          expect(result.data[0]?.universalTokenId).toBe(`mainnet-auction-${side}`);
+        }
+
+        expect(requests).toEqual([
+          expect.objectContaining({
+            pathname: '/v1/nfts',
+            query: expect.objectContaining({
+              auctionCreatorAddress: account,
+              chainId: '1',
+              hasAuction: 'true',
+              page: '1',
+              perPage: '1',
+            }) as Record<string, string>,
+          }),
+          expect.objectContaining({
+            pathname: '/v1/nfts',
+            query: expect.objectContaining({
+              auctionBidderAddress: account,
+              chainId: '1',
+              hasAuction: 'true',
+              page: '1',
+              perPage: '1',
+            }) as Record<string, string>,
+          }),
+        ]);
+      });
+    });
+  });
+
+  it('lists auction results discovered through NFT search', async (ctx) => {
+    await withTempHome(async (home) => {
+      const search = parseJsonStdout<{ data: AuctionSearchNft[] }>(
+        skipIfRareApiUnavailable(ctx, await runCli([
+          '--json',
+          'search',
+          'nfts',
+          '--chain',
+          'mainnet',
+          '--has-auction',
+          '--auction-state',
+          'RUNNING',
+          '--per-page',
+          '10',
+        ], { home, timeoutMs: 30_000 })),
+      );
+      const candidate = findAuctionListCandidate(search.data);
+      if (candidate === undefined) {
+        ctx.skip('Rare API did not return a running auction with a bidder to verify auction list.');
+        return;
+      }
+      const maker = parseJsonStdout<{ data: AuctionSearchNft[] }>(
+        skipIfRareApiUnavailable(ctx, await runCli([
+          '--json',
+          'auction',
+          'list',
+          '--account',
+          candidate.auction.sellerAddress,
+          '--side',
+          'maker',
+          '--chain',
+          'mainnet',
+          '--per-page',
+          '50',
+        ], { home, timeoutMs: 30_000 })),
+      );
+      expectAuctionSearchResult(maker.data, candidate, 'maker');
+
+      const taker = parseJsonStdout<{ data: AuctionSearchNft[] }>(
+        skipIfRareApiUnavailable(ctx, await runCli([
+          '--json',
+          'auction',
+          'list',
+          '--account',
+          candidate.bidder,
+          '--side',
+          'taker',
+          '--chain',
+          'mainnet',
+          '--per-page',
+          '50',
+        ], { home, timeoutMs: 30_000 })),
+      );
+      expectAuctionSearchResult(taker.data, candidate, 'taker');
+    });
+  });
+
   it('rejects invalid account market list options before API requests', async () => {
     await withTempHome(async (home) => {
       const invalidAccount = await runCli(['listing', 'list', '--account', 'not-an-address'], { home });
@@ -1328,6 +1443,136 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 });
+
+type RareApiFixtureRequest = {
+  pathname: string;
+  query: Record<string, string>;
+};
+
+type AuctionSearchNft = {
+  universalTokenId: string;
+  contractAddress: string;
+  tokenId: string;
+  market: {
+    auctions: AuctionSearchAuction[];
+  };
+};
+
+type AuctionSearchAuction = {
+  sellerAddress: string;
+  highestBidder: {
+    address: string;
+  };
+};
+
+type AuctionListCandidate = {
+  nft: AuctionSearchNft;
+  auction: AuctionSearchAuction;
+  bidder: string;
+};
+
+function findAuctionListCandidate(nfts: AuctionSearchNft[]): AuctionListCandidate | undefined {
+  for (const nft of nfts) {
+    for (const auction of nft.market.auctions) {
+      const bidder = auction.highestBidder.address;
+      if (isAddress(auction.sellerAddress) && isAddress(bidder) && bidder !== zeroAddress) {
+        return { nft, auction, bidder };
+      }
+    }
+  }
+  return undefined;
+}
+
+function expectAuctionSearchResult(
+  nfts: AuctionSearchNft[],
+  candidate: AuctionListCandidate,
+  side: 'maker' | 'taker',
+): void {
+  const matched = nfts.some((nft) =>
+    nft.universalTokenId === candidate.nft.universalTokenId &&
+    nft.contractAddress.toLowerCase() === candidate.nft.contractAddress.toLowerCase() &&
+    nft.tokenId === candidate.nft.tokenId &&
+    nft.market.auctions.some((auction) =>
+      side === 'maker'
+        ? auction.sellerAddress.toLowerCase() === candidate.auction.sellerAddress.toLowerCase()
+        : auction.highestBidder.address.toLowerCase() === candidate.bidder.toLowerCase(),
+    ),
+  );
+  expect(matched).toBe(true);
+}
+
+async function withRareApiFixture<T>(
+  fn: (fixture: { baseUrl: string; requests: RareApiFixtureRequest[] }) => Promise<T>,
+): Promise<T> {
+  const requests: RareApiFixtureRequest[] = [];
+  const server = createServer((req, res) => {
+    const url = new URL(req.url ?? '/', 'http://rare-api.test');
+    requests.push({
+      pathname: url.pathname,
+      query: Object.fromEntries(url.searchParams.entries()),
+    });
+
+    if (url.pathname === '/v1/nfts') {
+      writeJsonResponse(res, 200, buildAuctionListFixture(url));
+      return;
+    }
+
+    writeJsonResponse(res, 404, { error: `Unhandled fixture path: ${url.pathname}` });
+  });
+
+  await new Promise<void>((resolve) => {
+    server.listen(0, '127.0.0.1', resolve);
+  });
+
+  const address = server.address();
+  if (address === null || typeof address === 'string') {
+    await closeServer(server);
+    throw new Error('Rare API fixture server did not bind to a TCP port.');
+  }
+
+  try {
+    return await fn({
+      baseUrl: `http://127.0.0.1:${address.port}`,
+      requests,
+    });
+  } finally {
+    await closeServer(server);
+  }
+}
+
+function buildAuctionListFixture(url: URL): unknown {
+  const side = url.searchParams.has('auctionCreatorAddress') ? 'maker' : 'taker';
+  return {
+    data: [
+      {
+        universalTokenId: `mainnet-auction-${side}`,
+      },
+    ],
+    pagination: {
+      page: Number(url.searchParams.get('page') ?? 1),
+      perPage: Number(url.searchParams.get('perPage') ?? 24),
+      totalCount: 1,
+      totalPages: 1,
+    },
+  };
+}
+
+function writeJsonResponse(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { 'content-type': 'application/json' });
+  res.end(JSON.stringify(body));
+}
+
+async function closeServer(server: ReturnType<typeof createServer>): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
+}
 
 function skipIfRareApiUnavailable<T extends { code: number | null; stderr: string }>(
   ctx: TestContext,
