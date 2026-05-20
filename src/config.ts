@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
+import { randomUUID } from 'crypto';
 import { getAddress, isAddress, type Address } from 'viem';
 import { chainIds, supportedChains, isSupportedChain, type SupportedChain } from './contracts/addresses.js';
 import { isHexString } from './sdk/validation.js';
@@ -52,11 +53,9 @@ export function readConfig(): Config {
 export function writeConfig(config: Config): void {
   fs.mkdirSync(CONFIG_DIR, { recursive: true, mode: CONFIG_DIR_MODE });
   fs.chmodSync(CONFIG_DIR, CONFIG_DIR_MODE);
-  fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), {
-    encoding: 'utf-8',
-    mode: CONFIG_FILE_MODE,
-  });
+  writeFileAtomically(CONFIG_FILE, JSON.stringify(config, null, 2));
   fs.chmodSync(CONFIG_FILE, CONFIG_FILE_MODE);
+  fsyncDirectoryIfSupported(CONFIG_DIR);
 }
 
 export function deleteConfig(): boolean {
@@ -216,4 +215,52 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNodeFileNotFoundError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
+}
+
+function writeFileAtomically(filePath: string, contents: string): void {
+  const directory = path.dirname(filePath);
+  const tempFilePath = path.join(directory, `.config.json.${process.pid}.${randomUUID()}.tmp`);
+
+  try {
+    writeTempConfigFile(tempFilePath, contents);
+    fs.renameSync(tempFilePath, filePath);
+  } catch (error) {
+    removeFileIfExists(tempFilePath);
+    throw error;
+  }
+}
+
+function writeTempConfigFile(filePath: string, contents: string): void {
+  const fileDescriptor = fs.openSync(filePath, 'wx', CONFIG_FILE_MODE);
+
+  try {
+    fs.fchmodSync(fileDescriptor, CONFIG_FILE_MODE);
+    fs.writeFileSync(fileDescriptor, contents, { encoding: 'utf-8' });
+    fs.fsyncSync(fileDescriptor);
+  } finally {
+    fs.closeSync(fileDescriptor);
+  }
+}
+
+function removeFileIfExists(filePath: string): void {
+  try {
+    fs.unlinkSync(filePath);
+  } catch (error) {
+    if (!isNodeFileNotFoundError(error)) {
+      throw error;
+    }
+  }
+}
+
+function fsyncDirectoryIfSupported(directory: string): void {
+  try {
+    const fileDescriptor = fs.openSync(directory, 'r');
+    try {
+      fs.fsyncSync(fileDescriptor);
+    } finally {
+      fs.closeSync(fileDescriptor);
+    }
+  } catch {
+    // Directory fsync is unsupported on some platforms/filesystems.
+  }
 }
