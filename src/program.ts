@@ -13,6 +13,7 @@ import { collectionCommand } from './commands/collection.js';
 import { currenciesCommand } from './commands/currencies.js';
 import { liquidEditionCommand } from './commands/liquid-edition.js';
 import { swapCommand } from './commands/swap.js';
+import { royaltyCommand } from './commands/royalty.js';
 import { userCommand } from './commands/user.js';
 import { utilsCommand } from './commands/utils.js';
 import { getConfirmationDecision, type ConfirmationOptions } from './confirmation.js';
@@ -56,6 +57,7 @@ export function createRareProgram(): Command {
   program.addCommand(currenciesCommand());
   program.addCommand(liquidEditionCommand());
   program.addCommand(swapCommand());
+  program.addCommand(royaltyCommand());
   program.addCommand(userCommand());
   program.addCommand(utilsCommand());
 

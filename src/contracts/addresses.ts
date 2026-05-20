@@ -56,6 +56,8 @@ export type ContractAddresses = {
   liquidFactory?: Address;
   swapRouter?: Address;
   v4Quoter?: Address;
+  royaltyEngine?: Address;
+  royaltyRegistry?: Address;
 };
 
 export type CanonicalV4Pools = {
@@ -97,11 +99,15 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
     liquidFactory: getAddress('0xbb4341CFd588a098e9aCE1D224178836426c4a8E'),
     swapRouter: getAddress('0xEBd58EdA8408d9EA409f2c2bE8898BD9738f3583'),
     v4Quoter: getAddress('0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203'),
+    royaltyEngine: getAddress('0x0385603ab55642cb4Dd5De3aE9e306809991804f'),
+    royaltyRegistry: getAddress('0xaD2184FB5DBcfC05d8f056542fB25b04fa32A95D'),
   },
   base: {
     factory: getAddress('0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd'),
     auction: getAddress('0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2'),
     batchAuctionHouse: getAddress('0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd'),
+    royaltyEngine: getAddress('0xEF770dFb6D5620977213f55f99bfd781D04BBE15'),
+    royaltyRegistry: getAddress('0x3D1151dc590ebF5C04501a7d4E1f8921546774eA'),
   },
   'base-sepolia': {
     factory: getAddress('0x2b181ae0f1aea6fed75591b04991b1a3f9868d51'),

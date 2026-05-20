@@ -20,6 +20,7 @@ import type { CurrencyInfo, CurrencyInput, ResolvedCurrency, ResolvedCurrencyWit
 import type { LiquidEditionNamespace } from './liquid.js';
 import type { ListingNamespace } from './listing.js';
 import type { OfferNamespace } from './offer.js';
+import type { RoyaltyNamespace } from './royalty.js';
 import type { SwapNamespace } from './swap.js';
 import type { TokenNamespace } from './token.js';
 import type { UtilsNamespace } from './utils.js';
@@ -73,6 +74,8 @@ export type RareClientContracts = {
   liquidFactory?: Address;
   swapRouter?: Address;
   v4Quoter?: Address;
+  royaltyEngine?: Address;
+  royaltyRegistry?: Address;
 }
 
 export type SearchNamespace = {
@@ -129,6 +132,7 @@ export type RareClient = {
   search: SearchNamespace;
   nft: NftNamespace;
   collection: CollectionNamespace;
+  royalty: RoyaltyNamespace;
   user: UserNamespace;
   media: MediaNamespace;
   import: ImportNamespace;

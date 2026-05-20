@@ -17,6 +17,7 @@ import { createLiquidNamespace } from './liquid.js';
 import { createSwapNamespace } from './swap.js';
 import { createReleaseNamespace } from './release.js';
 import { createCollectionNamespace } from './collection.js';
+import { createRoyaltyNamespace } from './royalty.js';
 import { createUtilsNamespace } from './utils.js';
 import { buildNftUniversalTokenId } from './nft-core.js';
 
@@ -147,6 +148,8 @@ export function createRareClient(config: RareClientConfig): RareClient {
       liquidFactory: addresses.liquidFactory,
       swapRouter: addresses.swapRouter,
       v4Quoter: addresses.v4Quoter,
+      royaltyEngine: addresses.royaltyEngine,
+      royaltyRegistry: addresses.royaltyRegistry,
     },
     liquidEdition: createLiquidNamespace(config, chain, addresses),
     swap: createSwapNamespace(config, chain, chainId, addresses),
@@ -182,6 +185,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
         return api.getNft(buildNftUniversalTokenId({ ...params, chainId }));
       },
     },
+    royalty: createRoyaltyNamespace(publicClient, config, chain),
     collection: createCollectionNamespace(
       publicClient,
       config,
