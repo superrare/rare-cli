@@ -64,7 +64,7 @@ export function listingCommand(): Command {
     .description('Create a token-specific listing')
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
-    .option('--price <amount>', 'listing price in ETH or token units')
+    .requiredOption('--price <amount>', 'listing price in ETH or token units')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--target <address>', 'target buyer address (defaults to public listing)')
     .option(
@@ -192,7 +192,7 @@ export function listingCommand(): Command {
     .description('Buy a token-specific listing')
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID to buy')
-    .option('--price <amount>', 'purchase price in ETH or token units')
+    .requiredOption('--price <amount>', 'purchase price in ETH or token units')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--yes', 'yes to all prompts and required approvals')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')

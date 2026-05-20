@@ -61,7 +61,7 @@ export function offerCommand(): Command {
     .description('Create a token-specific offer')
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID')
-    .option('--price <amount>', 'offer price in ETH or token units')
+    .requiredOption('--price <amount>', 'offer price in ETH or token units')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
@@ -171,7 +171,7 @@ export function offerCommand(): Command {
     .description('Accept a token-specific offer')
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID to sell')
-    .option('--price <amount>', 'offer price to accept in ETH or token units')
+    .requiredOption('--price <amount>', 'offer price to accept in ETH or token units')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option(
       '--split <addr=ratio>',

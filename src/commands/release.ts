@@ -191,7 +191,7 @@ export function releaseCommand(): Command {
     .description('Configure a RareMinter direct sale release')
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--price <amount>', 'price per mint in ETH or token units')
-    .option('--max-mints <number>', 'max tokens per mint transaction (0 disables the per-tx cap, otherwise 1-100)')
+    .requiredOption('--max-mints <number>', 'max tokens per mint transaction (0 disables the per-tx cap, otherwise 1-100)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth)')
     .option('--start-time <time>', 'sale start time as unix seconds or an ISO date (defaults to now)')
     .option(
@@ -432,7 +432,7 @@ export function releaseCommand(): Command {
     .command('set')
     .description('Set the RareMinter allowlist root and end time for a release')
     .requiredOption('--contract <address>', 'collection contract address')
-    .option('--end-time <time>', 'allowlist end time as unix seconds or an ISO date')
+    .requiredOption('--end-time <time>', 'allowlist end time as unix seconds or an ISO date')
     .option('--input <file>', 'allowlist proof artifact JSON; uses its root')
     .option('--root <bytes32>', 'allowlist Merkle root override')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
@@ -539,7 +539,7 @@ export function releaseCommand(): Command {
     .command('set-mint')
     .description('Set the RareMinter per-wallet mint limit for a release')
     .requiredOption('--contract <address>', 'collection contract address')
-    .option('--limit <number>', 'per-wallet mint limit; 0 disables the limit')
+    .requiredOption('--limit <number>', 'per-wallet mint limit; 0 disables the limit')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: ReleaseLimitOptions): Promise<void> => {
@@ -584,7 +584,7 @@ export function releaseCommand(): Command {
     .command('set-tx')
     .description('Set the RareMinter per-wallet transaction limit for a release')
     .requiredOption('--contract <address>', 'collection contract address')
-    .option('--limit <number>', 'per-wallet mint transaction limit; 0 disables the limit')
+    .requiredOption('--limit <number>', 'per-wallet mint transaction limit; 0 disables the limit')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: ReleaseLimitOptions): Promise<void> => {

@@ -79,7 +79,7 @@ function swapTokensCommand(): Command {
     .requiredOption('--token-in <address>', 'input token address')
     .requiredOption('--amount-in <amount>', 'amount of the input token')
     .requiredOption('--token-out <address>', 'output token address')
-    .option('--min-amount-out <amount>', 'minimum output token amount')
+    .requiredOption('--min-amount-out <amount>', 'minimum output token amount')
     .requiredOption('--commands <hex>', 'raw router commands hex')
     .requiredOption('--inputs-file <path>', 'JSON file containing router input calldata array')
     .option('--recipient <address>', 'recipient address')

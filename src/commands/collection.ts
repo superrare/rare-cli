@@ -213,7 +213,7 @@ function createMintBatchCommand(): Command {
   cmd
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--base-uri <uri>', 'base URI for token metadata')
-    .option('--amount <number>', 'number of tokens to mint')
+    .requiredOption('--amount <number>', 'number of tokens to mint')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionMintBatchOptions) => {
@@ -271,7 +271,7 @@ function createPrepareLazyMintCommand(): Command {
   cmd
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--base-uri <uri>', 'base URI for token metadata')
-    .option('--amount <number>', 'number of tokens to prepare')
+    .requiredOption('--amount <number>', 'number of tokens to prepare')
     .option('--minter <address>', 'optional approved minter address')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
