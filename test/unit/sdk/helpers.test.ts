@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { createPublicClient, createWalletClient, http, type PublicClient, type WalletClient } from 'viem';
+import { describe, expect, it, vi } from 'vitest';
+import { createPublicClient, createWalletClient, custom, http, type PublicClient, type WalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { mainnet } from 'viem/chains';
 import {
@@ -11,6 +11,7 @@ import {
   requireWallet,
   resolveCurrencyDecimals,
   resolveChainFromPublicClient,
+  sendPreparedTransaction,
   toCurrencyAmount,
   toInteger,
   toNonNegativeInteger,
@@ -22,6 +23,7 @@ import {
   toWei,
 } from '../../../src/sdk/helpers.js';
 import { resolveCurrency } from '../../../src/contracts/addresses.js';
+import type { UniswapTransactionRequest } from '../../../src/swap/uniswap-api.js';
 
 const sellerAccount = privateKeyToAccount(
   '0x0000000000000000000000000000000000000000000000000000000000000001',
@@ -245,6 +247,38 @@ describe('wallet resolution', () => {
   });
 });
 
+describe('prepared transaction sending', () => {
+  it('rejects API-prepared transactions for a different sender before sending', async () => {
+    const request = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected RPC request');
+    });
+    const publicClient = createPublicClient({ chain: mainnet, transport: custom({ request }) });
+    const walletClient = createWalletClient({ account: sellerAccount, chain: mainnet, transport: custom({ request }) });
+    const tx = buildPreparedTransaction({ from: buyerAddress, chainId: mainnet.id });
+
+    await expect(sendPreparedTransaction(publicClient, walletClient, sellerAccount, tx, {
+      accountAddress: sellerAddress,
+      chainId: mainnet.id,
+    })).rejects.toThrow('does not match wallet account');
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('rejects API-prepared transactions for a different chain before sending', async () => {
+    const request = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected RPC request');
+    });
+    const publicClient = createPublicClient({ chain: mainnet, transport: custom({ request }) });
+    const walletClient = createWalletClient({ account: sellerAccount, chain: mainnet, transport: custom({ request }) });
+    const tx = buildPreparedTransaction({ from: sellerAddress, chainId: 11155111 });
+
+    await expect(sendPreparedTransaction(publicClient, walletClient, sellerAccount, tx, {
+      accountAddress: sellerAddress,
+      chainId: mainnet.id,
+    })).rejects.toThrow('does not match client chain ID');
+    expect(request).not.toHaveBeenCalled();
+  });
+});
+
 describe('chain resolution', () => {
   it('maps public client chain IDs to supported chain names', () => {
     expect(resolveChainFromPublicClient(publicClient(mainnet))).toBe('mainnet');
@@ -262,6 +296,17 @@ describe('chain resolution', () => {
     ).toThrow('Unsupported chain id: 999999.');
   });
 });
+
+function buildPreparedTransaction(
+  overrides: Pick<UniswapTransactionRequest, 'from' | 'chainId'>,
+): UniswapTransactionRequest {
+  return {
+    to: '0x9999999999999999999999999999999999999999',
+    data: '0x',
+    value: '0',
+    ...overrides,
+  };
+}
 
 function publicClient(chain?: PublicClient['chain']): PublicClient {
   return createPublicClient({

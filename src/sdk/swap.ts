@@ -493,7 +493,10 @@ export function createSwapNamespace(
         quote: quoteDetails.rawQuote,
         deadline: params.deadline === undefined ? undefined : toSafeIntegerNumber(params.deadline, 'deadline'),
       });
-      const sent = await sendPreparedTransaction(publicClient, walletClient, account, swapResponse.swap);
+      const sent = await sendPreparedTransaction(publicClient, walletClient, account, swapResponse.swap, {
+        accountAddress,
+        chainId,
+      });
       return {
         ...sent,
         estimatedAmountOut: quoteDetails.quote.estimatedAmountOut,
@@ -578,18 +581,27 @@ export function createSwapNamespace(
         tokenOut: ETH_ADDRESS,
       });
       const approvalResetTxHash = approval.cancel
-        ? (await sendPreparedTransaction(publicClient, walletClient, account, approval.cancel)).txHash
+        ? (await sendPreparedTransaction(publicClient, walletClient, account, approval.cancel, {
+            accountAddress,
+            chainId,
+          })).txHash
         : undefined;
 
       const approvalTxHash = approval.approval
-        ? (await sendPreparedTransaction(publicClient, walletClient, account, approval.approval)).txHash
+        ? (await sendPreparedTransaction(publicClient, walletClient, account, approval.approval, {
+            accountAddress,
+            chainId,
+          })).txHash
         : undefined;
 
       const swapResponse = await requestUniswapSwap({
         quote: quoteDetails.rawQuote,
         deadline: params.deadline === undefined ? undefined : toSafeIntegerNumber(params.deadline, 'deadline'),
       });
-      const sent = await sendPreparedTransaction(publicClient, walletClient, account, swapResponse.swap);
+      const sent = await sendPreparedTransaction(publicClient, walletClient, account, swapResponse.swap, {
+        accountAddress,
+        chainId,
+      });
       return {
         ...sent,
         estimatedAmountOut: quoteDetails.quote.estimatedAmountOut,

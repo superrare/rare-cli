@@ -80,7 +80,22 @@ export async function sendPreparedTransaction(
   walletClient: WalletClient,
   account: Address | WalletAccount,
   tx: UniswapTransactionRequest,
+  expected: {
+    accountAddress: Address;
+    chainId: number;
+  },
 ): Promise<TransactionResult> {
+  if (!isAddressEqual(tx.from, expected.accountAddress)) {
+    throw new Error(
+      `Prepared transaction sender ${tx.from} does not match wallet account ${expected.accountAddress}.`,
+    );
+  }
+  if (tx.chainId !== expected.chainId) {
+    throw new Error(
+      `Prepared transaction chain ID ${tx.chainId.toString()} does not match client chain ID ${expected.chainId.toString()}.`,
+    );
+  }
+
   const txHash = await walletClient.sendTransaction({
     account,
     to: tx.to,
