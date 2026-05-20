@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { createWalletClient, http, zeroAddress, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { getContractAddresses, viemChains, type SupportedChain } from '../../src/contracts/addresses.js';
@@ -56,6 +58,24 @@ type ReleaseMintDirectSaleResult = TxResult & {
   tokenIdStart: string;
   tokenIdEnd: string;
   tokenIds: string[];
+};
+
+type ReleaseAllowlistBuildResult = {
+  artifact: {
+    root: `0x${string}`;
+    wallets: unknown[];
+  };
+  outputPath: string;
+};
+
+type ReleaseAllowlistSetResult = TxResult & {
+  config: {
+    rareMinter: Address;
+    contract: Address;
+    root: `0x${string}`;
+    endTimestamp: string;
+    active: boolean;
+  };
 };
 
 type LiveState = {
@@ -174,6 +194,109 @@ describeLive('live RareMinter direct sale release mint', () => {
     expect(minted.tokenIdStart).toBe('1');
     expect(minted.tokenIdEnd).toBe('2');
     expect(minted.tokenIds).toEqual(['1', '2']);
+  });
+
+  it('mints an allowlisted direct sale release through rare-api proof resolution', async () => {
+    const contract = await step('deploy RareMinter allowlisted mint fixture contract', () =>
+      deployReleaseFixtureContract(live.chain, live.sellerWallet.privateKey, live.sellerAddress),
+    );
+    const rareMinter = getContractAddresses(live.chain).rareMinter!;
+
+    const configured = await step('configure zero-price allowlisted direct sale release', () =>
+      jsonCommand<ReleaseConfigureResult>(live.sellerHome, [
+        'listing',
+        'release',
+        'configure',
+        '--contract',
+        contract,
+        '--price',
+        '0',
+        '--max-mints',
+        '1',
+        '--split',
+        `${live.sellerAddress}=100`,
+        '--chain',
+        live.chain,
+      ], 240_000),
+    );
+    expectTx(configured);
+    expect(configured.rareMinter).toBe(rareMinter);
+    expect(configured.contract.toLowerCase()).toBe(contract.toLowerCase());
+
+    const allowlistCsv = join(live.sellerHome, 'direct-sale-mint-allowlist.csv');
+    const allowlistArtifact = join(live.sellerHome, 'direct-sale-mint-allowlist-artifact.json');
+    await writeFile(
+      allowlistCsv,
+      `wallet\n${live.buyerAddress}\n${live.sellerAddress}\n`,
+      'utf8',
+    );
+
+    const artifactBuild = await step('build release allowlist artifact for mint', () =>
+      jsonCommand<ReleaseAllowlistBuildResult>(live.sellerHome, [
+        'listing',
+        'release',
+        'allowlist',
+        'build',
+        '--input',
+        allowlistCsv,
+        '--output',
+        allowlistArtifact,
+      ]),
+    );
+    expect(artifactBuild.artifact.root).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(artifactBuild.artifact.wallets).toHaveLength(2);
+    expect(artifactBuild.outputPath).toBe(allowlistArtifact);
+
+    const endTimestamp = Math.floor(Date.now() / 1000) + 3_600;
+    const allowlist = await step('set release allowlist config for mint', () =>
+      jsonCommand<ReleaseAllowlistSetResult>(live.sellerHome, [
+        'listing',
+        'release',
+        'allowlist',
+        'set',
+        '--contract',
+        contract,
+        '--input',
+        allowlistArtifact,
+        '--end-time',
+        endTimestamp.toString(),
+        '--chain',
+        live.chain,
+      ], 240_000),
+    );
+    expectTx(allowlist);
+    expect(allowlist.config.rareMinter).toBe(rareMinter);
+    expect(allowlist.config.contract.toLowerCase()).toBe(contract.toLowerCase());
+    expect(allowlist.config.root).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(allowlist.config.endTimestamp).toBe(endTimestamp.toString());
+    expect(allowlist.config.active).toBe(true);
+
+    const minted = await step('mint allowlisted direct sale release as buyer via rare-api proof', () =>
+      jsonCommand<ReleaseMintDirectSaleResult>(live.buyerHome, [
+        'listing',
+        'release',
+        'mint',
+        '--contract',
+        contract,
+        '--quantity',
+        '1',
+        '--chain',
+        live.chain,
+      ], 240_000),
+    );
+
+    expectTx(minted);
+    expect(minted.rareMinter).toBe(rareMinter);
+    expect(minted.contract.toLowerCase()).toBe(contract.toLowerCase());
+    expect(minted.buyer.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
+    expect(minted.recipient.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
+    expect(minted.quantity).toBe(1);
+    expect(minted.currencyAddress).toBe(zeroAddress);
+    expect(minted.price).toBe('0');
+    expect(minted.totalPrice).toBe('0');
+    expect(minted.requiredPayment).toBe('0');
+    expect(minted.allowlistRequired).toBe(true);
+    expect(minted.tokenIds).toEqual(['1']);
   });
 });
 

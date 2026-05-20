@@ -3,6 +3,7 @@ import {
   parseUnits,
   parseEventLogs,
   type Address,
+  type Hex,
   type PublicClient,
 } from 'viem';
 import { batchOfferAbi } from '../contracts/abis/batch-offer.js';
@@ -27,11 +28,15 @@ import {
 } from './batch-offer-core.js';
 import {
   generateApiNftMerkleRoot,
+  isApiNftMerkleProofResolutionError,
   resolveApiNftMerkleProof,
+  resolveApiNftMerkleProofFromRoots,
 } from './merkle-api.js';
 import { resolveCurrencyForSdk } from './currency.js';
 
 export type * from './types/batch-offer.js';
+
+const BATCH_OFFER_EVENT_LOOKBACK_BLOCKS = 10_000n;
 
 export function createBatchOfferNamespace(
   publicClient: PublicClient,
@@ -103,7 +108,14 @@ export function createBatchOfferNamespace(
     async revoke(params): ReturnType<BatchOfferNamespace['revoke']> {
       const batchOfferCreator = requireContractAddress(chain, 'batchOfferCreator');
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const resolvedParams = await resolveBatchOfferRevokeParams(config, chainIds[chain], accountAddress, params);
+      const resolvedParams = await resolveBatchOfferRevokeParams({
+        config,
+        publicClient,
+        batchOfferCreator,
+        chainId: chainIds[chain],
+        accountAddress,
+        params,
+      });
       const plan = planBatchOfferRoot(resolvedParams);
 
       const txHash = await walletClient.writeContract({
@@ -140,7 +152,13 @@ export function createBatchOfferNamespace(
     async accept(params): ReturnType<BatchOfferNamespace['accept']> {
       const batchOfferCreator = requireContractAddress(chain, 'batchOfferCreator');
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const resolvedParams = await resolveBatchOfferAcceptParams(config, chainIds[chain], params);
+      const resolvedParams = await resolveBatchOfferAcceptParams({
+        config,
+        publicClient,
+        batchOfferCreator,
+        chainId: chainIds[chain],
+        params,
+      });
       const plan = planBatchOfferAccept(resolvedParams, accountAddress);
       const owner = await publicClient.readContract({
         address: plan.contract,
@@ -244,12 +262,15 @@ async function resolveBatchOfferCreateParams(
   };
 }
 
-async function resolveBatchOfferRevokeParams(
-  config: RareClientConfig,
-  chainId: number,
-  accountAddress: Address,
-  params: Parameters<BatchOfferNamespace['revoke']>[0],
-): Promise<{ root: `0x${string}` }> {
+async function resolveBatchOfferRevokeParams(opts: {
+  config: RareClientConfig;
+  publicClient: PublicClient;
+  batchOfferCreator: Address;
+  chainId: number;
+  accountAddress: Address;
+  params: Parameters<BatchOfferNamespace['revoke']>[0];
+}): Promise<{ root: `0x${string}` }> {
+  const { params } = opts;
   if (params.root !== undefined || params.artifact !== undefined) {
     return {
       root: planBatchOfferRoot(params).root,
@@ -257,12 +278,14 @@ async function resolveBatchOfferRevokeParams(
   }
 
   if ('contract' in params && 'tokenId' in params) {
-    const proof = await resolveApiNftMerkleProof(config, {
-      chainId,
+    const proof = await resolveBatchOfferApiProof({
+      config: opts.config,
+      publicClient: opts.publicClient,
+      batchOfferCreator: opts.batchOfferCreator,
+      chainId: opts.chainId,
       contractAddress: params.contract,
       tokenId: params.tokenId,
-      context: 'batch-offer',
-      creator: accountAddress,
+      creator: opts.accountAddress,
     });
     return { root: proof.root };
   }
@@ -272,11 +295,14 @@ async function resolveBatchOfferRevokeParams(
   );
 }
 
-async function resolveBatchOfferAcceptParams(
-  config: RareClientConfig,
-  chainId: number,
-  params: Parameters<BatchOfferNamespace['accept']>[0],
-): Promise<Parameters<BatchOfferNamespace['accept']>[0]> {
+async function resolveBatchOfferAcceptParams(opts: {
+  config: RareClientConfig;
+  publicClient: PublicClient;
+  batchOfferCreator: Address;
+  chainId: number;
+  params: Parameters<BatchOfferNamespace['accept']>[0];
+}): Promise<Parameters<BatchOfferNamespace['accept']>[0]> {
+  const { params } = opts;
   if (
     params.proofArtifact !== undefined ||
     (params.root !== undefined && params.proof !== undefined)
@@ -284,12 +310,14 @@ async function resolveBatchOfferAcceptParams(
     return params;
   }
 
-  const proof = await resolveApiNftMerkleProof(config, {
-    chainId,
+  const proof = await resolveBatchOfferApiProof({
+    config: opts.config,
+    publicClient: opts.publicClient,
+    batchOfferCreator: opts.batchOfferCreator,
+    chainId: opts.chainId,
     contractAddress: params.contract,
     tokenId: params.tokenId,
     root: params.root,
-    context: 'batch-offer',
     creator: params.creator,
   });
 
@@ -298,4 +326,97 @@ async function resolveBatchOfferAcceptParams(
     root: proof.root,
     proof: proof.proof,
   };
+}
+
+async function resolveBatchOfferApiProof(opts: {
+  config: RareClientConfig;
+  publicClient: PublicClient;
+  batchOfferCreator: Address;
+  chainId: number;
+  contractAddress: Address;
+  tokenId: string | number | bigint;
+  root?: Hex;
+  creator: Address;
+}): Promise<Awaited<ReturnType<typeof resolveApiNftMerkleProof>>> {
+  try {
+    return await resolveApiNftMerkleProof(opts.config, {
+      chainId: opts.chainId,
+      contractAddress: opts.contractAddress,
+      tokenId: opts.tokenId,
+      root: opts.root,
+      context: 'batch-offer',
+      creator: opts.creator,
+    });
+  } catch (error) {
+    if (opts.root !== undefined || !isApiNftMerkleProofResolutionError(error)) {
+      throw error;
+    }
+  }
+
+  const roots = await readRecentActiveBatchOfferRoots(opts.publicClient, opts.batchOfferCreator, opts.creator);
+  return resolveApiNftMerkleProofFromRoots(opts.config, {
+    chainId: opts.chainId,
+    contractAddress: opts.contractAddress,
+    tokenId: opts.tokenId,
+    roots,
+    context: 'batch-offer',
+    creator: opts.creator,
+  });
+}
+
+async function readRecentActiveBatchOfferRoots(
+  publicClient: PublicClient,
+  batchOfferCreator: Address,
+  creator: Address,
+): Promise<Hex[]> {
+  const latestBlock = await publicClient.getBlockNumber();
+  const fromBlock = latestBlock > BATCH_OFFER_EVENT_LOOKBACK_BLOCKS
+    ? latestBlock - BATCH_OFFER_EVENT_LOOKBACK_BLOCKS
+    : 0n;
+  const [events, block] = await Promise.all([
+    publicClient.getContractEvents({
+      address: batchOfferCreator,
+      abi: batchOfferAbi,
+      eventName: 'BatchOfferCreated',
+      args: { creator },
+      fromBlock,
+      toBlock: 'latest',
+      strict: true,
+    }),
+    publicClient.getBlock(),
+  ]);
+  const roots = [...new Set(events.map((event) => event.args.rootHash))].reverse();
+  return filterFillableBatchOfferRoots(publicClient, batchOfferCreator, creator, block.timestamp, roots);
+}
+
+async function filterFillableBatchOfferRoots(
+  publicClient: PublicClient,
+  batchOfferCreator: Address,
+  creator: Address,
+  nowTimestamp: bigint,
+  roots: readonly Hex[],
+  index = 0,
+): Promise<Hex[]> {
+  const root = roots[index];
+  if (root === undefined) {
+    return [];
+  }
+
+  const offer = shapeBatchOfferRead(await publicClient.readContract({
+    address: batchOfferCreator,
+    abi: batchOfferAbi,
+    functionName: 'getBatchOffer',
+    args: [creator, root],
+  }));
+  const status = shapeBatchOfferStatus(offer, { creator, root }, nowTimestamp);
+  const remainingRoots = await filterFillableBatchOfferRoots(
+    publicClient,
+    batchOfferCreator,
+    creator,
+    nowTimestamp,
+    roots,
+    index + 1,
+  );
+
+  return status.fillable ? [root, ...remainingRoots] : remainingRoots;
 }

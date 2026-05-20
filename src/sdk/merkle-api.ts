@@ -27,7 +27,7 @@ export async function generateApiNftMerkleRoot(
   config: RareClientConfig,
   nfts: readonly { contractAddress: Address; tokenId: string | number | bigint }[],
 ): Promise<Hex> {
-  const { data } = await createConfiguredApiClient(config).POST(
+  const { data } = await withApiTransportRetry(async () => await createConfiguredApiClient(config).POST(
     '/v1/merkle-roots/nfts',
     {
       body: {
@@ -37,7 +37,7 @@ export async function generateApiNftMerkleRoot(
         })),
       },
     },
-  );
+  ));
   if (!data) {
     throw new Error('rare-api returned an invalid NFT Merkle root response.');
   }
@@ -51,7 +51,7 @@ export async function generateApiAddressMerkleRoot(
     storageTarget: 'batch-listing' | 'collection-allowlist' | 'both';
   },
 ): Promise<Hex> {
-  const { data } = await createConfiguredApiClient(config).POST(
+  const { data } = await withApiTransportRetry(async () => await createConfiguredApiClient(config).POST(
     '/v1/merkle-roots/addresses',
     {
       body: {
@@ -59,7 +59,7 @@ export async function generateApiAddressMerkleRoot(
         storageTarget: params.storageTarget,
       },
     },
-  );
+  ));
   if (!data) {
     throw new Error('rare-api returned an invalid address Merkle root response.');
   }
@@ -77,7 +77,7 @@ export async function resolveApiNftMerkleProof(
     creator?: Address;
   },
 ): Promise<ApiNftMerkleProof> {
-  const { data } = await createConfiguredApiClient(config).POST(
+  const { data } = await withApiTransportRetry(async () => await createConfiguredApiClient(config).POST(
     '/v1/merkle-roots/nfts/proof',
     {
       body: {
@@ -89,7 +89,7 @@ export async function resolveApiNftMerkleProof(
         ...(params.creator === undefined ? {} : { creator: params.creator }),
       },
     },
-  );
+  ));
   if (!data) {
     throw new Error('rare-api returned an invalid NFT Merkle proof response.');
   }
@@ -102,6 +102,48 @@ export async function resolveApiNftMerkleProof(
   };
 }
 
+export async function resolveApiNftMerkleProofFromRoots(
+  config: RareClientConfig,
+  params: {
+    chainId: number;
+    contractAddress: Address;
+    tokenId: string | number | bigint;
+    roots: readonly Hex[];
+    context?: NftMerkleProofContext;
+    creator?: Address;
+  },
+): Promise<ApiNftMerkleProof> {
+  const roots = uniqueRoots(params.roots);
+  const { matches, lastNotFound } = await collectApiNftMerkleProofMatches(config, params, roots);
+  const [match] = matches;
+
+  if (matches.length === 1 && match !== undefined) {
+    return match;
+  }
+  if (matches.length > 1) {
+    throw new Error(
+      `Multiple active ${params.context ?? 'NFT'} Merkle roots contain token ` +
+        `${params.contractAddress}/${params.tokenId.toString()}. Pass root as an override.`,
+    );
+  }
+
+  if (lastNotFound !== undefined) {
+    throw lastNotFound;
+  }
+  throw new Error(
+    `No candidate ${params.context ?? 'NFT'} Merkle roots were available for token ` +
+      `${params.contractAddress}/${params.tokenId.toString()}.`,
+  );
+}
+
+export function isApiNftMerkleProofResolutionError(error: unknown): boolean {
+  return (
+    isApiErrorLike(error) &&
+    error.path === '/v1/merkle-roots/nfts/proof' &&
+    (error.status === 404 || error.status === 409)
+  );
+}
+
 export async function resolveApiAddressMerkleProof(
   config: RareClientConfig,
   params: {
@@ -110,10 +152,10 @@ export async function resolveApiAddressMerkleProof(
     storageTarget: 'batch-listing' | 'collection-allowlist';
   },
 ): Promise<ApiAddressMerkleProof> {
-  const { data } = await createConfiguredApiClient(config).POST(
+  const { data } = await withApiTransportRetry(async () => await createConfiguredApiClient(config).POST(
     '/v1/merkle-roots/addresses/proof',
     { body: params },
-  );
+  ));
   if (!data) {
     throw new Error('rare-api returned an invalid address Merkle proof response.');
   }
@@ -131,4 +173,90 @@ function createConfiguredApiClient(config: RareClientConfig): ApiClient {
 
 function normalizeProof(proof: readonly string[], label: string): Hex[] {
   return proof.map((entry, index) => normalizeBytes32(entry, `${label}[${index}]`));
+}
+
+async function withApiTransportRetry<T>(request: () => Promise<T>, attempt = 1): Promise<T> {
+  try {
+    return await request();
+  } catch (error) {
+    if (attempt >= 3 || !isRetryableApiTransportError(error)) {
+      throw error;
+    }
+
+    await sleep(250 * attempt);
+    return await withApiTransportRetry(request, attempt + 1);
+  }
+}
+
+async function collectApiNftMerkleProofMatches(
+  config: RareClientConfig,
+  params: {
+    chainId: number;
+    contractAddress: Address;
+    tokenId: string | number | bigint;
+    roots: readonly Hex[];
+    context?: NftMerkleProofContext;
+    creator?: Address;
+  },
+  roots: readonly Hex[],
+  index = 0,
+  matches: readonly ApiNftMerkleProof[] = [],
+  lastNotFound?: Error,
+): Promise<{ matches: readonly ApiNftMerkleProof[]; lastNotFound?: Error }> {
+  const root = roots[index];
+  if (root === undefined) {
+    return { matches, lastNotFound };
+  }
+
+  try {
+    const proof = await resolveApiNftMerkleProof(config, { ...params, root });
+    return await collectApiNftMerkleProofMatches(config, params, roots, index + 1, [...matches, proof], lastNotFound);
+  } catch (error) {
+    if (!isApiNftMerkleProofNotFound(error)) {
+      throw error;
+    }
+    return await collectApiNftMerkleProofMatches(config, params, roots, index + 1, matches, error);
+  }
+}
+
+function isApiNftMerkleProofNotFound(error: unknown): error is Error & { readonly path: string; readonly status: number } {
+  return (
+    isApiErrorLike(error) &&
+    error.path === '/v1/merkle-roots/nfts/proof' &&
+    error.status === 404
+  );
+}
+
+function isApiErrorLike(error: unknown): error is Error & { readonly path: string; readonly status: number } {
+  return (
+    error instanceof Error &&
+    'path' in error &&
+    typeof error.path === 'string' &&
+    'status' in error &&
+    typeof error.status === 'number'
+  );
+}
+
+function isRetryableApiTransportError(error: unknown): boolean {
+  if (isApiErrorLike(error)) {
+    return false;
+  }
+
+  return /(fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN)/i.test(errorCauseText(error));
+}
+
+function errorCauseText(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+
+  return `${error.message} ${errorCauseText(error.cause)}`;
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function uniqueRoots(roots: readonly Hex[]): Hex[] {
+  return [...new Set(roots.map((root) => normalizeBytes32(root, 'candidate root')))];
 }

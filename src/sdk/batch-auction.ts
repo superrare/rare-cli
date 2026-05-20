@@ -34,7 +34,9 @@ import {
 } from './batch-auction-core.js';
 import {
   generateApiNftMerkleRoot,
+  isApiNftMerkleProofResolutionError,
   resolveApiNftMerkleProof,
+  resolveApiNftMerkleProofFromRoots,
 } from './merkle-api.js';
 import { resolveCurrencyForSdk } from './currency.js';
 
@@ -170,7 +172,13 @@ export function createBatchAuctionNamespace(
     async bid(params): ReturnType<BatchAuctionNamespace['bid']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
       const { walletClient, account, accountAddress } = requireWallet(config);
-      const resolvedParams = await resolveBatchAuctionBidParams(config, chainIds[chain], params);
+      const resolvedParams = await resolveBatchAuctionBidParams({
+        config,
+        publicClient,
+        batchAuctionHouse,
+        chainId: chainIds[chain],
+        params,
+      });
       const currency = resolvedParams.currency === undefined
         ? ETH_ADDRESS
         : resolveCurrencyForSdk(resolvedParams.currency, chain).address;
@@ -280,7 +288,13 @@ export function createBatchAuctionNamespace(
 
     async status(params): ReturnType<BatchAuctionNamespace['status']> {
       const batchAuctionHouse = requireContractAddress(chain, 'batchAuctionHouse');
-      const resolvedParams = await resolveBatchAuctionStatusParams(config, chainIds[chain], params);
+      const resolvedParams = await resolveBatchAuctionStatusParams({
+        config,
+        publicClient,
+        batchAuctionHouse,
+        chainId: chainIds[chain],
+        params,
+      });
       const plan = planBatchAuctionStatus(resolvedParams);
       const [details, currentBid, block] = await Promise.all([
         publicClient.readContract({
@@ -378,11 +392,14 @@ async function resolveBatchAuctionCancelParams(
   return { root: roots[0] };
 }
 
-async function resolveBatchAuctionBidParams(
-  config: RareClientConfig,
-  chainId: number,
-  params: Parameters<BatchAuctionNamespace['bid']>[0],
-): Promise<Parameters<BatchAuctionNamespace['bid']>[0]> {
+async function resolveBatchAuctionBidParams(opts: {
+  config: RareClientConfig;
+  publicClient: PublicClient;
+  batchAuctionHouse: Address;
+  chainId: number;
+  params: Parameters<BatchAuctionNamespace['bid']>[0];
+}): Promise<Parameters<BatchAuctionNamespace['bid']>[0]> {
+  const { params } = opts;
   if (
     params.proofArtifact !== undefined ||
     (params.root !== undefined && params.proof !== undefined)
@@ -390,12 +407,14 @@ async function resolveBatchAuctionBidParams(
     return params;
   }
 
-  const proof = await resolveApiNftMerkleProof(config, {
-    chainId,
+  const proof = await resolveBatchAuctionApiProof({
+    config: opts.config,
+    publicClient: opts.publicClient,
+    batchAuctionHouse: opts.batchAuctionHouse,
+    chainId: opts.chainId,
     contractAddress: params.contract,
     tokenId: params.tokenId,
     root: params.root,
-    context: 'batch-auction',
     creator: params.creator,
   });
 
@@ -406,21 +425,26 @@ async function resolveBatchAuctionBidParams(
   };
 }
 
-async function resolveBatchAuctionStatusParams(
-  config: RareClientConfig,
-  chainId: number,
-  params: Parameters<BatchAuctionNamespace['status']>[0],
-): Promise<Parameters<BatchAuctionNamespace['status']>[0]> {
+async function resolveBatchAuctionStatusParams(opts: {
+  config: RareClientConfig;
+  publicClient: PublicClient;
+  batchAuctionHouse: Address;
+  chainId: number;
+  params: Parameters<BatchAuctionNamespace['status']>[0];
+}): Promise<Parameters<BatchAuctionNamespace['status']>[0]> {
+  const { params } = opts;
   if (params.root !== undefined || params.creator === undefined) {
     return params;
   }
 
-  const proof = await resolveApiNftMerkleProof(config, {
-    chainId,
+  const proof = await resolveBatchAuctionApiProof({
+    config: opts.config,
+    publicClient: opts.publicClient,
+    batchAuctionHouse: opts.batchAuctionHouse,
+    chainId: opts.chainId,
     contractAddress: params.contract,
     tokenId: params.tokenId,
     root: params.root,
-    context: 'batch-auction',
     creator: params.creator,
   });
 
@@ -429,6 +453,55 @@ async function resolveBatchAuctionStatusParams(
     root: proof.root,
     proof: params.proof ?? params.proofArtifact?.proof ?? proof.proof,
   };
+}
+
+async function resolveBatchAuctionApiProof(opts: {
+  config: RareClientConfig;
+  publicClient: PublicClient;
+  batchAuctionHouse: Address;
+  chainId: number;
+  contractAddress: Address;
+  tokenId: string | number | bigint;
+  root?: Hex;
+  creator: Address;
+}): Promise<Awaited<ReturnType<typeof resolveApiNftMerkleProof>>> {
+  try {
+    return await resolveApiNftMerkleProof(opts.config, {
+      chainId: opts.chainId,
+      contractAddress: opts.contractAddress,
+      tokenId: opts.tokenId,
+      root: opts.root,
+      context: 'batch-auction',
+      creator: opts.creator,
+    });
+  } catch (error) {
+    if (opts.root !== undefined || !isApiNftMerkleProofResolutionError(error)) {
+      throw error;
+    }
+  }
+
+  const roots = await readActiveBatchAuctionRoots(opts.publicClient, opts.batchAuctionHouse, opts.creator);
+  return resolveApiNftMerkleProofFromRoots(opts.config, {
+    chainId: opts.chainId,
+    contractAddress: opts.contractAddress,
+    tokenId: opts.tokenId,
+    roots,
+    context: 'batch-auction',
+    creator: opts.creator,
+  });
+}
+
+async function readActiveBatchAuctionRoots(
+  publicClient: PublicClient,
+  batchAuctionHouse: Address,
+  creator: Address,
+): Promise<Hex[]> {
+  return [...await publicClient.readContract({
+    address: batchAuctionHouse,
+    abi: batchAuctionHouseAbi,
+    functionName: 'getUserAuctionMerkleRoots',
+    args: [creator],
+  })];
 }
 
 async function approveNftContracts(opts: {
