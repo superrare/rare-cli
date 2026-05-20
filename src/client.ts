@@ -156,9 +156,11 @@ function getRequiredRpcUrl(chain: SupportedChain, chainConfig: ChainConfig): str
     );
   }
 
-  console.warn(
-    `Warning: no RPC URL configured for "${chain}", using public endpoint (may be unreliable).\n` +
-      `  Run: rare configure --chain ${chain} --rpc-url <your-node-url>\n`,
-  );
+  if (!isJsonMode()) {
+    console.warn(
+      `Warning: no RPC URL configured for "${chain}", using public endpoint (may be unreliable).\n` +
+        `  Run: rare configure --chain ${chain} --rpc-url <your-node-url>\n`,
+    );
+  }
   return fallback;
 }

@@ -4,8 +4,12 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 describe('config filesystem handling', () => {
+  const originalArgv = [...process.argv];
+
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
     vi.resetModules();
   });
 
@@ -63,4 +67,66 @@ describe('config filesystem handling', () => {
       await rm(home, { recursive: true, force: true });
     }
   });
+
+  it('warns when wallet setup falls back to a public RPC endpoint outside JSON mode', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'rare-cli-config-home-'));
+    const configDir = join(home, '.rare');
+    const configPath = join(configDir, 'config.json');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    try {
+      await mkdir(configDir, { recursive: true });
+      await writeFile(configPath, JSON.stringify({
+        chains: {
+          sepolia: {
+            privateKey: '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+          },
+        },
+      }), 'utf8');
+      vi.stubEnv('HOME', home);
+      vi.stubEnv('USERPROFILE', home);
+      stubProcessArgv(originalArgv.filter((arg) => arg !== '--json'));
+      vi.resetModules();
+
+      const { getWalletClient } = await import('../../src/client.js');
+
+      getWalletClient('sepolia');
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('using public endpoint'));
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
+  it('suppresses public RPC fallback warnings in JSON mode', async () => {
+    const home = await mkdtemp(join(tmpdir(), 'rare-cli-config-home-'));
+    const configDir = join(home, '.rare');
+    const configPath = join(configDir, 'config.json');
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    try {
+      await mkdir(configDir, { recursive: true });
+      await writeFile(configPath, JSON.stringify({
+        chains: {
+          sepolia: {
+            privateKey: '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+          },
+        },
+      }), 'utf8');
+      vi.stubEnv('HOME', home);
+      vi.stubEnv('USERPROFILE', home);
+      stubProcessArgv([...originalArgv, '--json']);
+      vi.resetModules();
+
+      const { getWalletClient } = await import('../../src/client.js');
+
+      getWalletClient('sepolia');
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      await rm(home, { recursive: true, force: true });
+    }
+  });
 });
+
+function stubProcessArgv(argv: string[]): void {
+  vi.stubGlobal('process', { ...process, argv });
+}
