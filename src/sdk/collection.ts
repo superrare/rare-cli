@@ -1,4 +1,11 @@
-import { type Address, type Hash, type PublicClient, parseEventLogs } from 'viem';
+import {
+  ContractFunctionExecutionError,
+  ContractFunctionZeroDataError,
+  type Address,
+  type Hash,
+  type PublicClient,
+  parseEventLogs,
+} from 'viem';
 import { lazySovereignFactoryAbi } from '../contracts/abis/lazy-sovereign-factory.js';
 import { collectionMintAbi } from '../contracts/abis/collection-mint.js';
 import { collectionOwnerAbi } from '../contracts/abis/collection-owner.js';
@@ -546,9 +553,20 @@ async function readOptionalDefaultRoyaltyReceiver(
       abi: collectionOwnerAbi,
       functionName: 'getDefaultRoyaltyReceiver',
     });
-  } catch {
-    return undefined;
+  } catch (error) {
+    if (isUnsupportedOptionalRead(error)) {
+      return undefined;
+    }
+
+    throw contractSupportError('getDefaultRoyaltyReceiver', contract, error);
   }
+}
+
+function isUnsupportedOptionalRead(error: unknown): boolean {
+  return (
+    error instanceof ContractFunctionExecutionError &&
+    error.cause instanceof ContractFunctionZeroDataError
+  );
 }
 
 async function readOptionalDefaultRoyaltyPercentage(
@@ -561,8 +579,12 @@ async function readOptionalDefaultRoyaltyPercentage(
       abi: collectionOwnerAbi,
       functionName: 'getDefaultRoyaltyPercentage',
     });
-  } catch {
-    return undefined;
+  } catch (error) {
+    if (isUnsupportedOptionalRead(error)) {
+      return undefined;
+    }
+
+    throw contractSupportError('getDefaultRoyaltyPercentage', contract, error);
   }
 }
 
