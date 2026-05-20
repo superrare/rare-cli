@@ -17,8 +17,13 @@ export function toInteger(value: IntegerInput, field: string): bigint {
     return BigInt(value);
   }
 
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    throw new Error(`${field} must be an integer.`);
+  }
+
   try {
-    return BigInt(value);
+    return BigInt(normalized);
   } catch {
     throw new Error(`${field} must be an integer.`);
   }

@@ -88,17 +88,15 @@ export function createBatchListingNamespace(
         }
       }
 
-      const approvalTxHashes = await Promise.all(
-        uniqueContracts.map(async (nftAddress) => approveNftContractIfNeeded({
-          publicClient,
-          walletClient,
-          account,
-          accountAddress,
-          nftAddress,
-          operator: addresses.erc721ApprovalManager,
-          autoApprove: params.autoApprove,
-        })),
-      ).then((hashes) => hashes.filter(isHash));
+      const approvalTxHashes = await approveNftContracts({
+        publicClient,
+        walletClient,
+        account,
+        accountAddress,
+        operator: addresses.erc721ApprovalManager,
+        nftAddresses: uniqueContracts,
+        autoApprove: params.autoApprove,
+      });
 
       const txHash = await walletClient.writeContract({
         address: addresses.batchListing,
@@ -542,6 +540,31 @@ async function readActiveBatchListingRoots(
 
 function isHash(value: Hash | undefined): value is Hash {
   return value !== undefined;
+}
+
+async function approveNftContracts(opts: {
+  publicClient: PublicClient;
+  walletClient: WalletClient;
+  account: Address | WalletAccount;
+  accountAddress: Address;
+  operator: Address;
+  nftAddresses: readonly Address[];
+  autoApprove?: boolean;
+}): Promise<Hash[]> {
+  return opts.nftAddresses.reduce<Promise<Hash[]>>(async (previous, nftAddress) => {
+    const hashes = await previous;
+    const txHash = await approveNftContractIfNeeded({
+      publicClient: opts.publicClient,
+      walletClient: opts.walletClient,
+      account: opts.account,
+      accountAddress: opts.accountAddress,
+      nftAddress,
+      operator: opts.operator,
+      autoApprove: opts.autoApprove,
+    });
+
+    return isHash(txHash) ? [...hashes, txHash] : hashes;
+  }, Promise.resolve([]));
 }
 
 async function prepareBatchListingPayment(opts: {

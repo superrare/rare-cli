@@ -45,6 +45,8 @@ describe('SDK helper normalization', () => {
     expect(() => toInteger(1.2, 'tokenId')).toThrow('tokenId must be an integer.');
     expect(() => toInteger(Number.POSITIVE_INFINITY, 'tokenId')).toThrow('tokenId must be an integer.');
     expect(() => toInteger('abc', 'tokenId')).toThrow('tokenId must be an integer.');
+    expect(() => toInteger('', 'tokenId')).toThrow('tokenId must be an integer.');
+    expect(() => toInteger('   ', 'tokenId')).toThrow('tokenId must be an integer.');
   });
 
   it('rejects unsafe numeric integers', () => {

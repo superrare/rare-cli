@@ -224,6 +224,69 @@ describe('batch listing namespace', () => {
     expect(result.approvalTxHashes).toEqual([hex32('6')]);
   });
 
+  it('serializes NFT approvals across multiple collection contracts', async () => {
+    const contractA = '0x1111111111111111111111111111111111111111' as Address;
+    const contractB = '0x2222222222222222222222222222222222222222' as Address;
+    const writeCalls: Array<{ address: Address; functionName: string; args: unknown[] }> = [];
+    const approvedContracts = new Set<Address>();
+    let activeApprovalWrites = 0;
+    let maxActiveApprovalWrites = 0;
+    const namespace = createBatchListingNamespace(
+      {
+        async readContract(params: { address: Address; functionName: string }) {
+          if (params.functionName === 'ownerOf') return accountAddress;
+          if (params.functionName === 'isApprovedForAll') return approvedContracts.has(params.address);
+          throw new Error(`Unexpected readContract: ${params.functionName}`);
+        },
+        async waitForTransactionReceipt() {
+          return receipt();
+        },
+      } as never,
+      {
+        publicClient: {} as never,
+        apiFetch: rareApiRootFetch(),
+        walletClient: {
+          account: { address: accountAddress },
+          async writeContract(params: { address: Address; functionName: string; args: unknown[] }) {
+            writeCalls.push(params);
+            if (params.functionName === 'setApprovalForAll') {
+              activeApprovalWrites += 1;
+              maxActiveApprovalWrites = Math.max(maxActiveApprovalWrites, activeApprovalWrites);
+              await new Promise((resolve) => setTimeout(resolve, 0));
+              activeApprovalWrites -= 1;
+              approvedContracts.add(params.address);
+              return params.address === contractA ? hex32('6') : hex32('7');
+            }
+            return hex32('8');
+          },
+        } as never,
+      },
+      addresses,
+    );
+
+    const result = await namespace.create({
+      artifact: {
+        root: hex32('2'),
+        currency: '0x0000000000000000000000000000000000000000',
+        amount: '1',
+        splitAddresses: [],
+        splitRatios: [],
+        tokens: [
+          { contract: contractA, tokenId: '1' },
+          { contract: contractB, tokenId: '2' },
+        ],
+      },
+    });
+
+    expect(maxActiveApprovalWrites).toBe(1);
+    expect(writeCalls.map((call) => call.functionName)).toEqual([
+      'setApprovalForAll',
+      'setApprovalForAll',
+      'registerSalePriceMerkleRoot',
+    ]);
+    expect(result.approvalTxHashes).toEqual([hex32('6'), hex32('7')]);
+  });
+
   it('resolves the cancel root from rare-api when token identity is provided', async () => {
     const contract = '0x1111111111111111111111111111111111111111' as Address;
     const root = hex32('8') as `0x${string}`;
