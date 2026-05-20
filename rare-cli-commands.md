@@ -97,9 +97,9 @@ rare auction batch settle --contract <address> --token-id <id> [--chain <chain>]
 rare auction batch cancel [--root <bytes32>] [--input <path>] [--format <format>] [--chain-id <id>] [--chain <chain>]
 rare auction batch status --contract <address> --token-id <id> [--creator <address>] [--root <bytes32>] [--input <path>] [--proof <path>] [--format <format>] [--chain-id <id>] [--chain <chain>]
 
-rare swap buy-token --token <address> [--amount-in <amount>] [--route <auto|local|uniswap|raw>] [--slippage-bps <bps>] [--min-amount-out <amount>] [--commands <hex>] [--inputs-file <path>] [--quote-only] [--yes] [--recipient <address>] [--deadline <seconds>] [--chain <chain>] [--chain-id <id>]
-rare swap sell-token --token <address> [--amount-in <amount>] [--route <auto|local|uniswap|raw>] [--slippage-bps <bps>] [--min-amount-out <amount>] [--commands <hex>] [--inputs-file <path>] [--quote-only] [--yes] [--recipient <address>] [--deadline <seconds>] [--chain <chain>] [--chain-id <id>]
-rare swap buy-rare [--amount-in <amount>] [--slippage-bps <bps>] [--min-amount-out <amount>] [--quote-only] [--yes] [--recipient <address>] [--deadline <seconds>] [--chain <chain>] [--chain-id <id>]
+rare swap buy-token --token <address> --amount-in <amount> [--route <auto|local|uniswap|raw>] [--slippage-bps <bps>] [--min-amount-out <amount>] [--commands <hex>] [--inputs-file <path>] [--quote-only] [--yes] [--recipient <address>] [--deadline <seconds>] [--chain <chain>] [--chain-id <id>]
+rare swap sell-token --token <address> --amount-in <amount> [--route <auto|local|uniswap|raw>] [--slippage-bps <bps>] [--min-amount-out <amount>] [--commands <hex>] [--inputs-file <path>] [--quote-only] [--yes] [--recipient <address>] [--deadline <seconds>] [--chain <chain>] [--chain-id <id>]
+rare swap buy-rare --amount-in <amount> [--slippage-bps <bps>] [--min-amount-out <amount>] [--quote-only] [--yes] [--recipient <address>] [--deadline <seconds>] [--chain <chain>] [--chain-id <id>]
 rare swap tokens --token-in <address> --amount-in <amount> --token-out <address> [--min-amount-out <amount>] --commands <hex> --inputs-file <path> [--recipient <address>] [--deadline <seconds>] [--yes] [--chain <chain>] [--chain-id <id>]
 
 rare utils tree build --input <path> [--format <format>] [--chain <chain>] [--chain-id <id>] [--output <path>]

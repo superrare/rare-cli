@@ -148,7 +148,7 @@ function swapBuyTokenCommand(): Command {
 
   cmd
     .requiredOption('--token <address>', 'token address to buy')
-    .option('--amount-in <amount>', 'ETH amount to spend')
+    .requiredOption('--amount-in <amount>', 'ETH amount to spend')
     .option('--route <mode>', 'route mode: auto, local, uniswap, raw (default: auto)')
     .option('--slippage-bps <bps>', 'slippage in basis points (default: 50)')
     .option('--min-amount-out <amount>', 'override minimum token amount out')
@@ -327,7 +327,7 @@ function swapSellTokenCommand(): Command {
 
   cmd
     .requiredOption('--token <address>', 'token address to sell')
-    .option('--amount-in <amount>', 'token amount to sell')
+    .requiredOption('--amount-in <amount>', 'token amount to sell')
     .option('--route <mode>', 'route mode: auto, local, uniswap, raw (default: auto)')
     .option('--slippage-bps <bps>', 'slippage in basis points (default: 50)')
     .option('--min-amount-out <amount>', 'override minimum ETH amount out')
@@ -507,7 +507,7 @@ function swapBuyRareCommand(): Command {
   cmd.description('Buy RARE with ETH using the curated canonical route');
 
   cmd
-    .option('--amount-in <amount>', 'ETH amount to spend')
+    .requiredOption('--amount-in <amount>', 'ETH amount to spend')
     .option('--slippage-bps <bps>', 'slippage in basis points (default: 50)')
     .option('--min-amount-out <amount>', 'override minimum RARE out')
     .option('--quote-only', 'show the quote without submitting a transaction')
