@@ -50,7 +50,6 @@ export { liquidEditionAbi } from '../contracts/abis/liquid-edition.js';
 export { liquidFactoryAbi } from '../contracts/abis/liquid-factory.js';
 export { liquidRouterAbi } from '../contracts/abis/liquid-router.js';
 export { rareMinterAbi } from '../contracts/abis/rare-minter.js';
-export { royaltyRegistryAbi, royaltyRegistryResolverAbi } from '../contracts/abis/royalty-registry.js';
 export { sovereignFactoryAbi } from '../contracts/abis/sovereign-factory.js';
 export { tokenAbi } from '../contracts/abis/token.js';
 export { uniswapV4QuoterAbi } from '../contracts/abis/uniswap-v4-quoter.js';

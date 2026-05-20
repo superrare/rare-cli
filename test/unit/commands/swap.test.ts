@@ -29,6 +29,8 @@ const token = '0x197FaeF3f59eC80113e773Bb6206a17d183F97CB';
 const publicClient = { kind: 'public-client' };
 const quoteBuyToken = vi.fn();
 const quoteSellToken = vi.fn();
+const buyToken = vi.fn();
+const sellToken = vi.fn();
 const swapTokens = vi.fn();
 let consoleLog: ReturnType<typeof vi.spyOn>;
 
@@ -39,6 +41,8 @@ beforeEach(() => {
   printError.mockReset();
   quoteBuyToken.mockReset();
   quoteSellToken.mockReset();
+  buyToken.mockReset();
+  sellToken.mockReset();
   swapTokens.mockReset();
 
   getPublicClient.mockReturnValue(publicClient);
@@ -50,11 +54,15 @@ beforeEach(() => {
     swap: {
       quoteBuyToken,
       quoteSellToken,
+      buyToken,
+      sellToken,
       swapTokens,
     },
   });
   quoteBuyToken.mockResolvedValue(tokenQuote({ direction: 'buy' }));
   quoteSellToken.mockResolvedValue(tokenQuote({ direction: 'sell' }));
+  buyToken.mockResolvedValue(tokenTradeResult());
+  sellToken.mockResolvedValue(tokenTradeResult());
   swapTokens.mockResolvedValue({
     txHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
     receipt: { blockNumber: 123n },
@@ -87,6 +95,7 @@ test('buy-token quote-only does not require a configured wallet', async () => {
     minAmountOut: undefined,
     slippageBps: undefined,
     recipient: undefined,
+    route: 'auto',
   });
 });
 
@@ -111,6 +120,53 @@ test('sell-token quote-only does not require a configured wallet', async () => {
     minAmountOut: undefined,
     slippageBps: undefined,
     recipient: undefined,
+    route: 'auto',
+  });
+});
+
+test('buy-token raw route submits prebuilt router calldata through the consolidated command', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'rare-cli-swap-test-'));
+  const inputsFile = join(tempDir, 'inputs.json');
+  const walletClient = { kind: 'wallet-client' };
+  getWalletClient.mockReturnValue({ client: walletClient });
+
+  try {
+    await writeFile(inputsFile, JSON.stringify(['0x1234']), 'utf8');
+
+    await swapCommand().parseAsync([
+      'buy-token',
+      '--token',
+      token,
+      '--amount-in',
+      '0.001',
+      '--route',
+      'raw',
+      '--min-amount-out',
+      '1',
+      '--commands',
+      '0x10',
+      '--inputs-file',
+      inputsFile,
+      '--yes',
+      '--chain',
+      'sepolia',
+    ], { from: 'user' });
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+
+  assert.equal(printError.mock.calls.length, 0);
+  assert.deepEqual(createRareClient.mock.calls[0]?.[0], { publicClient, walletClient });
+  assert.equal(quoteBuyToken.mock.calls.length, 0);
+  assert.deepEqual(buyToken.mock.calls[0]?.[0], {
+    route: 'raw',
+    token,
+    amountIn: '0.001',
+    minAmountOut: '1',
+    commands: '0x10',
+    inputs: ['0x1234'],
+    recipient: undefined,
+    deadline: undefined,
   });
 });
 
@@ -172,6 +228,19 @@ function tokenQuote(params: { direction: 'buy' | 'sell' }): TokenTradeQuote {
     routeSource: 'known-pool',
     execution: 'liquid-router',
     routeDescription: params.direction === 'buy' ? 'ETH->TOKEN' : 'TOKEN->ETH',
+    commands: '0x10',
+    inputs: ['0x1234'],
+  };
+}
+
+function tokenTradeResult() {
+  return {
+    txHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    receipt: { blockNumber: 123n },
+    estimatedAmountOut: 2n,
+    minAmountOut: 1n,
+    routeSource: 'raw',
+    execution: 'raw-router',
     commands: '0x10',
     inputs: ['0x1234'],
   };

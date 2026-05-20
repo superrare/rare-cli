@@ -184,11 +184,13 @@ describeLive('live swap CLI write commands', () => {
     expectTx(await step('execute raw RARE buy route', () =>
       jsonCommand<TxResult>(fixture.sellerHome, [
         'swap',
-        'buy',
+        'buy-token',
         '--token',
         fixture.rareAddress,
         '--amount-in',
         liveSwapEthAmount(),
+        '--route',
+        'raw',
         '--min-amount-out',
         formatEther(BigInt(buyQuote.minRareOut)),
         '--commands',
@@ -228,11 +230,13 @@ describeLive('live swap CLI write commands', () => {
     expectTx(await step('execute raw RARE sell route', () =>
       jsonCommand<TxResult>(fixture.sellerHome, [
         'swap',
-        'sell',
+        'sell-token',
         '--token',
         fixture.rareAddress,
         '--amount-in',
         liveSwapRareAmount(),
+        '--route',
+        'raw',
         '--min-amount-out',
         formatEther(BigInt(sellQuote.minAmountOut)),
         '--commands',

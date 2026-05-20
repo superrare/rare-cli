@@ -67,12 +67,12 @@ liquidEditionAbi
 liquidFactoryAbi
 liquidRouterAbi
 rareMinterAbi
-royaltyRegistryAbi
-royaltyRegistryResolverAbi
 sovereignFactoryAbi
 tokenAbi
 uniswapV4QuoterAbi
 ```
+
+Type exports include `CanonicalV4Pool`, `CanonicalV4Pools`, `ContractAddresses`, `CurrencyInfo`, `CurrencyInput`, `CurrencyName`, `CurrencyResolveResult`, `CustomCurrencyInfo`, `ResolvedCurrency`, and `SupportedChain`.
 
 ### `@rareprotocol/rare-cli/utils`
 
@@ -158,31 +158,32 @@ Swap:
 rare.swap.buy(params: RouterBuyParams): Promise<TransactionResult>
 rare.swap.sell(params: RouterSellParams): Promise<TransactionResult>
 rare.swap.swapTokens(params: RouterSwapTokensParams): Promise<TransactionResult>
-rare.swap.quoteBuyToken(params: BuyTokenParams): Promise<TokenTradeQuote>
+rare.swap.quoteBuyToken(params: TokenTradeQuoteParams): Promise<TokenTradeQuote>
 rare.swap.buyToken(params: BuyTokenParams): Promise<TokenTradeResult>
-rare.swap.quoteSellToken(params: SellTokenParams): Promise<TokenTradeQuote>
+rare.swap.quoteSellToken(params: TokenTradeQuoteParams): Promise<TokenTradeQuote>
 rare.swap.sellToken(params: SellTokenParams): Promise<TokenTradeResult>
 rare.swap.quoteBuyRare(params: BuyRareParams): Promise<BuyRareQuote>
 rare.swap.buyRare(params: BuyRareParams): Promise<BuyRareResult>
 
 Auction:
 
-rare.auction.create(params: AuctionCreateParams): Promise<TransactionResult & { approvalTxHash?: Hash; auctionType: 'reserve' | 'scheduled'; startTime: bigint }>
-rare.auction.bid(params: AuctionBidParams): Promise<TransactionResult & { approvalTxHash?: Hash }>
+rare.auction.create(params: AuctionCreateParams): Promise<AuctionCreateResult>
+rare.auction.bid(params: AuctionBidParams): Promise<AuctionBidResult>
 rare.auction.settle(params: AuctionSettleParams): Promise<TransactionResult>
 rare.auction.cancel(params: AuctionCancelParams): Promise<TransactionResult>
 rare.auction.status(params: AuctionStatusParams): Promise<AuctionStatus>
 rare.auction.batch.create(params: BatchAuctionCreateParams): Promise<BatchAuctionCreateResult>
 rare.auction.batch.cancel(params: BatchAuctionCancelParams): Promise<BatchAuctionCancelResult>
+rare.auction.batch.roots(params?: BatchAuctionRootsParams): Promise<Hex[]>
 rare.auction.batch.bid(params: BatchAuctionBidParams): Promise<BatchAuctionBidResult>
 rare.auction.batch.settle(params: BatchAuctionSettleParams): Promise<BatchAuctionSettleResult>
 rare.auction.batch.status(params: BatchAuctionStatusParams): Promise<BatchAuctionStatus>
 
 Offer:
 
-rare.offer.create(params: OfferCreateParams): Promise<TransactionResult & { approvalTxHash?: Hash }>
+rare.offer.create(params: OfferCreateParams): Promise<OfferCreateResult>
 rare.offer.cancel(params: OfferCancelParams): Promise<TransactionResult>
-rare.offer.accept(params: OfferAcceptParams): Promise<TransactionResult & { approvalTxHash?: Hash }>
+rare.offer.accept(params: OfferAcceptParams): Promise<OfferAcceptResult>
 rare.offer.status(params: OfferStatusParams): Promise<OfferStatus>
 rare.offer.batch.create(params: BatchOfferCreateParams): Promise<BatchOfferCreateResult>
 rare.offer.batch.revoke(params: BatchOfferRevokeParams): Promise<BatchOfferRevokeResult>
@@ -191,9 +192,9 @@ rare.offer.batch.status(params: BatchOfferStatusParams): Promise<BatchOfferStatu
 
 Listing:
 
-rare.listing.create(params: ListingCreateParams): Promise<TransactionResult & { approvalTxHash?: Hash }>
+rare.listing.create(params: ListingCreateParams): Promise<ListingCreateResult>
 rare.listing.cancel(params: ListingCancelParams): Promise<TransactionResult>
-rare.listing.buy(params: ListingBuyParams): Promise<TransactionResult & { approvalTxHash?: Hash }>
+rare.listing.buy(params: ListingBuyParams): Promise<ListingBuyResult>
 rare.listing.status(params: ListingStatusParams): Promise<ListingStatus>
 
 Listing release:
@@ -216,7 +217,7 @@ Batch listing:
 
 rare.listing.batch.create(params: BatchListingCreateParams): Promise<BatchListingCreateResult>
 rare.listing.batch.cancel(params: BatchListingCancelParams): Promise<BatchListingCancelResult>
-rare.listing.batch.buy(params: BatchListingBuyParams): Promise<TransactionResult & { approvalTxHash?: Hash }>
+rare.listing.batch.buy(params: BatchListingBuyParams): Promise<BatchListingBuyResult>
 rare.listing.batch.setAllowlist(params: BatchListingSetAllowListParams): Promise<BatchListingSetAllowListResult>
 rare.listing.batch.status(params: BatchListingStatusParams): Promise<BatchListingStatus>
 
@@ -249,12 +250,8 @@ rare.collection.prepareLazyMint(params: CollectionPrepareLazyMintParams): Promis
 rare.collection.getTokenCreator(params: CollectionTokenCreatorParams): Promise<CollectionTokenCreatorResult>
 rare.collection.royalty.status(params: CollectionRoyaltyInfoParams): Promise<CollectionRoyaltyInfoResult>
 rare.collection.setDefaultRoyaltyReceiver(params: CollectionSetDefaultRoyaltyReceiverParams): Promise<CollectionSetDefaultRoyaltyReceiverResult>
+rare.collection.setDefaultRoyaltyPercentage(params: CollectionSetDefaultRoyaltyPercentageParams): Promise<CollectionSetDefaultRoyaltyPercentageResult>
 rare.collection.setTokenRoyaltyReceiver(params: CollectionSetTokenRoyaltyReceiverParams): Promise<CollectionSetTokenRoyaltyReceiverResult>
-rare.collection.royalty.registry.status(params: CollectionRoyaltyRegistryStatusParams): Promise<CollectionRoyaltyRegistryStatusResult>
-rare.collection.setRoyaltyRegistryReceiverOverride(params: CollectionRoyaltyRegistryReceiverOverrideParams): Promise<CollectionRoyaltyRegistryReceiverOverrideResult>
-rare.collection.setRoyaltyRegistryContractReceiver(params: CollectionRoyaltyRegistryContractReceiverParams): Promise<CollectionRoyaltyRegistryContractReceiverResult>
-rare.collection.setRoyaltyRegistryTokenReceiver(params: CollectionRoyaltyRegistryTokenReceiverParams): Promise<CollectionRoyaltyRegistryTokenReceiverResult>
-rare.collection.setRoyaltyRegistryContractPercentage(params: CollectionRoyaltyRegistryContractPercentageParams): Promise<CollectionRoyaltyRegistryContractPercentageResult>
 rare.collection.metadata.status(params: CollectionMintConfigParams): Promise<CollectionMintConfigResult>
 rare.collection.updateBaseUri(params: CollectionUpdateBaseUriParams): Promise<CollectionUpdateBaseUriResult>
 rare.collection.updateTokenUri(params: CollectionUpdateTokenUriParams): Promise<CollectionUpdateTokenUriResult>
@@ -290,3 +287,4 @@ Consistency notes:
 - Collection single-token minting now lives at `collection.mint`, alongside `collection.mintBatch` and `collection.prepareLazyMint`.
 - Batch marketplaces are nested under their sale type: `listing.batch.*`, `offer.batch.*`, and `auction.batch.*`. Offline tree helpers live under `utils.tree.*`.
 - Marketplace currency aliases are first-class SDK inputs. `eth`, `rare`, `usdc`, and ERC20 addresses are accepted by marketplace methods that take `currency`; `rare.currency.*` exposes the same chain-aware resolver/list contract used by the CLI.
+- Swap token flows accept `route?: 'auto' | 'local' | 'uniswap'`; execution methods also accept `route: 'raw'` with `commands` and `inputs` for prebuilt liquid-router calldata. `rare.swap.buy` and `rare.swap.sell` remain lower-level raw router methods.

@@ -56,7 +56,12 @@ import type {
   BuyRareParams,
   BuyRareQuote,
   BuyRareResult,
+  BuyTokenParams,
+  SellTokenParams,
   SwapNamespace,
+  TokenTradeQuoteParams,
+  TokenTradeRawRouteParams,
+  TokenTradeRouteMode,
   TokenTradeResult,
   TokenTradeQuote,
 } from './types/swap.js';
@@ -74,6 +79,7 @@ type LocalBuyTradeParams = {
   minAmountOut?: AmountInput;
   slippageBps?: IntegerInput;
   recipient?: Address;
+  route?: TokenTradeRouteMode;
 };
 
 type LocalSellTradeParams = {
@@ -83,6 +89,7 @@ type LocalSellTradeParams = {
   minAmountOut?: AmountInput;
   slippageBps?: IntegerInput;
   recipient?: Address;
+  route?: TokenTradeRouteMode;
 };
 
 type LocalTradeParams = LocalBuyTradeParams | LocalSellTradeParams;
@@ -290,13 +297,19 @@ async function buildTokenTradeQuote(
   accountAddress: Address | undefined,
   params: LocalTradeParams,
 ): Promise<TokenTradeQuoteDetails> {
-  const localQuote = await buildLocalTokenTradeQuote(publicClient, chain, addresses, params);
-  if (localQuote.kind === 'local') {
-    return localQuote;
+  const route = params.route ?? 'auto';
+  if (route !== 'uniswap') {
+    const localQuote = await buildLocalTokenTradeQuote(publicClient, chain, addresses, params);
+    if (localQuote.kind === 'local') {
+      return localQuote;
+    }
+    if (route === 'local') {
+      throw new Error('No canonical local route is available for this token.');
+    }
   }
 
   if (!accountAddress) {
-    throw new Error('An account is required to quote non-canonical token routes via the Uniswap fallback.');
+    throw new Error('An account is required to quote this token route via the Uniswap API.');
   }
 
   return buildUniswapFallbackTradeQuote(publicClient, chainId, params.token, accountAddress, params);
@@ -325,6 +338,91 @@ async function buildBuyRareQuote(
   return buildBuyRareQuoteFromTokenQuote(rareAddress, tokenQuote.quote);
 }
 
+async function executeRawRouterBuy(params: {
+  publicClient: RareClientConfig['publicClient'];
+  config: RareClientConfig;
+  chain: SupportedChain;
+  addresses: { swapRouter?: Address };
+  token: Address;
+  amountIn: AmountInput;
+  minAmountOut: AmountInput;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+  recipient?: Address;
+  deadline?: IntegerInput;
+}): Promise<TransactionResult & { minAmountOut: bigint }> {
+  const { walletClient, account, accountAddress } = requireWallet(params.config);
+  const router = requireConfiguredAddress(params.addresses.swapRouter, 'Liquid router', params.chain);
+  validateRouterPayload(params.commands, params.inputs);
+
+  const recipient = params.recipient ?? accountAddress;
+  const amountIn = requireInput(params.amountIn, 'amountIn');
+  const minAmountOutInput = requireInput(params.minAmountOut, 'minAmountOut');
+  const ethAmount = toWei(amountIn);
+  const minTokensOut = await toTokenAmount(params.publicClient, params.token, minAmountOutInput, 'minAmountOut');
+  const txHash = await walletClient.writeContract({
+    address: router,
+    abi: liquidRouterAbi,
+    functionName: 'buy',
+    args: [params.token, recipient, minTokensOut, params.commands, [...params.inputs], resolveDeadline(params.deadline)],
+    account,
+    chain: undefined,
+    value: ethAmount,
+  });
+
+  const receipt = await params.publicClient.waitForTransactionReceipt({ hash: txHash });
+  return { txHash, receipt, minAmountOut: minTokensOut };
+}
+
+async function executeRawRouterSell(params: {
+  publicClient: RareClientConfig['publicClient'];
+  config: RareClientConfig;
+  chain: SupportedChain;
+  addresses: { swapRouter?: Address };
+  token: Address;
+  amountIn: AmountInput;
+  minAmountOut: AmountInput;
+  commands: `0x${string}`;
+  inputs: readonly `0x${string}`[];
+  recipient?: Address;
+  deadline?: IntegerInput;
+}): Promise<TransactionResult & { minAmountOut: bigint; tokenAmount: bigint }> {
+  const { walletClient, account, accountAddress } = requireWallet(params.config);
+  const router = requireConfiguredAddress(params.addresses.swapRouter, 'Liquid router', params.chain);
+  validateRouterPayload(params.commands, params.inputs);
+
+  const amountIn = requireInput(params.amountIn, 'amountIn');
+  const minAmountOutInput = requireInput(params.minAmountOut, 'minAmountOut');
+  const tokenAmount = await toTokenAmount(params.publicClient, params.token, amountIn, 'amountIn');
+  const minEthOut = toWei(minAmountOutInput);
+
+  await ensureTokenAllowance(params.publicClient, walletClient, account, accountAddress, params.token, router, tokenAmount);
+
+  const txHash = await walletClient.writeContract({
+    address: router,
+    abi: liquidRouterAbi,
+    functionName: 'sell',
+    args: [
+      params.token,
+      tokenAmount,
+      params.recipient ?? accountAddress,
+      minEthOut,
+      params.commands,
+      [...params.inputs],
+      resolveDeadline(params.deadline),
+    ],
+    account,
+    chain: undefined,
+  });
+
+  const receipt = await params.publicClient.waitForTransactionReceipt({ hash: txHash });
+  return { txHash, receipt, minAmountOut: minEthOut, tokenAmount };
+}
+
+function isRawTokenTradeParams(params: BuyTokenParams | SellTokenParams): params is TokenTradeRawRouteParams {
+  return params.route === 'raw';
+}
+
 export function createSwapNamespace(
   config: RareClientConfig,
   chain: SupportedChain,
@@ -335,60 +433,25 @@ export function createSwapNamespace(
 
   return {
     async buy(params): Promise<TransactionResult> {
-      const { walletClient, account, accountAddress } = requireWallet(config);
-      const router = requireConfiguredAddress(addresses.swapRouter, 'Liquid router', chain);
-      validateRouterPayload(params.commands, params.inputs);
-
-      const recipient = params.recipient ?? accountAddress;
-      const amountIn = requireInput(params.amountIn, 'amountIn');
-      const minAmountOutInput = requireInput(params.minAmountOut, 'minAmountOut');
-      const ethAmount = toWei(amountIn);
-      const minTokensOut = await toTokenAmount(publicClient, params.token, minAmountOutInput, 'minAmountOut');
-      const txHash = await walletClient.writeContract({
-        address: router,
-        abi: liquidRouterAbi,
-        functionName: 'buy',
-        args: [params.token, recipient, minTokensOut, params.commands, [...params.inputs], resolveDeadline(params.deadline)],
-        account,
-        chain: undefined,
-        value: ethAmount,
+      const result = await executeRawRouterBuy({
+        publicClient,
+        config,
+        chain,
+        addresses,
+        ...params,
       });
-
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return { txHash, receipt };
+      return { txHash: result.txHash, receipt: result.receipt };
     },
 
     async sell(params): Promise<TransactionResult> {
-      const { walletClient, account, accountAddress } = requireWallet(config);
-      const router = requireConfiguredAddress(addresses.swapRouter, 'Liquid router', chain);
-      validateRouterPayload(params.commands, params.inputs);
-
-      const amountIn = requireInput(params.amountIn, 'amountIn');
-      const minAmountOutInput = requireInput(params.minAmountOut, 'minAmountOut');
-      const tokenAmount = await toTokenAmount(publicClient, params.token, amountIn, 'amountIn');
-      const minEthOut = toWei(minAmountOutInput);
-
-      await ensureTokenAllowance(publicClient, walletClient, account, accountAddress, params.token, router, tokenAmount);
-
-      const txHash = await walletClient.writeContract({
-        address: router,
-        abi: liquidRouterAbi,
-        functionName: 'sell',
-        args: [
-          params.token,
-          tokenAmount,
-          params.recipient ?? accountAddress,
-          minEthOut,
-          params.commands,
-          [...params.inputs],
-          resolveDeadline(params.deadline),
-        ],
-        account,
-        chain: undefined,
+      const result = await executeRawRouterSell({
+        publicClient,
+        config,
+        chain,
+        addresses,
+        ...params,
       });
-
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return { txHash, receipt };
+      return { txHash: result.txHash, receipt: result.receipt };
     },
 
     async swapTokens(params): Promise<TransactionResult> {
@@ -426,7 +489,7 @@ export function createSwapNamespace(
       return { txHash, receipt };
     },
 
-    async quoteBuyToken(params): Promise<TokenTradeQuote> {
+    async quoteBuyToken(params: TokenTradeQuoteParams): Promise<TokenTradeQuote> {
       const quote = await buildTokenTradeQuote(
         publicClient,
         chain,
@@ -440,12 +503,39 @@ export function createSwapNamespace(
           minAmountOut: params.minAmountOut,
           slippageBps: params.slippageBps,
           recipient: params.recipient,
+          route: params.route,
         },
       );
       return quote.quote;
     },
 
     async buyToken(params): Promise<TokenTradeResult> {
+      if (isRawTokenTradeParams(params)) {
+        const result = await executeRawRouterBuy({
+          publicClient,
+          config,
+          chain,
+          addresses,
+          token: params.token,
+          amountIn: params.amountIn,
+          minAmountOut: params.minAmountOut,
+          commands: params.commands,
+          inputs: params.inputs,
+          recipient: params.recipient,
+          deadline: params.deadline,
+        });
+        return {
+          txHash: result.txHash,
+          receipt: result.receipt,
+          estimatedAmountOut: 0n,
+          minAmountOut: result.minAmountOut,
+          routeSource: 'raw',
+          execution: 'raw-router',
+          commands: params.commands,
+          inputs: params.inputs,
+        };
+      }
+
       const { walletClient, account, accountAddress } = requireWallet(config);
       const quoteDetails = await buildTokenTradeQuote(publicClient, chain, chainId, addresses, accountAddress, {
         direction: 'buy',
@@ -454,6 +544,7 @@ export function createSwapNamespace(
         minAmountOut: params.minAmountOut,
         slippageBps: params.slippageBps,
         recipient: params.recipient,
+        route: params.route,
       });
 
       if (quoteDetails.kind === 'local') {
@@ -506,7 +597,7 @@ export function createSwapNamespace(
       };
     },
 
-    async quoteSellToken(params): Promise<TokenTradeQuote> {
+    async quoteSellToken(params: TokenTradeQuoteParams): Promise<TokenTradeQuote> {
       const quote = await buildTokenTradeQuote(
         publicClient,
         chain,
@@ -520,12 +611,39 @@ export function createSwapNamespace(
           minAmountOut: params.minAmountOut,
           slippageBps: params.slippageBps,
           recipient: params.recipient,
+          route: params.route,
         },
       );
       return quote.quote;
     },
 
     async sellToken(params): Promise<TokenTradeResult> {
+      if (isRawTokenTradeParams(params)) {
+        const result = await executeRawRouterSell({
+          publicClient,
+          config,
+          chain,
+          addresses,
+          token: params.token,
+          amountIn: params.amountIn,
+          minAmountOut: params.minAmountOut,
+          commands: params.commands,
+          inputs: params.inputs,
+          recipient: params.recipient,
+          deadline: params.deadline,
+        });
+        return {
+          txHash: result.txHash,
+          receipt: result.receipt,
+          estimatedAmountOut: 0n,
+          minAmountOut: result.minAmountOut,
+          routeSource: 'raw',
+          execution: 'raw-router',
+          commands: params.commands,
+          inputs: params.inputs,
+        };
+      }
+
       const { walletClient, account, accountAddress } = requireWallet(config);
       const quoteDetails = await buildTokenTradeQuote(publicClient, chain, chainId, addresses, accountAddress, {
         direction: 'sell',
@@ -534,6 +652,7 @@ export function createSwapNamespace(
         minAmountOut: params.minAmountOut,
         slippageBps: params.slippageBps,
         recipient: params.recipient,
+        route: params.route,
       });
 
       if (quoteDetails.kind === 'local') {

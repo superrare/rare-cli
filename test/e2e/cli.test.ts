@@ -1,6 +1,5 @@
 import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type ServerResponse } from 'node:http';
-import type { AddressInfo } from 'node:net';
 import { delimiter, join } from 'node:path';
 import { describe, expect, it, type TestContext } from 'vitest';
 import { isAddress, zeroAddress } from 'viem';
@@ -728,6 +727,51 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('lists collections owned by an account', async (ctx) => {
+    await withTempHome(async (home) => {
+      await withRareApiFixture(async ({ baseUrl, requests }) => {
+        const account = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
+        const result = parseJsonStdout<{
+          pagination: { page: number; perPage: number; totalCount: number };
+          data: { collectionId: string }[];
+        }>(
+          skipIfRareApiUnavailable(ctx, await runCli([
+            '--json',
+            'collection',
+            'list',
+            '--account',
+            account,
+            '--chain',
+            'mainnet',
+            '--page',
+            '2',
+            '--per-page',
+            '1',
+          ], {
+            home,
+            env: { RARE_API_BASE_URL: baseUrl },
+            timeoutMs: 30_000,
+          })),
+        );
+
+        expect(result.pagination).toMatchObject({ page: 2, perPage: 1, totalCount: 1 });
+        expect(result.data).toHaveLength(1);
+        expect(result.data[0]?.collectionId).toBe('mainnet-owned-collection');
+        expect(requests).toEqual([
+          expect.objectContaining({
+            pathname: '/v1/collections',
+            query: expect.objectContaining({
+              ownerAddress: account,
+              chainId: '1',
+              page: '2',
+              perPage: '1',
+            }),
+          }),
+        ]);
+      });
+    });
+  });
+
   it('lists auctions for an account as maker and taker', async (ctx) => {
     await withTempHome(async (home) => {
       await withRareApiFixture(async ({ baseUrl, requests }) => {
@@ -767,7 +811,7 @@ describe('built CLI deterministic behavior', () => {
               hasAuction: 'true',
               page: '1',
               perPage: '1',
-            }) as Record<string, string>,
+            }),
           }),
           expect.objectContaining({
             pathname: '/v1/nfts',
@@ -777,7 +821,7 @@ describe('built CLI deterministic behavior', () => {
               hasAuction: 'true',
               page: '1',
               perPage: '1',
-            }) as Record<string, string>,
+            }),
           }),
         ]);
       });
@@ -1501,6 +1545,59 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('uploads and pins generated collection mint metadata before contract write', async (ctx) => {
+    await withTempHome(async (home) => {
+      await withRareApiFixture(async ({ baseUrl, requests }) => {
+        const imagePath = join(home, 'mint-image.png');
+        await writeFile(imagePath, new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+        const configure = await runCli([
+          'configure',
+          '--chain',
+          'sepolia',
+          '--private-key',
+          '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+          '--rpc-url',
+          'http://127.0.0.1:9',
+        ], { home });
+        expect(configure.code).toBe(0);
+
+        const result = skipIfRareApiUnavailable(ctx, await runCli([
+          '--json',
+          'collection',
+          'mint',
+          '--contract',
+          '0x1111111111111111111111111111111111111111',
+          '--name',
+          'Rare Generated Metadata E2E',
+          '--description',
+          'Exercises the metadata upload shell before the RPC write.',
+          '--image',
+          imagePath,
+          '--tag',
+          'e2e',
+          '--attribute',
+          'Flow=Generated',
+          '--chain',
+          'sepolia',
+        ], {
+          home,
+          env: { RARE_API_BASE_URL: baseUrl },
+          timeoutMs: 30_000,
+        }));
+
+        expect(result.code).toBe(1);
+        expect(result.stdout).toBe('');
+        expect(requests.map((request) => request.pathname)).toEqual([
+          '/v1/nfts/metadata/media/uploads',
+          '/upload-part/1',
+          '/v1/nfts/metadata/media/uploads/complete',
+          '/v1/nfts/metadata/media/generate',
+          '/v1/nfts/metadata',
+        ]);
+      });
+    });
+  });
+
   it('rejects invalid collection mint addresses before wallet setup', async () => {
     await withTempHome(async (home) => {
       const result = await runCli([
@@ -1534,30 +1631,47 @@ describe('built CLI deterministic behavior', () => {
       expect(royalty.stdout).toContain('--price <raw>');
       expect(royalty.stderr).toBe('');
 
-      const registry = await runCli(['collection', 'royalty', 'registry', 'status', '--help'], { home });
-      expect(registry.code).toBe(0);
-      expect(registry.stdout).toContain('Usage: rare collection royalty registry status [options]');
-      expect(registry.stdout).toContain('--registry <address>');
-      expect(registry.stdout).toContain('--price <raw>');
-      expect(registry.stderr).toBe('');
+      const royaltySetDefault = await runCli(['collection', 'royalty', 'set-default-receiver', '--help'], { home });
+      expect(royaltySetDefault.code).toBe(0);
+      expect(royaltySetDefault.stdout).toContain('Usage: rare collection royalty set-default-receiver [options]');
+      expect(royaltySetDefault.stdout).toContain('--receiver <address>');
+      expect(royaltySetDefault.stderr).toBe('');
 
-      const registrySet = await runCli([
-        'collection',
-        'royalty',
-        'registry',
-        'set-contract-percentage',
-        '--help',
-      ], { home });
-      expect(registrySet.code).toBe(0);
-      expect(registrySet.stdout).toContain('Usage: rare collection royalty registry set-contract-percentage [options]');
-      expect(registrySet.stdout).toContain('--percentage <number>');
-      expect(registrySet.stderr).toBe('');
+      const royaltySetPercentage = await runCli(['collection', 'royalty', 'set-default-percentage', '--help'], { home });
+      expect(royaltySetPercentage.code).toBe(0);
+      expect(royaltySetPercentage.stdout).toContain('Usage: rare collection royalty set-default-percentage [options]');
+      expect(royaltySetPercentage.stdout).toContain('--percentage <number>');
+      expect(royaltySetPercentage.stderr).toBe('');
+
+      const royaltySetToken = await runCli(['collection', 'royalty', 'set-token-receiver', '--help'], { home });
+      expect(royaltySetToken.code).toBe(0);
+      expect(royaltySetToken.stdout).toContain('Usage: rare collection royalty set-token-receiver [options]');
+      expect(royaltySetToken.stdout).toContain('--token-id <id>');
+      expect(royaltySetToken.stderr).toBe('');
+
+      const metadataStatus = await runCli(['collection', 'metadata', 'status', '--help'], { home });
+      expect(metadataStatus.code).toBe(0);
+      expect(metadataStatus.stdout).toContain('Usage: rare collection metadata status [options]');
+      expect(metadataStatus.stdout).toContain('--contract <address>');
+      expect(metadataStatus.stderr).toBe('');
 
       const metadata = await runCli(['collection', 'metadata', 'update-base-uri', '--help'], { home });
       expect(metadata.code).toBe(0);
       expect(metadata.stdout).toContain('Usage: rare collection metadata update-base-uri [options]');
       expect(metadata.stdout).toContain('--base-uri <uri>');
       expect(metadata.stderr).toBe('');
+
+      const metadataToken = await runCli(['collection', 'metadata', 'update-token-uri', '--help'], { home });
+      expect(metadataToken.code).toBe(0);
+      expect(metadataToken.stdout).toContain('Usage: rare collection metadata update-token-uri [options]');
+      expect(metadataToken.stdout).toContain('--token-uri <uri>');
+      expect(metadataToken.stderr).toBe('');
+
+      const metadataLock = await runCli(['collection', 'metadata', 'lock-base-uri', '--help'], { home });
+      expect(metadataLock.code).toBe(0);
+      expect(metadataLock.stdout).toContain('Usage: rare collection metadata lock-base-uri [options]');
+      expect(metadataLock.stdout).toContain('--contract <address>');
+      expect(metadataLock.stderr).toBe('');
     });
   });
 
@@ -1577,20 +1691,24 @@ describe('built CLI deterministic behavior', () => {
       expect(result.stdout).toBe('');
       expect(result.stderr).toContain('Error: --contract must be a valid 0x address.');
 
-      const registryResult = await runCli([
+      const percentageResult = await runCli([
         'collection',
         'royalty',
-        'registry',
-        'set-contract-receiver',
+        'set-default-percentage',
         '--contract',
         'not-an-address',
-        '--receiver',
-        '0x2222222222222222222222222222222222222222',
+        '--percentage',
+        '15',
       ], { home });
 
+      expect(percentageResult.code).toBe(1);
+      expect(percentageResult.stdout).toBe('');
+      expect(percentageResult.stderr).toContain('Error: --contract must be a valid 0x address.');
+
+      const registryResult = await runCli(['collection', 'royalty', 'registry'], { home });
       expect(registryResult.code).toBe(1);
       expect(registryResult.stdout).toBe('');
-      expect(registryResult.stderr).toContain('Error: --contract must be a valid 0x address.');
+      expect(registryResult.stderr).toContain("unknown command 'registry'");
     });
   });
 
@@ -1678,6 +1796,7 @@ async function withRareApiFixture<T>(
   const requests: RareApiFixtureRequest[] = [];
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://rare-api.test');
+    // eslint-disable-next-line functional/immutable-data -- Test fixture records requests made by CLI subprocesses.
     requests.push({
       pathname: url.pathname,
       query: Object.fromEntries(url.searchParams.entries()),
@@ -1685,6 +1804,77 @@ async function withRareApiFixture<T>(
 
     if (url.pathname === '/v1/nfts') {
       writeJsonResponse(res, 200, buildAuctionListFixture(url));
+      return;
+    }
+
+    if (url.pathname === '/v1/collections') {
+      writeJsonResponse(res, 200, buildCollectionListFixture(url));
+      return;
+    }
+
+    if (url.pathname === '/v1/nfts/metadata/media/uploads') {
+      const address = server.address();
+      if (address === null || typeof address === 'string') {
+        writeJsonResponse(res, 500, { error: 'fixture server is unavailable' });
+        return;
+      }
+      writeJsonResponse(res, 201, {
+        uploadId: 'upload-1',
+        key: 'media/mint-image.png',
+        bucket: 'rare-cli-e2e',
+        partSize: 10,
+        presignedUrls: [`http://127.0.0.1:${address.port}/upload-part/1`],
+        gatewayBaseUrl: 'https://fixture.example',
+      });
+      return;
+    }
+
+    if (url.pathname === '/upload-part/1') {
+      res.writeHead(200, { etag: 'fixture-etag' });
+      res.end();
+      return;
+    }
+
+    if (url.pathname === '/v1/nfts/metadata/media/uploads/complete') {
+      writeJsonResponse(res, 200, {
+        cid: 'bafymedia',
+        ipfsUrl: 'ipfs://bafymedia',
+        gatewayUrl: 'https://fixture.example/ipfs/bafymedia',
+      });
+      return;
+    }
+
+    if (url.pathname === '/v1/nfts/metadata/media/generate') {
+      writeJsonResponse(res, 200, {
+        media: {
+          uri: 'ipfs://bafymedia',
+          mimeType: 'image/png',
+          size: 4,
+          dimensions: '1x1',
+        },
+      });
+      return;
+    }
+
+    if (url.pathname === '/v1/nfts/metadata') {
+      writeJsonResponse(res, 201, {
+        cid: 'bafymetadata',
+        ipfsUrl: 'ipfs://bafymetadata',
+        gatewayUrl: 'https://fixture.example/ipfs/bafymetadata',
+        metadata: {
+          name: 'Rare Generated Metadata E2E',
+          description: 'Exercises the metadata upload shell before the RPC write.',
+          image: 'ipfs://bafymedia',
+          media: {
+            uri: 'ipfs://bafymedia',
+            mimeType: 'image/png',
+            size: 4,
+            dimensions: '1x1',
+          },
+          tags: ['e2e'],
+          attributes: [{ trait_type: 'Flow', value: 'Generated' }],
+        },
+      });
       return;
     }
 
@@ -1717,6 +1907,22 @@ function buildAuctionListFixture(url: URL): unknown {
     data: [
       {
         universalTokenId: `mainnet-auction-${side}`,
+      },
+    ],
+    pagination: {
+      page: Number(url.searchParams.get('page') ?? 1),
+      perPage: Number(url.searchParams.get('perPage') ?? 24),
+      totalCount: 1,
+      totalPages: 1,
+    },
+  };
+}
+
+function buildCollectionListFixture(url: URL): unknown {
+  return {
+    data: [
+      {
+        collectionId: 'mainnet-owned-collection',
       },
     ],
     pagination: {

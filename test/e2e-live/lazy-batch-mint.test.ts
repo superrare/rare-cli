@@ -55,4 +55,31 @@ describeLive('live lazy batch mint CLI write command', () => {
     expect(bytecode).toBeDefined();
     expect(bytecode).not.toBe('0x');
   });
+
+  it('deploys a capped Lazy Sovereign Batch Mint collection', async () => {
+    const fixture = live.value;
+    expect(getContractAddresses(fixture.chain).lazyBatchMintFactory).toBeDefined();
+
+    const deployed = await step(`deploy capped lazy batch mint collection on ${fixture.chain}`, () =>
+      jsonCommand<LazyBatchMintDeployResult>(fixture.sellerHome, [
+        'collection',
+        'deploy',
+        'lazy-batch-mint',
+        uniqueTokenName('Rare CLI Lazy Capped E2E'),
+        uniqueSymbol('LCZ'),
+        '--max-tokens',
+        '2',
+        '--chain',
+        fixture.chain,
+        '--chain-id',
+        String(fixture.chainId),
+      ], 240_000),
+    );
+
+    expectTx(deployed);
+    expect(isAddress(deployed.contract)).toBe(true);
+    const bytecode = await fixture.publicClient.getCode({ address: deployed.contract });
+    expect(bytecode).toBeDefined();
+    expect(bytecode).not.toBe('0x');
+  });
 });

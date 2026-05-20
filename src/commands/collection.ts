@@ -67,32 +67,11 @@ type CollectionTokenRoyaltyReceiverOptions = CollectionRoyaltyReceiverOptions & 
   tokenId: string;
 };
 
-type CollectionRoyaltyRegistryOptions = {
-  registry?: string;
-  chain?: string;
-  chainId?: string;
-};
-
-type CollectionRoyaltyRegistryStatusOptions = CollectionTokenOptions & CollectionRoyaltyRegistryOptions & {
-  price?: string;
-};
-
-type CollectionRoyaltyRegistryReceiverOverrideOptions = CollectionRoyaltyRegistryOptions & {
-  receiver: string;
-};
-
-type CollectionRoyaltyRegistryReceiverOptions = CollectionRoyaltyRegistryOptions & {
-  contract: string;
-  receiver: string;
-};
-
-type CollectionRoyaltyRegistryTokenReceiverOptions = CollectionRoyaltyRegistryReceiverOptions & {
-  tokenId: string;
-};
-
-type CollectionRoyaltyRegistryContractPercentageOptions = CollectionRoyaltyRegistryOptions & {
+type CollectionRoyaltyPercentageOptions = {
   contract: string;
   percentage: string;
+  chain?: string;
+  chainId?: string;
 };
 
 type CollectionContractOptions = {
@@ -481,6 +460,50 @@ function createSetDefaultRoyaltyReceiverCommand(): Command {
   return cmd;
 }
 
+function createSetDefaultRoyaltyPercentageCommand(): Command {
+  const cmd = new Command('set-default-percentage');
+  cmd.description('Set the default royalty percentage for a Sovereign-style collection');
+
+  cmd
+    .requiredOption('--contract <address>', 'collection contract address')
+    .requiredOption('--percentage <number>', 'royalty percentage, from 0 to 100')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
+    .action(async (opts: CollectionRoyaltyPercentageOptions) => {
+      try {
+        const contract = parseAddressOption(opts.contract, '--contract');
+        const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
+
+        log(`Setting default royalty percentage on ${chain}...`);
+        log(`  Contract: ${contract}`);
+        log(`  Percentage: ${opts.percentage}%`);
+        log('Waiting for transaction confirmation...');
+
+        const result = await rare.collection.setDefaultRoyaltyPercentage({
+          contract,
+          percentage: opts.percentage,
+        });
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            contract: result.contract,
+            percentage: result.percentage,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`Default royalty percentage set to: ${result.percentage}%`);
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
 function createSetTokenRoyaltyReceiverCommand(): Command {
   const cmd = new Command('set-token-receiver');
   cmd.description('Set a token-specific royalty receiver for a Sovereign-style collection');
@@ -530,262 +553,13 @@ function createSetTokenRoyaltyReceiverCommand(): Command {
   return cmd;
 }
 
-function createRoyaltyRegistryStatusCommand(): Command {
-  const cmd = new Command('status');
-  cmd.description('Read legacy RoyaltyRegistry receiver and percentage settings for a collection token');
-
-  cmd
-    .requiredOption('--contract <address>', 'collection contract address')
-    .requiredOption('--token-id <id>', 'token ID to inspect')
-    .option('--price <raw>', 'raw sale price units used for the royalty quote')
-    .option('--registry <address>', 'royalty registry address (defaults to the protocol registry)')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
-    .action(async (opts: CollectionRoyaltyRegistryStatusOptions) => {
-      const contract = parseAddressOption(opts.contract, '--contract');
-      const registry = parseOptionalAddressOption(opts.registry, '--registry');
-      const { chain, rare } = createReadCollectionClient(opts.chain, opts.chainId);
-      const result = await rare.collection.royalty.registry.status({
-        registry,
-        contract,
-        tokenId: opts.tokenId,
-        price: opts.price,
-      });
-
-      output(
-        {
-          chain,
-          registry: result.registry,
-          contract: result.contract,
-          tokenId: result.tokenId,
-          salePrice: result.salePrice,
-          creatorRegistry: result.creatorRegistry,
-          receiver: result.receiver,
-          royaltyPercentage: result.royaltyPercentage,
-          royaltyAmount: result.royaltyAmount,
-          configuredContractPercentage: result.configuredContractPercentage,
-          contractReceiver: result.contractReceiver,
-          tokenReceiver: result.tokenReceiver,
-        },
-        () => {
-          console.log(`Royalty registry: ${result.registry}`);
-          console.log(`Registry receiver: ${result.receiver}`);
-          console.log(`Royalty percentage: ${result.royaltyPercentage}%`);
-          console.log(`Royalty amount: ${result.royaltyAmount.toString()}`);
-          console.log(`Creator registry: ${result.creatorRegistry}`);
-          if (result.configuredContractPercentage !== undefined) {
-            console.log(`Configured contract percentage: ${result.configuredContractPercentage}%`);
-          }
-          if (result.contractReceiver !== undefined) {
-            console.log(`Contract receiver: ${result.contractReceiver}`);
-          }
-          if (result.tokenReceiver !== undefined) {
-            console.log(`Token receiver: ${result.tokenReceiver}`);
-          }
-        },
-      );
-    });
-
-  return cmd;
-}
-
-function createRoyaltyRegistrySetReceiverOverrideCommand(): Command {
-  const cmd = new Command('set-receiver-override');
-  cmd.description('Set your legacy RoyaltyRegistry receiver override');
-
-  cmd
-    .requiredOption('--receiver <address>', 'new royalty receiver for the connected wallet')
-    .option('--registry <address>', 'royalty registry address (defaults to the protocol registry)')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
-    .action(async (opts: CollectionRoyaltyRegistryReceiverOverrideOptions) => {
-      const receiver = parseAddressOption(opts.receiver, '--receiver');
-      const registry = parseOptionalAddressOption(opts.registry, '--registry');
-      const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
-
-      log(`Setting royalty registry receiver override on ${chain}...`);
-      if (registry !== undefined) log(`  Registry: ${registry}`);
-      log(`  Receiver: ${receiver}`);
-      log('Waiting for transaction confirmation...');
-
-      const result = await rare.collection.setRoyaltyRegistryReceiverOverride({ registry, receiver });
-
-      output(
-        {
-          txHash: result.txHash,
-          blockNumber: result.receipt.blockNumber.toString(),
-          registry: result.registry,
-          receiver: result.receiver,
-        },
-        () => {
-          console.log(`Transaction sent: ${result.txHash}`);
-          console.log(`Royalty registry receiver override set to: ${result.receiver}`);
-        },
-      );
-    });
-
-  return cmd;
-}
-
-function createRoyaltyRegistrySetContractReceiverCommand(): Command {
-  const cmd = new Command('set-contract-receiver');
-  cmd.description('Set a legacy RoyaltyRegistry receiver for an owned collection contract');
-
-  cmd
-    .requiredOption('--contract <address>', 'collection contract address')
-    .requiredOption('--receiver <address>', 'new collection royalty receiver')
-    .option('--registry <address>', 'royalty registry address (defaults to the protocol registry)')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
-    .action(async (opts: CollectionRoyaltyRegistryReceiverOptions) => {
-      const contract = parseAddressOption(opts.contract, '--contract');
-      const receiver = parseAddressOption(opts.receiver, '--receiver');
-      const registry = parseOptionalAddressOption(opts.registry, '--registry');
-      const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
-
-      log(`Setting royalty registry contract receiver on ${chain}...`);
-      if (registry !== undefined) log(`  Registry: ${registry}`);
-      log(`  Contract: ${contract}`);
-      log(`  Receiver: ${receiver}`);
-      log('Waiting for transaction confirmation...');
-
-      const result = await rare.collection.setRoyaltyRegistryContractReceiver({
-        registry,
-        contract,
-        receiver,
-      });
-
-      output(
-        {
-          txHash: result.txHash,
-          blockNumber: result.receipt.blockNumber.toString(),
-          registry: result.registry,
-          contract: result.contract,
-          receiver: result.receiver,
-        },
-        () => {
-          console.log(`Transaction sent: ${result.txHash}`);
-          console.log(`Royalty registry contract receiver set to: ${result.receiver}`);
-        },
-      );
-    });
-
-  return cmd;
-}
-
-function createRoyaltyRegistrySetTokenReceiverCommand(): Command {
-  const cmd = new Command('set-token-receiver');
-  cmd.description('Set a legacy RoyaltyRegistry receiver for one collection token');
-
-  cmd
-    .requiredOption('--contract <address>', 'collection contract address')
-    .requiredOption('--token-id <id>', 'token ID to update')
-    .requiredOption('--receiver <address>', 'new token royalty receiver')
-    .option('--registry <address>', 'royalty registry address (defaults to the protocol registry)')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
-    .action(async (opts: CollectionRoyaltyRegistryTokenReceiverOptions) => {
-      const contract = parseAddressOption(opts.contract, '--contract');
-      const receiver = parseAddressOption(opts.receiver, '--receiver');
-      const registry = parseOptionalAddressOption(opts.registry, '--registry');
-      const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
-
-      log(`Setting royalty registry token receiver on ${chain}...`);
-      if (registry !== undefined) log(`  Registry: ${registry}`);
-      log(`  Contract: ${contract}`);
-      log(`  Token ID: ${opts.tokenId}`);
-      log(`  Receiver: ${receiver}`);
-      log('Waiting for transaction confirmation...');
-
-      const result = await rare.collection.setRoyaltyRegistryTokenReceiver({
-        registry,
-        contract,
-        tokenId: opts.tokenId,
-        receiver,
-      });
-
-      output(
-        {
-          txHash: result.txHash,
-          blockNumber: result.receipt.blockNumber.toString(),
-          registry: result.registry,
-          contract: result.contract,
-          tokenId: result.tokenId,
-          receiver: result.receiver,
-        },
-        () => {
-          console.log(`Transaction sent: ${result.txHash}`);
-          console.log(`Token ${result.tokenId.toString()} royalty registry receiver set to: ${result.receiver}`);
-        },
-      );
-    });
-
-  return cmd;
-}
-
-function createRoyaltyRegistrySetContractPercentageCommand(): Command {
-  const cmd = new Command('set-contract-percentage');
-  cmd.description('Set a legacy RoyaltyRegistry percentage for a collection contract');
-
-  cmd
-    .requiredOption('--contract <address>', 'collection contract address')
-    .requiredOption('--percentage <number>', 'royalty percentage, from 0 to 100')
-    .option('--registry <address>', 'royalty registry address (defaults to the protocol registry)')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
-    .action(async (opts: CollectionRoyaltyRegistryContractPercentageOptions) => {
-      const contract = parseAddressOption(opts.contract, '--contract');
-      const registry = parseOptionalAddressOption(opts.registry, '--registry');
-      const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
-
-      log(`Setting royalty registry contract percentage on ${chain}...`);
-      if (registry !== undefined) log(`  Registry: ${registry}`);
-      log(`  Contract: ${contract}`);
-      log(`  Percentage: ${opts.percentage}%`);
-      log('Waiting for transaction confirmation...');
-
-      const result = await rare.collection.setRoyaltyRegistryContractPercentage({
-        registry,
-        contract,
-        percentage: opts.percentage,
-      });
-
-      output(
-        {
-          txHash: result.txHash,
-          blockNumber: result.receipt.blockNumber.toString(),
-          registry: result.registry,
-          contract: result.contract,
-          percentage: result.percentage,
-        },
-        () => {
-          console.log(`Transaction sent: ${result.txHash}`);
-          console.log(`Royalty registry contract percentage set to: ${result.percentage}%`);
-        },
-      );
-    });
-
-  return cmd;
-}
-
-function createRoyaltyRegistryCommand(): Command {
-  const cmd = new Command('registry');
-  cmd.description('Inspect and update legacy RoyaltyRegistry settings');
-  cmd.addCommand(createRoyaltyRegistryStatusCommand());
-  cmd.addCommand(createRoyaltyRegistrySetReceiverOverrideCommand());
-  cmd.addCommand(createRoyaltyRegistrySetContractReceiverCommand());
-  cmd.addCommand(createRoyaltyRegistrySetTokenReceiverCommand());
-  cmd.addCommand(createRoyaltyRegistrySetContractPercentageCommand());
-  return cmd;
-}
-
 function createRoyaltyCommand(): Command {
   const cmd = new Command('royalty');
   cmd.description('Inspect and update collection royalty receiver settings');
   cmd.addCommand(createRoyaltyStatusCommand());
   cmd.addCommand(createSetDefaultRoyaltyReceiverCommand());
+  cmd.addCommand(createSetDefaultRoyaltyPercentageCommand());
   cmd.addCommand(createSetTokenRoyaltyReceiverCommand());
-  cmd.addCommand(createRoyaltyRegistryCommand());
   return cmd;
 }
 
@@ -1041,12 +815,4 @@ function parseAddressOption(value: string, optionName: string): Address {
   }
 
   return getAddress(value);
-}
-
-function parseOptionalAddressOption(value: string | undefined, optionName: string): Address | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-
-  return parseAddressOption(value, optionName);
 }

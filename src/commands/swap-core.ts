@@ -1,5 +1,7 @@
 import { formatEther, formatUnits, getAddress, isHex, type Address } from 'viem';
-import type { BuyRareQuote, TokenTradeQuote } from '../sdk/swap.js';
+import type { BuyRareQuote, TokenTradeExecutionRoute, TokenTradeQuote } from '../sdk/swap.js';
+
+const tokenTradeExecutionRoutes = ['auto', 'local', 'uniswap', 'raw'] as const;
 
 export function parseInputsJson(raw: string, label: string): readonly `0x${string}`[] {
   const parsed = parseJson(raw, label);
@@ -40,6 +42,16 @@ export function parseAddress(value: string, label: string): Address {
 
 export function parseOptionalAddress(value: string | undefined, label: string): Address | undefined {
   return value === undefined ? undefined : parseAddress(value, label);
+}
+
+export function parseTokenTradeExecutionRoute(value: string | undefined): TokenTradeExecutionRoute {
+  if (value === undefined) {
+    return 'auto';
+  }
+  if ((tokenTradeExecutionRoutes as readonly string[]).includes(value)) {
+    return value as TokenTradeExecutionRoute;
+  }
+  throw new Error('--route must be one of: auto, local, uniswap, raw.');
 }
 
 export function formatBuyRareQuoteLines(params: {

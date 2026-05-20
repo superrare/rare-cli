@@ -13,12 +13,9 @@ import {
   mintToken,
   readCollectionMetadata,
   readCollectionRoyalty,
-  readProtocolRoyaltyRegistry,
-  readRoyaltyRegistryContractReceiver,
   type CollectionMetadataWriteResult,
   type CollectionMintBatchResult,
   type CollectionPrepareLazyMintResult,
-  type CollectionRoyaltyRegistryContractReceiverResult,
   type CollectionTokenCreatorResult,
   type CreateSovereignResult,
   type DeployResult,
@@ -63,6 +60,16 @@ describeLive('live collection CLI writes', () => {
     expectTx(fixture.buyerMintToken);
     expect(fixture.buyerMintToken.contract).toBe(fixture.collection.contract);
     expect(fixture.buyerMintToken.tokenId).toMatch(/^\d+$/);
+  });
+
+  it('mints with a custom royalty receiver', async () => {
+    const fixture = live.value;
+    const minted = await step('mint token with custom royalty receiver', () =>
+      mintToken(fixture, fixture.collection.contract, { royaltyReceiver: fixture.buyerAddress }),
+    );
+
+    const royalty = await readCollectionRoyalty(fixture, fixture.sellerHome, fixture.collection.contract, minted.tokenId);
+    expect(royalty.receiver.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
   });
 
   it('deploys an ERC-721 collection and batch mints through the active factory', async () => {
@@ -168,70 +175,26 @@ describeLive('live collection CLI writes', () => {
     expect(tokenReceiverRoyalty.receiver.toLowerCase()).toBe(fixture.sellerAddress.toLowerCase());
     expect(tokenReceiverRoyalty.defaultReceiver?.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
 
-    const registry = await readProtocolRoyaltyRegistry(fixture);
-    const registryReceiver = await step('set royalty registry contract receiver', () =>
-      jsonCommand<CollectionRoyaltyRegistryContractReceiverResult>(fixture.sellerHome, [
+    const percentageResult = await step('set default royalty percentage', () =>
+      jsonCommand<TxResult & { contract: string; percentage: number }>(fixture.sellerHome, [
         'collection',
         'royalty',
-        'registry',
-        'set-contract-receiver',
+        'set-default-percentage',
         '--contract',
         created.contract,
-        '--receiver',
-        fixture.buyerAddress,
+        '--percentage',
+        '15',
         '--chain',
         fixture.chain,
       ]),
     );
+    expectTx(percentageResult);
+    expect(percentageResult.contract.toLowerCase()).toBe(created.contract.toLowerCase());
+    expect(percentageResult.percentage).toBe(15);
 
-    expectTx(registryReceiver);
-    expect(registryReceiver.registry.toLowerCase()).toBe(registry.toLowerCase());
-    expect(registryReceiver.contract.toLowerCase()).toBe(created.contract.toLowerCase());
-    expect(registryReceiver.receiver.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
-
-    const contractReceiver = await readRoyaltyRegistryContractReceiver(fixture, registry, created.contract);
-    expect(contractReceiver.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
-
-    const tokenReceiver = await step('set royalty registry token receiver', () =>
-      jsonCommand<TxResult & { registry: string; contract: string; tokenId: string; receiver: string }>(fixture.sellerHome, [
-        'collection',
-        'royalty',
-        'registry',
-        'set-token-receiver',
-        '--contract',
-        created.contract,
-        '--token-id',
-        '1',
-        '--receiver',
-        fixture.sellerAddress,
-        '--chain',
-        fixture.chain,
-      ]),
-    );
-    expectTx(tokenReceiver);
-    expect(tokenReceiver.registry.toLowerCase()).toBe(registry.toLowerCase());
-    expect(tokenReceiver.contract.toLowerCase()).toBe(created.contract.toLowerCase());
-    expect(tokenReceiver.tokenId).toBe('1');
-    expect(tokenReceiver.receiver.toLowerCase()).toBe(fixture.sellerAddress.toLowerCase());
-
-    const registryStatus = await jsonCommand<{
-      configuredContractPercentage?: number;
-      contractReceiver?: string;
-      tokenReceiver?: string;
-    }>(fixture.sellerHome, [
-      'collection',
-      'royalty',
-      'registry',
-      'status',
-      '--contract',
-      created.contract,
-      '--token-id',
-      '1',
-      '--chain',
-      fixture.chain,
-    ]);
-    expect(registryStatus.contractReceiver?.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
-    expect(registryStatus.tokenReceiver?.toLowerCase()).toBe(fixture.sellerAddress.toLowerCase());
+    const percentageRoyalty = await readCollectionRoyalty(fixture, fixture.sellerHome, created.contract, '1');
+    expect(percentageRoyalty.defaultPercentage).toBe('15');
+    expect(percentageRoyalty.royaltyAmount).toBe('1500');
   });
 
   it('deploys a Lazy ERC-721 release collection through the lazy factory', async () => {
@@ -337,6 +300,31 @@ describeLive('live collection CLI writes', () => {
     const lockedMetadata = await readCollectionMetadata(fixture, fixture.sellerHome, created.contract);
     expect(lockedMetadata.baseUri).toBe(E2E_LAZY_UPDATED_BASE_URI);
     expect(lockedMetadata.lockedMetadata).toBe(true);
+  });
+
+  it('deploys a Lazy ERC-721 royalty-guard collection type', async () => {
+    const fixture = live.value;
+    const suffix = Date.now().toString(36);
+    const created = await step('deploy Lazy ERC-721 royalty-guard collection', () =>
+      jsonCommand<CreateSovereignResult>(fixture.sellerHome, [
+        'collection',
+        'deploy',
+        'lazy-erc721',
+        `Rare CLI Lazy Guard E2E ${suffix}`,
+        `RCG${suffix.slice(-4).toUpperCase()}`,
+        '--max-tokens',
+        '2',
+        '--contract-type',
+        'lazy-royalty-guard',
+        '--chain',
+        fixture.chain,
+      ]),
+    );
+
+    expectTx(created);
+    expect(created.contract).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(created.factory).toBe(getContractAddresses(fixture.chain).lazySovereignFactory);
+    expect(created.contractType).toBe('lazy-royalty-guard');
   });
 
   it('mints directly to another recipient', async () => {

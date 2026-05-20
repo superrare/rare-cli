@@ -1,7 +1,6 @@
 import { expect } from 'vitest';
 import type { Address, PublicClient } from 'viem';
-import { royaltyRegistryAbi, royaltyRegistryResolverAbi } from '../../../src/contracts/abis/royalty-registry.js';
-import { getContractAddresses, type SupportedChain } from '../../../src/contracts/addresses.js';
+import type { SupportedChain } from '../../../src/contracts/addresses.js';
 import {
   cleanupTempHome,
   configureLiveHome,
@@ -11,7 +10,6 @@ import {
   expectTx,
   jsonCommand,
   step,
-  type TxResult,
 } from '../live-helpers.js';
 import { releaseLiveWallets, reserveLiveWalletPair, type LiveWalletLease } from './live-wallet-pool.js';
 
@@ -75,32 +73,6 @@ export type CollectionRoyaltyInfoResult = {
   defaultReceiver?: Address;
   defaultPercentage?: string;
 };
-
-export type CollectionRoyaltyRegistryStatusResult = {
-  chain: string;
-  registry: Address;
-  contract: Address;
-  tokenId: string;
-  salePrice: string;
-  creatorRegistry: Address;
-  receiver: Address;
-  royaltyPercentage: number;
-  royaltyAmount: string;
-  configuredContractPercentage?: number;
-  contractReceiver?: Address;
-  tokenReceiver?: Address;
-};
-
-export type CollectionRoyaltyRegistryReceiverOverrideResult = {
-  registry: Address;
-  receiver: Address;
-} & TxResult
-
-export type CollectionRoyaltyRegistryContractReceiverResult = {
-  registry: Address;
-  contract: Address;
-  receiver: Address;
-} & TxResult
 
 export type CollectionMetadataStatusResult = {
   chain: string;
@@ -227,7 +199,7 @@ export async function deployErc721Collection(
 export async function mintToken(
   fixture: LiveCliFixture,
   contract: Address,
-  opts: { to?: Address } = {},
+  opts: { to?: Address; royaltyReceiver?: Address } = {},
 ): Promise<MintResult> {
   const baseArgs = [
     'collection',
@@ -239,7 +211,11 @@ export async function mintToken(
     '--chain',
     fixture.chain,
   ];
-  const args = opts.to ? [...baseArgs, '--to', opts.to] : baseArgs;
+  const args = [
+    ...baseArgs,
+    ...(opts.to ? ['--to', opts.to] : []),
+    ...(opts.royaltyReceiver ? ['--royalty-receiver', opts.royaltyReceiver] : []),
+  ];
 
   const result = await jsonCommand<MintResult>(fixture.sellerHome, args, 300_000);
 
@@ -371,41 +347,6 @@ export async function readCollectionRoyalty(
     '--chain',
     fixture.chain,
   ]);
-}
-
-export async function readProtocolRoyaltyRegistry(fixture: LiveCliFixture): Promise<Address> {
-  const auction = getContractAddresses(fixture.chain).auction;
-  return fixture.publicClient.readContract({
-    address: auction,
-    abi: royaltyRegistryResolverAbi,
-    functionName: 'royaltyRegistry',
-  });
-}
-
-export async function readRoyaltyRegistryReceiverOverride(
-  fixture: LiveCliFixture,
-  registry: Address,
-  wallet: Address,
-): Promise<Address> {
-  return fixture.publicClient.readContract({
-    address: registry,
-    abi: royaltyRegistryAbi,
-    functionName: 'royaltyReceiverOverride',
-    args: [wallet],
-  });
-}
-
-export async function readRoyaltyRegistryContractReceiver(
-  fixture: LiveCliFixture,
-  registry: Address,
-  contract: Address,
-): Promise<Address> {
-  return fixture.publicClient.readContract({
-    address: registry,
-    abi: royaltyRegistryAbi,
-    functionName: 'contractRoyaltyReceiver',
-    args: [contract],
-  });
 }
 
 export async function readCollectionMetadata(

@@ -1,6 +1,8 @@
 import type { Address } from 'viem';
 import type { AmountInput, IntegerInput, TransactionResult } from './common.js';
 
+type Hex = `0x${string}`;
+
 export type RouterBuyParams = {
   token: Address;
   amountIn: AmountInput;
@@ -40,7 +42,10 @@ export type BuyRareParams = {
   deadline?: IntegerInput;
 }
 
-export type BuyTokenParams = {
+export type TokenTradeRouteMode = 'auto' | 'local' | 'uniswap';
+export type TokenTradeExecutionRoute = TokenTradeRouteMode | 'raw';
+
+export type TokenTradeBaseParams = {
   token: Address;
   amountIn: AmountInput;
   minAmountOut?: AmountInput;
@@ -49,17 +54,22 @@ export type BuyTokenParams = {
   deadline?: IntegerInput;
 }
 
-export type SellTokenParams = {
-  token: Address;
-  amountIn: AmountInput;
-  minAmountOut?: AmountInput;
-  slippageBps?: IntegerInput;
-  recipient?: Address;
-  deadline?: IntegerInput;
+export type TokenTradeQuoteParams = TokenTradeBaseParams & {
+  route?: TokenTradeRouteMode;
 }
 
-export type TokenTradeRouteSource = 'liquid-edition' | 'known-pool' | 'uniswap-api';
-export type TokenTradeExecution = 'liquid-router' | 'uniswap-api';
+export type TokenTradeRawRouteParams = Omit<TokenTradeBaseParams, 'minAmountOut' | 'slippageBps'> & {
+  route: 'raw';
+  minAmountOut: AmountInput;
+  commands: Hex;
+  inputs: readonly Hex[];
+}
+
+export type BuyTokenParams = TokenTradeQuoteParams | TokenTradeRawRouteParams;
+export type SellTokenParams = TokenTradeQuoteParams | TokenTradeRawRouteParams;
+
+export type TokenTradeRouteSource = 'liquid-edition' | 'known-pool' | 'uniswap-api' | 'raw';
+export type TokenTradeExecution = 'liquid-router' | 'uniswap-api' | 'raw-router';
 
 export type TokenTradeQuoteBase = {
   amountIn: bigint;
@@ -92,10 +102,10 @@ export type TokenTradeResult = {
   minAmountOut: bigint;
   routeSource: TokenTradeRouteSource;
   execution: TokenTradeExecution;
-  commands?: `0x${string}`;
-  inputs?: readonly `0x${string}`[];
-  approvalTxHash?: `0x${string}`;
-  approvalResetTxHash?: `0x${string}`;
+  commands?: Hex;
+  inputs?: readonly Hex[];
+  approvalTxHash?: Hex;
+  approvalResetTxHash?: Hex;
 } & TransactionResult
 
 export type BuyRareQuote = {
@@ -119,9 +129,9 @@ export type SwapNamespace = {
   buy: (params: RouterBuyParams) => Promise<TransactionResult>;
   sell: (params: RouterSellParams) => Promise<TransactionResult>;
   swapTokens: (params: RouterSwapTokensParams) => Promise<TransactionResult>;
-  quoteBuyToken: (params: BuyTokenParams) => Promise<TokenTradeQuote>;
+  quoteBuyToken: (params: TokenTradeQuoteParams) => Promise<TokenTradeQuote>;
   buyToken: (params: BuyTokenParams) => Promise<TokenTradeResult>;
-  quoteSellToken: (params: SellTokenParams) => Promise<TokenTradeQuote>;
+  quoteSellToken: (params: TokenTradeQuoteParams) => Promise<TokenTradeQuote>;
   sellToken: (params: SellTokenParams) => Promise<TokenTradeResult>;
   quoteBuyRare: (params: BuyRareParams) => Promise<BuyRareQuote>;
   buyRare: (params: BuyRareParams) => Promise<BuyRareResult>;

@@ -105,6 +105,16 @@ export type CollectionSetDefaultRoyaltyReceiverResult = {
   receiver: Address;
 } & TransactionResult
 
+export type CollectionSetDefaultRoyaltyPercentageParams = {
+  contract: Address;
+  percentage: IntegerInput;
+}
+
+export type CollectionSetDefaultRoyaltyPercentageResult = {
+  contract: Address;
+  percentage: number;
+} & TransactionResult
+
 export type CollectionSetTokenRoyaltyReceiverParams = {
   contract: Address;
   tokenId: IntegerInput;
@@ -115,75 +125,6 @@ export type CollectionSetTokenRoyaltyReceiverResult = {
   contract: Address;
   tokenId: bigint;
   receiver: Address;
-} & TransactionResult
-
-export type CollectionRoyaltyRegistryStatusParams = {
-  registry?: Address;
-  contract: Address;
-  tokenId: IntegerInput;
-  price?: IntegerInput;
-}
-
-export type CollectionRoyaltyRegistryStatusResult = {
-  registry: Address;
-  contract: Address;
-  tokenId: bigint;
-  salePrice: bigint;
-  creatorRegistry: Address;
-  receiver: Address;
-  royaltyPercentage: number;
-  royaltyAmount: bigint;
-  configuredContractPercentage?: number;
-  contractReceiver?: Address;
-  tokenReceiver?: Address;
-}
-
-export type CollectionRoyaltyRegistryReceiverOverrideParams = {
-  registry?: Address;
-  receiver: Address;
-}
-
-export type CollectionRoyaltyRegistryReceiverOverrideResult = {
-  registry: Address;
-  receiver: Address;
-} & TransactionResult
-
-export type CollectionRoyaltyRegistryContractReceiverParams = {
-  registry?: Address;
-  contract: Address;
-  receiver: Address;
-}
-
-export type CollectionRoyaltyRegistryContractReceiverResult = {
-  registry: Address;
-  contract: Address;
-  receiver: Address;
-} & TransactionResult
-
-export type CollectionRoyaltyRegistryTokenReceiverParams = {
-  registry?: Address;
-  contract: Address;
-  tokenId: IntegerInput;
-  receiver: Address;
-}
-
-export type CollectionRoyaltyRegistryTokenReceiverResult = {
-  registry: Address;
-  contract: Address;
-  tokenId: bigint;
-  receiver: Address;
-} & TransactionResult
-
-export type CollectionRoyaltyRegistryContractPercentageParams = {
-  registry?: Address;
-  contract: Address;
-  percentage: IntegerInput;
-}
-
-export type CollectionRoyaltyRegistryContractPercentageResult = {
-  registry: Address;
-  contract: Address;
-  percentage: number;
 } & TransactionResult
 
 export type CollectionMintConfigParams = {
@@ -254,19 +195,13 @@ export type CollectionNamespace = {
   getTokenCreator: (params: CollectionTokenCreatorParams) => Promise<CollectionTokenCreatorResult>;
   royalty: {
     status: (params: CollectionRoyaltyInfoParams) => Promise<CollectionRoyaltyInfoResult>;
-    registry: {
-      status: (params: CollectionRoyaltyRegistryStatusParams) => Promise<CollectionRoyaltyRegistryStatusResult>;
-    };
   };
   metadata: {
     status: (params: CollectionMintConfigParams) => Promise<CollectionMintConfigResult>;
   };
   setDefaultRoyaltyReceiver: (params: CollectionSetDefaultRoyaltyReceiverParams) => Promise<CollectionSetDefaultRoyaltyReceiverResult>;
+  setDefaultRoyaltyPercentage: (params: CollectionSetDefaultRoyaltyPercentageParams) => Promise<CollectionSetDefaultRoyaltyPercentageResult>;
   setTokenRoyaltyReceiver: (params: CollectionSetTokenRoyaltyReceiverParams) => Promise<CollectionSetTokenRoyaltyReceiverResult>;
-  setRoyaltyRegistryReceiverOverride: (params: CollectionRoyaltyRegistryReceiverOverrideParams) => Promise<CollectionRoyaltyRegistryReceiverOverrideResult>;
-  setRoyaltyRegistryContractReceiver: (params: CollectionRoyaltyRegistryContractReceiverParams) => Promise<CollectionRoyaltyRegistryContractReceiverResult>;
-  setRoyaltyRegistryTokenReceiver: (params: CollectionRoyaltyRegistryTokenReceiverParams) => Promise<CollectionRoyaltyRegistryTokenReceiverResult>;
-  setRoyaltyRegistryContractPercentage: (params: CollectionRoyaltyRegistryContractPercentageParams) => Promise<CollectionRoyaltyRegistryContractPercentageResult>;
   updateBaseUri: (params: CollectionUpdateBaseUriParams) => Promise<CollectionUpdateBaseUriResult>;
   updateTokenUri: (params: CollectionUpdateTokenUriParams) => Promise<CollectionUpdateTokenUriResult>;
   lockBaseUri: (params: CollectionLockBaseUriParams) => Promise<CollectionLockBaseUriResult>;

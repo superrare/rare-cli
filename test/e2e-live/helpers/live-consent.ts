@@ -99,8 +99,11 @@ export function isLiveWriteCommand(args: string[]): boolean {
     }
     if (subcommand === 'royalty') {
       const royaltySubcommand = args[2];
-      if (royaltySubcommand === 'set-default-receiver' || royaltySubcommand === 'set-token-receiver') return true;
-      if (royaltySubcommand === 'registry') return args[3]?.startsWith('set-') === true;
+      if (
+        royaltySubcommand === 'set-default-receiver' ||
+        royaltySubcommand === 'set-default-percentage' ||
+        royaltySubcommand === 'set-token-receiver'
+      ) return true;
     }
     return false;
   }

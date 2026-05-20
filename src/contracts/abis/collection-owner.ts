@@ -41,6 +41,13 @@ export const collectionOwnerAbi = [
     type: 'function',
   },
   {
+    inputs: [{ internalType: 'uint256', name: '_percentage', type: 'uint256' }],
+    name: 'setDefaultRoyaltyPercentage',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
     inputs: [
       { internalType: 'address', name: '_receiver', type: 'address' },
       { internalType: 'uint256', name: '_tokenId', type: 'uint256' },
