@@ -3,7 +3,7 @@ import { chainIds, supportedChains, type SupportedChain } from '../contracts/add
 import type { UniswapTransactionRequest } from '../swap/uniswap-api.js';
 import type { RareClientConfig } from './types/client.js';
 import type { IntegerInput, TransactionResult, WalletAccount } from './types/common.js';
-import { toInteger } from './amounts-core.js';
+import { toPositiveInteger } from './amounts-core.js';
 
 export function resolveChainFromPublicClient(publicClient: PublicClient): SupportedChain {
   const chainId = publicClient.chain?.id;
@@ -61,7 +61,7 @@ export function resolveDeadline(value?: IntegerInput): bigint {
   if (value === undefined) {
     return BigInt(Math.floor(Date.now() / 1000) + 20 * 60);
   }
-  return toInteger(value, 'deadline');
+  return toPositiveInteger(value, 'deadline');
 }
 
 export function getConfiguredAccountAddress(config: RareClientConfig): Address | undefined {

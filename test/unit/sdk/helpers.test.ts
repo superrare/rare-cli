@@ -11,6 +11,7 @@ import {
   requireWallet,
   resolveCurrencyDecimals,
   resolveChainFromPublicClient,
+  resolveDeadline,
   sendPreparedTransaction,
   toCurrencyAmount,
   toInteger,
@@ -68,6 +69,12 @@ describe('SDK helper normalization', () => {
     expect(toPositiveInteger('1', 'duration')).toBe(1n);
     expect(() => toPositiveInteger(0, 'duration')).toThrow('duration must be greater than 0.');
     expect(() => toPositiveInteger(-1, 'duration')).toThrow('duration must be greater than 0.');
+  });
+
+  it('rejects non-positive explicit deadlines', () => {
+    expect(resolveDeadline('1')).toBe(1n);
+    expect(() => resolveDeadline(0)).toThrow('deadline must be greater than 0.');
+    expect(() => resolveDeadline('-1')).toThrow('deadline must be greater than 0.');
   });
 
   it('normalizes unix timestamp and ISO date inputs', () => {

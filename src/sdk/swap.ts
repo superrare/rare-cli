@@ -423,6 +423,18 @@ function isRawTokenTradeParams(params: BuyTokenParams | SellTokenParams): params
   return params.route === 'raw';
 }
 
+function resolveUniswapDeadline(value: IntegerInput | undefined): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const deadline = toSafeIntegerNumber(value, 'deadline');
+  if (deadline <= 0) {
+    throw new Error('deadline must be greater than 0.');
+  }
+  return deadline;
+}
+
 export function createSwapNamespace(
   config: RareClientConfig,
   chain: SupportedChain,
@@ -537,6 +549,7 @@ export function createSwapNamespace(
       }
 
       const { walletClient, account, accountAddress } = requireWallet(config);
+      const uniswapDeadline = resolveUniswapDeadline(params.deadline);
       const quoteDetails = await buildTokenTradeQuote(publicClient, chain, chainId, addresses, accountAddress, {
         direction: 'buy',
         token: params.token,
@@ -582,7 +595,7 @@ export function createSwapNamespace(
 
       const swapResponse = await requestUniswapSwap({
         quote: quoteDetails.rawQuote,
-        deadline: params.deadline === undefined ? undefined : toSafeIntegerNumber(params.deadline, 'deadline'),
+        deadline: uniswapDeadline,
       });
       const sent = await sendPreparedTransaction(publicClient, walletClient, account, swapResponse.swap, {
         accountAddress,
@@ -645,6 +658,7 @@ export function createSwapNamespace(
       }
 
       const { walletClient, account, accountAddress } = requireWallet(config);
+      const uniswapDeadline = resolveUniswapDeadline(params.deadline);
       const quoteDetails = await buildTokenTradeQuote(publicClient, chain, chainId, addresses, accountAddress, {
         direction: 'sell',
         token: params.token,
@@ -715,7 +729,7 @@ export function createSwapNamespace(
 
       const swapResponse = await requestUniswapSwap({
         quote: quoteDetails.rawQuote,
-        deadline: params.deadline === undefined ? undefined : toSafeIntegerNumber(params.deadline, 'deadline'),
+        deadline: uniswapDeadline,
       });
       const sent = await sendPreparedTransaction(publicClient, walletClient, account, swapResponse.swap, {
         accountAddress,
