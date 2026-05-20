@@ -4,7 +4,7 @@ import { lazyBatchMintFactoryAbi } from '../contracts/abis/lazy-batch-mint-facto
 import type { RareClientConfig } from './types/client.js';
 import type { CollectionDeployNamespace } from './types/collection.js';
 import { requireWallet } from './wallet-shell.js';
-import { toInteger } from './amounts-core.js';
+import { toPositiveInteger } from './amounts-core.js';
 
 export function createDeployNamespace(
   publicClient: PublicClient,
@@ -19,7 +19,7 @@ export function createDeployNamespace(
           address: addresses.factory,
           abi: factoryAbi,
           functionName: 'createSovereignBatchMint',
-          args: [params.name, params.symbol, toInteger(params.maxTokens, 'maxTokens')],
+          args: [params.name, params.symbol, toPositiveInteger(params.maxTokens, 'maxTokens')],
           account,
           chain: undefined,
         })
@@ -65,7 +65,7 @@ export function createDeployNamespace(
           address: factoryAddress,
           abi: lazyBatchMintFactoryAbi,
           functionName: 'createLazySovereignBatchMint',
-          args: [params.name, params.symbol, toInteger(params.maxTokens, 'maxTokens')],
+          args: [params.name, params.symbol, toPositiveInteger(params.maxTokens, 'maxTokens')],
           account,
           chain: undefined,
         })
