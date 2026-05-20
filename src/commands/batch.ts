@@ -178,6 +178,10 @@ type AuctionRootInput = {
   artifact?: BatchTokenListArtifact;
 };
 
+type BatchCreateRootInput =
+  | { root: Hex; artifact?: undefined }
+  | { artifact: BatchTokenListArtifact; root?: undefined };
+
 type AuctionCreateOptions = OfferRootOptions & {
   price: string;
   reserve?: string;
@@ -409,20 +413,20 @@ function createOfferCreateCommand(): Command {
     .option('--yes', 'yes to all prompts, including approval and transaction submission')
     .action(async (opts: OfferCreateOptions) => {
       try {
-        const root = await resolveOfferRoot(opts);
+        const rootInput = await resolveBatchCreateRootInput(opts);
         const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
         const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
 
         log(`Creating batch offer on ${chain}...`);
         log(`  BatchOfferCreator: ${rare.contracts.batchOfferCreator}`);
-        log(`  Root: ${root}`);
+        log(`  Root: ${rootInput.artifact === undefined ? rootInput.root : 'rare-api canonical root from input'}`);
         log(`  Price: ${opts.price} ${currency === ETH_ADDRESS ? 'ETH' : currency}`);
         log(`  Currency: ${currency === ETH_ADDRESS ? 'ETH' : currency}`);
         log(`  End time: ${opts.endTime}`);
         log('Waiting for confirmation...');
 
         const createParams = {
-          root,
+          ...rootInput,
           price: opts.price,
           currency,
           endTime: opts.endTime,
@@ -690,14 +694,14 @@ function createAuctionCreateCommand(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts: AuctionCreateOptions) => {
       try {
-        const rootInput = await resolveAuctionRootInput(opts);
+        const rootInput = await resolveBatchCreateRootInput(opts);
         const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
         const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
         const splits = finalizeSplits(opts.split);
 
         log(`Creating batch auction on ${chain}...`);
         log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse}`);
-        log(`  Root: ${rootInput.root}`);
+        log(`  Root: ${rootInput.artifact === undefined ? rootInput.root : 'rare-api canonical root from input'}`);
         log(`  Price: ${opts.price} ${currency === ETH_ADDRESS ? 'ETH' : currency}`);
         log(`  Currency: ${currency === ETH_ADDRESS ? 'ETH' : currency}`);
         log(`  End time: ${opts.endTime}`);
@@ -710,8 +714,7 @@ function createAuctionCreateCommand(): Command {
         log('Waiting for confirmation...');
 
         const createParams = {
-          root: rootInput.root,
-          artifact: rootInput.artifact,
+          ...rootInput,
           price: opts.price,
           currency,
           endTime: opts.endTime,
@@ -1524,6 +1527,28 @@ async function resolveAuctionRootInput(opts: OfferRootOptions): Promise<AuctionR
     root: artifact.root,
     artifact,
   };
+}
+
+async function resolveBatchCreateRootInput(opts: OfferRootOptions): Promise<BatchCreateRootInput> {
+  const directRoot = opts.root === undefined ? undefined : normalizeBytes32(opts.root, '--root');
+  if (opts.input === undefined) {
+    if (directRoot === undefined) {
+      throw new Error('Pass --input, or pass --root as an override.');
+    }
+    return { root: directRoot };
+  }
+
+  const artifact = await readBatchTreeArtifact({
+    input: opts.input,
+    format: opts.format,
+    chain: opts.chain,
+    chainId: opts.chainId,
+  });
+  if (directRoot !== undefined && directRoot !== artifact.root) {
+    throw new Error('--root does not match --input artifact root.');
+  }
+
+  return { artifact };
 }
 
 async function resolveOptionalAuctionRootInput(opts: OfferRootOptions): Promise<AuctionRootInput | undefined> {

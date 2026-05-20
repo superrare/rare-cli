@@ -256,6 +256,8 @@ describeLive('live batch marketplace CLI commands', () => {
         'auction',
         'batch',
         'cancel',
+        '--root',
+        created.root,
         '--chain',
         fixture.chain,
       ], 240_000),
@@ -490,7 +492,10 @@ function isRareApiMerkleProofNotFound(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return (
     message.includes('API error 404 on /v1/merkle-roots/nfts/proof') &&
-    message.includes('No Merkle root found')
+    (
+      message.includes('No Merkle root found') ||
+      message.includes('Merkle list not found')
+    )
   );
 }
 
