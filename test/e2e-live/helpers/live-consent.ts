@@ -50,7 +50,9 @@ function acceptsLiveWriteConsent(args: string[]): boolean {
 export function isLiveWriteCommand(args: string[]): boolean {
   const [command, subcommand] = args;
   if (args.includes('--quote-only')) return false;
-  if (command === 'liquid-edition' && subcommand === 'deploy') return true;
+  if (command === 'liquid-edition') {
+    return subcommand === 'deploy' || subcommand === 'set-render-contract';
+  }
   if (command === 'listing') {
     if (subcommand === 'create' || subcommand === 'cancel' || subcommand === 'buy') return true;
     if (subcommand === 'batch') {

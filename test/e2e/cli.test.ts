@@ -1,6 +1,7 @@
 import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { createServer, type ServerResponse } from 'node:http';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { delimiter, join } from 'node:path';
+import { text } from 'node:stream/consumers';
 import { describe, expect, it, type TestContext } from 'vitest';
 import { isAddress, zeroAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -469,6 +470,67 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('imports an ERC-721 collection through the configured wallet owner', async () => {
+    await withTempHome(async (home) => {
+      await withRareApiFixture(async ({ baseUrl, requests }) => {
+        const privateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+        const owner = privateKeyToAccount(privateKey).address;
+        const contract = '0x1111111111111111111111111111111111111111';
+        const configured = await runCli([
+          'configure',
+          '--chain',
+          'sepolia',
+          '--private-key',
+          privateKey,
+          '--rpc-url',
+          'http://127.0.0.1:9',
+        ], { home });
+        expect(configured.code).toBe(0);
+
+        const result = parseJsonStdout<{
+          imported: true;
+          chain: string;
+          chainId: number;
+          contract: string;
+          owner: string;
+        }>(
+          await runCli([
+            '--json',
+            'import',
+            'erc721',
+            '--contract',
+            contract,
+            '--chain',
+            'sepolia',
+          ], {
+            home,
+            env: { RARE_API_BASE_URL: baseUrl },
+            timeoutMs: 30_000,
+          }),
+        );
+
+        expect(result).toEqual({
+          imported: true,
+          chain: 'sepolia',
+          chainId: 11_155_111,
+          contract,
+          owner,
+        });
+        expect(requests).toEqual([
+          expect.objectContaining({
+            method: 'POST',
+            pathname: '/v1/collections/import',
+            body: {
+              chainId: 11_155_111,
+              contractAddress: contract,
+              ownerAddress: owner.toLowerCase(),
+            },
+          }),
+        ]);
+      });
+    });
+  });
+
   it('covers read/API CLI command wiring and validation', async (ctx) => {
     await withTempHome(async (home) => {
       const tokenSearch = parseJsonStdout<{
@@ -819,6 +881,123 @@ describe('built CLI deterministic behavior', () => {
               auctionBidderAddress: account,
               chainId: '1',
               hasAuction: 'true',
+              page: '1',
+              perPage: '1',
+            }),
+          }),
+        ]);
+      });
+    });
+  });
+
+  it('lists token listings, batch listings, and offers for an account', async (ctx) => {
+    await withTempHome(async (home) => {
+      await withRareApiFixture(async ({ baseUrl, requests }) => {
+        const account = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8';
+        const listing = parseJsonStdout<{ pagination: { page: number; perPage: number; totalCount: number }; data: { universalTokenId: string }[] }>(
+          skipIfRareApiUnavailable(ctx, await runCli([
+            '--json',
+            'listing',
+            'list',
+            '--account',
+            account,
+            '--chain',
+            'mainnet',
+            '--page',
+            '3',
+            '--per-page',
+            '2',
+          ], {
+            home,
+            env: { RARE_API_BASE_URL: baseUrl },
+            timeoutMs: 30_000,
+          })),
+        );
+        expect(listing.pagination).toMatchObject({ page: 3, perPage: 2, totalCount: 1 });
+        expect(listing.data[0]?.universalTokenId).toBe('mainnet-token-listing');
+
+        const batchListing = parseJsonStdout<{ data: { universalTokenId: string }[] }>(
+          skipIfRareApiUnavailable(ctx, await runCli([
+            '--json',
+            'listing',
+            'batch',
+            'list',
+            '--account',
+            account,
+            '--chain',
+            'mainnet',
+            '--per-page',
+            '1',
+          ], {
+            home,
+            env: { RARE_API_BASE_URL: baseUrl },
+            timeoutMs: 30_000,
+          })),
+        );
+        expect(batchListing.data[0]?.universalTokenId).toBe('mainnet-batch-listing');
+
+        for (const side of ['maker', 'taker']) {
+          const offer = parseJsonStdout<{ data: { universalTokenId: string }[] }>(
+            skipIfRareApiUnavailable(ctx, await runCli([
+              '--json',
+              'offer',
+              'list',
+              '--account',
+              account,
+              '--side',
+              side,
+              '--chain',
+              'mainnet',
+              '--per-page',
+              '1',
+            ], {
+              home,
+              env: { RARE_API_BASE_URL: baseUrl },
+              timeoutMs: 30_000,
+            })),
+          );
+          expect(offer.data[0]?.universalTokenId).toBe(`mainnet-offer-${side}`);
+        }
+
+        expect(requests).toEqual([
+          expect.objectContaining({
+            pathname: '/v1/nfts',
+            query: expect.objectContaining({
+              ownerAddress: account,
+              chainId: '1',
+              hasListing: 'true',
+              listingType: 'SALE_PRICE',
+              page: '3',
+              perPage: '2',
+            }),
+          }),
+          expect.objectContaining({
+            pathname: '/v1/nfts',
+            query: expect.objectContaining({
+              ownerAddress: account,
+              chainId: '1',
+              hasListing: 'true',
+              listingType: 'BATCH_SALE_PRICE',
+              page: '1',
+              perPage: '1',
+            }),
+          }),
+          expect.objectContaining({
+            pathname: '/v1/nfts',
+            query: expect.objectContaining({
+              offerBuyerAddress: account,
+              chainId: '1',
+              hasOffer: 'true',
+              page: '1',
+              perPage: '1',
+            }),
+          }),
+          expect.objectContaining({
+            pathname: '/v1/nfts',
+            query: expect.objectContaining({
+              ownerAddress: account,
+              chainId: '1',
+              hasOffer: 'true',
               page: '1',
               perPage: '1',
             }),
@@ -1734,8 +1913,10 @@ describe('built CLI deterministic behavior', () => {
 });
 
 type RareApiFixtureRequest = {
+  method: string;
   pathname: string;
   query: Record<string, string>;
+  body?: unknown;
 };
 
 type AuctionSearchNft = {
@@ -1795,90 +1976,10 @@ async function withRareApiFixture<T>(
 ): Promise<T> {
   const requests: RareApiFixtureRequest[] = [];
   const server = createServer((req, res) => {
-    const url = new URL(req.url ?? '/', 'http://rare-api.test');
-    // eslint-disable-next-line functional/immutable-data -- Test fixture records requests made by CLI subprocesses.
-    requests.push({
-      pathname: url.pathname,
-      query: Object.fromEntries(url.searchParams.entries()),
-    });
-
-    if (url.pathname === '/v1/nfts') {
-      writeJsonResponse(res, 200, buildAuctionListFixture(url));
-      return;
-    }
-
-    if (url.pathname === '/v1/collections') {
-      writeJsonResponse(res, 200, buildCollectionListFixture(url));
-      return;
-    }
-
-    if (url.pathname === '/v1/nfts/metadata/media/uploads') {
-      const address = server.address();
-      if (address === null || typeof address === 'string') {
-        writeJsonResponse(res, 500, { error: 'fixture server is unavailable' });
-        return;
-      }
-      writeJsonResponse(res, 201, {
-        uploadId: 'upload-1',
-        key: 'media/mint-image.png',
-        bucket: 'rare-cli-e2e',
-        partSize: 10,
-        presignedUrls: [`http://127.0.0.1:${address.port}/upload-part/1`],
-        gatewayBaseUrl: 'https://fixture.example',
+    void handleRareApiFixtureRequest(req, res, requests, () => server.address())
+      .catch((error: unknown) => {
+        writeJsonResponse(res, 500, { error: error instanceof Error ? error.message : String(error) });
       });
-      return;
-    }
-
-    if (url.pathname === '/upload-part/1') {
-      res.writeHead(200, { etag: 'fixture-etag' });
-      res.end();
-      return;
-    }
-
-    if (url.pathname === '/v1/nfts/metadata/media/uploads/complete') {
-      writeJsonResponse(res, 200, {
-        cid: 'bafymedia',
-        ipfsUrl: 'ipfs://bafymedia',
-        gatewayUrl: 'https://fixture.example/ipfs/bafymedia',
-      });
-      return;
-    }
-
-    if (url.pathname === '/v1/nfts/metadata/media/generate') {
-      writeJsonResponse(res, 200, {
-        media: {
-          uri: 'ipfs://bafymedia',
-          mimeType: 'image/png',
-          size: 4,
-          dimensions: '1x1',
-        },
-      });
-      return;
-    }
-
-    if (url.pathname === '/v1/nfts/metadata') {
-      writeJsonResponse(res, 201, {
-        cid: 'bafymetadata',
-        ipfsUrl: 'ipfs://bafymetadata',
-        gatewayUrl: 'https://fixture.example/ipfs/bafymetadata',
-        metadata: {
-          name: 'Rare Generated Metadata E2E',
-          description: 'Exercises the metadata upload shell before the RPC write.',
-          image: 'ipfs://bafymedia',
-          media: {
-            uri: 'ipfs://bafymedia',
-            mimeType: 'image/png',
-            size: 4,
-            dimensions: '1x1',
-          },
-          tags: ['e2e'],
-          attributes: [{ trait_type: 'Flow', value: 'Generated' }],
-        },
-      });
-      return;
-    }
-
-    writeJsonResponse(res, 404, { error: `Unhandled fixture path: ${url.pathname}` });
   });
 
   await new Promise<void>((resolve) => {
@@ -1901,12 +2002,138 @@ async function withRareApiFixture<T>(
   }
 }
 
+async function handleRareApiFixtureRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  requests: RareApiFixtureRequest[],
+  serverAddress: () => ReturnType<ReturnType<typeof createServer>['address']>,
+): Promise<void> {
+  const url = new URL(req.url ?? '/', 'http://rare-api.test');
+  const body = url.pathname === '/v1/collections/import' ? JSON.parse(await text(req)) as unknown : undefined;
+  // eslint-disable-next-line functional/immutable-data -- Test fixture records requests made by CLI subprocesses.
+  requests.push({
+    method: req.method ?? 'GET',
+    pathname: url.pathname,
+    query: Object.fromEntries(url.searchParams.entries()),
+    ...(body === undefined ? {} : { body }),
+  });
+
+  if (url.pathname === '/v1/collections/import') {
+    writeJsonResponse(res, 200, { imported: true });
+    return;
+  }
+
+  if (url.pathname === '/v1/nfts') {
+    writeJsonResponse(res, 200, buildNftListFixture(url));
+    return;
+  }
+
+  if (url.pathname === '/v1/collections') {
+    writeJsonResponse(res, 200, buildCollectionListFixture(url));
+    return;
+  }
+
+  if (url.pathname === '/v1/nfts/metadata/media/uploads') {
+    const address = serverAddress();
+    if (address === null || typeof address === 'string') {
+      writeJsonResponse(res, 500, { error: 'fixture server is unavailable' });
+      return;
+    }
+    writeJsonResponse(res, 201, {
+      uploadId: 'upload-1',
+      key: 'media/mint-image.png',
+      bucket: 'rare-cli-e2e',
+      partSize: 10,
+      presignedUrls: [`http://127.0.0.1:${address.port}/upload-part/1`],
+      gatewayBaseUrl: 'https://fixture.example',
+    });
+    return;
+  }
+
+  if (url.pathname === '/upload-part/1') {
+    res.writeHead(200, { etag: 'fixture-etag' });
+    res.end();
+    return;
+  }
+
+  if (url.pathname === '/v1/nfts/metadata/media/uploads/complete') {
+    writeJsonResponse(res, 200, {
+      cid: 'bafymedia',
+      ipfsUrl: 'ipfs://bafymedia',
+      gatewayUrl: 'https://fixture.example/ipfs/bafymedia',
+    });
+    return;
+  }
+
+  if (url.pathname === '/v1/nfts/metadata/media/generate') {
+    writeJsonResponse(res, 200, {
+      media: {
+        uri: 'ipfs://bafymedia',
+        mimeType: 'image/png',
+        size: 4,
+        dimensions: '1x1',
+      },
+    });
+    return;
+  }
+
+  if (url.pathname === '/v1/nfts/metadata') {
+    writeJsonResponse(res, 201, {
+      cid: 'bafymetadata',
+      ipfsUrl: 'ipfs://bafymetadata',
+      gatewayUrl: 'https://fixture.example/ipfs/bafymetadata',
+      metadata: {
+        name: 'Rare Generated Metadata E2E',
+        description: 'Exercises the metadata upload shell before the RPC write.',
+        image: 'ipfs://bafymedia',
+        media: {
+          uri: 'ipfs://bafymedia',
+          mimeType: 'image/png',
+          size: 4,
+          dimensions: '1x1',
+        },
+        tags: ['e2e'],
+        attributes: [{ trait_type: 'Flow', value: 'Generated' }],
+      },
+    });
+    return;
+  }
+
+  writeJsonResponse(res, 404, { error: `Unhandled fixture path: ${url.pathname}` });
+}
+
+function buildNftListFixture(url: URL): unknown {
+  if (url.searchParams.get('hasAuction') === 'true') {
+    return buildAuctionListFixture(url);
+  }
+
+  if (url.searchParams.get('hasListing') === 'true') {
+    return buildNftSearchFixture(
+      url,
+      url.searchParams.get('listingType') === 'BATCH_SALE_PRICE'
+        ? 'mainnet-batch-listing'
+        : 'mainnet-token-listing',
+    );
+  }
+
+  if (url.searchParams.get('hasOffer') === 'true') {
+    const side = url.searchParams.has('offerBuyerAddress') ? 'maker' : 'taker';
+    return buildNftSearchFixture(url, `mainnet-offer-${side}`);
+  }
+
+  return buildNftSearchFixture(url, 'mainnet-nft');
+}
+
 function buildAuctionListFixture(url: URL): unknown {
   const side = url.searchParams.has('auctionCreatorAddress') ? 'maker' : 'taker';
+  return buildNftSearchFixture(url, `mainnet-auction-${side}`);
+}
+
+function buildNftSearchFixture(url: URL, universalTokenId: string): unknown {
   return {
     data: [
       {
-        universalTokenId: `mainnet-auction-${side}`,
+        universalTokenId,
       },
     ],
     pagination: {

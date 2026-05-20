@@ -53,9 +53,23 @@ type BatchAuctionStatus = {
   settlementEligible: boolean;
 };
 
+type BatchOfferStatus = {
+  state: string;
+  creator: Address;
+  root: `0x${string}`;
+  hasOffer: boolean;
+  fillable: boolean;
+};
+
 type BatchListingCreateResult = TxResult & {
   root: `0x${string}`;
   approvalTxHashes: string[] | null;
+};
+
+type BatchListingStatus = {
+  root: `0x${string}`;
+  seller: Address;
+  hasListing: boolean;
 };
 
 const live = new LiveCliFixtureRef<BatchFixture>('Live batch marketplace CLI fixture has not been initialized.');
@@ -99,6 +113,23 @@ describeLive('live batch marketplace CLI commands', () => {
     );
     expectTx(created);
     expect(created.root).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
+    const status = await step('read batch listing status', () =>
+      jsonCommand<BatchListingStatus>(fixture.sellerHome, [
+        'listing',
+        'batch',
+        'status',
+        '--root',
+        created.root,
+        '--creator',
+        fixture.sellerAddress,
+        '--chain',
+        fixture.chain,
+      ]),
+    );
+    expect(status.root).toBe(created.root);
+    expect(status.seller.toLowerCase()).toBe(fixture.sellerAddress.toLowerCase());
+    expect(status.hasListing).toBe(true);
 
     const bought = await step('buy batch listing as taker', () =>
       retryRareApiMerkleResolution(() =>
@@ -151,6 +182,25 @@ describeLive('live batch marketplace CLI commands', () => {
     expectTx(created);
     expect(created.creator.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
     expect(created.root).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
+    const status = await step('read batch offer status', () =>
+      jsonCommand<BatchOfferStatus>(fixture.buyerHome, [
+        'offer',
+        'batch',
+        'status',
+        '--creator',
+        fixture.buyerAddress,
+        '--root',
+        created.root,
+        '--chain',
+        fixture.chain,
+      ]),
+    );
+    expect(status.state).toBe('ACTIVE');
+    expect(status.creator.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
+    expect(status.root).toBe(created.root);
+    expect(status.hasOffer).toBe(true);
+    expect(status.fillable).toBe(true);
 
     const revoked = await step('revoke batch offer through rare-api root resolution', () =>
       retryRareApiMerkleResolution(() =>

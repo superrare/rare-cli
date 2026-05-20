@@ -5,12 +5,15 @@ import {
   createLiveFixture,
   E2E_TOKEN_URI,
   expectTx,
+  jsonCommand,
   LIQUID_CURVES,
   LiveFixtureRef,
   missingEnv,
+  step,
   uniqueSymbol,
   uniqueTokenName,
   type LiveFixture,
+  type TxResult,
 } from './helpers/live-harness.js';
 import {
   deployLiquidEdition,
@@ -73,5 +76,25 @@ describeLive('live deploy liquid-edition CLI write command', () => {
     expect(status.currentPrice.contract).toBe(deployed.contract);
     expect(Number(status.marketState.sqrtPriceX96)).toBeGreaterThan(0);
     expect(Number(status.marketState.currentSupply)).toBeGreaterThan(0);
+
+    const renderContract = status.renderContract;
+    const updated = await step('set Liquid Edition render contract', () =>
+      jsonCommand<TxResult & { contract: string; renderContract: string }>(fixture.sellerHome, [
+        'liquid-edition',
+        'set-render-contract',
+        '--contract',
+        deployed.contract,
+        '--render-contract',
+        renderContract,
+        '--chain',
+        fixture.chain,
+      ], 240_000),
+    );
+    expectTx(updated);
+    expect(updated.contract.toLowerCase()).toBe(deployed.contract.toLowerCase());
+    expect(updated.renderContract.toLowerCase()).toBe(renderContract.toLowerCase());
+
+    const updatedStatus = await readLiquidEditionStatus(fixture, deployed.contract);
+    expect(updatedStatus.renderContract.toLowerCase()).toBe(renderContract.toLowerCase());
   });
 });
