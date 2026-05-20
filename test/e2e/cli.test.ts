@@ -7,6 +7,30 @@ import { isAddress, zeroAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { parseJsonStdout, runCli, withTempHome } from '../helpers/cli.js';
 
+const batchListingRootArtifact = {
+  root: '0xa01f005c90f56c0f2b981e045caf4949f489bf82e5d3c49effb1334cab26043a',
+  currency: zeroAddress,
+  amount: '1',
+  splitAddresses: [],
+  splitRatios: [],
+  tokens: [
+    { contract: '0x1111111111111111111111111111111111111111', tokenId: '1' },
+    { contract: '0x1111111111111111111111111111111111111111', tokenId: '2' },
+  ],
+} as const;
+
+const allowlistedBatchListingRootArtifact = {
+  ...batchListingRootArtifact,
+  allowList: {
+    root: '0x27544996534742c5e4c082fa1ed524eea6991a4d0325902124bc233e8d7379af',
+    addresses: [
+      '0x1000000000000000000000000000000000000000',
+      '0x2000000000000000000000000000000000000000',
+    ],
+    endTimestamp: '1234',
+  },
+} as const;
+
 describe('built CLI deterministic behavior', () => {
   it('prints top-level help and version', async () => {
     await withTempHome(async (home) => {
@@ -1063,6 +1087,153 @@ describe('built CLI deterministic behavior', () => {
         tokenId: '2',
         valid: true,
       });
+
+      const wrongRoot = `0x${'00'.repeat(32)}`;
+      const mismatchedVerify = parseJsonStdout<{
+        root: string;
+        contractAddress: string;
+        tokenId: string;
+        valid: boolean;
+      }>(await runCli([
+        '--json',
+        'utils',
+        'tree',
+        'verify',
+        '--input',
+        artifactPath,
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+        '--root',
+        wrongRoot,
+      ], { home }));
+
+      expect(mismatchedVerify).toEqual({
+        root: wrongRoot,
+        contractAddress: '0x1111111111111111111111111111111111111111',
+        tokenId: '1',
+        valid: false,
+      });
+    });
+  });
+
+  it('builds utility merkle proof artifacts from batch listing root artifacts', async () => {
+    await withTempHome(async (home) => {
+      const input = join(home, 'batch-listing-root.json');
+      const proofPath = join(home, 'batch-listing-proof.json');
+      await writeFile(input, JSON.stringify(batchListingRootArtifact), 'utf8');
+
+      const proof = parseJsonStdout<{
+        root: string;
+        contract: string;
+        tokenId: string;
+        proof: string[];
+      }>(await runCli([
+        '--json',
+        'utils',
+        'merkle',
+        'proof',
+        '--input',
+        input,
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+        '--output',
+        proofPath,
+      ], { home }));
+
+      expect(proof).toEqual({
+        root: '0xa01f005c90f56c0f2b981e045caf4949f489bf82e5d3c49effb1334cab26043a',
+        contract: '0x1111111111111111111111111111111111111111',
+        tokenId: '1',
+        proof: ['0xfde38319eec56e703ba771c1e2abddca86188674940372bdfed26cec392ec314'],
+      });
+
+      const writtenProof = JSON.parse(await readFile(proofPath, 'utf8'));
+      expect(writtenProof).toEqual(proof);
+    });
+  });
+
+  it('includes allowlist proof fields for utility merkle proofs when buyer is provided', async () => {
+    await withTempHome(async (home) => {
+      const input = join(home, 'allowlisted-batch-listing-root.json');
+      await writeFile(input, JSON.stringify(allowlistedBatchListingRootArtifact), 'utf8');
+
+      const proof = parseJsonStdout<{
+        root: string;
+        contract: string;
+        tokenId: string;
+        proof: string[];
+        allowListProof: string[];
+        allowListAddress: string;
+      }>(await runCli([
+        '--json',
+        'utils',
+        'merkle',
+        'proof',
+        '--input',
+        input,
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+        '--buyer',
+        '0x1000000000000000000000000000000000000000',
+      ], { home }));
+
+      expect(proof).toEqual({
+        root: '0xa01f005c90f56c0f2b981e045caf4949f489bf82e5d3c49effb1334cab26043a',
+        contract: '0x1111111111111111111111111111111111111111',
+        tokenId: '1',
+        proof: ['0xfde38319eec56e703ba771c1e2abddca86188674940372bdfed26cec392ec314'],
+        allowListProof: ['0x8dfad888a2f79bcfe6633c369a5652e94379f63f5849d8e8fe519c586bb49633'],
+        allowListAddress: '0x1000000000000000000000000000000000000000',
+      });
+    });
+  });
+
+  it('rejects utility merkle proofs for allowlisted roots without a matching buyer', async () => {
+    await withTempHome(async (home) => {
+      const input = join(home, 'allowlisted-batch-listing-root.json');
+      await writeFile(input, JSON.stringify(allowlistedBatchListingRootArtifact), 'utf8');
+
+      const missingBuyer = await runCli([
+        'utils',
+        'merkle',
+        'proof',
+        '--input',
+        input,
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+      ], { home });
+
+      expect(missingBuyer.code).toBe(1);
+      expect(missingBuyer.stdout).toBe('');
+      expect(missingBuyer.stderr).toContain(
+        'This root has an allowlist; pass buyer address to buildMerkleProofArtifact to include allowListProof',
+      );
+
+      const nonMemberBuyer = await runCli([
+        'utils',
+        'merkle',
+        'proof',
+        '--input',
+        input,
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+        '--buyer',
+        '0x3000000000000000000000000000000000000000',
+      ], { home });
+
+      expect(nonMemberBuyer.code).toBe(1);
+      expect(nonMemberBuyer.stdout).toBe('');
+      expect(nonMemberBuyer.stderr).toContain('Buyer 0x3000000000000000000000000000000000000000 is not in the allowlist');
     });
   });
 
