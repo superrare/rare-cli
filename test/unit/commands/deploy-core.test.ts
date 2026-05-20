@@ -2,6 +2,7 @@ import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import {
   formatCurvePreview,
+  getLiquidEditionDeployConfirmationDecision,
   resolveCurveSourceMode,
   validateLiquidEditionDeployMetadataOptions,
 } from '../../../src/commands/deploy-core.js';
@@ -30,6 +31,25 @@ test('validateLiquidEditionDeployMetadataOptions requires metadata inputs before
 test('validateLiquidEditionDeployMetadataOptions allows token URI and preview flows', () => {
   assert.deepEqual(validateLiquidEditionDeployMetadataOptions({ tokenUri: 'ipfs://metadata' }), { isValid: true });
   assert.deepEqual(validateLiquidEditionDeployMetadataOptions({ preview: true }), { isValid: true });
+});
+
+test('getLiquidEditionDeployConfirmationDecision requires yes for JSON and non-interactive writes', () => {
+  assert.equal(
+    getLiquidEditionDeployConfirmationDecision({ yes: true, jsonMode: true, stdinIsTty: false }),
+    'skip',
+  );
+  assert.equal(
+    getLiquidEditionDeployConfirmationDecision({ jsonMode: true, stdinIsTty: false }),
+    'reject-json',
+  );
+  assert.equal(
+    getLiquidEditionDeployConfirmationDecision({ jsonMode: false, stdinIsTty: false }),
+    'reject-non-interactive',
+  );
+  assert.equal(
+    getLiquidEditionDeployConfirmationDecision({ jsonMode: false, stdinIsTty: true }),
+    'prompt',
+  );
 });
 
 test('formatCurvePreview prints source and segment details', () => {

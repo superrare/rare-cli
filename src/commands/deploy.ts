@@ -17,13 +17,20 @@ import { output, log, isJsonMode } from '../output.js';
 import {
   formatLiquidEditionUrl,
   formatCurvePreview,
+  getLiquidEditionDeployConfirmationDecision,
   isCurvePresetKey,
   parseAttribute,
   resolveCurveSourceMode,
   validateLiquidEditionDeployMetadataOptions,
 } from './deploy-core.js';
 
-export { formatCurvePreview, formatLiquidEditionUrl, resolveCurveSourceMode, validateLiquidEditionDeployMetadataOptions } from './deploy-core.js';
+export {
+  formatCurvePreview,
+  formatLiquidEditionUrl,
+  getLiquidEditionDeployConfirmationDecision,
+  resolveCurveSourceMode,
+  validateLiquidEditionDeployMetadataOptions,
+} from './deploy-core.js';
 
 async function resolveTokenUri(
   rare: ReturnType<typeof createRareClient>,
@@ -95,11 +102,19 @@ function collectRepeatedString(value: string, previous: string[]): string[] {
 }
 
 async function confirmLiquidEditionDeploy(chain: string, yes?: boolean): Promise<void> {
-  if (yes || !process.stdin.isTTY) {
+  const decision = getLiquidEditionDeployConfirmationDecision({
+    yes,
+    jsonMode: isJsonMode(),
+    stdinIsTty: process.stdin.isTTY,
+  });
+  if (decision === 'skip') {
     return;
   }
-  if (isJsonMode()) {
+  if (decision === 'reject-json') {
     throw new Error('rare liquid-edition deploy multicurve requires --yes when --json is enabled.');
+  }
+  if (decision === 'reject-non-interactive') {
+    throw new Error('rare liquid-edition deploy multicurve requires --yes in non-interactive mode.');
   }
 
   const rl = createInterface({

@@ -143,6 +143,29 @@ export function validateLiquidEditionDeployMetadataOptions(opts: {
   };
 }
 
+export type LiquidEditionDeployConfirmationDecision =
+  | 'skip'
+  | 'prompt'
+  | 'reject-json'
+  | 'reject-non-interactive';
+
+export function getLiquidEditionDeployConfirmationDecision(opts: {
+  yes?: boolean;
+  jsonMode: boolean;
+  stdinIsTty: boolean;
+}): LiquidEditionDeployConfirmationDecision {
+  if (opts.yes === true) {
+    return 'skip';
+  }
+  if (opts.jsonMode) {
+    return 'reject-json';
+  }
+  if (!opts.stdinIsTty) {
+    return 'reject-non-interactive';
+  }
+  return 'prompt';
+}
+
 export function formatLiquidEditionUrl(chainId: number, contractAddress: string): string {
   return `https://superrare.com/liquid-editions/${chainId}/${contractAddress}`;
 }
