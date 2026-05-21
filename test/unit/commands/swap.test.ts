@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, test, vi } from 'vitest';
+import type { TransactionReceipt } from 'viem';
 import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import { swapCommand } from '../../../src/commands/swap.js';
 import type { TokenTradeQuote, TokenTradeResult } from '../../../src/sdk/swap.js';
@@ -65,7 +66,7 @@ beforeEach(() => {
   sellToken.mockResolvedValue(tokenTradeResult());
   swapTokens.mockResolvedValue({
     txHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-    receipt: { blockNumber: 123n },
+    receipt: mockTransactionReceipt(),
   });
   consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
 });
@@ -278,12 +279,33 @@ function tokenQuote(params: { direction: 'buy' | 'sell' }): TokenTradeQuote {
 function tokenTradeResult(): TokenTradeResult {
   return {
     txHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-    receipt: { blockNumber: 123n },
+    receipt: mockTransactionReceipt(),
     estimatedAmountOut: 2n,
     minAmountOut: 1n,
     routeSource: 'raw',
     execution: 'raw-router',
     commands: '0x10',
     inputs: ['0x1234'],
+  };
+}
+
+function mockTransactionReceipt(): TransactionReceipt {
+  const hash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+  const address = '0x0000000000000000000000000000000000000001';
+  return {
+    blockHash: hash,
+    blockNumber: 123n,
+    contractAddress: null,
+    cumulativeGasUsed: 0n,
+    effectiveGasPrice: 0n,
+    from: address,
+    gasUsed: 0n,
+    logs: [],
+    logsBloom: '0x',
+    status: 'success',
+    to: address,
+    transactionHash: hash,
+    transactionIndex: 0,
+    type: 'eip1559',
   };
 }
