@@ -4,6 +4,8 @@ Command-line tool for the [RARE Protocol](https://superrare.com) on Ethereum. De
 
 ## Install
 
+Requires Node.js 22+.
+
 ```bash
 npm install -g @rareprotocol/rare-cli
 ```
@@ -78,11 +80,11 @@ Private keys are masked in the output. Configured account addresses are shown.
 
 ## Usage
 
-All commands accept `--chain` to select a network. Batch listing and lazy batch mint commands also accept `--chain-id`. Defaults to `sepolia`.
+Most chain-aware commands accept `--chain` or `--chain-id` to select a network. Defaults to the configured default chain, or `sepolia` when no default is configured.
 
 Supported chains: `mainnet`, `sepolia`, `base`, `base-sepolia`
 
-Batch listing marketplace support is currently deployed on `mainnet` and `sepolia` only.
+Feature deployment varies by chain. Batch listing, batch offer, RareMinter release, Liquid Edition, and swap flows are currently available on `mainnet` and `sepolia`; batch auction addresses are also configured for `base` and `base-sepolia`.
 
 ### Deploy an NFT Collection
 
@@ -114,11 +116,11 @@ rare collection deploy lazy-batch-mint "My Lazy Collection" "MLC" --max-tokens 1
 
 **Lazy vs standard batch mint**:
 
-- `rare collection deploy erc721` deploys a SovereignBatchMint contract — tokens are minted directly via `rare mint` in the same tx as their creation. Use this for traditional editions where the artist mints up front.
+- `rare collection deploy erc721` deploys a SovereignBatchMint contract — tokens are minted directly via `rare collection mint` in the same tx as their creation. Use this for traditional editions where the artist mints up front.
 - `rare collection deploy lazy-erc721` deploys a LazySovereignNFT contract — designed for RareMinter direct sale releases where buyers mint sequential token IDs.
 - `rare collection deploy lazy-batch-mint` deploys a LazySovereignBatchMint contract — designed to feed the lazy mint preparation/redemption pipeline. Use this when buyers (not the artist) trigger the on-chain mint at purchase time.
 
-The lazy factory is currently deployed on **mainnet** and **sepolia** only.
+The Lazy Sovereign and Lazy Batch Mint factories are currently deployed on **mainnet** and **sepolia** only.
 
 Batch mint an owned Sovereign collection by passing the metadata base URI. Token metadata resolves as `baseUri/tokenId.json` on supported contracts.
 
@@ -133,7 +135,7 @@ rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --amoun
 rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --amount 100 --minter 0x...
 ```
 
-Build token-list Merkle artifacts for later batch offer, batch listing, and batch auction flows. CSV files should include contract and token ID columns such as `contract_address,token_id`; JSON files can be an array of `{ "contractAddress": "0x...", "tokenId": "1" }` objects or a generated artifact. Pass `--chain-id` or include a `chain_id` column when the artifact should carry chain context.
+Build token-list Merkle artifacts for offline proof checks and for batch offer and batch auction root inputs. CSV files should include contract and token ID columns such as `contract_address,token_id`; JSON files can be an array of `{ "contractAddress": "0x...", "tokenId": "1" }` objects or a generated artifact. Pass `--chain-id` or include a `chain_id` column when the artifact should carry chain context.
 
 ```bash
 rare utils tree build --input batch-tokens.csv --chain-id 11155111 --output batch-token-artifact.json
@@ -464,6 +466,43 @@ rare listing batch cancel --input ./root.json
 
 Named currencies are parsed with chain-aware decimals. Arbitrary ERC20 addresses are supported and their `decimals()` values are resolved from chain RPC when sending buys.
 
+### Batch Offers and Batch Auctions
+
+Batch offers and batch auctions use token Merkle roots. You can pass a token-list artifact with `--input` or a known bytes32 root with `--root`.
+
+```bash
+# Create a batch offer over a token set
+rare offer batch create \
+  --input batch-token-artifact.json \
+  --price 1 \
+  --currency eth \
+  --end-time 1778586400 \
+  --yes
+
+# Accept a batch offer for one token
+rare offer batch accept \
+  --creator 0x...buyer \
+  --contract 0x... \
+  --token-id 1 \
+  --root 0x... \
+  --yes
+
+# Create a batch reserve auction over a token set
+rare auction batch create \
+  --input batch-token-artifact.json \
+  --price 0.1 \
+  --end-time 1778586400 \
+  --yes
+
+# Bid on, inspect, settle, or cancel batch auctions
+rare auction batch bid --creator 0x...seller --contract 0x... --token-id 1 --price 0.2
+rare auction batch status --creator 0x...seller --contract 0x... --token-id 1
+rare auction batch settle --contract 0x... --token-id 1
+rare auction batch cancel --root 0x...
+```
+
+Batch marketplace commands can resolve proofs through the Rare API when enough token, root, and creator context is provided. Pass local proof artifacts when you need a portable offline override.
+
 ### Currencies
 
 All marketplace commands (`auction`, `offer`, `listing`) accept `--currency` to specify a payment token. Named currencies (`eth`, `usdc`, `rare`) are resolved per-chain automatically. You can also pass any ERC20 address directly.
@@ -477,6 +516,62 @@ ERC20 allowances are auto-approved when needed for bids, offers, listing purchas
 rare currencies
 rare currencies --chain mainnet
 ```
+
+### Liquid Editions
+
+Liquid Edition deployments support generated presets, custom curve files, metadata upload, preview-only output, and explicit transaction confirmation.
+
+```bash
+# Preview a generated curve before deploying
+rare liquid-edition deploy multicurve "My Liquid Edition" "MLE" \
+  --curve-preset medium-demand \
+  --description "A liquid edition" \
+  --image ./art.png \
+  --preview
+
+# Submit the deployment
+rare liquid-edition deploy multicurve "My Liquid Edition" "MLE" \
+  --curve-preset medium-demand \
+  --description "A liquid edition" \
+  --image ./art.png \
+  --initial-rare-liquidity 1000 \
+  --yes
+
+# Inspect and maintain a Liquid Edition
+rare liquid-edition status --contract 0x...
+rare liquid-edition token-uri --contract 0x...
+rare liquid-edition set-render-contract --contract 0x... --render-contract 0x...
+```
+
+Use `--preview` to stop before deployment. Otherwise, the CLI resolves the curve config and asks for confirmation unless you pass `--yes`; in `--json` or non-interactive mode, pass `--yes` to submit a transaction.
+
+### Swaps
+
+Swap commands quote before submitting. Use `--quote-only` to stop after the quote or `--yes` to submit without the interactive confirmation.
+
+```bash
+# Buy an arbitrary token with ETH
+rare swap buy-token --token 0x... --amount-in 0.1 --quote-only
+rare swap buy-token --token 0x... --amount-in 0.1 --slippage-bps 50 --yes
+
+# Sell a token for ETH
+rare swap sell-token --token 0x... --amount-in 10 --quote-only
+
+# Buy RARE with ETH through the canonical route
+rare swap buy-rare --amount-in 0.1 --quote-only
+
+# Execute a prebuilt raw liquid-router swap
+rare swap tokens \
+  --token-in 0x... \
+  --amount-in 10 \
+  --token-out 0x... \
+  --min-amount-out 9.5 \
+  --commands 0x... \
+  --inputs-file ./router-inputs.json \
+  --yes
+```
+
+`buy-token` and `sell-token` accept `--route auto`, `--route local`, `--route uniswap`, or `--route raw`. Raw route execution requires `--commands`, `--inputs-file`, and `--min-amount-out`.
 
 ### Search
 
@@ -506,6 +601,10 @@ rare search events --chain-id 1 --contract 0x...
 
 # Search collections
 rare search collections
+
+# Fetch a specific NFT or user
+rare nft get --contract 0x... --token-id 1
+rare user get 0x...
 ```
 
 All search commands support `--per-page <n>` and `--page <n>` for pagination.
@@ -550,6 +649,16 @@ const walletClient = createWalletClient({
 
 const rare = createRareClient({ publicClient, walletClient });
 ```
+
+Public package subpaths are intentionally scoped:
+
+```ts
+import { createRareClient } from '@rareprotocol/rare-cli/client';
+import { contractAddresses, supportedChains } from '@rareprotocol/rare-cli/contracts';
+import { buildUtilsTree, getUtilsTreeProof } from '@rareprotocol/rare-cli/utils';
+```
+
+Use `@rareprotocol/rare-cli/client` for app-level SDK workflows, `@rareprotocol/rare-cli/contracts` for lower-level viem contract metadata and ABIs, and `@rareprotocol/rare-cli/utils` for standalone pure artifact/proof helpers.
 
 ### Search
 
@@ -621,13 +730,25 @@ console.log(release.contract);
 console.log(release.nextStep);
 ```
 
+### Deploy a Lazy Batch Mint collection
+
+```ts
+const lazyBatch = await rare.collection.deploy.lazyBatchMint({
+  name: 'My Lazy Collection',
+  symbol: 'MLC',
+  maxTokens: 1000,
+});
+
+console.log(lazyBatch.contract);
+```
+
 ### Batch mint a Sovereign collection
 
 ```ts
 const batch = await rare.collection.mintBatch({
   contract: '0xYourContractAddress',
   baseUri: 'ipfs://your-metadata-directory',
-  tokenCount: 100,
+  amount: 100,
 });
 
 console.log(batch.fromTokenId, batch.toTokenId);
@@ -639,7 +760,7 @@ console.log(batch.fromTokenId, batch.toTokenId);
 const prepared = await rare.collection.prepareLazyMint({
   contract: '0xYourContractAddress',
   baseUri: 'ipfs://your-metadata-directory',
-  tokenCount: 100,
+  amount: 100,
   minter: '0xOptionalMinterAddress',
 });
 
@@ -668,6 +789,22 @@ const proofValid = rare.utils.tree.verify({
 });
 
 console.log(tree.root, tokenProof.proof, proofValid);
+```
+
+### Liquid Edition and swap SDK methods
+
+```ts
+const liquidStatus = await rare.liquidEdition.status({
+  contract: '0xLiquidEditionContract',
+});
+
+const buyQuote = await rare.swap.quoteBuyToken({
+  token: '0xTokenAddress',
+  amountIn: '0.1',
+  route: 'auto',
+});
+
+console.log(liquidStatus.currentPrice.rarePerToken, buyQuote.minAmountOut);
 ```
 
 ### Inspect and maintain collection owner settings
@@ -760,12 +897,25 @@ RARE_CLI_TEST_OP_PRIVATE_KEY_REF=op://Private/rare-sepolia/private-key \
 
 ## Contract Addresses
 
-| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Auction | RareMinter | Batch Listing | BatchOfferCreator |
-|---|---|---|---|---|---|---|---|
-| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` | `0xd28Dc0B89104d7BBd902F338a0193fF063617ccE` | `0xF2bE72d4343beD375Cb6d0E799a3c003163860e0` | `0x371cca54ef859bb0c7b910581a528ee47773fd56` |
-| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` | `0x5fa112EFeD8297bec0010b312208d223E0cE891E` | `0x6a190885A806D39A0A8C348bfA1ac762D72E608d` | `0xe15cf80b25272ade261532efdb7912f9104851d4` |
-| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | — | — | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` | — | — | — |
-| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | — | — | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` | — | — | — |
+These are the addresses embedded in the SDK under `@rareprotocol/rare-cli/contracts`.
+
+Core collection and marketplace contracts:
+
+| Network | Factory | Sovereign Factory | Lazy Sovereign Factory | Lazy Batch Mint Factory | Auction | RareMinter |
+|---|---|---|---|---|---|---|
+| Sepolia | `0x3c7526a0975156299ceef369b8ff3c01cc670523` | `0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf` | `0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA` | `0xE5efBA88D556aDA98124654fE505465b8d494858` | `0xC8Edc7049b233641ad3723D6C60019D1c8771612` | `0xd28Dc0B89104d7BBd902F338a0193fF063617ccE` |
+| Mainnet | `0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1` | `0xe980ec62378529d95ba446433f4deb6324129c59` | `0xba798BD606d86D207ca2751510173532899117a1` | `0x40F9E4b420D5A8fF5aED32B5F72A37013c0739B6` | `0x6D7c44773C52D396F43c2D511B81aa168E9a7a42` | `0x5fa112EFeD8297bec0010b312208d223E0cE891E` |
+| Base Sepolia | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | — | — | — | `0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2` | — |
+| Base | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | — | — | — | `0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2` | — |
+
+Batch, approval, Liquid Edition, and swap infrastructure:
+
+| Network | Batch Listing | BatchOfferCreator | BatchAuctionHouse | Marketplace Settings | ERC20 Approval Manager | ERC721 Approval Manager | Liquid Factory | Swap Router | V4 Quoter |
+|---|---|---|---|---|---|---|---|---|---|
+| Sepolia | `0xF2bE72d4343beD375Cb6d0E799a3c003163860e0` | `0x371cca54ef859bb0c7b910581a528ee47773fd56` | `0x293AE7701A7830B1d38A7608EdF86A106d9E2645` | `0x972dEe8fa339ad2D9c6cbDA31b67f98Fac242d13` | `0x4619eB29e84392CE91C27FC936A5c94d1D14b93f` | `0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E` | `0xb1777091C953fa2aC1fD67f2b3e2f61343F5Ce5e` | `0x429c3Ee66E7f6CDA12C5BadE4104aF3277aA2305` | `0x61B3f2011A92d183C7dbaDBdA940a7555Ccf9227` |
+| Mainnet | `0x6a190885A806D39A0A8C348bfA1ac762D72E608d` | `0xe15cf80b25272ade261532efdb7912f9104851d4` | `0x71742c7196f1c334C4c038ce6dcDcEE98097F9Da` | `0x61DBF87164d33FD3695256DC8Ba74D3B1d304170` | `0xa837a7eAff154Ab837617Cf7250648D3Ec0A4436` | `0x4bb0Deea6d1A30C601338aAB776d394C2AE5c0F8` | `0xbb4341CFd588a098e9aCE1D224178836426c4a8E` | `0xEBd58EdA8408d9EA409f2c2bE8898BD9738f3583` | `0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203` |
+| Base Sepolia | — | — | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | — | — | — | — | — | — |
+| Base | — | — | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | — | — | — | — | — | — |
 
 ## Underlying Solidity Contracts
 
