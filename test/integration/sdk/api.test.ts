@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { getAddress } from 'viem';
 import {
   getCollection,
   getCollectionEvents,
@@ -29,7 +30,7 @@ describe('SDK API live integration', () => {
 
     const searchedEvents = await searchEvents({
       chainId: nft.chainId,
-      contract: nft.contractAddress,
+      contract: getAddress(nft.contractAddress),
       tokenId: nft.tokenId,
       eventType: ['CREATE_NFT', 'SETTLE_AUCTION'],
       page: 1,
