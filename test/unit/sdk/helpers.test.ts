@@ -188,11 +188,12 @@ describe('NFT approval planning', () => {
 
 describe('currency decimal resolution', () => {
   it('uses configured decimals for known currencies without an RPC read', async () => {
+    // eslint-disable-next-line no-restricted-syntax
     const client = {
       async readContract(): Promise<number> {
         throw new Error('unexpected decimals read');
       },
-    } as const;
+    } as never;
     const eth = resolveCurrency('eth', 'sepolia');
     const rare = resolveCurrency('rare', 'sepolia');
     const usdc = resolveCurrency('usdc', 'sepolia');
@@ -206,13 +207,14 @@ describe('currency decimal resolution', () => {
 
   it('reads decimals for arbitrary ERC20 currencies', async () => {
     const currency = '0x9999999999999999999999999999999999999999';
+    // eslint-disable-next-line no-restricted-syntax
     const client = {
       async readContract({ address, functionName }: { address: string; functionName: string }): Promise<number> {
         expect(address).toBe(currency);
         expect(functionName).toBe('decimals');
         return 8;
       },
-    } as const;
+    } as never;
 
     expect(getKnownCurrencyDecimals(currency, 'sepolia')).toBeNull();
     expect(await resolveCurrencyDecimals(client, 'sepolia', currency)).toBe(8);

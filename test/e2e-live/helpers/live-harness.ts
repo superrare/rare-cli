@@ -106,13 +106,18 @@ export async function createLiveFixture(options: { buyer?: boolean } = {}): Prom
     } else {
       ({ sellerWallet, buyerWallet } = await step('reserve seller and buyer live wallets', () => reserveLiveWalletPair(chain)));
     }
+    if (sellerWallet === undefined) {
+      throw new Error('Seller wallet lease was not created.');
+    }
+    const reservedSellerWallet = sellerWallet;
     await writeFile(curvesFile, JSON.stringify(LIQUID_CURVES, null, 2), 'utf8');
-    await step('configure seller wallet', () => configureLiveHome(sellerHome, chain, sellerWallet.privateKey));
+    await step('configure seller wallet', () => configureLiveHome(sellerHome, chain, reservedSellerWallet.privateKey));
     if (buyerHome) {
       if (buyerWallet === undefined) {
         throw new Error('Buyer wallet lease was not created.');
       }
-      await step('configure buyer wallet', () => configureLiveHome(buyerHome, chain, buyerWallet.privateKey));
+      const reservedBuyerWallet = buyerWallet;
+      await step('configure buyer wallet', () => configureLiveHome(buyerHome, chain, reservedBuyerWallet.privateKey));
     }
 
     return {
@@ -123,9 +128,9 @@ export async function createLiveFixture(options: { buyer?: boolean } = {}): Prom
       chain,
       chainId: chainIds[chain],
       publicClient,
-      sellerAddress: sellerWallet.address,
+      sellerAddress: reservedSellerWallet.address,
       buyerAddress: buyerWallet?.address,
-      sellerWallet,
+      sellerWallet: reservedSellerWallet,
       buyerWallet,
       rareAddress: resolveCurrency('rare', chain),
       usdcAddress: resolveCurrency('usdc', chain),

@@ -8,13 +8,14 @@ import {
   uniqueAddresses,
 } from '../../../src/sdk/batch-listing-core.js';
 import type { BatchListingRootArtifact } from '../../../src/sdk/batch-listing.js';
+import type { BatchListingProofArtifact } from '../../../src/sdk/types/batch-listing.js';
 
-const seller = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' satisfies Address;
-const collaborator = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' satisfies Address;
-const contract = '0x1111111111111111111111111111111111111111' satisfies Address;
-const otherContract = '0x2222222222222222222222222222222222222222' satisfies Address;
-const root = `0x${'22'.repeat(32)}` as const;
-const allowListRoot = `0x${'33'.repeat(32)}` as const;
+const seller: Address = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const collaborator: Address = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+const contract: Address = '0x1111111111111111111111111111111111111111';
+const otherContract: Address = '0x2222222222222222222222222222222222222222';
+const root: `0x${string}` = `0x${'22'.repeat(32)}`;
+const allowListRoot: `0x${string}` = `0x${'33'.repeat(32)}`;
 
 const artifact = {
   root,
@@ -70,12 +71,12 @@ describe('batch listing core', () => {
   });
 
   it('decides when an active allowlist proof needs API resolution', () => {
-    const tokenProof = {
+    const tokenProof: BatchListingProofArtifact = {
       root,
       contract,
       tokenId: '1',
       proof: [`0x${'44'.repeat(32)}`],
-    } as const;
+    };
     const allowList = { root: allowListRoot, endTimestamp: 100n };
 
     expect(shouldResolveBatchListingAllowListProof({
