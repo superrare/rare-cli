@@ -26,13 +26,14 @@ export async function withTempHome<T>(fn: (home: string) => Promise<T>): Promise
 
 export async function runCli(args: string[], opts: {
   home?: string;
+  cwd?: string;
   env?: NodeJS.ProcessEnv;
   input?: string;
   timeoutMs?: number;
 } = {}): Promise<CliResult> {
   const command = `rare ${redactArgs(args).join(' ')}`;
   const child = spawn(process.execPath, [cliPath, ...args], {
-    cwd: repoRoot,
+    cwd: opts.cwd ?? repoRoot,
     env: {
       ...process.env,
       HOME: opts.home ?? process.env.HOME,

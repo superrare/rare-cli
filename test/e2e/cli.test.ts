@@ -1584,6 +1584,38 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('does not load dotenv from the caller working directory', async () => {
+    await withTempHome(async (home) => {
+      await writeFile(join(home, '.env'), 'RARE_SKIP_CONFIRMATION=1\n', 'utf8');
+      const inputsFile = join(home, 'swap-inputs.json');
+      await writeFile(inputsFile, JSON.stringify(['0x1234']), 'utf8');
+
+      const result = await runCli([
+        '--json',
+        'swap',
+        'tokens',
+        '--token-in',
+        zeroAddress,
+        '--amount-in',
+        '0.001',
+        '--token-out',
+        '0x197FaeF3f59eC80113e773Bb6206a17d183F97CB',
+        '--min-amount-out',
+        '1',
+        '--commands',
+        '0x10',
+        '--inputs-file',
+        inputsFile,
+        '--chain',
+        'sepolia',
+      ], { cwd: home, home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('rare swap tokens requires --yes when --json is enabled.');
+    });
+  });
+
   it('imports an ERC-721 collection through the configured wallet owner', async () => {
     await withTempHome(async (home) => {
       await withRareApiFixture(async ({ baseUrl, requests }) => {
