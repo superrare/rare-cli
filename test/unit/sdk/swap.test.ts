@@ -2,11 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPublicClient, createWalletClient, custom } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { resolveCurrency } from '../../../src/contracts/addresses.js';
+import { resolveCurrency, viemChains } from '../../../src/contracts/addresses.js';
 import { createRareClient } from '../../../src/sdk/client.js';
 
 const accountAddress = '0x1234567890123456789012345678901234567890' as const;
 const rareAddress = resolveCurrency('rare', 'sepolia');
+const baseRareAddress = resolveCurrency('rare', 'base');
 const swapAccount = privateKeyToAccount(
   '0x0000000000000000000000000000000000000000000000000000000000000001',
 );
@@ -124,6 +125,33 @@ describe('Swap SDK fallback handling', () => {
       route: 'uniswap',
     })).rejects.toThrow('stop after headers');
 
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
+      'x-api-key': 'configured-key',
+    });
+  });
+
+  it('falls back to Uniswap for known tokens when auto routing has no configured local pool', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => {
+      throw new Error('reached Uniswap fallback');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const request = vi.fn(async ({ method }: { method: string }): Promise<`0x${string}`> => {
+      if (method === 'eth_call') {
+        return '0x';
+      }
+      throw new Error(`unexpected RPC method: ${method}`);
+    });
+    const publicClient = createPublicClient({ chain: viemChains.base, transport: custom({ request }) });
+    const rare = createRareClient({ publicClient, account: accountAddress, uniswapApiKey: 'configured-key' });
+
+    await expect(rare.swap.quoteBuyToken({
+      token: baseRareAddress,
+      amountIn: '0.001',
+      route: 'auto',
+    })).rejects.toThrow('reached Uniswap fallback');
+
+    expect(fetchMock).toHaveBeenCalledOnce();
     expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
       'x-api-key': 'configured-key',
     });
