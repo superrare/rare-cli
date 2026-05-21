@@ -364,6 +364,7 @@ export function deployLiquidEditionCommand(): Command {
             return;
           }
 
+          await confirmLiquidEditionDeploy(chain, opts.yes);
           const { client } = getWalletClient(chain);
           const rare = createRareClient({ publicClient, walletClient: client });
           const tokenUri = await resolveTokenUri(rare, name, opts);
@@ -379,7 +380,6 @@ export function deployLiquidEditionCommand(): Command {
           if (opts.totalSupply) {
             log(`  Total supply: ${opts.totalSupply}`);
           }
-          await confirmLiquidEditionDeploy(chain, opts.yes);
           log('Waiting for confirmation...');
 
           const result = await rare.liquidEdition.deploy.multiCurve({
