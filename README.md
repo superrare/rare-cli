@@ -18,6 +18,8 @@ Verify installation:
 rare --help
 ```
 
+See [CHANGELOG.md](./CHANGELOG.md) for release notes and migration guidance.
+
 ## Getting Started
 
 All examples below assume you installed the CLI globally and are running `rare` directly.
