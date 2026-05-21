@@ -6,6 +6,7 @@ import {
   createWalletClient,
   http,
   isAddressEqual,
+  zeroAddress,
   type Address,
   type PublicClient,
   type WalletClient,
@@ -45,10 +46,12 @@ describeFork('SDK fork integration write paths', () => {
     }
 
     const publicClient = createForkPublicClient();
-    await fundForkAccounts(publicClient);
-    const snapshotId = await createForkSnapshot(publicClient);
+    let snapshotId: string | undefined;
 
     try {
+      await fundForkAccounts(publicClient);
+      snapshotId = await createForkSnapshot(publicClient);
+
       const chain = await detectForkChain(publicClient);
       const seller = createForkRareClient(chain, forkSellerPrivateKey);
       const buyer = createForkRareClient(chain, forkBuyerPrivateKey);
@@ -142,8 +145,7 @@ describeFork('SDK fork integration write paths', () => {
       }
       expect(isAddressEqual(token.owner, buyer.account)).toBe(true);
     } finally {
-      await revertForkSnapshot(publicClient, snapshotId);
-      await fork.stop();
+      await cleanupFork(publicClient, fork, snapshotId);
     }
   }, 240_000);
 
@@ -155,10 +157,12 @@ describeFork('SDK fork integration write paths', () => {
     }
 
     const publicClient = createForkPublicClient();
-    await fundForkAccounts(publicClient);
-    const snapshotId = await createForkSnapshot(publicClient);
+    let snapshotId: string | undefined;
 
     try {
+      await fundForkAccounts(publicClient);
+      snapshotId = await createForkSnapshot(publicClient);
+
       const chain = await detectForkChain(publicClient);
       const seller = createForkRareClient(chain, forkSellerPrivateKey);
       const buyer = createForkRareClient(chain, forkBuyerPrivateKey);
@@ -267,8 +271,7 @@ describeFork('SDK fork integration write paths', () => {
 
       await expectTokenOwner(buyer.rare, collection.contract, tokens[2], buyer.account);
     } finally {
-      await revertForkSnapshot(publicClient, snapshotId);
-      await fork.stop();
+      await cleanupFork(publicClient, fork, snapshotId);
     }
   }, 300_000);
 
@@ -280,10 +283,12 @@ describeFork('SDK fork integration write paths', () => {
     }
 
     const publicClient = createForkPublicClient();
-    await fundForkAccounts(publicClient);
-    const snapshotId = await createForkSnapshot(publicClient);
+    let snapshotId: string | undefined;
 
     try {
+      await fundForkAccounts(publicClient);
+      snapshotId = await createForkSnapshot(publicClient);
+
       const chain = await detectForkChain(publicClient);
       const seller = createForkRareClient(chain, forkSellerPrivateKey);
       const buyer = createForkRareClient(chain, forkBuyerPrivateKey);
@@ -358,8 +363,7 @@ describeFork('SDK fork integration write paths', () => {
       });
       expect(updatedToken.tokenUri).toBe(tokenUri);
     } finally {
-      await revertForkSnapshot(publicClient, snapshotId);
-      await fork.stop();
+      await cleanupFork(publicClient, fork, snapshotId);
     }
   }, 300_000);
 
@@ -371,10 +375,12 @@ describeFork('SDK fork integration write paths', () => {
     }
 
     const publicClient = createForkPublicClient();
-    await fundForkAccounts(publicClient);
-    const snapshotId = await createForkSnapshot(publicClient);
+    let snapshotId: string | undefined;
 
     try {
+      await fundForkAccounts(publicClient);
+      snapshotId = await createForkSnapshot(publicClient);
+
       const chain = await detectForkChain(publicClient);
       const seller = createForkRareClient(chain, forkSellerPrivateKey);
       const buyer = createForkRareClient(chain, forkBuyerPrivateKey);
@@ -410,8 +416,7 @@ describeFork('SDK fork integration write paths', () => {
       expect(minted.price).toBe(0n);
       expect(minted.tokenIds).toHaveLength(2);
     } finally {
-      await revertForkSnapshot(publicClient, snapshotId);
-      await fork.stop();
+      await cleanupFork(publicClient, fork, snapshotId);
     }
   }, 300_000);
 });
@@ -552,11 +557,31 @@ type LocalForkStartResult = LocalFork | {
   readonly skipReason: string;
 };
 
+async function cleanupFork(
+  publicClient: PublicClient,
+  fork: LocalFork,
+  snapshotId: string | undefined,
+): Promise<void> {
+  try {
+    if (snapshotId !== undefined) {
+      await revertForkSnapshot(publicClient, snapshotId);
+    }
+  } finally {
+    await fork.stop();
+  }
+}
+
 async function startLocalFork(): Promise<LocalForkStartResult> {
-  if (await isLocalForkReady()) {
+  const existingForkHealth = await getLocalForkHealth();
+  if (existingForkHealth.state === 'ready') {
     return {
       stop: async (): Promise<void> => {},
     };
+  }
+  if (existingForkHealth.state === 'unhealthy') {
+    throw new Error(
+      `Local fork RPC at ${localForkRpcUrl} is responding but is not usable for SDK fork integration tests. Stop the existing Anvil process on port ${localForkPort} and rerun.\n${existingForkHealth.reason}`,
+    );
   }
 
   const forkUrl = process.env.TEST_RPC_URL?.trim();
@@ -604,7 +629,7 @@ async function startLocalFork(): Promise<LocalForkStartResult> {
       throw new Error(`Anvil exited before the local fork was ready.\n${output.read()}`);
     }
 
-    if (await isLocalForkReady()) {
+    if ((await getLocalForkHealth()).state === 'ready') {
       return {
         stop: async (): Promise<void> => {
           await stopProcess(child);
@@ -619,23 +644,97 @@ async function startLocalFork(): Promise<LocalForkStartResult> {
   throw new Error(`Timed out waiting for Anvil local fork at ${localForkRpcUrl}.\n${output.read()}`);
 }
 
-async function isLocalForkReady(): Promise<boolean> {
+type LocalForkHealth = {
+  readonly state: 'ready' | 'unreachable';
+} | {
+  readonly reason: string;
+  readonly state: 'unhealthy';
+};
+
+async function getLocalForkHealth(): Promise<LocalForkHealth> {
+  const chainId = await requestLocalForkRpc('eth_chainId', []);
+  if (!chainId.ok) {
+    return chainId.reachable
+      ? { state: 'unhealthy', reason: chainId.reason }
+      : { state: 'unreachable' };
+  }
+
+  const pendingTransactionCount = await requestLocalForkRpc(
+    'eth_getTransactionCount',
+    [zeroAddress, 'pending'],
+  );
+  if (!pendingTransactionCount.ok) {
+    return { state: 'unhealthy', reason: pendingTransactionCount.reason };
+  }
+
+  return { state: 'ready' };
+}
+
+type LocalForkRpcResult = {
+  readonly ok: true;
+  readonly result: unknown;
+} | {
+  readonly ok: false;
+  readonly reachable: boolean;
+  readonly reason: string;
+};
+
+async function requestLocalForkRpc(method: string, params: readonly unknown[]): Promise<LocalForkRpcResult> {
   try {
     const response = await fetch(localForkRpcUrl, {
       body: JSON.stringify({
         id: 1,
         jsonrpc: '2.0',
-        method: 'eth_chainId',
-        params: [],
+        method,
+        params,
       }),
       headers: { 'Content-Type': 'application/json' },
       method: 'POST',
       signal: AbortSignal.timeout(1_000),
     });
-    return response.ok;
-  } catch {
-    return false;
+    if (!response.ok) {
+      return {
+        ok: false,
+        reachable: true,
+        reason: `RPC ${method} returned HTTP ${response.status}.`,
+      };
+    }
+
+    const body: unknown = await response.json();
+    if (!isRecord(body)) {
+      return {
+        ok: false,
+        reachable: true,
+        reason: `RPC ${method} returned a non-object response.`,
+      };
+    }
+    if ('result' in body) {
+      return { ok: true, result: body.result };
+    }
+
+    return {
+      ok: false,
+      reachable: true,
+      reason: `RPC ${method} failed: ${rpcErrorMessage(body.error)}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reachable: false,
+      reason: error instanceof Error ? error.message : String(error),
+    };
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function rpcErrorMessage(error: unknown): string {
+  if (isRecord(error) && typeof error.message === 'string') {
+    return error.message;
+  }
+  return JSON.stringify(error);
 }
 
 async function createForkSnapshot(publicClient: PublicClient): Promise<string> {
@@ -657,13 +756,32 @@ async function createForkSnapshot(publicClient: PublicClient): Promise<string> {
 }
 
 async function revertForkSnapshot(publicClient: PublicClient, snapshotId: string): Promise<void> {
-  const reverted = await publicClient.request({
-    method: 'evm_revert',
-    params: [snapshotId],
-  });
-  if (reverted !== true) {
-    throw new Error('Failed to revert SDK fork integration snapshot.');
+  let evmRevertError: unknown;
+  try {
+    const reverted = await publicClient.request({
+      method: 'evm_revert',
+      params: [snapshotId],
+    });
+    if (reverted === true) {
+      return;
+    }
+  } catch (error) {
+    evmRevertError = error;
   }
+
+  try {
+    const reverted = await publicClient.request({
+      method: 'anvil_revert',
+      params: [snapshotId],
+    });
+    if (reverted === true) {
+      return;
+    }
+  } catch (error) {
+    throw new Error('Failed to revert SDK fork integration snapshot.', { cause: error });
+  }
+
+  throw new Error('Failed to revert SDK fork integration snapshot.', { cause: evmRevertError });
 }
 
 function createProcessOutputBuffer(): {
