@@ -110,6 +110,9 @@ function swapTokensCommand(): Command {
       const recipient = parseOptionalAddress(opts.recipient, 'recipient');
       planTokenTradeLocalInputs({ amountIn: opts.amountIn, minAmountOut });
       const chain = getActiveChain(opts.chain, opts.chainId);
+      if (opts.yes !== true) {
+        await confirmQuotedSwapExecution('rare swap tokens');
+      }
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });

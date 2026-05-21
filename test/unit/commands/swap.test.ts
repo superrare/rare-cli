@@ -215,6 +215,46 @@ test('raw token swap supports the legacy swap alias', async () => {
   });
 });
 
+test('raw token swap requires confirmation before loading a wallet', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'rare-cli-swap-test-'));
+  const inputsFile = join(tempDir, 'inputs.json');
+  const originalArgv = [...process.argv];
+  process.argv.push('--json');
+
+  try {
+    await writeFile(inputsFile, JSON.stringify(['0x1234']), 'utf8');
+
+    await swapCommand().parseAsync([
+      'tokens',
+      '--token-in',
+      ETH_ADDRESS,
+      '--amount-in',
+      '0.001',
+      '--token-out',
+      token,
+      '--min-amount-out',
+      '1',
+      '--commands',
+      '0x10',
+      '--inputs-file',
+      inputsFile,
+      '--chain',
+      'sepolia',
+    ], { from: 'user' });
+  } finally {
+    process.argv.splice(0, process.argv.length, ...originalArgv);
+    await rm(tempDir, { recursive: true, force: true });
+  }
+
+  const error = printError.mock.calls[0]?.[0];
+  assert.ok(error instanceof Error);
+  assert.match(error.message, /rare swap tokens requires --yes when submitting a quoted swap/);
+  assert.equal(getWalletClient.mock.calls.length, 0);
+  assert.equal(getPublicClient.mock.calls.length, 0);
+  assert.equal(createRareClient.mock.calls.length, 0);
+  assert.equal(swapTokens.mock.calls.length, 0);
+});
+
 function tokenQuote(params: { direction: 'buy' | 'sell' }): TokenTradeQuote {
   return {
     amountIn: 1n,
