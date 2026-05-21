@@ -141,20 +141,25 @@ export async function createLiveCliFixture(): Promise<LiveCliFixture> {
 
   try {
     ({ sellerWallet, buyerWallet } = await reserveLiveWalletPair(chain));
+    if (sellerWallet === undefined || buyerWallet === undefined) {
+      throw new Error('Live wallet pair reservation did not return both wallet leases.');
+    }
+    const reservedSellerWallet = sellerWallet;
+    const reservedBuyerWallet = buyerWallet;
     await step(`configure seller wallet on ${chain}`, () =>
-      configureLiveHome(sellerHome, sellerWallet.privateKey, chain),
+      configureLiveHome(sellerHome, reservedSellerWallet.privateKey, chain),
     );
     await step(`configure buyer wallet on ${chain}`, () =>
-      configureLiveHome(buyerHome, buyerWallet.privateKey, chain),
+      configureLiveHome(buyerHome, reservedBuyerWallet.privateKey, chain),
     );
 
     return {
       sellerHome,
       buyerHome,
-      sellerAddress: sellerWallet.address,
-      buyerAddress: buyerWallet.address,
-      sellerWallet,
-      buyerWallet,
+      sellerAddress: reservedSellerWallet.address,
+      buyerAddress: reservedBuyerWallet.address,
+      sellerWallet: reservedSellerWallet,
+      buyerWallet: reservedBuyerWallet,
       chain,
       publicClient: createLivePublicClient(chain),
     };

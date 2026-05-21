@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { describe, expect, it } from 'vitest';
 import {
@@ -466,7 +466,7 @@ async function detectForkChain(publicClient: PublicClient): Promise<SupportedCha
 async function fundForkAccounts(publicClient: PublicClient): Promise<void> {
   try {
     await Promise.all([forkSellerPrivateKey, forkBuyerPrivateKey].map(async (privateKey) => {
-      await publicClient.request({
+      await requestForkRpc(publicClient, {
         method: 'anvil_setBalance',
         params: [privateKeyToAccount(privateKey).address, forkAccountBalance],
       });
@@ -510,11 +510,11 @@ function expectConfiguredBatchAuction(
 }
 
 async function advanceForkTime(publicClient: PublicClient, seconds: number): Promise<void> {
-  await publicClient.request({
+  await requestForkRpc(publicClient, {
     method: 'evm_increaseTime',
     params: [seconds],
   });
-  await publicClient.request({
+  await requestForkRpc(publicClient, {
     method: 'evm_mine',
     params: [],
   });
@@ -739,7 +739,7 @@ function rpcErrorMessage(error: unknown): string {
 
 async function createForkSnapshot(publicClient: PublicClient): Promise<string> {
   try {
-    const snapshotId = await publicClient.request({
+    const snapshotId = await requestForkRpc(publicClient, {
       method: 'evm_snapshot',
       params: [],
     });
@@ -758,7 +758,7 @@ async function createForkSnapshot(publicClient: PublicClient): Promise<string> {
 async function revertForkSnapshot(publicClient: PublicClient, snapshotId: string): Promise<void> {
   let evmRevertError: unknown;
   try {
-    const reverted = await publicClient.request({
+    const reverted = await requestForkRpc(publicClient, {
       method: 'evm_revert',
       params: [snapshotId],
     });
@@ -770,7 +770,7 @@ async function revertForkSnapshot(publicClient: PublicClient, snapshotId: string
   }
 
   try {
-    const reverted = await publicClient.request({
+    const reverted = await requestForkRpc(publicClient, {
       method: 'anvil_revert',
       params: [snapshotId],
     });
@@ -797,7 +797,7 @@ function createProcessOutputBuffer(): {
   };
 }
 
-async function stopProcess(child: ChildProcessWithoutNullStreams): Promise<void> {
+async function stopProcess(child: ChildProcess): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) {
     return;
   }
@@ -811,7 +811,7 @@ async function stopProcess(child: ChildProcessWithoutNullStreams): Promise<void>
 }
 
 async function waitForClose(
-  child: ChildProcessWithoutNullStreams,
+  child: ChildProcess,
   timeoutMs: number,
 ): Promise<boolean> {
   if (child.exitCode !== null || child.signalCode !== null) {
@@ -833,6 +833,14 @@ async function waitForClose(
     };
     child.once('close', close);
   });
+}
+
+function requestForkRpc(
+  publicClient: PublicClient,
+  request: { method: string; params: readonly unknown[] },
+): Promise<unknown> {
+  // eslint-disable-next-line no-restricted-syntax
+  return publicClient.request(request as never);
 }
 
 function isCommandNotFoundError(error: Error): boolean {
