@@ -4,6 +4,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { mainnet } from 'viem/chains';
 import {
   approveNftContractIfNeeded,
+  ensureTokenAllowance,
   getKnownCurrencyDecimals,
   NftApprovalRequiredError,
   PaymentApprovalRequiredError,
@@ -118,6 +119,39 @@ describe('SDK helper normalization', () => {
 });
 
 describe('payment approval planning', () => {
+  it('does not approve when ERC20 allowance reads fail', async () => {
+    const currency = '0x9999999999999999999999999999999999999999';
+    const spender = '0x8888888888888888888888888888888888888888';
+    const writeContract = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected approval write');
+    });
+    const waitForTransactionReceipt = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected approval receipt wait');
+    });
+    const readError = new Error('allowance RPC failed');
+    const payment = preparePaymentAmountForSpender({
+      publicClient: {
+        async readContract(params: { functionName: string }): Promise<never> {
+          expect(params.functionName).toBe('allowance');
+          throw readError;
+        },
+        waitForTransactionReceipt,
+      },
+      walletClient: {
+        writeContract,
+      },
+      account: sellerAddress,
+      accountAddress: sellerAddress,
+      spenderAddress: spender,
+      currency,
+      requiredAmount: 5n,
+    });
+
+    await expect(payment).rejects.toBe(readError);
+    expect(writeContract).not.toHaveBeenCalled();
+    expect(waitForTransactionReceipt).not.toHaveBeenCalled();
+  });
+
   it('returns a typed approval-required error before writing when auto approval is disabled', async () => {
     const currency = '0x9999999999999999999999999999999999999999';
     const spender = '0x8888888888888888888888888888888888888888';
@@ -149,6 +183,41 @@ describe('payment approval planning', () => {
       requiredAmount: 5n,
       spenderAddress: spender,
     });
+  });
+
+  it('does not approve token allowance when the allowance read fails', async () => {
+    const token = '0x9999999999999999999999999999999999999999';
+    const spender = '0x8888888888888888888888888888888888888888';
+    const writeContract = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected approval write');
+    });
+    const waitForTransactionReceipt = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected approval receipt wait');
+    });
+    const readError = new Error('allowance RPC failed');
+
+    await expect(ensureTokenAllowance(
+      // eslint-disable-next-line no-restricted-syntax
+      {
+        async readContract(params: { functionName: string }): Promise<never> {
+          expect(params.functionName).toBe('allowance');
+          throw readError;
+        },
+        waitForTransactionReceipt,
+      } as never,
+      // eslint-disable-next-line no-restricted-syntax
+      {
+        writeContract,
+      } as never,
+      sellerAccount,
+      sellerAddress,
+      token,
+      spender,
+      5n,
+    )).rejects.toBe(readError);
+
+    expect(writeContract).not.toHaveBeenCalled();
+    expect(waitForTransactionReceipt).not.toHaveBeenCalled();
   });
 });
 
