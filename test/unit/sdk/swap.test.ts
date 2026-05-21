@@ -81,4 +81,31 @@ describe('Swap SDK fallback handling', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();
   });
+
+  it('rejects malformed raw router calldata before allowance side effects', async () => {
+    const request = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected RPC request');
+    });
+    const transport = custom({ request });
+    const publicClient = createPublicClient({ chain: sepolia, transport });
+    const writeContract = vi.fn(async (): Promise<`0x${string}`> => {
+      throw new Error('unexpected wallet write');
+    });
+    const walletClient = createWalletClient({ account: swapAccount, chain: sepolia, transport }).extend(() => ({
+      writeContract,
+    }));
+    const rare = createRareClient({ publicClient, walletClient });
+
+    await expect(rare.swap.sellToken({
+      token: rareAddress,
+      amountIn: '1',
+      minAmountOut: '0.1',
+      route: 'raw',
+      commands: '0xzz',
+      inputs: ['0x12'],
+    })).rejects.toThrow('Router commands must be an even-length hex string.');
+
+    expect(request).not.toHaveBeenCalled();
+    expect(writeContract).not.toHaveBeenCalled();
+  });
 });

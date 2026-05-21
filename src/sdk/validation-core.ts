@@ -1,4 +1,4 @@
-import type { Address } from 'viem';
+import { isHex, type Address } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
 import type { TimestampInput } from './types/common.js';
 import { toPositiveInteger } from './amounts-core.js';
@@ -40,11 +40,22 @@ export function requireConfiguredAddress(address: Address | undefined, label: st
 }
 
 export function validateRouterPayload(commands: `0x${string}`, inputs: readonly `0x${string}`[]): void {
+  if (!isEvenLengthHex(commands)) {
+    throw new Error('Router commands must be an even-length hex string.');
+  }
   const byteLength = (commands.length - 2) / 2;
   if (byteLength <= 0) {
     throw new Error('Router commands must not be empty.');
   }
+  const invalidInputIndex = inputs.findIndex((input) => !isEvenLengthHex(input));
+  if (invalidInputIndex !== -1) {
+    throw new Error(`Router input at index ${invalidInputIndex} must be an even-length hex string.`);
+  }
   if (byteLength !== inputs.length) {
     throw new Error(`Router commands/input mismatch: commands has ${byteLength} byte(s) but ${inputs.length} input(s) were provided.`);
   }
+}
+
+function isEvenLengthHex(value: `0x${string}`): boolean {
+  return isHex(value) && value.length % 2 === 0;
 }
