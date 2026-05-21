@@ -1,4 +1,4 @@
-import { type PublicClient, parseEventLogs } from 'viem';
+import { type PublicClient, isAddressEqual, parseEventLogs, zeroAddress } from 'viem';
 import { tokenAbi } from '../contracts/abis/token.js';
 import type { RareClientConfig } from './types/client.js';
 import type { CollectionNamespace } from './types/collection.js';
@@ -39,9 +39,13 @@ export function createCollectionMint(
       eventName: 'Transfer',
     });
 
-    const log = logs[0];
+    const log = logs.find((candidate) => (
+      isAddressEqual(candidate.address, params.contract)
+      && isAddressEqual(candidate.args.from, zeroAddress)
+      && isAddressEqual(candidate.args.to, receiver)
+    ));
     if (log === undefined) {
-      throw new Error('Mint transaction succeeded but Transfer event was not found in logs.');
+      throw new Error('Mint transaction succeeded but matching collection mint Transfer event was not found in logs.');
     }
 
     return {
