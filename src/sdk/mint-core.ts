@@ -48,6 +48,10 @@ export function isMintMetadataOptionsError(error: unknown): error is MintMetadat
 export function parseMintAttribute(raw: string): NftAttribute {
   if (raw.startsWith('{')) {
     const parsed: unknown = JSON.parse(raw);
+    if (isRecord(parsed)) {
+      assertFiniteAttributeNumber(parsed.value, 'value', raw);
+      assertFiniteAttributeNumber(parsed.max_value, 'max_value', raw);
+    }
     if (!isMintAttribute(parsed)) {
       throw new Error(`Attribute JSON must include "value": ${raw}`);
     }
@@ -63,9 +67,18 @@ export function parseMintAttribute(raw: string): NftAttribute {
   const rawValue = raw.slice(eqIndex + 1);
 
   const numValue = Number(rawValue);
+  if (rawValue.length > 0 && !Number.isNaN(numValue) && !Number.isFinite(numValue)) {
+    throw new Error(`Attribute value must be a finite number: ${raw}`);
+  }
   const value = rawValue.length > 0 && !Number.isNaN(numValue) ? numValue : rawValue;
 
   return { trait_type, value };
+}
+
+function assertFiniteAttributeNumber(value: unknown, field: string, raw: string): void {
+  if (typeof value === 'number' && !Number.isFinite(value)) {
+    throw new Error(`Attribute JSON "${field}" must be a finite number: ${raw}`);
+  }
 }
 
 function isMintAttribute(value: unknown): value is NftAttribute {
@@ -76,12 +89,12 @@ function isMintAttribute(value: unknown): value is NftAttribute {
   return (
     typeof value.trait_type === 'string' &&
     (value.display_type === undefined || isDisplayType(value.display_type)) &&
-    (value.max_value === undefined || typeof value.max_value === 'number')
+    (value.max_value === undefined || (typeof value.max_value === 'number' && Number.isFinite(value.max_value)))
   );
 }
 
 function isAttributeValue(value: unknown): value is NftAttribute['value'] {
-  return typeof value === 'string' || typeof value === 'number';
+  return typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value));
 }
 
 function isDisplayType(value: unknown): value is NonNullable<NftAttribute['display_type']> {

@@ -17,8 +17,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function parseAttributeValue(value: unknown, raw: string): string | number {
-  if (typeof value === 'string' || typeof value === 'number') {
+  if (typeof value === 'string') {
     return value;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'number') {
+    throw new Error(`Attribute JSON "value" must be a finite number: ${raw}`);
   }
   throw new Error(`Attribute JSON "value" must be a string or number: ${raw}`);
 }
@@ -91,6 +97,9 @@ export function parseAttribute(raw: string): NftAttribute {
   const trait_type = raw.slice(0, eqIndex);
   const rawValue = raw.slice(eqIndex + 1);
   const numValue = Number(rawValue);
+  if (rawValue.length > 0 && !Number.isNaN(numValue) && !Number.isFinite(numValue)) {
+    throw new Error(`Attribute value must be a finite number: ${raw}`);
+  }
   const value = rawValue.length > 0 && !Number.isNaN(numValue) ? numValue : rawValue;
   return { trait_type, value };
 }

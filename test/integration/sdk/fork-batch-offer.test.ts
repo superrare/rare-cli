@@ -227,11 +227,12 @@ describeFork('SDK fork integration write paths', () => {
         chainId: chainIds[chain],
       });
 
+      const settleAuctionDurationSeconds = 10;
       await seller.rare.auction.batch.create({
         root: settleTree.root,
         artifact: settleTree,
         price: '0.000001',
-        endTime: Math.floor(Date.now() / 1000) + 1,
+        endTime: Math.floor(Date.now() / 1000) + settleAuctionDurationSeconds,
       });
       const bid = await buyer.rare.auction.batch.bid({
         creator: seller.account,
@@ -245,7 +246,7 @@ describeFork('SDK fork integration write paths', () => {
       expect(bid.creator).toBe(seller.account);
       expect(bid.root).toBe(settleTree.root);
 
-      await advanceForkTime(publicClient, 2);
+      await advanceForkTime(publicClient, settleAuctionDurationSeconds + 1);
       const ended = await seller.rare.auction.batch.status({
         creator: seller.account,
         root: settleTree.root,

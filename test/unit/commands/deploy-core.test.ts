@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   formatCurvePreview,
   getLiquidEditionDeployConfirmationDecision,
+  parseAttribute,
   resolveCurveSourceMode,
   validateLiquidEditionDeployMetadataOptions,
 } from '../../../src/commands/deploy-core.js';
@@ -31,6 +32,29 @@ test('validateLiquidEditionDeployMetadataOptions requires metadata inputs before
 test('validateLiquidEditionDeployMetadataOptions allows token URI and preview flows', () => {
   assert.deepEqual(validateLiquidEditionDeployMetadataOptions({ tokenUri: 'ipfs://metadata' }), { isValid: true });
   assert.deepEqual(validateLiquidEditionDeployMetadataOptions({ preview: true }), { isValid: true });
+});
+
+test('parseAttribute accepts finite numeric and string values', () => {
+  assert.deepEqual(parseAttribute('Level=3'), {
+    trait_type: 'Level',
+    value: 3,
+  });
+  assert.deepEqual(parseAttribute('Base=Starfish'), {
+    trait_type: 'Base',
+    value: 'Starfish',
+  });
+  assert.deepEqual(parseAttribute('{"trait_type":"Boost","value":2,"display_type":"number"}'), {
+    trait_type: 'Boost',
+    value: 2,
+    display_type: 'number',
+    max_value: undefined,
+  });
+});
+
+test('parseAttribute rejects non-finite numeric values', () => {
+  assert.throws(() => parseAttribute('score=Infinity'), /finite number/);
+  assert.throws(() => parseAttribute('score=1e309'), /finite number/);
+  assert.throws(() => parseAttribute('{"trait_type":"score","value":1e309}'), /finite number/);
 });
 
 test('getLiquidEditionDeployConfirmationDecision requires yes for JSON and non-interactive writes', () => {

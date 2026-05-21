@@ -45,6 +45,17 @@ describe('mint metadata core', () => {
     );
   });
 
+  it('rejects non-finite numeric mint attributes', () => {
+    expect(() => parseMintAttribute('score=Infinity')).toThrow('finite number');
+    expect(() => parseMintAttribute('score=1e309')).toThrow('finite number');
+    expect(() => parseMintAttribute('{"trait_type":"score","value":1e309}')).toThrow(
+      'finite number',
+    );
+    expect(() => parseMintAttribute('{"trait_type":"score","value":1,"max_value":1e309}')).toThrow(
+      'finite number',
+    );
+  });
+
   it('plans direct token URI mints without requiring metadata inputs', () => {
     expect(planMintTokenUri({
       tokenUri: 'ipfs://metadata',
