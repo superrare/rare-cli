@@ -32,6 +32,22 @@ function createTestDeployNamespace(): {
   };
 }
 
+function createReadOnlyDeployNamespace(addresses: {
+  factory?: typeof factory;
+  lazyBatchMintFactory?: typeof lazyBatchMintFactory;
+} = {}): ReturnType<typeof createDeployNamespace> {
+  const request = vi.fn(async () => {
+    throw new Error('unexpected RPC request');
+  });
+  const transport = custom({ request });
+  const publicClient = createPublicClient({ chain: mainnet, transport });
+
+  return createDeployNamespace(publicClient, { publicClient }, {
+    factory: addresses.factory ?? factory,
+    lazyBatchMintFactory: addresses.lazyBatchMintFactory,
+  });
+}
+
 describe('SDK collection deploy namespace', () => {
   it('rejects non-positive ERC-721 maxTokens before writing', async () => {
     const { deploy, request } = createTestDeployNamespace();
@@ -51,6 +67,16 @@ describe('SDK collection deploy namespace', () => {
     expect(request).not.toHaveBeenCalled();
   });
 
+  it('rejects non-positive ERC-721 maxTokens before requiring a wallet', async () => {
+    const deploy = createReadOnlyDeployNamespace();
+
+    await expect(deploy.erc721({
+      name: 'Invalid Cap',
+      symbol: 'CAP',
+      maxTokens: 0,
+    })).rejects.toThrow('maxTokens must be greater than 0.');
+  });
+
   it('rejects non-positive lazy batch mint maxTokens before writing', async () => {
     const { deploy, request } = createTestDeployNamespace();
 
@@ -67,5 +93,15 @@ describe('SDK collection deploy namespace', () => {
     })).rejects.toThrow('maxTokens must be greater than 0.');
 
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-positive lazy batch mint maxTokens before wallet and factory guards', async () => {
+    const deploy = createReadOnlyDeployNamespace();
+
+    await expect(deploy.lazyBatchMint({
+      name: 'Invalid Lazy Cap',
+      symbol: 'LCAP',
+      maxTokens: 0,
+    })).rejects.toThrow('maxTokens must be greater than 0.');
   });
 });

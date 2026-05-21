@@ -13,13 +13,14 @@ export function createDeployNamespace(
 ): Pick<CollectionDeployNamespace, 'erc721' | 'lazyBatchMint'> {
   return {
     async erc721(params): ReturnType<CollectionDeployNamespace['erc721']> {
+      const maxTokens = params.maxTokens === undefined ? undefined : toPositiveInteger(params.maxTokens, 'maxTokens');
       const { walletClient, account } = requireWallet(config);
-      const txHash = params.maxTokens !== undefined
+      const txHash = maxTokens !== undefined
         ? await walletClient.writeContract({
           address: addresses.factory,
           abi: factoryAbi,
           functionName: 'createSovereignBatchMint',
-          args: [params.name, params.symbol, toPositiveInteger(params.maxTokens, 'maxTokens')],
+          args: [params.name, params.symbol, maxTokens],
           account,
           chain: undefined,
         })
@@ -52,6 +53,7 @@ export function createDeployNamespace(
     },
 
     async lazyBatchMint(params): ReturnType<CollectionDeployNamespace['lazyBatchMint']> {
+      const maxTokens = params.maxTokens === undefined ? undefined : toPositiveInteger(params.maxTokens, 'maxTokens');
       if (!addresses.lazyBatchMintFactory) {
         throw new Error(
           'Lazy batch mint factory is not deployed on this chain. Supported chains: mainnet, sepolia.',
@@ -65,7 +67,7 @@ export function createDeployNamespace(
           address: factoryAddress,
           abi: lazyBatchMintFactoryAbi,
           functionName: 'createLazySovereignBatchMint',
-          args: [params.name, params.symbol, toPositiveInteger(params.maxTokens, 'maxTokens')],
+          args: [params.name, params.symbol, maxTokens],
           account,
           chain: undefined,
         })
