@@ -99,6 +99,36 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('prints configure success as JSON in JSON mode', async () => {
+    await withTempHome(async (home) => {
+      const configure = await runCli([
+        '--json',
+        'configure',
+        '--chain',
+        'sepolia',
+        '--rpc-url',
+        'http://127.0.0.1:8545',
+      ], { home });
+      expect(configure.code).toBe(0);
+      expect(configure.stderr).toBe('');
+      expect(parseJsonStdout(configure)).toEqual({
+        updated: true,
+        path: join(home, '.rare', 'config.json'),
+        defaultChain: null,
+        chain: 'sepolia',
+      });
+
+      const config: unknown = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
+      expect(config).toEqual({
+        chains: {
+          sepolia: {
+            rpcUrl: 'http://127.0.0.1:8545',
+          },
+        },
+      });
+    });
+  });
+
   it('deletes config only after confirmation', async () => {
     await withTempHome(async (home) => {
       const configPath = join(home, '.rare', 'config.json');

@@ -101,9 +101,19 @@ export function configureCommand(): Command {
 
       if (messages.length > 0) {
         writeConfig(nextConfig);
-        for (const message of messages) {
-          console.log(message);
-        }
+        output(
+          {
+            updated: true,
+            path: getConfigFilePath(),
+            defaultChain: nextConfig.defaultChain ?? null,
+            chain: selectedChain ?? null,
+          },
+          () => {
+            for (const message of messages) {
+              console.log(message);
+            }
+          },
+        );
       }
     });
 
