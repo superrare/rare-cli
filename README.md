@@ -80,6 +80,22 @@ rare configure --show
 
 Private keys are masked in the output. Configured account addresses are shown.
 
+### 4. Configure Uniswap fallback routes (optional)
+
+`rare swap buy-token` and `rare swap sell-token` can fall back to the hosted Uniswap API when `--route auto` cannot build a local route, or when you force `--route uniswap`. Those routes require a Uniswap API key in rare's per-chain wallet config:
+
+```bash
+rare configure --chain sepolia --uniswap-api-key your-uniswap-api-key
+```
+
+You can store the API key in 1Password instead:
+
+```bash
+rare configure --chain sepolia --uniswap-api-key-ref op://Private/uniswap/api-key
+```
+
+The CLI verifies the 1Password reference during configuration, then resolves it only if a hosted Uniswap route is actually needed. Normal user workflows do not read Uniswap keys from `.env` files.
+
 ## Usage
 
 Most chain-aware commands accept `--chain` or `--chain-id` to select a network. Defaults to the configured default chain, or `sepolia` when no default is configured.
@@ -575,6 +591,8 @@ rare swap tokens \
 
 `buy-token` and `sell-token` accept `--route auto`, `--route local`, `--route uniswap`, or `--route raw`. Raw route execution requires `--commands`, `--inputs-file`, and `--min-amount-out`.
 
+With `--route auto`, the CLI tries the local liquid-router path first. If no canonical local route is available, it uses the hosted Uniswap API and requires `uniswapApiKey` or `uniswapApiKeyRef` in the selected chain config.
+
 ### Search
 
 ```bash
@@ -847,7 +865,7 @@ await rare.import.erc721({
 
 ## Configuration
 
-Config is stored at `~/.rare/config.json`. Each chain has its own key source and RPC URL. A key source can be a plaintext `privateKey` or a 1Password `privateKeyRef` plus a derived public address. `rare configure --show` prints the account address for configured key sources.
+Config is stored at `~/.rare/config.json`. Each chain has its own key source, RPC URL, and optional Uniswap API key source. A wallet key source can be a plaintext `privateKey` or a 1Password `privateKeyRef` plus a derived public address. A Uniswap API key source can be a plaintext `uniswapApiKey` or a 1Password `uniswapApiKeyRef`. `rare configure --show` prints the account address for configured key sources and masks plaintext secrets.
 
 ```bash
 # Set private key and RPC for a chain
@@ -855,6 +873,12 @@ rare configure --chain sepolia --private-key 0x... --rpc-url https://...
 
 # Set a 1Password-backed private key reference and RPC for a chain
 rare configure --chain sepolia --private-key-ref op://Private/rare-sepolia/private-key --rpc-url https://...
+
+# Set a Uniswap API key for hosted swap fallback routes
+rare configure --chain sepolia --uniswap-api-key your-uniswap-api-key
+
+# Or keep the Uniswap API key in 1Password
+rare configure --chain sepolia --uniswap-api-key-ref op://Private/uniswap/api-key
 
 # Configure multiple chains
 rare configure --chain base --rpc-url https://your-base-rpc.com
@@ -884,6 +908,7 @@ RARE_API_BASE_URL=https://rare-api.example.com rare listing batch buy --contract
 - **Use sepolia for testing.** Default to sepolia and only switch to mainnet when you're ready.
 - **Set a reliable RPC endpoint.** Public endpoints throttle and drop requests. Services like Alchemy or Infura provide free tiers.
 - **Prefer 1Password for private keys.** Install the 1Password CLI, run `op signin`, and configure keys with `--private-key-ref` to avoid storing plaintext keys in rare config.
+- **Prefer 1Password for Uniswap API keys.** Configure hosted swap fallback routes with `--uniswap-api-key-ref` when you do not want API keys stored in plaintext config.
 - **Don't share your private key.** If you use `--private-key` or generated saved wallets, keep `~/.rare/config.json` secure and never commit it to version control.
 - **Check status before transacting.** Use `rare status` and `rare auction status` to inspect on-chain state before sending transactions.
 - **Back up your wallet.** If you lose your private key, you lose access to your assets. Store a copy somewhere safe.

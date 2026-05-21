@@ -13,6 +13,8 @@ export type ChainConfig = {
   privateKeyRef?: PrivateKeyReference;
   accountAddress?: Address;
   rpcUrl?: string;
+  uniswapApiKey?: string;
+  uniswapApiKeyRef?: PrivateKeyReference;
 }
 
 export type Config = {
@@ -183,12 +185,20 @@ function parseChainConfig(value: unknown, chain: SupportedChain): ChainConfig | 
     : undefined;
   const accountAddress = parseAccountAddress(value);
   const rpcUrl = typeof value.rpcUrl === 'string' ? value.rpcUrl : undefined;
+  const uniswapApiKey = typeof value.uniswapApiKey === 'string' && value.uniswapApiKey.trim().length > 0
+    ? value.uniswapApiKey.trim()
+    : undefined;
+  const uniswapApiKeyRef = typeof value.uniswapApiKeyRef === 'string' && isPrivateKeyReference(value.uniswapApiKeyRef)
+    ? value.uniswapApiKeyRef
+    : undefined;
 
   if (
     privateKey === undefined &&
     privateKeyRef === undefined &&
     accountAddress === undefined &&
-    rpcUrl === undefined
+    rpcUrl === undefined &&
+    uniswapApiKey === undefined &&
+    uniswapApiKeyRef === undefined
   ) {
     return undefined;
   }
@@ -198,6 +208,8 @@ function parseChainConfig(value: unknown, chain: SupportedChain): ChainConfig | 
     ...(privateKeyRef === undefined ? {} : { privateKeyRef }),
     ...(accountAddress === undefined ? {} : { accountAddress }),
     ...(rpcUrl === undefined ? {} : { rpcUrl }),
+    ...(uniswapApiKey === undefined ? {} : { uniswapApiKey }),
+    ...(uniswapApiKeyRef === undefined ? {} : { uniswapApiKeyRef }),
   };
 }
 

@@ -1,10 +1,12 @@
 import { getAddress, type Address } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
 import {
+  canonicalV4Pools,
   getCanonicalRareEthPool,
   getCanonicalUsdcEthPool,
   getV4QuoterAddress,
   resolveCurrency,
+  type CanonicalV4Pool,
 } from '../contracts/addresses.js';
 import { normalizeAddress } from './pool-core.js';
 import type { PoolKey } from './route-types.js';
@@ -16,7 +18,7 @@ const wrappedEthAddresses: Partial<Record<SupportedChain, Address>> = {
   'base-sepolia': getAddress('0x4200000000000000000000000000000000000006'),
 };
 
-function poolToKey(pool: ReturnType<typeof getCanonicalRareEthPool>): PoolKey {
+function poolToKey(pool: CanonicalV4Pool): PoolKey {
   return {
     currency0: pool.currency0,
     currency1: pool.currency1,
@@ -48,11 +50,12 @@ export function getWrappedEthAddress(chain: SupportedChain): Address | null {
 
 export function getKnownCanonicalEthPoolKey(chain: SupportedChain, token: Address): PoolKey | null {
   const normalizedToken = normalizeAddress(token);
+  const pools = canonicalV4Pools[chain];
   if (normalizedToken === normalizeAddress(getRareAddress(chain))) {
-    return getCanonicalRareEthPoolKey(chain);
+    return pools?.rareEthPool ? poolToKey(pools.rareEthPool) : null;
   }
   if (normalizedToken === normalizeAddress(getUsdcAddress(chain))) {
-    return getCanonicalUsdcEthPoolKey(chain);
+    return pools?.usdcEthPool ? poolToKey(pools.usdcEthPool) : null;
   }
   return null;
 }

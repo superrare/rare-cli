@@ -36,11 +36,18 @@ export async function configureLiveHome(home: string, privateKey: `0x${string}`,
     privateKey,
     '--rpc-url',
     liveRpcUrl(),
+    ...liveUniswapApiKeyConfigureArgs(),
   ], { home });
 
   expect(result.code).toBe(0);
   expect(result.stderr).toBe('');
   await writeFile(liveAccountPath(home), privateKeyToAccount(privateKey).address);
+}
+
+function liveUniswapApiKeyConfigureArgs(): string[] {
+  return process.env.UNISWAP_API_KEY
+    ? ['--uniswap-api-key', process.env.UNISWAP_API_KEY]
+    : [];
 }
 
 export async function jsonCommand<T>(home: string, args: string[], timeoutMs = 180_000): Promise<T> {

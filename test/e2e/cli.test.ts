@@ -108,6 +108,8 @@ describe('built CLI deterministic behavior', () => {
         'sepolia',
         '--rpc-url',
         'http://127.0.0.1:8545',
+        '--uniswap-api-key',
+        'uni-test-key-1234567890',
       ], { home });
       expect(configure.code).toBe(0);
       expect(configure.stderr).toBe('');
@@ -123,6 +125,19 @@ describe('built CLI deterministic behavior', () => {
         chains: {
           sepolia: {
             rpcUrl: 'http://127.0.0.1:8545',
+            uniswapApiKey: 'uni-test-key-1234567890',
+          },
+        },
+      });
+
+      const show = await runCli(['configure', '--show'], { home });
+      expect(show.code).toBe(0);
+      expect(JSON.parse(show.stdout)).toEqual({
+        defaultChain: 'sepolia (default)',
+        chains: {
+          sepolia: {
+            rpcUrl: 'http://127.0.0.1:8545',
+            uniswapApiKey: 'uni-te...7890',
           },
         },
       });
@@ -193,13 +208,19 @@ describe('built CLI deterministic behavior', () => {
         'configure',
         '--private-key-ref',
         'op://Private/rare-sepolia/private-key',
+        '--uniswap-api-key-ref',
+        'op://Private/uniswap/api-key',
         '--rpc-url',
         'http://127.0.0.1:8545',
       ], { home, env });
 
       expect(configure.code).toBe(0);
       expect(configure.stdout).toContain('Configuration updated for chain: sepolia');
-      expect(await readFile(fakeOp.logPath, 'utf8')).toBe('read op://Private/rare-sepolia/private-key\n');
+      expect(await readFile(fakeOp.logPath, 'utf8')).toBe([
+        'read op://Private/rare-sepolia/private-key',
+        'read op://Private/uniswap/api-key',
+        '',
+      ].join('\n'));
 
       const config: unknown = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
       expect(config).toEqual({
@@ -208,6 +229,7 @@ describe('built CLI deterministic behavior', () => {
             privateKeyRef: 'op://Private/rare-sepolia/private-key',
             accountAddress: expectedAddress,
             rpcUrl: 'http://127.0.0.1:8545',
+            uniswapApiKeyRef: 'op://Private/uniswap/api-key',
           },
         },
       });
@@ -222,7 +244,11 @@ describe('built CLI deterministic behavior', () => {
 
       expect(address.code).toBe(0);
       expect(address.stdout.trim()).toBe(expectedAddress);
-      expect(await readFile(fakeOp.logPath, 'utf8')).toBe('read op://Private/rare-sepolia/private-key\n');
+      expect(await readFile(fakeOp.logPath, 'utf8')).toBe([
+        'read op://Private/rare-sepolia/private-key',
+        'read op://Private/uniswap/api-key',
+        '',
+      ].join('\n'));
 
       const show = await runCli(['configure', '--show'], { home });
       expect(show.code).toBe(0);
@@ -234,6 +260,7 @@ describe('built CLI deterministic behavior', () => {
             privateKeyRef: 'op://Private/rare-sepolia/private-key',
             accountAddress: expectedAddress,
             rpcUrl: 'http://127.0.0.1:8545',
+            uniswapApiKeyRef: 'op://Private/uniswap/api-key',
           },
         },
       });

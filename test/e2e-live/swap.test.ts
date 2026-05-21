@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, type TestContext } from 'vitest';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { formatEther } from 'viem';
@@ -55,6 +55,32 @@ describeLive('live swap CLI write commands', () => {
     );
 
     expectKnownPoolSwap(result);
+  });
+
+  it('quotes a forced Uniswap API token buy using the configured wallet API key', async (ctx: TestContext) => {
+    skipWithoutUniswapApiKey(ctx);
+    const fixture = live.value;
+
+    const quote = await skipIfUniswapQuoteUnavailable(ctx, () =>
+      jsonCommand<TokenTradeResult>(fixture.sellerHome, [
+        'swap',
+        'buy-token',
+        '--token',
+        fixture.rareAddress,
+        '--amount-in',
+        liveSwapEthAmount(),
+        '--route',
+        'uniswap',
+        '--quote-only',
+        '--chain',
+        fixture.chain,
+      ], 240_000),
+    );
+
+    expect(quote.execution).toBe('uniswap-api');
+    expect(quote.routeSource).toBe('uniswap-api');
+    expect(BigInt(quote.estimatedAmountOut)).toBeGreaterThan(0n);
+    expect(BigInt(quote.minAmountOut)).toBeGreaterThan(0n);
   });
 
   it('sells RARE for ETH', async () => {
@@ -250,6 +276,27 @@ describeLive('live swap CLI write commands', () => {
     ));
   });
 });
+
+function skipWithoutUniswapApiKey(ctx: TestContext): void {
+  if (!process.env.UNISWAP_API_KEY) {
+    ctx.skip('UNISWAP_API_KEY is not configured for Uniswap API live coverage.');
+  }
+}
+
+async function skipIfUniswapQuoteUnavailable<T>(ctx: TestContext, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('A Uniswap API key is required')) {
+      throw error;
+    }
+    if (message.includes('Uniswap API')) {
+      ctx.skip(`Uniswap API route unavailable: ${message}`);
+    }
+    throw error;
+  }
+}
 
 async function writeSwapInputsFile(
   fixture: LiveFixture,

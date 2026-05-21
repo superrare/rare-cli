@@ -50,6 +50,17 @@ export type RareClientConfig = {
    * Optional fetch implementation for API-backed SDK methods.
    */
   apiFetch?: typeof fetch;
+  /**
+   * Optional Uniswap Trade API key used when token trades require the hosted
+   * Uniswap route.
+   */
+  uniswapApiKey?: string;
+  /**
+   * Optional lazy Uniswap Trade API key resolver. Prefer this when the key
+   * lives in an external secret manager and should only be read if a hosted
+   * Uniswap route is actually needed.
+   */
+  resolveUniswapApiKey?: () => Promise<string | undefined>;
 }
 
 export type RareClientNftSearchParams = Omit<NftSearchParams, 'chainId'>;

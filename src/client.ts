@@ -10,7 +10,7 @@ import {
   type ChainConfig,
   type PrivateKeyReference,
 } from './config.js';
-import { createOnePasswordAccount } from './one-password.js';
+import { createOnePasswordAccount, readOnePasswordSecret } from './one-password.js';
 import { isJsonMode, log } from './output.js';
 
 export type WalletAccount = PrivateKeyAccount | LocalAccount;
@@ -77,6 +77,22 @@ export function getConfiguredAccountAddress(chain: SupportedChain): Address | un
   }
 
   return chainConfig.accountAddress;
+}
+
+export async function getConfiguredUniswapApiKey(chain: SupportedChain): Promise<string | undefined> {
+  const chainConfig = getChainConfig(chain);
+  if (chainConfig.uniswapApiKey !== undefined) {
+    return chainConfig.uniswapApiKey;
+  }
+  if (chainConfig.uniswapApiKeyRef !== undefined) {
+    const apiKey = (await readOnePasswordSecret(chainConfig.uniswapApiKeyRef)).trim();
+    if (apiKey.length === 0) {
+      throw new Error(`1Password Uniswap API key at ${chainConfig.uniswapApiKeyRef} is empty.`);
+    }
+    return apiKey;
+  }
+
+  return undefined;
 }
 
 function getWalletAccount(chainConfig: WalletConfig): WalletAccount {

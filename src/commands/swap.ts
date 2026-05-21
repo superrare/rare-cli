@@ -3,7 +3,7 @@ import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
 import { formatEther } from 'viem';
 import { getActiveChain } from '../config.js';
-import { getPublicClient, getWalletClient } from '../client.js';
+import { getConfiguredAccountAddress, getConfiguredUniswapApiKey, getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
 import { planTokenTradeLocalInputs } from '../swap/trade-core.js';
 import { printError } from '../errors.js';
@@ -242,9 +242,15 @@ function swapBuyTokenCommand(): Command {
         return;
       }
       const wallet = quoteOnly ? undefined : getWalletClient(chain);
+      const resolveUniswapApiKey = async (): Promise<string | undefined> => getConfiguredUniswapApiKey(chain);
+      const configuredAccount = wallet === undefined ? getConfiguredAccountAddress(chain) : undefined;
       const rare = wallet === undefined
-        ? createRareClient({ publicClient })
-        : createRareClient({ publicClient, walletClient: wallet.client });
+        ? createRareClient({
+            publicClient,
+            ...(configuredAccount === undefined ? {} : { account: configuredAccount }),
+            resolveUniswapApiKey,
+          })
+        : createRareClient({ publicClient, walletClient: wallet.client, resolveUniswapApiKey });
       const recipient = explicitRecipient ?? wallet?.account.address;
       const quote = await rare.swap.quoteBuyToken({
         token,
@@ -427,9 +433,15 @@ function swapSellTokenCommand(): Command {
         return;
       }
       const wallet = quoteOnly ? undefined : getWalletClient(chain);
+      const resolveUniswapApiKey = async (): Promise<string | undefined> => getConfiguredUniswapApiKey(chain);
+      const configuredAccount = wallet === undefined ? getConfiguredAccountAddress(chain) : undefined;
       const rare = wallet === undefined
-        ? createRareClient({ publicClient })
-        : createRareClient({ publicClient, walletClient: wallet.client });
+        ? createRareClient({
+            publicClient,
+            ...(configuredAccount === undefined ? {} : { account: configuredAccount }),
+            resolveUniswapApiKey,
+          })
+        : createRareClient({ publicClient, walletClient: wallet.client, resolveUniswapApiKey });
       const recipient = explicitRecipient ?? wallet?.account.address;
       const quote = await rare.swap.quoteSellToken({
         token,
