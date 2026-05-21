@@ -8,7 +8,13 @@ import type { RareClient } from '../sdk/client.js';
 import {
   lazySovereignCollectionContractTypes,
   normalizeLazySovereignCollectionContractType,
+  planCollectionMintBatch,
+  planCollectionPrepareLazyMint,
+  planCollectionRoyaltyPercentage,
+  planCollectionTokenReceiver,
+  planCollectionTokenUri,
 } from '../sdk/collection-core.js';
+import { toPositiveInteger } from '../sdk/amounts-core.js';
 import { printError } from '../errors.js';
 import { output, log, printCollection } from '../output.js';
 import { createCollectionListCommand } from './account-market-list.js';
@@ -110,6 +116,7 @@ function lazyBatchMintCmd(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (name: string, symbol: string, opts: LazyBatchMintOptions): Promise<void> => {
+      const maxTokens = opts.maxTokens === undefined ? undefined : toPositiveInteger(opts.maxTokens, 'maxTokens');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
@@ -118,14 +125,14 @@ function lazyBatchMintCmd(): Command {
       log(`Deploying Lazy Sovereign Batch Mint collection on ${chain}...`);
       log(`  Name: ${name}`);
       log(`  Symbol: ${symbol}`);
-      if (opts.maxTokens) log(`  Max tokens: ${opts.maxTokens}`);
+      if (maxTokens !== undefined) log(`  Max tokens: ${maxTokens.toString()}`);
       else log(`  Max tokens: uncapped`);
       log('Waiting for transaction confirmation...');
 
       const result = await rare.collection.deploy.lazyBatchMint({
         name,
         symbol,
-        maxTokens: opts.maxTokens,
+        maxTokens,
       });
 
       output(
@@ -161,6 +168,7 @@ function deployLazyErc721CollectionCommand(): Command {
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (name: string, symbol: string, opts: CreateLazySovereignOptions): Promise<void> => {
       const contractType = normalizeLazySovereignCollectionContractType(opts.contractType);
+      const maxTokens = toPositiveInteger(opts.maxTokens, 'maxTokens');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const factoryAddress = requireContractAddress(chain, 'lazySovereignFactory');
       const { client } = getWalletClient(chain);
@@ -172,14 +180,14 @@ function deployLazyErc721CollectionCommand(): Command {
       log(`  Symbol: ${symbol}`);
       log(`  Contract type: ${contractType ?? 'lazy'}`);
       log(`  Factory: ${factoryAddress}`);
-      log(`  Max tokens: ${opts.maxTokens}`);
+      log(`  Max tokens: ${maxTokens.toString()}`);
       log('Waiting for transaction confirmation...');
 
       try {
         const result = await rare.collection.deploy.lazyErc721({
           name,
           symbol,
-          maxTokens: opts.maxTokens,
+          maxTokens,
           contractType,
         });
 
@@ -223,6 +231,7 @@ function createMintBatchCommand(): Command {
         if (amount === undefined) {
           throw new Error('collection mint-batch requires --amount.');
         }
+        const plan = planCollectionMintBatch({ contract, baseUri: opts.baseUri, amount });
         const chain = getActiveChain(opts.chain, opts.chainId);
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
@@ -231,13 +240,13 @@ function createMintBatchCommand(): Command {
         log(`Batch minting collection tokens on ${chain}...`);
         log(`  Contract: ${contract}`);
         log(`  Base URI: ${opts.baseUri}`);
-        log(`  Amount: ${amount}`);
+        log(`  Amount: ${plan.tokenCount.toString()}`);
         log('Waiting for transaction confirmation...');
 
         const result = await rare.collection.mintBatch({
           contract,
           baseUri: opts.baseUri,
-          amount,
+          amount: plan.tokenCount,
         });
 
         output(
@@ -285,6 +294,7 @@ function createPrepareLazyMintCommand(): Command {
         const minter = opts.minter === undefined
           ? undefined
           : parseAddressOption(opts.minter, '--minter');
+        const plan = planCollectionPrepareLazyMint({ contract, baseUri: opts.baseUri, amount, minter });
         const chain = getActiveChain(opts.chain, opts.chainId);
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
@@ -293,14 +303,14 @@ function createPrepareLazyMintCommand(): Command {
         log(`Preparing Lazy Sovereign mint on ${chain}...`);
         log(`  Contract: ${contract}`);
         log(`  Base URI: ${opts.baseUri}`);
-        log(`  Amount: ${amount}`);
+        log(`  Amount: ${plan.tokenCount.toString()}`);
         if (minter !== undefined) log(`  Minter: ${minter}`);
         log('Waiting for transaction confirmation...');
 
         const result = await rare.collection.prepareLazyMint({
           contract,
           baseUri: opts.baseUri,
-          amount,
+          amount: plan.tokenCount,
           minter,
         });
 
@@ -472,16 +482,17 @@ function createSetDefaultRoyaltyPercentageCommand(): Command {
     .action(async (opts: CollectionRoyaltyPercentageOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
+        const plan = planCollectionRoyaltyPercentage({ contract, percentage: opts.percentage });
         const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
         log(`Setting default royalty percentage on ${chain}...`);
         log(`  Contract: ${contract}`);
-        log(`  Percentage: ${opts.percentage}%`);
+        log(`  Percentage: ${plan.percentage}%`);
         log('Waiting for transaction confirmation...');
 
         const result = await rare.collection.setDefaultRoyaltyPercentage({
           contract,
-          percentage: opts.percentage,
+          percentage: plan.percentage,
         });
 
         output(
@@ -518,18 +529,19 @@ function createSetTokenRoyaltyReceiverCommand(): Command {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
         const receiver = parseAddressOption(opts.receiver, '--receiver');
+        const plan = planCollectionTokenReceiver({ contract, tokenId: opts.tokenId, receiver });
         const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
         log(`Setting token royalty receiver on ${chain}...`);
-        log(`  Contract: ${contract}`);
-        log(`  Token ID: ${opts.tokenId}`);
-        log(`  Receiver: ${receiver}`);
+        log(`  Contract: ${plan.contract}`);
+        log(`  Token ID: ${plan.tokenId.toString()}`);
+        log(`  Receiver: ${plan.receiver}`);
         log('Waiting for transaction confirmation...');
 
         const result = await rare.collection.setTokenRoyaltyReceiver({
-          contract,
-          tokenId: opts.tokenId,
-          receiver,
+          contract: plan.contract,
+          tokenId: plan.tokenId,
+          receiver: plan.receiver,
         });
 
         output(
@@ -656,18 +668,19 @@ function createUpdateTokenUriCommand(): Command {
     .action(async (opts: CollectionUpdateTokenUriOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
+        const plan = planCollectionTokenUri({ contract, tokenId: opts.tokenId, tokenUri: opts.tokenUri });
         const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
         log(`Updating token metadata URI on ${chain}...`);
-        log(`  Contract: ${contract}`);
-        log(`  Token ID: ${opts.tokenId}`);
-        log(`  Token URI: ${opts.tokenUri}`);
+        log(`  Contract: ${plan.contract}`);
+        log(`  Token ID: ${plan.tokenId.toString()}`);
+        log(`  Token URI: ${plan.tokenUri}`);
         log('Waiting for transaction confirmation...');
 
         const result = await rare.collection.updateTokenUri({
-          contract,
-          tokenId: opts.tokenId,
-          tokenUri: opts.tokenUri,
+          contract: plan.contract,
+          tokenId: plan.tokenId,
+          tokenUri: plan.tokenUri,
         });
 
         output(

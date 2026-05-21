@@ -5,7 +5,7 @@ import type {
   BatchListingRootArtifact,
   BatchListingStatus,
 } from './types/batch-listing.js';
-import { planPayoutSplits } from './splits-core.js';
+import { planPayoutSplits, planProvidedPayoutSplits } from './splits-core.js';
 
 export type BatchListingReadConfig = {
   currency: Address;
@@ -31,6 +31,18 @@ export function planBatchListingRootRegistration(
   artifact: BatchListingRootArtifact,
   accountAddress: Address,
 ): { splitAddresses: Address[]; splitRatios: number[] } {
+  const local = planBatchListingRootRegistrationLocalInputs(artifact);
+  if (local !== undefined) {
+    return local;
+  }
+
+  const splits = planPayoutSplits(undefined, undefined, accountAddress);
+  return { splitAddresses: splits.addresses, splitRatios: splits.ratios };
+}
+
+export function planBatchListingRootRegistrationLocalInputs(
+  artifact: BatchListingRootArtifact,
+): { splitAddresses: Address[]; splitRatios: number[] } | undefined {
   if (artifact.tokens.length < 2) {
     throw new Error('Root artifact must contain at least two tokens; the batch listing contract rejects empty proofs');
   }
@@ -43,11 +55,10 @@ export function planBatchListingRootRegistration(
 
   const { splitAddresses, splitRatios } = artifact;
   if (splitAddresses.length === 0 && splitRatios.length === 0) {
-    const splits = planPayoutSplits(undefined, undefined, accountAddress);
-    return { splitAddresses: splits.addresses, splitRatios: splits.ratios };
+    return undefined;
   }
 
-  const splits = planPayoutSplits(splitAddresses, splitRatios, accountAddress);
+  const splits = planProvidedPayoutSplits(splitAddresses, splitRatios);
   return { splitAddresses: splits.addresses, splitRatios: splits.ratios };
 }
 

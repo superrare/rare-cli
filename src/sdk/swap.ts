@@ -44,6 +44,7 @@ import {
   computeMinAmountOut,
   computeSlippageBpsFromAmounts,
   getQuotedRecipientAmount,
+  planTokenTradeLocalInputs,
   resolveSlippageBps,
 } from '../swap/trade-core.js';
 import type {
@@ -502,6 +503,7 @@ export function createSwapNamespace(
     },
 
     async quoteBuyToken(params: TokenTradeQuoteParams): Promise<TokenTradeQuote> {
+      const localInputs = planTokenTradeLocalInputs(params);
       const quote = await buildTokenTradeQuote(
         publicClient,
         chain,
@@ -511,9 +513,9 @@ export function createSwapNamespace(
         {
           direction: 'buy',
           token: params.token,
-          amountIn: requireInput(params.amountIn, 'amountIn'),
-          minAmountOut: params.minAmountOut,
-          slippageBps: params.slippageBps,
+          amountIn: localInputs.amountIn,
+          minAmountOut: localInputs.minAmountOut,
+          slippageBps: localInputs.slippageBps,
           recipient: params.recipient,
           route: params.route,
         },
@@ -548,14 +550,15 @@ export function createSwapNamespace(
         };
       }
 
+      const localInputs = planTokenTradeLocalInputs(params);
       const { walletClient, account, accountAddress } = requireWallet(config);
       const uniswapDeadline = resolveUniswapDeadline(params.deadline);
       const quoteDetails = await buildTokenTradeQuote(publicClient, chain, chainId, addresses, accountAddress, {
         direction: 'buy',
         token: params.token,
-        amountIn: requireInput(params.amountIn, 'amountIn'),
-        minAmountOut: params.minAmountOut,
-        slippageBps: params.slippageBps,
+        amountIn: localInputs.amountIn,
+        minAmountOut: localInputs.minAmountOut,
+        slippageBps: localInputs.slippageBps,
         recipient: params.recipient,
         route: params.route,
       });
@@ -611,6 +614,7 @@ export function createSwapNamespace(
     },
 
     async quoteSellToken(params: TokenTradeQuoteParams): Promise<TokenTradeQuote> {
+      const localInputs = planTokenTradeLocalInputs(params);
       const quote = await buildTokenTradeQuote(
         publicClient,
         chain,
@@ -620,9 +624,9 @@ export function createSwapNamespace(
         {
           direction: 'sell',
           token: params.token,
-          amountIn: requireInput(params.amountIn, 'amountIn'),
-          minAmountOut: params.minAmountOut,
-          slippageBps: params.slippageBps,
+          amountIn: localInputs.amountIn,
+          minAmountOut: localInputs.minAmountOut,
+          slippageBps: localInputs.slippageBps,
           recipient: params.recipient,
           route: params.route,
         },
@@ -657,14 +661,15 @@ export function createSwapNamespace(
         };
       }
 
+      const localInputs = planTokenTradeLocalInputs(params);
       const { walletClient, account, accountAddress } = requireWallet(config);
       const uniswapDeadline = resolveUniswapDeadline(params.deadline);
       const quoteDetails = await buildTokenTradeQuote(publicClient, chain, chainId, addresses, accountAddress, {
         direction: 'sell',
         token: params.token,
-        amountIn: requireInput(params.amountIn, 'amountIn'),
-        minAmountOut: params.minAmountOut,
-        slippageBps: params.slippageBps,
+        amountIn: localInputs.amountIn,
+        minAmountOut: localInputs.minAmountOut,
+        slippageBps: localInputs.slippageBps,
         recipient: params.recipient,
         route: params.route,
       });

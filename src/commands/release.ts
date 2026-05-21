@@ -10,12 +10,17 @@ import {
   buildReleaseAllowlistArtifactFromInput,
   getReleaseAllowlistProof,
   normalizeReleaseAllowlistProof,
+  normalizeReleasePrice,
+  normalizeReleaseStartTime,
+  planReleaseAllowlistConfig,
   parseReleaseAllowlistArtifactJson,
 } from '../sdk/release-core.js';
 import type {
   ReleaseAllowlistArtifact,
   ReleaseAllowlistInputFormat,
 } from '../sdk/types/release.js';
+import { toInteger, toNonNegativeInteger, toPositiveInteger } from '../sdk/amounts-core.js';
+import { resolveCurrencyDecimals } from '../sdk/payments-shell.js';
 import { resolveCurrency } from '../contracts/addresses.js';
 import { output, log } from '../output.js';
 import { runWithPaymentApprovalConsent } from './approval-consent.js';
@@ -209,19 +214,28 @@ export function releaseCommand(): Command {
         if (maxMints === undefined) {
           throw new Error('release configure requires --max-mints.');
         }
+        const normalizedMaxMints = toInteger(maxMints, 'maxMints');
+        if (normalizedMaxMints < 0n || normalizedMaxMints > 100n) {
+          throw new Error('maxMints must be an integer between 0 and 100.');
+        }
 
         const chain = getActiveChain(opts.chain, opts.chainId);
-        const { client, account } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
-        const rare = createRareClient({ publicClient, walletClient: client });
         const currency = opts.currency === undefined ? ETH_ADDRESS : resolveCurrency(opts.currency, chain);
+        const currencyDecimals = currency === ETH_ADDRESS
+          ? null
+          : await resolveCurrencyDecimals(publicClient, chain, currency);
+        normalizeReleasePrice({ currencyAddress: currency, amount: opts.price, currencyDecimals });
+        normalizeReleaseStartTime(opts.startTime, currentUnixTimestamp());
+        const { client, account } = getWalletClient(chain);
+        const rare = createRareClient({ publicClient, walletClient: client });
         const isEth = currency === ETH_ADDRESS;
 
         log(`Configuring direct sale release on ${chain}...`);
         log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
         log(`  Collection: ${opts.contract}`);
         log(`  Price:      ${opts.price} ${isEth ? 'ETH' : currency}`);
-        log(`  Max mints:  ${maxMints}`);
+        log(`  Max mints:  ${normalizedMaxMints.toString()}`);
         log(`  Start:      ${opts.startTime ?? 'now'}`);
         if (splits !== undefined) {
           log('  Splits:');
@@ -237,7 +251,7 @@ export function releaseCommand(): Command {
           currency,
           price: opts.price,
           startTime: opts.startTime,
-          maxMints,
+          maxMints: normalizedMaxMints,
           splitAddresses: splits?.addresses,
           splitRatios: splits?.ratios,
         });
@@ -284,10 +298,25 @@ export function releaseCommand(): Command {
           assertAddressOption(opts.recipient, 'recipient');
         }
         const proof = opts.proof === undefined ? undefined : readProofFile(opts.proof);
-        const chain = getActiveChain(opts.chain, opts.chainId);
-        const rare = releaseWriteClient(chain);
-        const currency = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain);
         const quantity = opts.quantity ?? '1';
+        const normalizedQuantity = toPositiveInteger(quantity, 'quantity');
+        if (normalizedQuantity > 255n) {
+          throw new Error('quantity must be less than or equal to 255.');
+        }
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const currency = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain);
+        if (opts.price !== undefined) {
+          const priceCurrency = currency ?? ETH_ADDRESS;
+          const currencyDecimals = priceCurrency === ETH_ADDRESS
+            ? null
+            : await resolveCurrencyDecimals(getPublicClient(chain), chain, priceCurrency);
+          normalizeReleasePrice({
+            currencyAddress: priceCurrency,
+            amount: opts.price,
+            currencyDecimals,
+          });
+        }
+        const rare = releaseWriteClient(chain);
 
         log(`Minting direct sale release on ${chain}...`);
         log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
@@ -305,7 +334,7 @@ export function releaseCommand(): Command {
 
         const mintParams = {
           contract: opts.contract,
-          quantity,
+          quantity: normalizedQuantity,
           currency,
           price: opts.price,
           proof,
@@ -451,13 +480,15 @@ export function releaseCommand(): Command {
           throw new Error('release allowlist set requires --end-time.');
         }
 
-        const chain = getActiveChain(opts.chain, opts.chainId);
-        const rare = releaseWriteClient(chain);
         const artifact = opts.input === undefined ? undefined : loadAllowlistArtifact(opts.input);
         if (opts.root !== undefined) {
           assertBytes32Option(opts.root, '--root');
         }
         const root = opts.root;
+        const contract = opts.contract;
+        planReleaseAllowlistConfig({ contract, root, artifact, endTime });
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const rare = releaseWriteClient(chain);
 
         log(`Configuring release allowlist on ${chain}...`);
         log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
@@ -549,17 +580,18 @@ export function releaseCommand(): Command {
         if (limit === undefined) {
           throw new Error('release limits set-mint requires --limit.');
         }
+        const normalizedLimit = toNonNegativeInteger(limit, 'limit');
         const chain = getActiveChain(opts.chain, opts.chainId);
         const rare = releaseWriteClient(chain);
 
         log(`Configuring release mint limit on ${chain}...`);
         log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
         log(`  Collection: ${opts.contract}`);
-        log(`  Limit:      ${limit}`);
+        log(`  Limit:      ${normalizedLimit.toString()}`);
 
         const result = await rare.listing.release.limits.setMint({
           contract: opts.contract,
-          limit,
+          limit: normalizedLimit,
         });
 
         output(
@@ -594,17 +626,18 @@ export function releaseCommand(): Command {
         if (limit === undefined) {
           throw new Error('release limits set-tx requires --limit.');
         }
+        const normalizedLimit = toNonNegativeInteger(limit, 'limit');
         const chain = getActiveChain(opts.chain, opts.chainId);
         const rare = releaseWriteClient(chain);
 
         log(`Configuring release transaction limit on ${chain}...`);
         log(`  RareMinter: ${rare.contracts.rareMinter ?? '(unsupported chain)'}`);
         log(`  Collection: ${opts.contract}`);
-        log(`  Limit:      ${limit}`);
+        log(`  Limit:      ${normalizedLimit.toString()}`);
 
         const result = await rare.listing.release.limits.setTx({
           contract: opts.contract,
-          limit,
+          limit: normalizedLimit,
         });
 
         output(
@@ -695,4 +728,8 @@ export function releaseCommand(): Command {
     });
 
   return cmd;
+}
+
+function currentUnixTimestamp(): bigint {
+  return BigInt(Math.floor(Date.now() / 1000));
 }

@@ -52,6 +52,9 @@ export type ListingBuyPlan = {
   amount: bigint;
 };
 
+export type ListingCreateLocalInputsPlan = Pick<ListingCreatePlan, 'tokenId' | 'price'>;
+export type ListingBuyLocalInputsPlan = Pick<ListingBuyPlan, 'tokenId' | 'amount'>;
+
 export type OfferCreatePlan = {
   tokenId: bigint;
   currency: Address;
@@ -65,6 +68,9 @@ export type OfferAcceptPlan = {
   splitAddresses: Address[];
   splitRatios: number[];
 };
+
+export type OfferCreateLocalInputsPlan = Pick<OfferCreatePlan, 'tokenId' | 'amount'>;
+export type OfferAcceptLocalInputsPlan = Pick<OfferAcceptPlan, 'tokenId' | 'amount'>;
 
 export type AuctionCreatePlan = {
   nftAddress: Address;
@@ -84,6 +90,12 @@ export type AuctionBidPlan = {
   amount: bigint;
 };
 
+export type AuctionCreateLocalInputsPlan = Pick<
+  AuctionCreatePlan,
+  'tokenId' | 'startingPrice' | 'duration' | 'auctionType' | 'startTime'
+>;
+export type AuctionBidLocalInputsPlan = Pick<AuctionBidPlan, 'tokenId' | 'amount'>;
+
 export type AuctionBidRead = {
   bidder: Address;
   currencyAddress: Address;
@@ -98,14 +110,24 @@ export type AuctionTypeIds = {
 
 const zeroBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
+export function planListingCreateLocalInputs(
+  params: Pick<ListingCreateParams, 'tokenId' | 'price'>,
+): ListingCreateLocalInputsPlan {
+  return {
+    tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
+    price: toNonNegativeWei(params.price, 'price'),
+  };
+}
+
 export function planListingCreate(params: ResolvedCurrencyParam<ListingCreateParams>, accountAddress: Address): ListingCreatePlan {
+  const local = planListingCreateLocalInputs(params);
   const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
 
   return {
     nftAddress: params.contract,
-    tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
+    tokenId: local.tokenId,
     currency: params.currency ?? ETH_ADDRESS,
-    price: toNonNegativeWei(params.price, 'price'),
+    price: local.price,
     target: params.target ?? PUBLIC_LISTING_TARGET,
     splitAddresses: splits.addresses,
     splitRatios: splits.ratios,
@@ -119,12 +141,20 @@ export function planListingCancel(params: ListingCancelParams): { tokenId: bigin
   };
 }
 
-export function planListingBuy(params: ResolvedCurrencyParam<ListingBuyParams>): ListingBuyPlan {
+export function planListingBuyLocalInputs(
+  params: Pick<ListingBuyParams, 'tokenId' | 'price'>,
+): ListingBuyLocalInputsPlan {
   const price = requireInput(params.price, 'price');
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
-    currency: params.currency ?? ETH_ADDRESS,
     amount: toPositiveWei(price, 'price'),
+  };
+}
+
+export function planListingBuy(params: ResolvedCurrencyParam<ListingBuyParams>): ListingBuyPlan {
+  return {
+    ...planListingBuyLocalInputs(params),
+    currency: params.currency ?? ETH_ADDRESS,
   };
 }
 
@@ -176,12 +206,20 @@ export function shapeListingStatus(
   };
 }
 
-export function planOfferCreate(params: ResolvedCurrencyParam<OfferCreateParams>): OfferCreatePlan {
+export function planOfferCreateLocalInputs(
+  params: Pick<OfferCreateParams, 'tokenId' | 'price'>,
+): OfferCreateLocalInputsPlan {
   const price = requireInput(params.price, 'price');
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
-    currency: params.currency ?? ETH_ADDRESS,
     amount: toPositiveWei(price, 'price'),
+  };
+}
+
+export function planOfferCreate(params: ResolvedCurrencyParam<OfferCreateParams>): OfferCreatePlan {
+  return {
+    ...planOfferCreateLocalInputs(params),
+    currency: params.currency ?? ETH_ADDRESS,
   };
 }
 
@@ -192,14 +230,25 @@ export function planOfferCancel(params: ResolvedCurrencyParam<OfferCancelParams>
   };
 }
 
-export function planOfferAccept(params: ResolvedCurrencyParam<OfferAcceptParams>, accountAddress: Address): OfferAcceptPlan {
-  const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
+export function planOfferAcceptLocalInputs(
+  params: Pick<OfferAcceptParams, 'tokenId' | 'price'>,
+): OfferAcceptLocalInputsPlan {
   const price = requireInput(params.price, 'price');
 
   return {
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
-    currency: params.currency ?? ETH_ADDRESS,
     amount: toPositiveWei(price, 'price'),
+  };
+}
+
+export function planOfferAccept(params: ResolvedCurrencyParam<OfferAcceptParams>, accountAddress: Address): OfferAcceptPlan {
+  const local = planOfferAcceptLocalInputs(params);
+  const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
+
+  return {
+    tokenId: local.tokenId,
+    currency: params.currency ?? ETH_ADDRESS,
+    amount: local.amount,
     splitAddresses: splits.addresses,
     splitRatios: splits.ratios,
   };
@@ -271,38 +320,57 @@ export function planProvidedSplits(
   return planProvidedPayoutSplits(splitAddresses, splitRatios);
 }
 
-export function planAuctionCreate(
+export function planAuctionCreateLocalInputs(
   params: ResolvedCurrencyParam<AuctionCreateParams>,
-  accountAddress: Address,
   nowSeconds: bigint,
-): AuctionCreatePlan {
+): AuctionCreateLocalInputsPlan {
   const auctionType = normalizeAuctionType(params);
-  const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
   const price = requireInput(params.price, 'price');
   const startTime = auctionType === 'scheduled' ? toUnixTimestamp(params.startTime ?? 0, 'startTime') : 0n;
   const duration = resolveAuctionDuration(params, startTime, nowSeconds);
 
   return {
-    nftAddress: params.contract,
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
-    currency: params.currency ?? ETH_ADDRESS,
     startingPrice: auctionType === 'scheduled'
       ? toNonNegativeWei(price, 'price')
       : toPositiveWei(price, 'price'),
     duration,
     auctionType,
     startTime,
+  };
+}
+
+export function planAuctionCreate(
+  params: ResolvedCurrencyParam<AuctionCreateParams>,
+  accountAddress: Address,
+  nowSeconds: bigint,
+): AuctionCreatePlan {
+  const local = planAuctionCreateLocalInputs(params, nowSeconds);
+  const splits = planSplits(params.splitAddresses, params.splitRatios, accountAddress);
+
+  return {
+    nftAddress: params.contract,
+    currency: params.currency ?? ETH_ADDRESS,
     splitAddresses: splits.addresses,
     splitRatios: splits.ratios,
+    ...local,
+  };
+}
+
+export function planAuctionBidLocalInputs(
+  params: Pick<AuctionBidParams, 'tokenId' | 'price'>,
+): AuctionBidLocalInputsPlan {
+  const price = requireInput(params.price, 'price');
+  return {
+    tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
+    amount: toPositiveWei(price, 'price'),
   };
 }
 
 export function planAuctionBid(params: ResolvedCurrencyParam<AuctionBidParams>): AuctionBidPlan {
-  const price = requireInput(params.price, 'price');
   return {
-    tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
+    ...planAuctionBidLocalInputs(params),
     currency: params.currency ?? ETH_ADDRESS,
-    amount: toPositiveWei(price, 'price'),
   };
 }
 

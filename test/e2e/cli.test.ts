@@ -456,6 +456,1039 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('validates write-command local inputs before wallet setup', async () => {
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'auction',
+        'create',
+        '--contract',
+        'not-an-address',
+        '--token-id',
+        '1',
+        '--price',
+        '0.1',
+        '--end-time',
+        '2000000000',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --contract must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'auction',
+        'create',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '-1',
+        '--price',
+        '0.1',
+        '--end-time',
+        '2000000000',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: tokenId must be greater than or equal to 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'auction',
+        'create',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+        '--price',
+        '0.1',
+        '--end-time',
+        '1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: endTime must be after the auction start time.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'auction',
+        'bid',
+        '--contract',
+        'not-an-address',
+        '--token-id',
+        '1',
+        '--price',
+        '0.1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --contract must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'auction',
+        'bid',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+        '--price',
+        '0',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: price must be greater than 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'auction',
+        'settle',
+        '--contract',
+        'not-an-address',
+        '--token-id',
+        '1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --contract must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'auction',
+        'cancel',
+        '--contract',
+        'not-an-address',
+        '--token-id',
+        '1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --contract must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'auction',
+        'batch',
+        'create',
+        '--root',
+        '0x1111111111111111111111111111111111111111111111111111111111111111',
+        '--price',
+        '0',
+        '--end-time',
+        '2000000000',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: price must be greater than 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'auction',
+        'batch',
+        'settle',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '-1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: tokenId must be greater than or equal to 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'auction',
+        'batch',
+        'create',
+        '--root',
+        '0x1111111111111111111111111111111111111111111111111111111111111111',
+        '--price',
+        '0.1',
+        '--end-time',
+        '1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: endTime must be in the future.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'auction',
+        'batch',
+        'bid',
+        '--creator',
+        '0x1111111111111111111111111111111111111111',
+        '--contract',
+        '0x2222222222222222222222222222222222222222',
+        '--token-id',
+        '-1',
+        '--price',
+        '0.1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: tokenId must be greater than or equal to 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'auction',
+        'batch',
+        'bid',
+        '--creator',
+        '0x1111111111111111111111111111111111111111',
+        '--contract',
+        '0x2222222222222222222222222222222222222222',
+        '--token-id',
+        '1',
+        '--price',
+        '0',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: price must be greater than 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'auction',
+        'batch',
+        'cancel',
+        '--root',
+        '0x1234',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --root must be a bytes32 hex string.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'collection',
+        'mint-batch',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--base-uri',
+        'ipfs://example/',
+        '--amount',
+        '0',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: amount must be greater than 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'collection',
+        'prepare-lazy-mint',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--base-uri',
+        'ipfs://example/',
+        '--amount',
+        '0',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: amount must be greater than 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'collection',
+        'royalty',
+        'set-default-percentage',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--percentage',
+        '101',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: percentage must be between 0 and 100.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'collection',
+        'royalty',
+        'set-token-receiver',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '-1',
+        '--receiver',
+        '0x2222222222222222222222222222222222222222',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: tokenId must be greater than or equal to 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'collection',
+        'metadata',
+        'update-token-uri',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '-1',
+        '--token-uri',
+        'ipfs://example/1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: tokenId must be greater than or equal to 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'collection',
+        'deploy',
+        'erc721',
+        'Test Collection',
+        'TEST',
+        '--max-tokens',
+        '0',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: maxTokens must be greater than 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'collection',
+        'deploy',
+        'lazy-batch-mint',
+        'Test Collection',
+        'TEST',
+        '--max-tokens',
+        '0',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: maxTokens must be greater than 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'collection',
+        'deploy',
+        'lazy-erc721',
+        'Test Collection',
+        'TEST',
+        '--max-tokens',
+        '0',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: maxTokens must be greater than 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'collection',
+        'mint',
+        '--contract',
+        'not-an-address',
+        '--token-uri',
+        'ipfs://example/1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --contract must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      (home) => [
+        'collection',
+        'mint',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--name',
+        'Test NFT',
+        '--description',
+        'Test description',
+        '--image',
+        join(home, 'missing-image.png'),
+        '--chain',
+        'sepolia',
+      ],
+      'Error: Could not read image file:',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'offer',
+        'batch',
+        'create',
+        '--root',
+        '0x1111111111111111111111111111111111111111111111111111111111111111',
+        '--price',
+        '0',
+        '--end-time',
+        '2000000000',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: price must be greater than 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'offer',
+        'batch',
+        'create',
+        '--root',
+        '0x1111111111111111111111111111111111111111111111111111111111111111',
+        '--price',
+        '0.1',
+        '--end-time',
+        '1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: expiry must be in the future.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'offer',
+        'batch',
+        'accept',
+        '--creator',
+        '0x1111111111111111111111111111111111111111',
+        '--contract',
+        '0x2222222222222222222222222222222222222222',
+        '--token-id',
+        '-1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: tokenId must be greater than or equal to 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'import',
+        'erc721',
+        '--contract',
+        'not-an-address',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --contract must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'liquid-edition',
+        'set-render-contract',
+        '--contract',
+        'not-an-address',
+        '--render-contract',
+        '0x2222222222222222222222222222222222222222',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --contract must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      (home) => [
+        'liquid-edition',
+        'deploy',
+        'multicurve',
+        'Test Liquid',
+        'TLQ',
+        '--curve-preset',
+        'low-demand',
+        '--description',
+        'Test liquid edition',
+        '--image',
+        join(home, 'missing-liquid-image.png'),
+        '--yes',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: Could not read image file:',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'create',
+        '--contract',
+        'not-an-address',
+        '--token-id',
+        '1',
+        '--price',
+        '0.1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --contract must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'create',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '-1',
+        '--price',
+        '0.1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: tokenId must be greater than or equal to 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'create',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+        '--price',
+        '-1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: price must be greater than or equal to 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'cancel',
+        '--contract',
+        'not-an-address',
+        '--token-id',
+        '1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --contract must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'buy',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+        '--price',
+        '0',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: price must be greater than 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'buy',
+        '--contract',
+        'not-an-address',
+        '--token-id',
+        '1',
+        '--price',
+        '0.1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --contract must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      async (home) => {
+        const input = join(home, 'bad-batch-listing-root.json');
+        await writeFile(input, '{}', 'utf8');
+        return [
+          'listing',
+          'batch',
+          'create',
+          '--input',
+          input,
+          '--chain',
+          'sepolia',
+        ];
+      },
+      'Error: root must be a 0x-prefixed bytes32 hex string',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      async (home) => {
+        const input = join(home, 'bad-batch-listing-splits.json');
+        await writeFile(input, JSON.stringify({
+          root: '0x1111111111111111111111111111111111111111111111111111111111111111',
+          currency: zeroAddress,
+          amount: '1000000000000000000',
+          splitAddresses: ['0x1111111111111111111111111111111111111111'],
+          splitRatios: [],
+          tokens: [
+            { contract: '0x2222222222222222222222222222222222222222', tokenId: '1' },
+            { contract: '0x2222222222222222222222222222222222222222', tokenId: '2' },
+          ],
+        }), 'utf8');
+        return [
+          'listing',
+          'batch',
+          'create',
+          '--input',
+          input,
+          '--chain',
+          'sepolia',
+        ];
+      },
+      'Error: splitAddresses and splitRatios must have the same length.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'batch',
+        'cancel',
+        '--root',
+        '0x1234',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --root must be a 0x-prefixed bytes32 hex string',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'batch',
+        'cancel',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '-1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: tokenId must be greater than or equal to 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'batch',
+        'buy',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+        '--creator',
+        'not-an-address',
+        '--currency',
+        'eth',
+        '--price',
+        '0.1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --creator must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'batch',
+        'buy',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+        '--creator',
+        '0x2222222222222222222222222222222222222222',
+        '--currency',
+        'eth',
+        '--price',
+        'abc',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: Number `abc` is not a valid decimal number.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'batch',
+        'set-allowlist',
+        '--root',
+        '0x1234',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --root must be a 0x-prefixed bytes32 hex string',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'batch',
+        'set-allowlist',
+        '--root',
+        '0x1111111111111111111111111111111111111111111111111111111111111111',
+        '--allowlist-root',
+        '0x2222222222222222222222222222222222222222222222222222222222222222',
+        '--end-time',
+        'abc',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: endTime must be an integer.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'offer',
+        'create',
+        '--contract',
+        'not-an-address',
+        '--token-id',
+        '1',
+        '--price',
+        '0.1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --contract must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'offer',
+        'create',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '-1',
+        '--price',
+        '0.1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: tokenId must be greater than or equal to 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'offer',
+        'create',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+        '--price',
+        '0',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: price must be greater than 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'offer',
+        'cancel',
+        '--contract',
+        'not-an-address',
+        '--token-id',
+        '1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --contract must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'offer',
+        'accept',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+        '--price',
+        '0',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: price must be greater than 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'offer',
+        'accept',
+        '--contract',
+        'not-an-address',
+        '--token-id',
+        '1',
+        '--price',
+        '0.1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: --contract must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      async (home) => {
+        const input = join(home, 'bad-allowlist-artifact.json');
+        await writeFile(input, '{ "kind": ', 'utf8');
+        return [
+          'listing',
+          'release',
+          'allowlist',
+          'set',
+          '--contract',
+          '0x1111111111111111111111111111111111111111',
+          '--end-time',
+          '2000000000',
+          '--input',
+          input,
+          '--chain',
+          'sepolia',
+        ];
+      },
+      'Error: Malformed allowlist artifact JSON:',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'release',
+        'configure',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--price',
+        '0',
+        '--max-mints',
+        '-1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: maxMints must be an integer between 0 and 100.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'release',
+        'configure',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--price',
+        'abc',
+        '--max-mints',
+        '1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: Number `abc` is not a valid decimal number.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'release',
+        'allowlist',
+        'set',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--root',
+        '0x1111111111111111111111111111111111111111111111111111111111111111',
+        '--end-time',
+        'abc',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: endTime must be a unix timestamp or ISO date string.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'release',
+        'mint',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--quantity',
+        '0',
+        '--yes',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: quantity must be greater than 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'release',
+        'mint',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--price',
+        'abc',
+        '--yes',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: Number `abc` is not a valid decimal number.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'release',
+        'limits',
+        'set-mint',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--limit',
+        '-1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: limit must be greater than or equal to 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'listing',
+        'release',
+        'limits',
+        'set-tx',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--limit',
+        '-1',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: limit must be greater than or equal to 0.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      async (home) => {
+        const inputs = join(home, 'swap-inputs.json');
+        await writeFile(inputs, '[]', 'utf8');
+        return [
+          'swap',
+          'tokens',
+          '--token-in',
+          'not-an-address',
+          '--amount-in',
+          '1',
+          '--token-out',
+          '0x1111111111111111111111111111111111111111',
+          '--min-amount-out',
+          '1',
+          '--commands',
+          '0x',
+          '--inputs-file',
+          inputs,
+          '--yes',
+          '--chain',
+          'sepolia',
+        ];
+      },
+      'Error: token-in must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      async (home) => {
+        const inputs = join(home, 'swap-inputs.json');
+        await writeFile(inputs, '[]', 'utf8');
+        return [
+          'swap',
+          'buy-token',
+          '--token',
+          'not-an-address',
+          '--amount-in',
+          '1',
+          '--route',
+          'raw',
+          '--min-amount-out',
+          '1',
+          '--commands',
+          '0x',
+          '--inputs-file',
+          inputs,
+          '--yes',
+          '--chain',
+          'sepolia',
+        ];
+      },
+      'Error: token must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'swap',
+        'buy-token',
+        '--token',
+        'not-an-address',
+        '--amount-in',
+        '1',
+        '--yes',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: token must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'swap',
+        'buy-token',
+        '--token',
+        '0x1111111111111111111111111111111111111111',
+        '--amount-in',
+        'abc',
+        '--yes',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: Number `abc` is not a valid decimal number.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      async (home) => {
+        const inputs = join(home, 'swap-inputs.json');
+        await writeFile(inputs, '[]', 'utf8');
+        return [
+          'swap',
+          'sell-token',
+          '--token',
+          'not-an-address',
+          '--amount-in',
+          '1',
+          '--route',
+          'raw',
+          '--min-amount-out',
+          '1',
+          '--commands',
+          '0x',
+          '--inputs-file',
+          inputs,
+          '--yes',
+          '--chain',
+          'sepolia',
+        ];
+      },
+      'Error: token must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'swap',
+        'sell-token',
+        '--token',
+        'not-an-address',
+        '--amount-in',
+        '1',
+        '--yes',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: token must be a valid EVM address.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'swap',
+        'sell-token',
+        '--token',
+        '0x1111111111111111111111111111111111111111',
+        '--amount-in',
+        'abc',
+        '--yes',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: Number `abc` is not a valid decimal number.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      () => [
+        'swap',
+        'buy-rare',
+        '--amount-in',
+        '1',
+        '--recipient',
+        'not-an-address',
+        '--yes',
+        '--chain',
+        'sepolia',
+      ],
+      'Error: recipient must be a valid EVM address.',
+    );
+  });
+
   it('lists supported currencies as JSON without wallet setup', async () => {
     await withTempHome(async (home) => {
       const currencies = parseJsonStdout<{ name: string; address: string }[]>(
@@ -2213,6 +3246,20 @@ function isErrorJson(value: unknown): value is { message: string; causes?: strin
     typeof value.message === 'string' &&
     (!('causes' in value) || (Array.isArray(value.causes) && value.causes.every((cause) => typeof cause === 'string')))
   );
+}
+
+async function expectLocalValidationBeforeWalletSetup(
+  argsForHome: (home: string) => string[] | Promise<string[]>,
+  expectedError: string,
+): Promise<void> {
+  await withTempHome(async (home) => {
+    const result = await runCli(await argsForHome(home), { home });
+
+    expect(result.code).toBe(1);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toContain(expectedError);
+    await expect(access(join(home, '.rare', 'config.json'))).rejects.toMatchObject({ code: 'ENOENT' });
+  });
 }
 
 async function createFakeOp(home: string): Promise<{ binDir: string; logPath: string }> {

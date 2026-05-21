@@ -13,6 +13,7 @@ import type { RareClient } from '../sdk/client.js';
 import {
   getBatchTokenProof,
   normalizeBytes32,
+  normalizeTokenId,
   parseBatchTokenListArtifactOrBuild,
   parseBatchTokenProofInput,
   validateBatchTokenProofInputMatchesTarget,
@@ -21,9 +22,17 @@ import {
   type BatchTokenListInputFormat,
   type BatchTokenProofInput,
 } from '../sdk/batch-core.js';
+import { planBatchListingRootRegistrationLocalInputs } from '../sdk/batch-listing-core.js';
+import {
+  planBatchAuctionBidLocalInputs,
+  planBatchAuctionCreateLocalInputs,
+  planBatchAuctionToken,
+} from '../sdk/batch-auction-core.js';
+import { planBatchOfferAcceptLocalInputs, planBatchOfferCreateLocalInputs } from '../sdk/batch-offer-core.js';
 import {
   buildMerkleProofArtifact,
 } from '../sdk/merkle-core.js';
+import { requireInput, toUnixTimestamp } from '../sdk/validation-core.js';
 import {
   loadMerkleProofArtifact,
   loadMerkleRootArtifact,
@@ -414,6 +423,7 @@ function createOfferCreateCommand(): Command {
     .action(async (opts: OfferCreateOptions) => {
       try {
         const rootInput = await resolveBatchCreateRootInput(opts);
+        planBatchOfferCreateLocalInputs(rootInputToCreateParams(rootInput, opts), currentUnixTimestamp());
         const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
         const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
 
@@ -563,13 +573,14 @@ function createOfferAcceptCommand(): Command {
           });
         }
         const splits = finalizeSplits(opts.split);
+        const localPlan = planBatchOfferAcceptLocalInputs({ tokenId: opts.tokenId });
         const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
 
         log(`Accepting batch offer on ${chain}...`);
         log(`  BatchOfferCreator: ${rare.contracts.batchOfferCreator}`);
         log(`  Creator: ${creator}`);
         log(`  Root: ${root ?? 'rare-api'}`);
-        log(`  Token: ${contract} #${opts.tokenId}`);
+        log(`  Token: ${contract} #${localPlan.tokenId.toString()}`);
         if (splits !== undefined) {
           log('  Splits:');
           formatSplitLines(splits).forEach((line) => {
@@ -583,7 +594,7 @@ function createOfferAcceptCommand(): Command {
           root,
           proof: proofInput?.proof,
           contract,
-          tokenId: opts.tokenId,
+          tokenId: localPlan.tokenId,
           splitAddresses: splits?.addresses,
           splitRatios: splits?.ratios,
         };
@@ -695,9 +706,10 @@ function createAuctionCreateCommand(): Command {
     .action(async (opts: AuctionCreateOptions) => {
       try {
         const rootInput = await resolveBatchCreateRootInput(opts);
+        const splits = finalizeSplits(opts.split);
+        planBatchAuctionCreateLocalInputs(rootInputToCreateParams(rootInput, opts), currentUnixTimestamp());
         const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
         const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
-        const splits = finalizeSplits(opts.split);
 
         log(`Creating batch auction on ${chain}...`);
         log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse}`);
@@ -778,8 +790,11 @@ function createAuctionCancelCommand(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .action(async (opts: AuctionCancelOptions) => {
       try {
+        const explicitRoot = opts.root !== undefined || opts.input !== undefined
+          ? await resolveOfferRoot(opts)
+          : undefined;
         const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
-        const root = await resolveAuctionCancelRoot(rare, opts);
+        const root = explicitRoot ?? await resolveAuctionCancelRoot(rare);
 
         log(`Cancelling batch auction on ${chain}...`);
         log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse}`);
@@ -841,6 +856,7 @@ function createAuctionBidCommand(): Command {
             allowRootOverride: opts.root !== undefined,
           });
         }
+        const localPlan = planBatchAuctionBidLocalInputs({ tokenId: opts.tokenId, price: opts.price });
         const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
         const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
 
@@ -848,7 +864,7 @@ function createAuctionBidCommand(): Command {
         log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse}`);
         log(`  Creator: ${creator}`);
         log(`  Root: ${root ?? 'rare-api'}`);
-        log(`  Token: ${contract} #${opts.tokenId}`);
+        log(`  Token: ${contract} #${localPlan.tokenId.toString()}`);
         log(`  Price: ${opts.price} ${currency === ETH_ADDRESS ? 'ETH' : currency}`);
         log('Waiting for confirmation...');
 
@@ -857,7 +873,7 @@ function createAuctionBidCommand(): Command {
           root,
           proof: proofInput?.proof,
           contract,
-          tokenId: opts.tokenId,
+          tokenId: localPlan.tokenId,
           currency,
           price: opts.price,
         };
@@ -921,16 +937,17 @@ function createAuctionSettleCommand(): Command {
     .action(async (opts: AuctionSettleOptions) => {
       try {
         const contract = parseAddressOption(opts.contract, '--contract');
+        const localPlan = planBatchAuctionToken({ contract, tokenId: opts.tokenId });
         const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
 
         log(`Settling batch auction token on ${chain}...`);
         log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse}`);
-        log(`  Token: ${contract} #${opts.tokenId}`);
+        log(`  Token: ${localPlan.contract} #${localPlan.tokenId.toString()}`);
         log('Waiting for confirmation...');
 
         const result = await rare.auction.batch.settle({
-          contract,
-          tokenId: opts.tokenId,
+          contract: localPlan.contract,
+          tokenId: localPlan.tokenId,
         });
 
         output(
@@ -1115,11 +1132,12 @@ function addBatchListingCommands(cmd: Command): void {
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: BatchListingCreateOptions): Promise<void> => {
       try {
+        const artifact = await loadMerkleRootArtifact(opts.input);
+        planBatchListingRootRegistrationLocalInputs(artifact);
         const chain = getActiveChain(opts.chain, opts.chainId);
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
-        const artifact = await loadMerkleRootArtifact(opts.input);
 
         log(`Registering batch listing on ${chain}...`);
         log(`  Marketplace contract: ${rare.contracts.batchListing}`);
@@ -1179,13 +1197,14 @@ function addBatchListingCommands(cmd: Command): void {
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: BatchListingRootOptions): Promise<void> => {
       try {
+        const artifact = opts.input === undefined ? undefined : await loadMerkleRootArtifact(opts.input);
+        const root = opts.root === undefined ? undefined : parseBytes32(opts.root, '--root');
+        const contract = parseOptionalAddress(opts.contract, '--contract');
+        const tokenId = opts.tokenId === undefined ? undefined : normalizeTokenId(opts.tokenId, 'tokenId');
         const chain = getActiveChain(opts.chain, opts.chainId);
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
-        const artifact = opts.input === undefined ? undefined : await loadMerkleRootArtifact(opts.input);
-        const root = opts.root === undefined ? undefined : parseBytes32(opts.root, '--root');
-        const contract = parseOptionalAddress(opts.contract, '--contract');
 
         log(`Cancelling batch listing on ${chain}...`);
         log(`  Root: ${root ?? artifact?.root ?? 'rare-api'}`);
@@ -1194,7 +1213,7 @@ function addBatchListingCommands(cmd: Command): void {
           root,
           artifact,
           contract,
-          tokenId: opts.tokenId,
+          tokenId,
         });
 
         output(
@@ -1230,12 +1249,14 @@ function addBatchListingCommands(cmd: Command): void {
         if (proofArtifact === undefined && (contract === undefined || tokenId === undefined)) {
           throw new Error('Pass --contract and --token-id so rare-api can resolve the batch listing proof, or pass --proof as an override.');
         }
+        const root = opts.root === undefined ? undefined : parseBytes32(opts.root, '--root');
+        const creator = parseAddress(opts.creator, '--creator');
         const chain = getActiveChain(opts.chain, opts.chainId);
-        const { client } = getWalletClient(chain);
-        const publicClient = getPublicClient(chain);
-        const rare = createRareClient({ publicClient, walletClient: client });
         const currency = resolveCurrency(opts.currency, chain);
+        const publicClient = getPublicClient(chain);
         const amount = await parseBatchAmount(publicClient, chain, currency, opts.price);
+        const { client } = getWalletClient(chain);
+        const rare = createRareClient({ publicClient, walletClient: client });
 
         log(`Buying batch-listed token on ${chain}...`);
         log(`  Marketplace contract: ${rare.contracts.batchListing}`);
@@ -1248,10 +1269,10 @@ function addBatchListingCommands(cmd: Command): void {
 
         const buyParams = {
           proofArtifact,
-          root: opts.root === undefined ? undefined : parseBytes32(opts.root, '--root'),
+          root,
           contract,
           tokenId,
-          creator: parseAddress(opts.creator, '--creator'),
+          creator,
           currency,
           price: amount,
         };
@@ -1305,10 +1326,6 @@ function addBatchListingCommands(cmd: Command): void {
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: BatchListingSetAllowListOptions): Promise<void> => {
       try {
-        const chain = getActiveChain(opts.chain, opts.chainId);
-        const { client } = getWalletClient(chain);
-        const publicClient = getPublicClient(chain);
-        const rare = createRareClient({ publicClient, walletClient: client });
         const artifact = opts.input === undefined ? undefined : await loadMerkleRootArtifact(opts.input);
         const root = opts.root === undefined ? undefined : parseBytes32(opts.root, '--root');
         const contract = parseOptionalAddress(opts.contract, '--contract');
@@ -1316,6 +1333,11 @@ function addBatchListingCommands(cmd: Command): void {
           ? undefined
           : parseBytes32(opts.allowlistRoot, '--allowlist-root');
         const endTime = opts.endTime ?? artifact?.allowList?.endTimestamp;
+        const endTimestamp = toUnixTimestamp(requireInput(endTime, 'endTime'), 'endTime');
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const { client } = getWalletClient(chain);
+        const publicClient = getPublicClient(chain);
+        const rare = createRareClient({ publicClient, walletClient: client });
 
         log(`Setting allowlist for batch listing on ${chain}...`);
         log(`  Root: ${root ?? artifact?.root ?? 'rare-api'}`);
@@ -1327,7 +1349,7 @@ function addBatchListingCommands(cmd: Command): void {
           contract,
           tokenId: opts.tokenId,
           allowListRoot,
-          endTime,
+          endTime: endTimestamp,
         });
 
         output(
@@ -1452,11 +1474,7 @@ async function resolveOfferRevokeParams(opts: OfferRevokeOptions): Promise<
   throw new Error('Pass --input, pass --root, or pass --contract and --token-id to resolve the active batch offer root through rare-api.');
 }
 
-async function resolveAuctionCancelRoot(rare: RareClient, opts: AuctionCancelOptions): Promise<Hex> {
-  if (opts.root !== undefined || opts.input !== undefined) {
-    return resolveOfferRoot(opts);
-  }
-
+async function resolveAuctionCancelRoot(rare: RareClient): Promise<Hex> {
   const roots = await rare.auction.batch.roots();
   return selectRootCandidate({
     roots,
@@ -1579,6 +1597,21 @@ function createRootOnlyArtifact(root: Hex): BatchTokenListArtifact {
     tokens: [],
     entries: [],
   };
+}
+
+function rootInputToCreateParams(
+  rootInput: BatchCreateRootInput,
+  opts: { price: string; endTime: string },
+): BatchCreateRootInput & { price: string; endTime: string } {
+  return {
+    ...rootInput,
+    price: opts.price,
+    endTime: opts.endTime,
+  };
+}
+
+function currentUnixTimestamp(): bigint {
+  return BigInt(Math.floor(Date.now() / 1000));
 }
 
 async function readBatchProofFile(inputPath: string): Promise<BatchTokenProofInput> {

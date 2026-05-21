@@ -638,7 +638,7 @@ function normalizeAddressValue(value: string, field: string): Address {
   return getAddress(trimmed);
 }
 
-function normalizeTokenId(value: IntegerInput, field: string): string {
+export function normalizeTokenId(value: IntegerInput, field: string): string {
   const normalized = toNonNegativeInteger(normalizeIntegerInput(value, field), field);
   if (normalized > maxUint256) {
     throw new Error(`${field} must fit in uint256.`);

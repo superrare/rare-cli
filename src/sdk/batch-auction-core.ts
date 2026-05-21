@@ -33,6 +33,11 @@ export type BatchAuctionCreatePlan = {
   approvalContracts: Address[];
 };
 
+export type BatchAuctionCreateLocalInputsPlan = Pick<
+  BatchAuctionCreatePlan,
+  'root' | 'reserveAmount' | 'duration'
+>;
+
 export type BatchAuctionRootPlan = {
   root: Hex;
 };
@@ -47,6 +52,8 @@ export type BatchAuctionBidPlan = {
   amount: bigint;
   requiredPayment: bigint;
 };
+
+export type BatchAuctionBidLocalInputsPlan = Pick<BatchAuctionBidPlan, 'tokenId' | 'amount' | 'requiredPayment'>;
 
 export type BatchAuctionTokenPlan = {
   contract: Address;
@@ -97,17 +104,26 @@ export type BatchAuctionRootContext = {
 const zeroAddress = ETH_ADDRESS;
 const marketplaceFeePercentage = 3n;
 
+export function planBatchAuctionCreateLocalInputs(
+  params: ResolvedCurrencyParam<BatchAuctionCreateParams>,
+  nowSeconds: bigint,
+): BatchAuctionCreateLocalInputsPlan {
+  const price = requireInput(params.price, 'price');
+  return {
+    root: resolveBatchAuctionRoot(params),
+    reserveAmount: toPositiveWei(price, 'price'),
+    duration: resolveBatchAuctionDuration(params, nowSeconds),
+  };
+}
+
 export function planBatchAuctionCreate(
   params: ResolvedCurrencyParam<BatchAuctionCreateParams>,
   accountAddress: Address,
   nowSeconds: bigint,
 ): BatchAuctionCreatePlan {
-  const price = requireInput(params.price, 'price');
   return {
-    root: resolveBatchAuctionRoot(params),
+    ...planBatchAuctionCreateLocalInputs(params, nowSeconds),
     currency: params.currency ?? ETH_ADDRESS,
-    reserveAmount: toPositiveWei(price, 'price'),
-    duration: resolveBatchAuctionDuration(params, nowSeconds),
     ...planSplitRecipients(params.splitAddresses, params.splitRatios, accountAddress),
     approvalContracts: params.artifact === undefined
       ? []
@@ -121,31 +137,42 @@ export function planBatchAuctionRoot(params: BatchAuctionCancelParams): BatchAuc
   };
 }
 
-export function planBatchAuctionBid(params: ResolvedCurrencyParam<BatchAuctionBidParams>): BatchAuctionBidPlan {
+export function planBatchAuctionBidLocalInputs(
+  params: Pick<BatchAuctionBidParams, 'tokenId' | 'price'>,
+): BatchAuctionBidLocalInputsPlan {
   const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
+  const price = requireInput(params.price, 'price');
+  const amount = toPositiveWei(price, 'price');
+  return {
+    tokenId,
+    amount,
+    requiredPayment: addMarketplaceFee(amount),
+  };
+}
+
+export function planBatchAuctionBid(params: ResolvedCurrencyParam<BatchAuctionBidParams>): BatchAuctionBidPlan {
+  const local = planBatchAuctionBidLocalInputs(params);
   const root = resolveBatchAuctionProofRoot(params);
   const proof = resolveBatchAuctionProof(params);
 
   if (!verifyBatchTokenProof({
     root,
     contractAddress: params.contract,
-    tokenId,
+    tokenId: local.tokenId,
     proof,
   })) {
     throw new Error('Batch auction proof is not valid for the requested token.');
   }
 
-  const price = requireInput(params.price, 'price');
-  const amount = toPositiveWei(price, 'price');
   return {
     creator: params.creator,
     root,
     proof,
     contract: params.contract,
-    tokenId,
+    tokenId: local.tokenId,
     currency: params.currency ?? ETH_ADDRESS,
-    amount,
-    requiredPayment: addMarketplaceFee(amount),
+    amount: local.amount,
+    requiredPayment: local.requiredPayment,
   };
 }
 

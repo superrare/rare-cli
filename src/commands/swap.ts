@@ -5,6 +5,7 @@ import { formatEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
+import { planTokenTradeLocalInputs } from '../swap/trade-core.js';
 import { printError } from '../errors.js';
 import { output, log, isJsonMode } from '../output.js';
 import {
@@ -100,10 +101,6 @@ function swapTokensCommand(): Command {
       chain?: string;
       chainId?: string;
     }) => {
-      const chain = getActiveChain(opts.chain, opts.chainId);
-      const { client } = getWalletClient(chain);
-      const publicClient = getPublicClient(chain);
-      const rare = createRareClient({ publicClient, walletClient: client });
       const minAmountOut = opts.minAmountOut;
       if (minAmountOut === undefined) throw new Error('swap swap requires --min-amount-out.');
       const inputs = await readInputsFile(opts.inputsFile);
@@ -111,6 +108,11 @@ function swapTokensCommand(): Command {
       const tokenIn = parseAddress(opts.tokenIn, 'token-in');
       const tokenOut = parseAddress(opts.tokenOut, 'token-out');
       const recipient = parseOptionalAddress(opts.recipient, 'recipient');
+      planTokenTradeLocalInputs({ amountIn: opts.amountIn, minAmountOut });
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const { client } = getWalletClient(chain);
+      const publicClient = getPublicClient(chain);
+      const rare = createRareClient({ publicClient, walletClient: client });
 
       log(`Swapping via router on ${chain}...`);
       log(`  Router: ${rare.contracts.swapRouter}`);
@@ -175,12 +177,19 @@ function swapBuyTokenCommand(): Command {
       chain?: string;
       chainId?: string;
     }) => {
-      const chain = getActiveChain(opts.chain, opts.chainId);
-      const publicClient = getPublicClient(chain);
       const quoteOnly = opts.quoteOnly === true;
       const route = parseTokenTradeExecutionRoute(opts.route);
       const amountIn = opts.amountIn;
       if (amountIn === undefined) throw new Error('swap buy-token requires --amount-in.');
+      const token = parseAddress(opts.token, 'token');
+      const explicitRecipient = parseOptionalAddress(opts.recipient, 'recipient');
+      planTokenTradeLocalInputs({
+        amountIn,
+        minAmountOut: opts.minAmountOut,
+        slippageBps: opts.slippageBps,
+      });
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const publicClient = getPublicClient(chain);
       if (route === 'raw') {
         if (quoteOnly) {
           throw new Error('swap buy-token --route raw does not support --quote-only.');
@@ -194,21 +203,21 @@ function swapBuyTokenCommand(): Command {
         if (opts.inputsFile === undefined) {
           throw new Error('swap buy-token --route raw requires --inputs-file.');
         }
-        const wallet = getWalletClient(chain);
-        const rare = createRareClient({ publicClient, walletClient: wallet.client });
-        const token = parseAddress(opts.token, 'token');
-        const recipient = parseOptionalAddress(opts.recipient, 'recipient');
+        const commands = ensureHex(opts.commands, 'commands');
+        const inputs = await readInputsFile(opts.inputsFile);
         if (opts.yes !== true) {
           await confirmQuotedSwapExecution('rare swap buy-token --route raw');
         }
+        const wallet = getWalletClient(chain);
+        const rare = createRareClient({ publicClient, walletClient: wallet.client });
         const result = await rare.swap.buyToken({
           route,
           token,
           amountIn,
           minAmountOut: opts.minAmountOut,
-          commands: ensureHex(opts.commands, 'commands'),
-          inputs: await readInputsFile(opts.inputsFile),
-          recipient,
+          commands,
+          inputs,
+          recipient: explicitRecipient,
           deadline: opts.deadline,
         });
 
@@ -233,8 +242,7 @@ function swapBuyTokenCommand(): Command {
       const rare = wallet === undefined
         ? createRareClient({ publicClient })
         : createRareClient({ publicClient, walletClient: wallet.client });
-      const token = parseAddress(opts.token, 'token');
-      const recipient = opts.recipient ? parseAddress(opts.recipient, 'recipient') : wallet?.account.address;
+      const recipient = explicitRecipient ?? wallet?.account.address;
       const quote = await rare.swap.quoteBuyToken({
         token,
         amountIn,
@@ -354,12 +362,19 @@ function swapSellTokenCommand(): Command {
       chain?: string;
       chainId?: string;
     }) => {
-      const chain = getActiveChain(opts.chain, opts.chainId);
-      const publicClient = getPublicClient(chain);
       const quoteOnly = opts.quoteOnly === true;
       const route = parseTokenTradeExecutionRoute(opts.route);
       const amountIn = opts.amountIn;
       if (amountIn === undefined) throw new Error('swap sell-token requires --amount-in.');
+      const token = parseAddress(opts.token, 'token');
+      const explicitRecipient = parseOptionalAddress(opts.recipient, 'recipient');
+      planTokenTradeLocalInputs({
+        amountIn,
+        minAmountOut: opts.minAmountOut,
+        slippageBps: opts.slippageBps,
+      });
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const publicClient = getPublicClient(chain);
       if (route === 'raw') {
         if (quoteOnly) {
           throw new Error('swap sell-token --route raw does not support --quote-only.');
@@ -373,21 +388,21 @@ function swapSellTokenCommand(): Command {
         if (opts.inputsFile === undefined) {
           throw new Error('swap sell-token --route raw requires --inputs-file.');
         }
-        const wallet = getWalletClient(chain);
-        const rare = createRareClient({ publicClient, walletClient: wallet.client });
-        const token = parseAddress(opts.token, 'token');
-        const recipient = parseOptionalAddress(opts.recipient, 'recipient');
+        const commands = ensureHex(opts.commands, 'commands');
+        const inputs = await readInputsFile(opts.inputsFile);
         if (opts.yes !== true) {
           await confirmQuotedSwapExecution('rare swap sell-token --route raw');
         }
+        const wallet = getWalletClient(chain);
+        const rare = createRareClient({ publicClient, walletClient: wallet.client });
         const result = await rare.swap.sellToken({
           route,
           token,
           amountIn,
           minAmountOut: opts.minAmountOut,
-          commands: ensureHex(opts.commands, 'commands'),
-          inputs: await readInputsFile(opts.inputsFile),
-          recipient,
+          commands,
+          inputs,
+          recipient: explicitRecipient,
           deadline: opts.deadline,
         });
 
@@ -412,8 +427,7 @@ function swapSellTokenCommand(): Command {
       const rare = wallet === undefined
         ? createRareClient({ publicClient })
         : createRareClient({ publicClient, walletClient: wallet.client });
-      const token = parseAddress(opts.token, 'token');
-      const recipient = opts.recipient ? parseAddress(opts.recipient, 'recipient') : wallet?.account.address;
+      const recipient = explicitRecipient ?? wallet?.account.address;
       const quote = await rare.swap.quoteSellToken({
         token,
         amountIn,
@@ -527,19 +541,20 @@ function swapBuyRareCommand(): Command {
       chain?: string;
       chainId?: string;
     }) => {
-      const chain = getActiveChain(opts.chain, opts.chainId);
-      const publicClient = getPublicClient(chain);
       const quoteOnly = opts.quoteOnly === true;
-      const quoteClient = createRareClient({ publicClient });
       const amountIn = opts.amountIn;
       if (amountIn === undefined) throw new Error('swap buy-rare requires --amount-in.');
+      const explicitRecipient = parseOptionalAddress(opts.recipient, 'recipient');
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const publicClient = getPublicClient(chain);
+      const quoteClient = createRareClient({ publicClient });
       const quote = await quoteClient.swap.quoteBuyRare({
         amountIn,
         minAmountOut: opts.minAmountOut,
         slippageBps: opts.slippageBps,
       });
       const wallet = quoteOnly ? undefined : getWalletClient(chain);
-      const recipient = opts.recipient ? parseAddress(opts.recipient, 'recipient') : wallet?.account.address;
+      const recipient = explicitRecipient ?? wallet?.account.address;
       const quoteLines = formatBuyRareQuoteLines({
         chain,
         router: quoteClient.contracts.swapRouter,

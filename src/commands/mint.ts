@@ -59,10 +59,14 @@ export function mintCommand(): Command {
           attributes: opts.attribute,
         });
 
-        const chain = getActiveChain(opts.chain, opts.chainId);
         const contractAddress = parseAddress(opts.contract, '--contract');
         const to = parseOptionalAddress(opts.to, '--to');
         const royaltyReceiver = parseOptionalAddress(opts.royaltyReceiver, '--royalty-receiver');
+        if (tokenUriPlan.mode === 'metadata') {
+          await preflightMetadataUploads(tokenUriPlan.metadata);
+        }
+
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const publicClient = getPublicClient(chain);
         const { client, account } = getWalletClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
@@ -107,6 +111,10 @@ export function mintCommand(): Command {
     });
 
   return cmd;
+}
+
+async function preflightMetadataUploads(plan: MintGeneratedMetadataPlan): Promise<void> {
+  await Promise.all(plan.uploads.map(async (upload) => readFileOrThrow(upload.path, upload.role)));
 }
 
 async function uploadAndPinMetadata(plan: MintGeneratedMetadataPlan): Promise<string> {

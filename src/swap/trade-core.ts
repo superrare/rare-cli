@@ -1,11 +1,20 @@
 import { isAddressEqual, type Address } from 'viem';
 import type { SupportedChain } from '../contracts/addresses.js';
+import { toWei } from '../sdk/amounts-core.js';
+import { requireInput } from '../sdk/validation-core.js';
+import type { AmountInput, IntegerInput } from '../sdk/types/common.js';
 import { buildCanonicalTokenBuyRoute, buildCanonicalTokenSellRoute } from './build-route.js';
 import type { PoolKey, ResolvedRoute, RouteQuote } from './route-types.js';
 
 export type TokenTradeDirection = 'buy' | 'sell';
 export type TokenTradeRouteSource = 'liquid-edition' | 'known-pool' | 'uniswap-api';
 export type TokenTradeExecution = 'liquid-router' | 'uniswap-api';
+
+export type TokenTradeLocalInputsPlan = {
+  amountIn: AmountInput;
+  minAmountOut?: AmountInput;
+  slippageBps: number;
+};
 
 export type TokenTradeQuoteCoreBase = {
   amountIn: bigint;
@@ -71,6 +80,24 @@ export function resolveSlippageBps(value?: bigint | number | string): number {
     throw new Error('slippageBps must be an integer between 0 and 9999.');
   }
   return slippageBps;
+}
+
+export function planTokenTradeLocalInputs(params: {
+  amountIn?: AmountInput;
+  minAmountOut?: AmountInput;
+  slippageBps?: IntegerInput;
+}): TokenTradeLocalInputsPlan {
+  const amountIn = requireInput(params.amountIn, 'amountIn');
+  toWei(amountIn);
+  if (params.minAmountOut !== undefined) {
+    toWei(params.minAmountOut);
+  }
+
+  return {
+    amountIn,
+    slippageBps: resolveSlippageBps(params.slippageBps),
+    ...(params.minAmountOut === undefined ? {} : { minAmountOut: params.minAmountOut }),
+  };
 }
 
 export function computeMinAmountOut(amountOut: bigint, slippageBps: number): bigint {

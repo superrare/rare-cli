@@ -98,9 +98,9 @@ function liquidEditionSetRenderContractCommand(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: SetRenderContractOptions): Promise<void> => {
-      const chain = getActiveChain(opts.chain, opts.chainId);
       const contract = parseAddress(opts.contract, '--contract');
       const renderContract = parseAddress(opts.renderContract, '--render-contract');
+      const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const { client } = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });

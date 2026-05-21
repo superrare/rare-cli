@@ -29,6 +29,8 @@ export type BatchOfferCreatePlan = {
   expiry: bigint;
 };
 
+export type BatchOfferCreateLocalInputsPlan = Pick<BatchOfferCreatePlan, 'root' | 'amount' | 'expiry'>;
+
 export type BatchOfferRootPlan = {
   root: Hex;
 };
@@ -44,6 +46,8 @@ export type BatchOfferAcceptPlan = {
   autoApprove: boolean;
 };
 
+export type BatchOfferAcceptLocalInputsPlan = Pick<BatchOfferAcceptPlan, 'tokenId'>;
+
 export type BatchOfferRead = {
   creator: Address;
   rootHash: Hex;
@@ -58,10 +62,10 @@ type BatchOfferReadTuple = readonly [Address, Hex, bigint, Address, bigint, bigi
 const zeroAddress = ETH_ADDRESS;
 const zeroBytes32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as const;
 
-export function planBatchOfferCreate(
+export function planBatchOfferCreateLocalInputs(
   params: ResolvedCurrencyParam<BatchOfferCreateParams>,
   nowSeconds?: bigint,
-): BatchOfferCreatePlan {
+): BatchOfferCreateLocalInputsPlan {
   const expiry = toUnixTimestamp(
     requireInput(params.endTime, 'endTime'),
     'endTime',
@@ -75,8 +79,17 @@ export function planBatchOfferCreate(
   return {
     root: resolveBatchOfferRoot(params),
     amount: toPositiveWei(price, 'price'),
-    currency: params.currency ?? ETH_ADDRESS,
     expiry,
+  };
+}
+
+export function planBatchOfferCreate(
+  params: ResolvedCurrencyParam<BatchOfferCreateParams>,
+  nowSeconds?: bigint,
+): BatchOfferCreatePlan {
+  return {
+    ...planBatchOfferCreateLocalInputs(params, nowSeconds),
+    currency: params.currency ?? ETH_ADDRESS,
   };
 }
 
@@ -86,18 +99,26 @@ export function planBatchOfferRoot(params: BatchOfferRevokeParams | BatchOfferSt
   };
 }
 
+export function planBatchOfferAcceptLocalInputs(
+  params: Pick<BatchOfferAcceptParams, 'tokenId'>,
+): BatchOfferAcceptLocalInputsPlan {
+  return {
+    tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
+  };
+}
+
 export function planBatchOfferAccept(
   params: BatchOfferAcceptParams,
   accountAddress: Address,
 ): BatchOfferAcceptPlan {
-  const tokenId = toNonNegativeInteger(params.tokenId, 'tokenId');
+  const local = planBatchOfferAcceptLocalInputs(params);
   const root = resolveBatchOfferProofRoot(params);
   const proof = resolveBatchOfferProof(params);
 
   if (!verifyBatchTokenProof({
     root,
     contractAddress: params.contract,
-    tokenId,
+    tokenId: local.tokenId,
     proof,
   })) {
     throw new Error('Batch offer proof is not valid for the requested token.');
@@ -108,7 +129,7 @@ export function planBatchOfferAccept(
     root,
     proof,
     contract: params.contract,
-    tokenId,
+    tokenId: local.tokenId,
     ...planSplitRecipients(params.splitAddresses, params.splitRatios, accountAddress),
     autoApprove: params.autoApprove ?? true,
   };

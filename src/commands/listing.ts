@@ -5,6 +5,11 @@ import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.
 import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '../contracts/addresses.js';
+import {
+  planListingBuyLocalInputs,
+  planListingCancel,
+  planListingCreateLocalInputs,
+} from '../sdk/marketplace-core.js';
 import { parseAddress } from '../sdk/validation.js';
 import { resolveCurrencyDecimals } from '../sdk/payments-shell.js';
 import { output, log } from '../output.js';
@@ -82,20 +87,21 @@ export function listingCommand(): Command {
         if (!hasOption(price)) {
           throw new Error('rare listing create requires --price.');
         }
+        const contract = parseAddress(opts.contract, '--contract');
+        const target = opts.target ? parseAddress(opts.target, '--target') : PUBLIC_LISTING_TARGET;
+        const splits = finalizeSplits(opts.split);
+        const localPlan = planListingCreateLocalInputs({ tokenId: opts.tokenId, price });
         const chain = getActiveChain(opts.chain, opts.chainId);
+        const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
+        const isEth = currency === ETH_ADDRESS;
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
-        const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
-        const isEth = currency === ETH_ADDRESS;
-        const splits = finalizeSplits(opts.split);
-        const contract = parseAddress(opts.contract, '--contract');
-        const target = opts.target ? parseAddress(opts.target, '--target') : PUBLIC_LISTING_TARGET;
 
         log(`Creating listing on ${chain}...`);
         log(`  Marketplace contract: ${rare.contracts.auction}`);
         log(`  NFT contract: ${contract}`);
-        log(`  Token ID: ${opts.tokenId}`);
+        log(`  Token ID: ${localPlan.tokenId.toString()}`);
         log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
         log(`  Target: ${isAddressEqual(target, PUBLIC_LISTING_TARGET) ? 'public' : target}`);
         if (splits) {
@@ -107,7 +113,7 @@ export function listingCommand(): Command {
 
         const listingParams = {
           contract,
-          tokenId: opts.tokenId,
+          tokenId: localPlan.tokenId,
           price,
           currency,
           target,
@@ -160,19 +166,20 @@ export function listingCommand(): Command {
     .action(async (opts: ListingCancelOptions): Promise<void> => {
       try {
         requireTokenScopeOptions(opts, 'cancel');
+        const contract = parseAddress(opts.contract, '--contract');
+        const target = opts.target ? parseAddress(opts.target, '--target') : PUBLIC_LISTING_TARGET;
+        const localPlan = planListingCancel({ contract, tokenId: opts.tokenId, target });
         const chain = getActiveChain(opts.chain, opts.chainId);
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
-        const contract = parseAddress(opts.contract, '--contract');
-        const target = opts.target ? parseAddress(opts.target, '--target') : PUBLIC_LISTING_TARGET;
 
         log(`Cancelling listing on ${chain}...`);
 
         const result = await rare.listing.cancel({
           contract,
-          tokenId: opts.tokenId,
-          target,
+          tokenId: localPlan.tokenId,
+          target: localPlan.target,
         });
 
         output(
@@ -199,12 +206,6 @@ export function listingCommand(): Command {
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ListingBuyOptions): Promise<void> => {
       try {
-        const chain = getActiveChain(opts.chain, opts.chainId);
-        const { client } = getWalletClient(chain);
-        const publicClient = getPublicClient(chain);
-        const rare = createRareClient({ publicClient, walletClient: client });
-        const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
-        const isEth = currency === ETH_ADDRESS;
         if (!hasOption(opts.contract)) {
           throw new Error('rare listing buy requires --contract.');
         }
@@ -213,16 +214,23 @@ export function listingCommand(): Command {
           throw new Error('rare listing buy requires --price.');
         }
         const contract = parseAddress(opts.contract, '--contract');
+        const localPlan = planListingBuyLocalInputs({ tokenId: opts.tokenId, price });
+        const chain = getActiveChain(opts.chain, opts.chainId);
+        const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
+        const isEth = currency === ETH_ADDRESS;
+        const { client } = getWalletClient(chain);
+        const publicClient = getPublicClient(chain);
+        const rare = createRareClient({ publicClient, walletClient: client });
 
         log(`Buying token on ${chain}...`);
         log(`  Marketplace contract: ${rare.contracts.auction}`);
         log(`  NFT contract: ${contract}`);
-        log(`  Token ID: ${opts.tokenId}`);
+        log(`  Token ID: ${localPlan.tokenId.toString()}`);
         log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
 
         const buyParams = {
           contract,
-          tokenId: opts.tokenId,
+          tokenId: localPlan.tokenId,
           price,
           currency,
         };

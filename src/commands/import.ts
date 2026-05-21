@@ -24,12 +24,12 @@ export function importCommand(): Command {
     .option('--chain <chain>', 'chain the contract is deployed on')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ImportErc721Options): Promise<void> => {
+      const contractAddress = parseAddress(opts.contract, '--contract');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const { client, account } = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const ownerAddress = account.address;
-      const contractAddress = parseAddress(opts.contract, '--contract');
       const chainId = chainIds[chain];
 
       log(`Importing ERC-721 contract...`);

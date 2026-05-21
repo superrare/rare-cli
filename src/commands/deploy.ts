@@ -11,6 +11,7 @@ import {
   type LiquidCurvePreview,
   type LiquidCurveSegment,
 } from '../liquid/curve-config.js';
+import { toPositiveInteger } from '../sdk/amounts-core.js';
 import { resolveLiquidFactoryConfigForSupply } from '../liquid/factory-config-core.js';
 import { runLiquidCurveWizard } from '../liquid/wizard.js';
 import { output, log, isJsonMode } from '../output.js';
@@ -54,7 +55,7 @@ async function resolveTokenUri(
     throw new Error('--image is required when not using --token-uri');
   }
 
-  const imageBuffer = await readFile(opts.image);
+  const imageBuffer = await readMetadataFile(opts.image, 'image');
   log(`Uploading image: ${basename(opts.image)} (${imageBuffer.byteLength} bytes)`);
   const imageMedia = await rare.media.upload(new Uint8Array(imageBuffer), basename(opts.image));
   log(`  Image uploaded: ${imageMedia.url}`);
@@ -78,11 +79,35 @@ async function uploadVideoMedia(
   rare: ReturnType<typeof createRareClient>,
   videoPath: string,
 ): Promise<Awaited<ReturnType<ReturnType<typeof createRareClient>['media']['upload']>>> {
-  const videoBuffer = await readFile(videoPath);
+  const videoBuffer = await readMetadataFile(videoPath, 'video');
   log(`Uploading video: ${basename(videoPath)} (${videoBuffer.byteLength} bytes)`);
   const videoMedia = await rare.media.upload(new Uint8Array(videoBuffer), basename(videoPath));
   log(`  Video uploaded: ${videoMedia.url}`);
   return videoMedia;
+}
+
+async function preflightTokenUriFiles(opts: {
+  tokenUri?: string;
+  image?: string;
+  video?: string;
+}): Promise<void> {
+  if (opts.tokenUri !== undefined) {
+    return;
+  }
+  if (opts.image !== undefined) {
+    await readMetadataFile(opts.image, 'image');
+  }
+  if (opts.video !== undefined) {
+    await readMetadataFile(opts.video, 'video');
+  }
+}
+
+async function readMetadataFile(path: string, role: 'image' | 'video'): Promise<Buffer> {
+  try {
+    return await readFile(path);
+  } catch (error) {
+    throw new Error(`Could not read ${role} file: ${path}`, { cause: error });
+  }
 }
 
 async function writeGeneratedCurves(path: string | undefined, curves: LiquidCurveSegment[]): Promise<void> {
@@ -228,6 +253,7 @@ export function deployErc721Command(): Command {
       symbol: string,
       opts: { maxTokens?: string; chain?: string; chainId?: string },
     ): Promise<void> => {
+      const maxTokens = opts.maxTokens === undefined ? undefined : toPositiveInteger(opts.maxTokens, 'maxTokens');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
@@ -237,14 +263,14 @@ export function deployErc721Command(): Command {
       log(`  Factory: ${rare.contracts.factory}`);
       log(`  Name: ${name}`);
       log(`  Symbol: ${symbol}`);
-      if (opts.maxTokens) log(`  Max tokens: ${opts.maxTokens}`);
+      if (maxTokens !== undefined) log(`  Max tokens: ${maxTokens.toString()}`);
       log('Waiting for confirmation...');
 
       try {
         const result = await rare.collection.deploy.erc721({
           name,
           symbol,
-          maxTokens: opts.maxTokens,
+          maxTokens,
         });
 
         output(
@@ -310,12 +336,13 @@ export function deployLiquidEditionCommand(): Command {
           chainId?: string;
         },
       ) => {
-        const chain = getActiveChain(opts.chain, opts.chainId);
         const metadataValidation = validateLiquidEditionDeployMetadataOptions(opts);
         if (!metadataValidation.isValid) {
           throw new Error(metadataValidation.errorMessage);
         }
+        await preflightTokenUriFiles(opts);
 
+        const chain = getActiveChain(opts.chain, opts.chainId);
         const publicClient = getPublicClient(chain);
         const readOnlyRare = createRareClient({ publicClient });
 

@@ -5,6 +5,11 @@ import { getPublicClient, getWalletClient } from '../client.js';
 import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
+import {
+  planAuctionBidLocalInputs,
+  planAuctionCreateLocalInputs,
+  planAuctionTokenAction,
+} from '../sdk/marketplace-core.js';
 import { parseAddress } from '../sdk/validation.js';
 import { output, log } from '../output.js';
 import { createAuctionListCommand } from './account-market-list.js';
@@ -80,18 +85,26 @@ export function auctionCommand(): Command {
       }
       const auctionType = parseAuctionTypeOption(opts.type, opts.startTime);
       const splits = finalizeSplits(opts.split);
+      const contract = parseAddress(opts.contract, '--contract');
+      const localPlan = planAuctionCreateLocalInputs({
+        tokenId: opts.tokenId,
+        price,
+        endTime: opts.endTime,
+        auctionType,
+        startTime: opts.startTime,
+        contract,
+      }, currentUnixTimestamp());
       const chain = getActiveChain(opts.chain, opts.chainId);
+      const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
+      const isEth = currency === ETH_ADDRESS;
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
-      const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
-      const isEth = currency === ETH_ADDRESS;
-      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Creating auction on ${chain}...`);
       log(`  Auction contract: ${rare.contracts.auction}`);
       log(`  NFT contract: ${contract}`);
-      log(`  Token ID: ${opts.tokenId}`);
+      log(`  Token ID: ${localPlan.tokenId.toString()}`);
       log(`  Type: ${auctionType}`);
       log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
       log(`  End time: ${opts.endTime}`);
@@ -109,7 +122,7 @@ export function auctionCommand(): Command {
       try {
         const auctionParams = {
           contract,
-          tokenId: opts.tokenId,
+          tokenId: localPlan.tokenId,
           price,
           endTime: opts.endTime,
           currency,
@@ -171,24 +184,25 @@ export function auctionCommand(): Command {
       if (price === undefined) {
         throw new Error('auction bid requires --price.');
       }
+      const contract = parseAddress(opts.contract, '--contract');
+      const localPlan = planAuctionBidLocalInputs({ tokenId: opts.tokenId, price });
       const chain = getActiveChain(opts.chain, opts.chainId);
+      const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
+      const isEth = currency === ETH_ADDRESS;
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
-      const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
-      const isEth = currency === ETH_ADDRESS;
-      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Placing bid on ${chain}...`);
       log(`  Auction contract: ${rare.contracts.auction}`);
       log(`  NFT contract: ${contract}`);
-      log(`  Token ID: ${opts.tokenId}`);
+      log(`  Token ID: ${localPlan.tokenId.toString()}`);
       log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
 
       try {
         const bidParams = {
           contract,
-          tokenId: opts.tokenId,
+          tokenId: localPlan.tokenId,
           price,
           currency,
         };
@@ -236,18 +250,19 @@ export function auctionCommand(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: AuctionTokenOptions): Promise<void> => {
+      const contract = parseAddress(opts.contract, '--contract');
+      const localPlan = planAuctionTokenAction({ tokenId: opts.tokenId, contract });
       const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
-      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Settling auction on ${chain}...`);
 
       try {
         const result = await rare.auction.settle({
           contract,
-          tokenId: opts.tokenId,
+          tokenId: localPlan.tokenId,
         });
 
         output(
@@ -271,18 +286,19 @@ export function auctionCommand(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: AuctionTokenOptions): Promise<void> => {
+      const contract = parseAddress(opts.contract, '--contract');
+      const localPlan = planAuctionTokenAction({ tokenId: opts.tokenId, contract });
       const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
-      const contract = parseAddress(opts.contract, '--contract');
 
       log(`Cancelling auction on ${chain}...`);
 
       try {
         const result = await rare.auction.cancel({
           contract,
-          tokenId: opts.tokenId,
+          tokenId: localPlan.tokenId,
         });
 
         output(
@@ -350,4 +366,8 @@ export function auctionCommand(): Command {
     });
 
   return cmd;
+}
+
+function currentUnixTimestamp(): bigint {
+  return BigInt(Math.floor(Date.now() / 1000));
 }
