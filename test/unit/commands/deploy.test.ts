@@ -87,6 +87,7 @@ test('liquid edition deploy requires confirmation before wallet setup and metada
   const tempDir = await mkdtemp(join(tmpdir(), 'rare-cli-deploy-test-'));
   const imagePath = join(tempDir, 'image.png');
   const originalArgv = [...process.argv];
+  // eslint-disable-next-line functional/immutable-data
   process.argv.push('--json');
 
   try {
@@ -105,6 +106,7 @@ test('liquid edition deploy requires confirmation before wallet setup and metada
       'sepolia',
     ], { from: 'user' });
   } finally {
+    // eslint-disable-next-line functional/immutable-data
     process.argv.splice(0, process.argv.length, ...originalArgv);
     await rm(tempDir, { recursive: true, force: true });
   }
