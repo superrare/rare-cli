@@ -3,6 +3,7 @@ import { parseConfig, setChainConfig, type Config } from '../../src/config.js';
 
 const accountAddress = '0x0000000000000000000000000000000000000001';
 const alternateAccountAddress = '0x0000000000000000000000000000000000000002';
+const privateKey = '0x1111111111111111111111111111111111111111111111111111111111111111';
 
 describe('config parsing', () => {
   it('normalizes plaintext keys, 1Password references, account addresses, and RPC URLs', () => {
@@ -10,7 +11,7 @@ describe('config parsing', () => {
       defaultChain: 'base',
       chains: {
         sepolia: {
-          privateKey: '0xabc123',
+          privateKey,
           privateKeyRef: 'op://Private/rare-sepolia/private-key',
           accountAddress,
           rpcUrl: 'http://127.0.0.1:8545',
@@ -20,13 +21,23 @@ describe('config parsing', () => {
       defaultChain: 'base',
       chains: {
         sepolia: {
-          privateKey: '0xabc123',
+          privateKey,
           privateKeyRef: 'op://Private/rare-sepolia/private-key',
           accountAddress,
           rpcUrl: 'http://127.0.0.1:8545',
         },
       },
     });
+  });
+
+  it('rejects malformed persisted private keys', () => {
+    expect(() => parseConfig({
+      chains: {
+        sepolia: {
+          privateKey: '0xabc123',
+        },
+      },
+    })).toThrow('chains.sepolia.privateKey must be a 0x-prefixed 32-byte private key.');
   });
 
   it('migrates legacy wallet addresses to account addresses', () => {
