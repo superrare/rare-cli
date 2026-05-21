@@ -4,7 +4,7 @@ import os from 'os';
 import { randomUUID } from 'crypto';
 import { getAddress, isAddress, type Address } from 'viem';
 import { chainIds, supportedChains, isSupportedChain, type SupportedChain } from './contracts/addresses.js';
-import { isHexString } from './sdk/validation.js';
+import { parsePrivateKey } from './sdk/validation.js';
 
 export type PrivateKeyReference = `op://${string}`;
 
@@ -165,18 +165,18 @@ export function parseConfig(value: unknown): Config {
 
 function parseChainConfigs(value: Record<string, unknown>): Partial<Record<SupportedChain, ChainConfig>> {
   return supportedChains.reduce<Partial<Record<SupportedChain, ChainConfig>>>((configs, chain) => {
-    const chainConfig = parseChainConfig(value[chain]);
+    const chainConfig = parseChainConfig(value[chain], chain);
     return chainConfig === undefined ? configs : { ...configs, [chain]: chainConfig };
   }, {});
 }
 
-function parseChainConfig(value: unknown): ChainConfig | undefined {
+function parseChainConfig(value: unknown, chain: SupportedChain): ChainConfig | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
 
-  const privateKey = typeof value.privateKey === 'string' && isHexString(value.privateKey)
-    ? value.privateKey
+  const privateKey = typeof value.privateKey === 'string'
+    ? parsePrivateKey(value.privateKey, `chains.${chain}.privateKey`)
     : undefined;
   const privateKeyRef = typeof value.privateKeyRef === 'string' && isPrivateKeyReference(value.privateKeyRef)
     ? value.privateKeyRef

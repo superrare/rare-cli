@@ -341,7 +341,7 @@ describe('built CLI deterministic behavior', () => {
 
       const savedJson = parseJsonStdout<{
         address: string;
-        privateKey: string;
+        privateKey: `0x${string}`;
         saved: true;
         chain: string;
       }>(await runCli(['--json', 'wallet', 'generate', '--save', '--chain', 'sepolia'], { home }));

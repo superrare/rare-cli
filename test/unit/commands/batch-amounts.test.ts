@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { parseBatchAmount, formatBatchAmount, getBatchCurrencyDecimals } from '../../../src/commands/batch-amounts.js';
 import { resolveCurrency } from '../../../src/contracts/addresses.js';
 
+// eslint-disable-next-line no-restricted-syntax
 const mockPublicClient = {
   async readContract(): Promise<number> {
     return 8;
   },
-} as const;
+} as never;
 
 describe('batch amount helpers', () => {
   it('uses named currency decimals', async () => {

@@ -9,7 +9,7 @@ import { clearRareCliLocks } from '../../scripts/clear-locks.mjs';
 describe('clearRareCliLocks', () => {
   it('removes lowercase and checksummed rare-cli lock directories only', async () => {
     const tempDir = await mkdtemp(join(tmpdir(), 'rare-cli-clear-locks-test-'));
-    const logger = { log: () => undefined };
+    const logger = { log: (): void => undefined };
 
     try {
       await mkdir(join(tempDir, 'rare-cli-live-e2e-0xabc123.lock'));

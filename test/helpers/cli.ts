@@ -45,8 +45,8 @@ export async function runCli(args: string[], opts: {
   if (opts.input !== undefined) {
     child.stdin?.end(opts.input);
   }
-  const stdout = text(child.stdout);
-  const stderr = text(child.stderr);
+  const stdout = text(child.stdout!);
+  const stderr = text(child.stderr!);
   const code = await waitForClose(child, opts.timeoutMs ?? 30_000, command);
   return { command, code, stdout: await stdout, stderr: await stderr };
 }

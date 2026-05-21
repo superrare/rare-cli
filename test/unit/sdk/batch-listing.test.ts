@@ -9,12 +9,13 @@ const marketplaceSettingsAddress = '0x972dEe8fa339ad2D9c6cbDA31b67f98Fac242d13' 
 const erc20ApprovalManagerAddress = '0x4619eB29e84392CE91C27FC936A5c94d1D14b93f' as Address;
 const approvalManagerAddress = '0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E' as Address;
 const accountAddress = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as Address;
-const hex32 = (byte: string) => (`0x${byte.repeat(64)}`);
+const hex32 = (byte: string): `0x${string}` => `0x${byte.repeat(64)}`;
 const addresses = {
   batchListing: batchListingAddress,
   marketplaceSettings: marketplaceSettingsAddress,
   erc20ApprovalManager: erc20ApprovalManagerAddress,
   erc721ApprovalManager: approvalManagerAddress,
+  chain: 'sepolia',
   chainId: 11155111,
 } as const;
 
@@ -289,7 +290,7 @@ describe('batch listing namespace', () => {
 
   it('resolves the cancel root from rare-api when token identity is provided', async () => {
     const contract = '0x1111111111111111111111111111111111111111' as Address;
-    const root = hex32('8') as `0x${string}`;
+    const root = hex32('8');
     const writeCalls: Array<{ functionName: string; args: unknown[] }> = [];
     const namespace = createBatchListingNamespace(
       {
@@ -335,8 +336,8 @@ describe('batch listing namespace', () => {
   });
 
   it('sets an allowlist from artifact data without requiring root inputs', async () => {
-    const root = hex32('c') as `0x${string}`;
-    const allowListRoot = hex32('d') as `0x${string}`;
+    const root = hex32('c');
+    const allowListRoot = hex32('d');
     const writeCalls: Array<{ functionName: string; args: unknown[] }> = [];
     const namespace = createBatchListingNamespace(
       {
@@ -378,7 +379,7 @@ describe('batch listing namespace', () => {
           { contract: accountAddress, tokenId: '2' },
         ],
         allowList: {
-          root: hex32('f') as `0x${string}`,
+          root: hex32('f'),
           addresses: [accountAddress, '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'],
           endTimestamp: '123',
         },

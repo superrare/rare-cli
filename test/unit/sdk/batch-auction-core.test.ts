@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { zeroAddress } from 'viem';
+import { zeroAddress, type Address } from 'viem';
 import {
   addMarketplaceFee,
   planBatchAuctionBid,
@@ -16,10 +16,10 @@ import {
   getBatchTokenProof,
 } from '../../../src/sdk/batch-core.js';
 
-const ACCOUNT = '0x1111111111111111111111111111111111111111';
-const CREATOR = '0x2222222222222222222222222222222222222222';
-const CONTRACT = '0x3333333333333333333333333333333333333333';
-const ROOT = '0xc9ea7316e48c69cf113a1746956da366068e750940ab24ae2633c3c55291f0cf';
+const ACCOUNT: Address = '0x1111111111111111111111111111111111111111';
+const CREATOR: Address = '0x2222222222222222222222222222222222222222';
+const CONTRACT: Address = '0x3333333333333333333333333333333333333333';
+const ROOT: `0x${string}` = '0xc9ea7316e48c69cf113a1746956da366068e750940ab24ae2633c3c55291f0cf';
 const ZERO_ADDRESS = zeroAddress;
 const NOW_SECONDS = 1767225600n;
 const END_TIME = '1767229200';

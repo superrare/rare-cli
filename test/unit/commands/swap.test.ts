@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, test, vi } from 'vitest';
 import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import { swapCommand } from '../../../src/commands/swap.js';
-import type { TokenTradeQuote } from '../../../src/sdk/swap.js';
+import type { TokenTradeQuote, TokenTradeResult } from '../../../src/sdk/swap.js';
 
 const getPublicClient = vi.hoisted(() => vi.fn());
 const getWalletClient = vi.hoisted(() => vi.fn());
@@ -219,6 +219,7 @@ test('raw token swap requires confirmation before loading a wallet', async () =>
   const tempDir = await mkdtemp(join(tmpdir(), 'rare-cli-swap-test-'));
   const inputsFile = join(tempDir, 'inputs.json');
   const originalArgv = [...process.argv];
+  // eslint-disable-next-line functional/immutable-data
   process.argv.push('--json');
 
   try {
@@ -242,6 +243,7 @@ test('raw token swap requires confirmation before loading a wallet', async () =>
       'sepolia',
     ], { from: 'user' });
   } finally {
+    // eslint-disable-next-line functional/immutable-data
     process.argv.splice(0, process.argv.length, ...originalArgv);
     await rm(tempDir, { recursive: true, force: true });
   }
@@ -273,7 +275,7 @@ function tokenQuote(params: { direction: 'buy' | 'sell' }): TokenTradeQuote {
   };
 }
 
-function tokenTradeResult() {
+function tokenTradeResult(): TokenTradeResult {
   return {
     txHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
     receipt: { blockNumber: 123n },

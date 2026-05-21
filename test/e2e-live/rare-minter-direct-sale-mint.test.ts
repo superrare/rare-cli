@@ -101,16 +101,21 @@ describeLive('live RareMinter direct sale release mint', () => {
 
     try {
       ({ sellerWallet, buyerWallet } = await reserveLiveWalletPair(chain));
-      const sellerAddress = sellerWallet.address;
-      const buyerAddress = buyerWallet.address;
+      if (sellerWallet === undefined || buyerWallet === undefined) {
+        throw new Error('Live wallet pair reservation did not return both wallet leases.');
+      }
+      const reservedSellerWallet = sellerWallet;
+      const reservedBuyerWallet = buyerWallet;
+      const sellerAddress = reservedSellerWallet.address;
+      const buyerAddress = reservedBuyerWallet.address;
       await step('configure seller wallet for direct sale release', () =>
-        configureLiveHome(sellerHome, sellerWallet.privateKey, chain),
+        configureLiveHome(sellerHome, reservedSellerWallet.privateKey, chain),
       );
       await step('configure buyer wallet for direct sale release', () =>
-        configureLiveHome(buyerHome, buyerWallet.privateKey, chain),
+        configureLiveHome(buyerHome, reservedBuyerWallet.privateKey, chain),
       );
       const releaseContract = await step('deploy RareMinter direct sale fixture contract', () =>
-        deployReleaseFixtureContract(chain, sellerWallet.privateKey, sellerAddress),
+        deployReleaseFixtureContract(chain, reservedSellerWallet.privateKey, sellerAddress),
       );
 
       live = {

@@ -88,21 +88,29 @@ describe('Rare SDK client API integration', () => {
       }),
     });
 
-    // @ts-expect-error exercising runtime validation for JavaScript callers.
-    await expect(rare.search.nfts({ chainId: 11_155_111, page: 1, perPage: 2 })).rejects.toThrow(
+    await expect(rare.search.nfts({
+      // @ts-expect-error exercising runtime validation for JavaScript callers.
+      chainId: 11_155_111,
+      page: 1,
+      perPage: 2,
+    })).rejects.toThrow(
       'rare.search.nfts uses the RareClient chain (mainnet).',
     );
-    // @ts-expect-error exercising runtime validation for JavaScript callers.
     await expect(rare.search.events({
+      // @ts-expect-error exercising runtime validation for JavaScript callers.
       chain: 'sepolia',
       contract: '0x1000000000000000000000000000000000000000',
-    })).rejects.toThrow('rare.search.events uses the RareClient chain (mainnet).');
-    // @ts-expect-error exercising runtime validation for JavaScript callers.
+    })).rejects.toThrow(
+      'rare.search.events uses the RareClient chain (mainnet).',
+    );
     await expect(rare.nft.get({
+      // @ts-expect-error exercising runtime validation for JavaScript callers.
       chainId: 11_155_111,
       contract: '0x1000000000000000000000000000000000000000',
       tokenId: 1,
-    })).rejects.toThrow('rare.nft.get uses the RareClient chain (mainnet).');
+    })).rejects.toThrow(
+      'rare.nft.get uses the RareClient chain (mainnet).',
+    );
   });
 
   it('exposes marketplace currency alias resolution through the SDK client', async () => {
@@ -167,6 +175,7 @@ describeLive('Rare SDK client live integration', () => {
 
   it('rejects lazy batch mint deploys on chains without a configured lazy factory before requiring a wallet', async () => {
     const rare = createRareClient({
+      // @ts-expect-error viem client transaction union differs between test and SDK entry imports.
       publicClient: createPublicClient({
         chain: baseSepolia,
         transport: http('http://127.0.0.1:8545'),
