@@ -17,7 +17,7 @@ import {
 } from '../config.js';
 import { chainIds, isSupportedChain, supportedChains, type SupportedChain } from '../contracts/addresses.js';
 import { isPrivateKeyString, parsePrivateKey } from '../sdk/validation.js';
-import { readOnePasswordPrivateKey } from '../one-password.js';
+import { readOnePasswordPrivateKey, readOnePasswordSecret } from '../one-password.js';
 import { isJsonMode, output } from '../output.js';
 
 type ConfigureOptions = {
@@ -25,6 +25,8 @@ type ConfigureOptions = {
   chainId?: string;
   privateKey?: string;
   privateKeyRef?: string;
+  uniswapApiKey?: string;
+  uniswapApiKeyRef?: string;
   rpcUrl?: string;
   defaultChain?: string;
   show?: boolean;
@@ -44,6 +46,8 @@ export function configureCommand(): Command {
     .option('--chain-id <id>', `chain ID to use (${Object.entries(chainIds).map(([chain, id]) => `${id} (${chain})`).join(', ')})`)
     .option('--private-key <key>', 'private key for the specified chain')
     .option('--private-key-ref <ref>', '1Password secret reference for the specified chain private key')
+    .option('--uniswap-api-key <key>', 'Uniswap API key for hosted fallback routes')
+    .option('--uniswap-api-key-ref <ref>', '1Password secret reference for the Uniswap API key')
     .option('--rpc-url <url>', 'custom RPC URL for the specified chain')
     .option('--default-chain <chain>', 'set the default chain')
     .option('--show', 'display current configuration')
@@ -64,6 +68,8 @@ export function configureCommand(): Command {
                 privateKeyRef: chainCfg.privateKeyRef,
                 accountAddress: getAccountAddress(chainCfg),
                 rpcUrl: chainCfg.rpcUrl,
+                uniswapApiKey: chainCfg.uniswapApiKey !== undefined ? maskSecret(chainCfg.uniswapApiKey) : undefined,
+                uniswapApiKeyRef: chainCfg.uniswapApiKeyRef,
               },
             ])
           ),
@@ -135,7 +141,13 @@ function getSelectedChain(opts: ConfigureOptions, config: Config): SupportedChai
 }
 
 function hasChainConfigUpdates(opts: ConfigureOptions): boolean {
-  return opts.privateKey !== undefined || opts.privateKeyRef !== undefined || opts.rpcUrl !== undefined;
+  return (
+    opts.privateKey !== undefined ||
+    opts.privateKeyRef !== undefined ||
+    opts.rpcUrl !== undefined ||
+    opts.uniswapApiKey !== undefined ||
+    opts.uniswapApiKeyRef !== undefined
+  );
 }
 
 function deleteConfigCommand(): Command {
@@ -221,11 +233,51 @@ async function getChainConfigUpdates(opts: ConfigureOptions): Promise<ChainConfi
   if (opts.privateKey !== undefined && opts.privateKeyRef !== undefined) {
     throw new Error('--private-key and --private-key-ref cannot be used together.');
   }
+  if (opts.uniswapApiKey !== undefined && opts.uniswapApiKeyRef !== undefined) {
+    throw new Error('--uniswap-api-key and --uniswap-api-key-ref cannot be used together.');
+  }
 
   return {
     ...(await getKeySourceUpdates(opts)),
+    ...(await getUniswapApiKeyUpdates(opts)),
     ...(opts.rpcUrl === undefined ? {} : { rpcUrl: opts.rpcUrl }),
   };
+}
+
+async function getUniswapApiKeyUpdates(opts: ConfigureOptions): Promise<ChainConfig> {
+  if (opts.uniswapApiKey !== undefined) {
+    const uniswapApiKey = parseUniswapApiKey(opts.uniswapApiKey, '--uniswap-api-key');
+    return {
+      uniswapApiKey,
+      uniswapApiKeyRef: undefined,
+    };
+  }
+
+  if (opts.uniswapApiKeyRef !== undefined) {
+    const uniswapApiKeyRef = parsePrivateKeyReference(opts.uniswapApiKeyRef, '--uniswap-api-key-ref');
+    parseUniswapApiKey(
+      await readOnePasswordSecret(uniswapApiKeyRef),
+      `1Password Uniswap API key at ${uniswapApiKeyRef}`,
+    );
+    return {
+      uniswapApiKey: undefined,
+      uniswapApiKeyRef,
+    };
+  }
+
+  return {};
+}
+
+function parseUniswapApiKey(value: string, field: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error(`${field} must not be empty.`);
+  }
+  return trimmed;
+}
+
+function maskSecret(value: string): string {
+  return value.length <= 10 ? '[redacted]' : `${value.slice(0, 6)}...${value.slice(-4)}`;
 }
 
 async function confirmDeleteConfig(configPath: string): Promise<boolean> {

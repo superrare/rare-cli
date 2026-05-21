@@ -104,9 +104,13 @@ function getBaseUrl(options?: UniswapApiRequestOptions): string {
 }
 
 function requireApiKey(options?: UniswapApiRequestOptions): string {
-  const apiKey = options?.apiKey ?? process.env.UNISWAP_API_KEY;
+  const apiKey = options?.apiKey;
   if (!apiKey) {
-    throw new Error('UNISWAP_API_KEY is required to use the Uniswap fallback route.');
+    throw new Error(
+      'A Uniswap API key is required to use the Uniswap route. ' +
+        'Run: rare configure --chain <chain> --uniswap-api-key <key> ' +
+        'or rare configure --chain <chain> --uniswap-api-key-ref <op://...>.',
+    );
   }
   return apiKey;
 }

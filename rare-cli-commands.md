@@ -10,7 +10,7 @@ Global behavior:
 - `--split <addr=ratio>` is repeatable up to 5 times. Ratios must sum to 100.
 - This map reflects Commander-level required options. Command action handlers may still require conditionally dependent inputs before execution.
 
-rare configure [--chain <chain>] [--chain-id <id>] [--private-key <key>] [--private-key-ref <ref>] [--rpc-url <url>] [--default-chain <chain>] [--show]
+rare configure [--chain <chain>] [--chain-id <id>] [--private-key <key>] [--private-key-ref <ref>] [--rpc-url <url>] [--uniswap-api-key <key>] [--uniswap-api-key-ref <ref>] [--default-chain <chain>] [--show]
 rare configure delete [--yes]
 
 rare status --contract <address> [--token-id <id>] [--chain <chain>] [--chain-id <id>]

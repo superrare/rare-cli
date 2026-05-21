@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, type TestContext } from 'vitest';
 import { isHex, parseEther, parseUnits } from 'viem';
 import { ETH_ADDRESS, resolveCurrency } from '../../../src/contracts/addresses.js';
 import { createRareClient } from '../../../src/sdk/client.js';
@@ -59,4 +59,47 @@ describeLive('Swap SDK live integration', () => {
     expect(sell.estimatedAmountOut).toBeGreaterThan(0n);
     expect(sell.minAmountOut).toBeLessThanOrEqual(sell.estimatedAmountOut);
   }, 30_000);
+
+  it('quotes a forced Uniswap API route with an explicit API key from test env', async (ctx) => {
+    const uniswapApiKey = process.env.UNISWAP_API_KEY;
+    if (!uniswapApiKey) {
+      ctx.skip('UNISWAP_API_KEY is not configured for Uniswap API integration coverage.');
+    }
+    const rare = createRareClient({
+      publicClient: createTestSepoliaPublicClient(),
+      account: '0x1234567890123456789012345678901234567890',
+      uniswapApiKey,
+    });
+
+    const quote = await quoteUniswapOrSkip(ctx, () => rare.swap.quoteBuyToken({
+      token: rareAddress,
+      amountIn: '0.001',
+      slippageBps: 100,
+      route: 'uniswap',
+    }));
+
+    expect(quote).toMatchObject({
+      tokenIn: ETH_ADDRESS,
+      tokenOut: rareAddress,
+      routeSource: 'uniswap-api',
+      execution: 'uniswap-api',
+    });
+    expect(quote.estimatedAmountOut).toBeGreaterThan(0n);
+    expect(quote.minAmountOut).toBeGreaterThan(0n);
+  }, 30_000);
 });
+
+async function quoteUniswapOrSkip<T>(ctx: TestContext, fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes('A Uniswap API key is required')) {
+      throw error;
+    }
+    if (message.includes('Uniswap API')) {
+      ctx.skip(`Uniswap API route unavailable: ${message}`);
+    }
+    throw error;
+  }
+}

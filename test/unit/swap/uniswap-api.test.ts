@@ -79,7 +79,7 @@ describe('Uniswap Trade API client', () => {
       amount: 1n,
       swapper,
       slippageBps: 50,
-    })).rejects.toThrow('UNISWAP_API_KEY is required');
+    })).rejects.toThrow('A Uniswap API key is required to use the Uniswap route.');
 
     expect(fetchMock).not.toHaveBeenCalled();
   });

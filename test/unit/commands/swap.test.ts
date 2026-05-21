@@ -9,12 +9,16 @@ import type { TokenTradeQuote, TokenTradeResult } from '../../../src/sdk/swap.js
 
 const getPublicClient = vi.hoisted(() => vi.fn());
 const getWalletClient = vi.hoisted(() => vi.fn());
+const getConfiguredAccountAddress = vi.hoisted(() => vi.fn());
+const getConfiguredUniswapApiKey = vi.hoisted(() => vi.fn());
 const createRareClient = vi.hoisted(() => vi.fn());
 const printError = vi.hoisted(() => vi.fn());
 
 vi.mock('../../../src/client.js', () => ({
+  getConfiguredAccountAddress,
   getPublicClient,
   getWalletClient,
+  getConfiguredUniswapApiKey,
 }));
 
 vi.mock('../../../src/sdk/client.js', () => ({
@@ -37,6 +41,8 @@ let consoleLog: ReturnType<typeof vi.spyOn>;
 beforeEach(() => {
   getPublicClient.mockReset();
   getWalletClient.mockReset();
+  getConfiguredAccountAddress.mockReset();
+  getConfiguredUniswapApiKey.mockReset();
   createRareClient.mockReset();
   printError.mockReset();
   quoteBuyToken.mockReset();
@@ -46,6 +52,8 @@ beforeEach(() => {
   swapTokens.mockReset();
 
   getPublicClient.mockReturnValue(publicClient);
+  getConfiguredAccountAddress.mockReturnValue('0x1234567890123456789012345678901234567890');
+  getConfiguredUniswapApiKey.mockResolvedValue('test-uniswap-key');
   getWalletClient.mockImplementation(() => {
     throw new Error('quote-only token swap should not load a wallet');
   });
@@ -88,7 +96,11 @@ test('buy-token quote-only does not require a configured wallet', async () => {
 
   assert.equal(getWalletClient.mock.calls.length, 0);
   assert.equal(printError.mock.calls.length, 0);
-  assert.deepEqual(createRareClient.mock.calls[0]?.[0], { publicClient });
+  const rareConfig = createRareClient.mock.calls[0]?.[0];
+  assert.equal(rareConfig.publicClient, publicClient);
+  assert.equal(rareConfig.account, '0x1234567890123456789012345678901234567890');
+  assert.equal(typeof rareConfig.resolveUniswapApiKey, 'function');
+  assert.equal(await rareConfig.resolveUniswapApiKey(), 'test-uniswap-key');
   assert.deepEqual(quoteBuyToken.mock.calls[0]?.[0], {
     token,
     amountIn: '0.001',
@@ -113,7 +125,11 @@ test('sell-token quote-only does not require a configured wallet', async () => {
 
   assert.equal(getWalletClient.mock.calls.length, 0);
   assert.equal(printError.mock.calls.length, 0);
-  assert.deepEqual(createRareClient.mock.calls[0]?.[0], { publicClient });
+  const rareConfig = createRareClient.mock.calls[0]?.[0];
+  assert.equal(rareConfig.publicClient, publicClient);
+  assert.equal(rareConfig.account, '0x1234567890123456789012345678901234567890');
+  assert.equal(typeof rareConfig.resolveUniswapApiKey, 'function');
+  assert.equal(await rareConfig.resolveUniswapApiKey(), 'test-uniswap-key');
   assert.deepEqual(quoteSellToken.mock.calls[0]?.[0], {
     token,
     amountIn: '1',

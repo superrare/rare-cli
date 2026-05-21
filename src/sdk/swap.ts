@@ -81,6 +81,8 @@ type LocalBuyTradeParams = {
   slippageBps?: IntegerInput;
   recipient?: Address;
   route?: TokenTradeRouteMode;
+  uniswapApiKey?: string;
+  resolveUniswapApiKey?: RareClientConfig['resolveUniswapApiKey'];
 };
 
 type LocalSellTradeParams = {
@@ -91,6 +93,8 @@ type LocalSellTradeParams = {
   slippageBps?: IntegerInput;
   recipient?: Address;
   route?: TokenTradeRouteMode;
+  uniswapApiKey?: string;
+  resolveUniswapApiKey?: RareClientConfig['resolveUniswapApiKey'];
 };
 
 type LocalTradeParams = LocalBuyTradeParams | LocalSellTradeParams;
@@ -115,6 +119,7 @@ type UniswapTokenTradeQuoteDetails = {
   rawQuote: UniswapQuotePayload;
   tokenIn: Address;
   tokenOut: Address;
+  apiKey?: string;
 };
 
 type TokenTradeQuoteDetails = LocalTokenTradeQuoteDetails | UniswapTokenTradeQuoteDetails;
@@ -205,6 +210,7 @@ async function buildUniswapFallbackTradeQuote(
   params: LocalTradeParams,
 ): Promise<UniswapTokenTradeQuoteDetails> {
   assertRecipientSupportedForUniswapFallback(params.recipient, accountAddress);
+  const apiKey = await resolveUniswapApiKey(params);
 
   const tokenIn = params.direction === 'buy' ? ETH_ADDRESS : token;
   const tokenOut = params.direction === 'buy' ? token : ETH_ADDRESS;
@@ -223,6 +229,7 @@ async function buildUniswapFallbackTradeQuote(
   const defaultSlippageBps = resolveSlippageBps(params.slippageBps);
 
   const initialQuoteResponse = await requestUniswapQuote({
+    apiKey,
     chainId,
     tokenIn,
     tokenOut,
@@ -243,6 +250,7 @@ async function buildUniswapFallbackTradeQuote(
         tokenOut,
         amountIn,
         accountAddress,
+        uniswapApiKey: apiKey,
       });
 
   return {
@@ -250,6 +258,7 @@ async function buildUniswapFallbackTradeQuote(
     rawQuote: quoteResponse.quote,
     tokenIn,
     tokenOut,
+    apiKey,
     quote: buildUniswapTradeQuote({
       amountIn,
       quote: quoteResponse.quote,
@@ -263,6 +272,16 @@ async function buildUniswapFallbackTradeQuote(
   };
 }
 
+async function resolveUniswapApiKey(params: {
+  uniswapApiKey?: string;
+  resolveUniswapApiKey?: RareClientConfig['resolveUniswapApiKey'];
+}): Promise<string | undefined> {
+  if (params.uniswapApiKey !== undefined) {
+    return params.uniswapApiKey;
+  }
+  return params.resolveUniswapApiKey?.();
+}
+
 async function requoteForRequestedMinAmountOut(params: {
   initialQuoteResponse: UniswapQuoteResponse;
   requestedMinAmountOut: bigint;
@@ -271,12 +290,14 @@ async function requoteForRequestedMinAmountOut(params: {
   tokenOut: Address;
   amountIn: bigint;
   accountAddress: Address;
+  uniswapApiKey?: string;
 }): Promise<UniswapQuoteResponse> {
   const quotedAmounts = getQuotedRecipientAmount(params.initialQuoteResponse.quote, params.accountAddress);
   assertRequestedMinAmountOut(quotedAmounts.estimatedAmountOut, params.requestedMinAmountOut);
 
   const derivedSlippageBps = computeSlippageBpsFromAmounts(quotedAmounts.estimatedAmountOut, params.requestedMinAmountOut);
   const quoteResponse = await requestUniswapQuote({
+    apiKey: params.uniswapApiKey,
     chainId: params.chainId,
     tokenIn: params.tokenIn,
     tokenOut: params.tokenOut,
@@ -518,6 +539,8 @@ export function createSwapNamespace(
           slippageBps: localInputs.slippageBps,
           recipient: params.recipient,
           route: params.route,
+          uniswapApiKey: config.uniswapApiKey,
+          resolveUniswapApiKey: config.resolveUniswapApiKey,
         },
       );
       return quote.quote;
@@ -561,6 +584,8 @@ export function createSwapNamespace(
         slippageBps: localInputs.slippageBps,
         recipient: params.recipient,
         route: params.route,
+        uniswapApiKey: config.uniswapApiKey,
+        resolveUniswapApiKey: config.resolveUniswapApiKey,
       });
 
       if (quoteDetails.kind === 'local') {
@@ -597,6 +622,7 @@ export function createSwapNamespace(
       }
 
       const swapResponse = await requestUniswapSwap({
+        apiKey: quoteDetails.apiKey,
         quote: quoteDetails.rawQuote,
         deadline: uniswapDeadline,
       });
@@ -629,6 +655,8 @@ export function createSwapNamespace(
           slippageBps: localInputs.slippageBps,
           recipient: params.recipient,
           route: params.route,
+          uniswapApiKey: config.uniswapApiKey,
+          resolveUniswapApiKey: config.resolveUniswapApiKey,
         },
       );
       return quote.quote;
@@ -672,6 +700,8 @@ export function createSwapNamespace(
         slippageBps: localInputs.slippageBps,
         recipient: params.recipient,
         route: params.route,
+        uniswapApiKey: config.uniswapApiKey,
+        resolveUniswapApiKey: config.resolveUniswapApiKey,
       });
 
       if (quoteDetails.kind === 'local') {
@@ -712,6 +742,7 @@ export function createSwapNamespace(
       }
 
       const approval = await requestUniswapApproval({
+        apiKey: quoteDetails.apiKey,
         chainId,
         walletAddress: accountAddress,
         token: params.token,
@@ -733,6 +764,7 @@ export function createSwapNamespace(
         : undefined;
 
       const swapResponse = await requestUniswapSwap({
+        apiKey: quoteDetails.apiKey,
         quote: quoteDetails.rawQuote,
         deadline: uniswapDeadline,
       });

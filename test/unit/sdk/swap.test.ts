@@ -22,7 +22,6 @@ describe('Swap SDK fallback handling', () => {
     const fetchMock = vi.fn(async (): Promise<Response> => {
       throw new Error('unexpected Uniswap fallback');
     });
-    vi.stubEnv('UNISWAP_API_KEY', 'test-key');
     vi.stubGlobal('fetch', fetchMock);
 
     const publicClient = createPublicClient({
@@ -56,13 +55,12 @@ describe('Swap SDK fallback handling', () => {
     const request = vi.fn(async (): Promise<never> => {
       throw new Error('unexpected RPC request');
     });
-    vi.stubEnv('UNISWAP_API_KEY', 'test-key');
     vi.stubGlobal('fetch', fetchMock);
 
     const transport = custom({ request });
     const publicClient = createPublicClient({ chain: sepolia, transport });
     const walletClient = createWalletClient({ account: swapAccount, chain: sepolia, transport });
-    const rare = createRareClient({ publicClient, walletClient });
+    const rare = createRareClient({ publicClient, walletClient, uniswapApiKey: 'test-key' });
 
     await expect(rare.swap.buyToken({
       token: rareAddress,
@@ -80,6 +78,55 @@ describe('Swap SDK fallback handling', () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it('requires an explicit configured Uniswap API key for forced hosted routes', async () => {
+    const fetchMock = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected Uniswap API request');
+    });
+    const request = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected RPC request');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const publicClient = createPublicClient({ chain: sepolia, transport: custom({ request }) });
+    const rare = createRareClient({ publicClient, account: accountAddress });
+
+    await expect(rare.swap.quoteBuyToken({
+      token: rareAddress,
+      amountIn: '0.001',
+      route: 'uniswap',
+    })).rejects.toThrow('A Uniswap API key is required to use the Uniswap route.');
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('passes the configured Uniswap API key to hosted route requests', async () => {
+    const fetchMock = vi.fn<typeof fetch>(async () => {
+      throw new Error('stop after headers');
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const publicClient = createPublicClient({
+      chain: sepolia,
+      transport: custom({
+        async request(): Promise<never> {
+          throw new Error('unexpected RPC request');
+        },
+      }),
+    });
+    const rare = createRareClient({ publicClient, account: accountAddress, uniswapApiKey: 'configured-key' });
+
+    await expect(rare.swap.quoteBuyToken({
+      token: rareAddress,
+      amountIn: '0.001',
+      route: 'uniswap',
+    })).rejects.toThrow('stop after headers');
+
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({
+      'x-api-key': 'configured-key',
+    });
   });
 
   it('rejects malformed raw router calldata before allowance side effects', async () => {

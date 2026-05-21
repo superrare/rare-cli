@@ -15,6 +15,8 @@ describe('config parsing', () => {
           privateKeyRef: 'op://Private/rare-sepolia/private-key',
           accountAddress,
           rpcUrl: 'http://127.0.0.1:8545',
+          uniswapApiKey: 'uni-test-key',
+          uniswapApiKeyRef: 'op://Private/uniswap/api-key',
         },
       },
     })).toEqual({
@@ -25,6 +27,8 @@ describe('config parsing', () => {
           privateKeyRef: 'op://Private/rare-sepolia/private-key',
           accountAddress,
           rpcUrl: 'http://127.0.0.1:8545',
+          uniswapApiKey: 'uni-test-key',
+          uniswapApiKeyRef: 'op://Private/uniswap/api-key',
         },
       },
     });
