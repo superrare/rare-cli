@@ -276,7 +276,7 @@ function tokenQuote(params: { direction: 'buy' | 'sell' }): TokenTradeQuote {
   };
 }
 
-function tokenTradeResult(): TokenTradeResult {
+function tokenTradeResult(): Omit<TokenTradeResult, 'receipt'> & { receipt: { blockNumber: bigint } } {
   return {
     txHash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
     receipt: mockTransactionReceipt(),
