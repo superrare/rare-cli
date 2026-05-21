@@ -138,19 +138,15 @@ export async function ensureTokenAllowance(
     return;
   }
 
-  try {
-    const allowance = await publicClient.readContract({
-      address: token,
-      abi: erc20Abi,
-      functionName: 'allowance',
-      args: [owner, spender],
-    });
+  const allowance = await publicClient.readContract({
+    address: token,
+    abi: erc20Abi,
+    functionName: 'allowance',
+    args: [owner, spender],
+  });
 
-    if (allowance >= amount) {
-      return;
-    }
-  } catch {
-    // Fall through to approval write.
+  if (allowance >= amount) {
+    return;
   }
 
   const approveTx = await walletClient.writeContract({
@@ -278,7 +274,7 @@ export async function preparePaymentAmountForSpender(opts: {
   }
 
   const allowance = await readAllowance(publicClient, currency, accountAddress, spenderAddress);
-  if (allowance !== undefined && allowance >= requiredAmount) {
+  if (allowance >= requiredAmount) {
     return {
       value: 0n,
       requiredAmount,
@@ -347,16 +343,11 @@ async function readAllowance(
   currency: Address,
   accountAddress: Address,
   spenderAddress: Address,
-): Promise<bigint | undefined> {
-  try {
-    return await publicClient.readContract({
-      address: currency,
-      abi: erc20Abi,
-      functionName: 'allowance',
-      args: [accountAddress, spenderAddress],
-    });
-  } catch {
-    // Allowance check failed (e.g. non-standard ERC20), so approve unconditionally.
-    return undefined;
-  }
+): Promise<bigint> {
+  return publicClient.readContract({
+    address: currency,
+    abi: erc20Abi,
+    functionName: 'allowance',
+    args: [accountAddress, spenderAddress],
+  });
 }
