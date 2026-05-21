@@ -62,7 +62,7 @@ export function createDeployNamespace(
       const factoryAddress = addresses.lazyBatchMintFactory;
       const { walletClient, account } = requireWallet(config);
 
-      const txHash = params.maxTokens !== undefined
+      const txHash = maxTokens !== undefined
         ? await walletClient.writeContract({
           address: factoryAddress,
           abi: lazyBatchMintFactoryAbi,
