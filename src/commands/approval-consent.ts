@@ -22,9 +22,11 @@ export async function runWithPaymentApprovalConsent<Result>(params: {
     log(params.approvalMessage);
     log(`  Spender: ${error.spenderAddress}`);
     log(`  Required payment: ${error.requiredAmount.toString()} raw units`);
+    if (!process.stdin.isTTY) {
+      throw new Error(`${params.commandName} requires --yes when an ERC20 approval is required in non-interactive mode.`);
+    }
     if (!(await confirmApproval())) {
-      console.log('Aborted.');
-      return undefined;
+      throw new Error('Aborted.');
     }
 
     return params.runWithApproval();
@@ -50,9 +52,11 @@ export async function runWithNftApprovalConsent<Result>(params: {
     log(params.approvalMessage);
     log(`  NFT contract: ${error.nftAddress}`);
     log(`  Operator: ${error.operator}`);
+    if (!process.stdin.isTTY) {
+      throw new Error(`${params.commandName} requires --yes when an NFT approval is required in non-interactive mode.`);
+    }
     if (!(await confirmApproval())) {
-      console.log('Aborted.');
-      return undefined;
+      throw new Error('Aborted.');
     }
 
     return params.runWithApproval();
