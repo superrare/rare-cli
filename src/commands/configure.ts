@@ -16,7 +16,7 @@ import {
   type Config,
 } from '../config.js';
 import { chainIds, isSupportedChain, supportedChains, type SupportedChain } from '../contracts/addresses.js';
-import { isPrivateKeyString, parseHexString } from '../sdk/validation.js';
+import { isPrivateKeyString, parsePrivateKey } from '../sdk/validation.js';
 import { readOnePasswordPrivateKey } from '../one-password.js';
 import { isJsonMode, output } from '../output.js';
 
@@ -72,36 +72,38 @@ export function configureCommand(): Command {
         return;
       }
 
-      const configWithDefaultChain = opts.defaultChain && isSupportedChain(opts.defaultChain)
-        ? setDefaultChain(config, opts.defaultChain)
-        : config;
+      if (opts.defaultChain !== undefined && !isSupportedChain(opts.defaultChain)) {
+        throw new Error(`--default-chain must be one of: ${supportedChainsText}`);
+      }
+
+      const configWithDefaultChain = opts.defaultChain === undefined
+        ? config
+        : setDefaultChain(config, opts.defaultChain);
       const selectedChain = getSelectedChain(opts, configWithDefaultChain);
 
-      if (opts.defaultChain) {
-        if (!isSupportedChain(opts.defaultChain)) {
-          throw new Error(`--default-chain must be one of: ${supportedChainsText}`);
-        }
-        writeConfig(configWithDefaultChain);
-        console.log(`Default chain set to: ${opts.defaultChain}`);
-      }
+      const defaultChainMessages = opts.defaultChain === undefined
+        ? []
+        : [`Default chain set to: ${opts.defaultChain}`];
 
-      if (selectedChain !== undefined) {
-        if (opts.privateKey !== undefined && opts.privateKeyRef !== undefined) {
-          throw new Error('--private-key and --private-key-ref cannot be used together.');
-        }
-
-        const keySourceUpdates = await getKeySourceUpdates(opts);
-        const nextConfig = setChainConfig(configWithDefaultChain, selectedChain, {
-          ...keySourceUpdates,
-          ...(opts.rpcUrl === undefined ? {} : { rpcUrl: opts.rpcUrl }),
-        });
-
-        writeConfig(nextConfig);
-        console.log(`Configuration updated for chain: ${selectedChain}`);
-      }
+      const chainConfigUpdates = selectedChain === undefined
+        ? undefined
+        : await getChainConfigUpdates(opts);
+      const nextConfig = selectedChain === undefined || chainConfigUpdates === undefined
+        ? configWithDefaultChain
+        : setChainConfig(configWithDefaultChain, selectedChain, chainConfigUpdates);
+      const messages = selectedChain === undefined
+        ? defaultChainMessages
+        : [...defaultChainMessages, `Configuration updated for chain: ${selectedChain}`];
 
       if (opts.defaultChain === undefined && selectedChain === undefined) {
         cmd.help();
+      }
+
+      if (messages.length > 0) {
+        writeConfig(nextConfig);
+        for (const message of messages) {
+          console.log(message);
+        }
       }
     });
 
@@ -186,7 +188,7 @@ function getAccountAddress(chainCfg: ChainConfig): string | undefined {
 async function getKeySourceUpdates(opts: ConfigureOptions): Promise<ChainConfig> {
   if (opts.privateKey !== undefined) {
     return {
-      privateKey: parseHexString(opts.privateKey, '--private-key'),
+      privateKey: parsePrivateKey(opts.privateKey, '--private-key'),
       privateKeyRef: undefined,
       accountAddress: undefined,
     };
@@ -203,6 +205,17 @@ async function getKeySourceUpdates(opts: ConfigureOptions): Promise<ChainConfig>
   }
 
   return {};
+}
+
+async function getChainConfigUpdates(opts: ConfigureOptions): Promise<ChainConfig> {
+  if (opts.privateKey !== undefined && opts.privateKeyRef !== undefined) {
+    throw new Error('--private-key and --private-key-ref cannot be used together.');
+  }
+
+  return {
+    ...(await getKeySourceUpdates(opts)),
+    ...(opts.rpcUrl === undefined ? {} : { rpcUrl: opts.rpcUrl }),
+  };
 }
 
 async function confirmDeleteConfig(configPath: string): Promise<boolean> {

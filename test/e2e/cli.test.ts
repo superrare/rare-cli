@@ -456,6 +456,57 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('does not persist partial configure updates when later validation fails', async () => {
+    await withTempHome(async (home) => {
+      const configPath = join(home, '.rare', 'config.json');
+      const initial = await runCli([
+        'configure',
+        '--chain',
+        'sepolia',
+        '--rpc-url',
+        'http://127.0.0.1:8545',
+      ], { home });
+      expect(initial.code).toBe(0);
+
+      const result = await runCli([
+        'configure',
+        '--default-chain',
+        'base',
+        '--private-key-ref',
+        'not-op',
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('--private-key-ref must be a 1Password secret reference beginning with op://.');
+      expect(JSON.parse(await readFile(configPath, 'utf8'))).toEqual({
+        chains: {
+          sepolia: {
+            rpcUrl: 'http://127.0.0.1:8545',
+          },
+        },
+      });
+    });
+  });
+
+  it('rejects malformed plaintext private keys without writing config', async () => {
+    await withTempHome(async (home) => {
+      const configPath = join(home, '.rare', 'config.json');
+      const result = await runCli([
+        'configure',
+        '--chain',
+        'sepolia',
+        '--private-key',
+        '0x1',
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('--private-key must be a 0x-prefixed 32-byte private key.');
+      await expect(access(configPath)).rejects.toThrow();
+    });
+  });
+
   it('validates write-command local inputs before wallet setup', async () => {
     await expectLocalValidationBeforeWalletSetup(
       () => [
