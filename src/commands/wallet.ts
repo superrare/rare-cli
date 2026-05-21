@@ -28,9 +28,7 @@ export function walletCommand(): Command {
     .option('--chain-id <id>', `chain ID to use (${Object.entries(chainIds).map(([chain, id]) => `${id} (${chain})`).join(', ')})`)
     .option('--save', 'save the generated key to config for the specified chain')
     .action((opts: WalletGenerateOptions): void => {
-      const selectedChain = opts.chain === undefined && opts.chainId === undefined
-        ? 'sepolia'
-        : getActiveChain(opts.chain, opts.chainId);
+      const selectedChain = getActiveChain(opts.chain, opts.chainId);
       const privateKey = generatePrivateKey();
       const account = privateKeyToAccount(privateKey);
 
