@@ -5,6 +5,7 @@ import { text } from 'node:stream/consumers';
 import { describe, expect, it, type TestContext } from 'vitest';
 import { isAddress, zeroAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import pkg from '../../package.json' with { type: 'json' };
 import { parseJsonStdout, runCli, withTempHome } from '../helpers/cli.js';
 
 const batchListingRootArtifact = {
@@ -43,7 +44,7 @@ describe('built CLI deterministic behavior', () => {
 
       const version = await runCli(['--version'], { home });
       expect(version.code).toBe(0);
-      expect(version.stdout.trim()).toBe('1.0.0');
+      expect(version.stdout.trim()).toBe(pkg.version);
       expect(version.stderr).toBe('');
 
       const removedDeploy = await runCli(['deploy'], { home });
