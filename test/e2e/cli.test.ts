@@ -393,6 +393,35 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('saves generated wallets to the configured default chain when no chain flag is passed', async () => {
+    await withTempHome(async (home) => {
+      const configured = await runCli(['configure', '--default-chain', 'base-sepolia'], { home });
+      expect(configured.code).toBe(0);
+
+      const savedJson = parseJsonStdout<{
+        address: string;
+        privateKey: `0x${string}`;
+        saved: true;
+        chain: string;
+      }>(await runCli(['--json', 'wallet', 'generate', '--save'], { home }));
+
+      expect(isAddress(savedJson.address)).toBe(true);
+      expect(savedJson.privateKey).toMatch(/^0x[0-9a-f]{64}$/);
+      expect(savedJson.saved).toBe(true);
+      expect(savedJson.chain).toBe('base-sepolia');
+
+      const config: unknown = JSON.parse(await readFile(join(home, '.rare', 'config.json'), 'utf8'));
+      expect(config).toEqual({
+        defaultChain: 'base-sepolia',
+        chains: {
+          'base-sepolia': {
+            privateKey: savedJson.privateKey,
+          },
+        },
+      });
+    });
+  });
+
   it('does not auto-generate and print wallet secrets for JSON commands', async () => {
     await withTempHome(async (home) => {
       const result = await runCli([
