@@ -3006,6 +3006,13 @@ describe('built CLI deterministic behavior', () => {
       expect(creator.stdout).toContain('--token-id <id>');
       expect(creator.stderr).toBe('');
 
+      const collectionStatus = await runCli(['collection', 'status', '--help'], { home });
+      expect(collectionStatus.code).toBe(0);
+      expect(collectionStatus.stdout).toContain('Usage: rare collection status [options]');
+      expect(collectionStatus.stdout).toContain('--contract <address>');
+      expect(collectionStatus.stdout).toContain('--token-id <id>');
+      expect(collectionStatus.stderr).toBe('');
+
       const royalty = await runCli(['collection', 'royalty', 'status', '--help'], { home });
       expect(royalty.code).toBe(0);
       expect(royalty.stdout).toContain('Usage: rare collection royalty status [options]');

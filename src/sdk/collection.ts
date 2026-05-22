@@ -9,6 +9,7 @@ import {
 import { lazySovereignFactoryAbi } from '../contracts/abis/lazy-sovereign-factory.js';
 import { collectionMintAbi } from '../contracts/abis/collection-mint.js';
 import { collectionOwnerAbi } from '../contracts/abis/collection-owner.js';
+import { collectionStatusAbi } from '../contracts/abis/collection-status.js';
 import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
 import type { RareClientConfig } from './types/client.js';
 import type { CollectionNamespace } from './types/collection.js';
@@ -45,6 +46,100 @@ export function createCollectionNamespace(
   return {
     ...baseCollection,
     mint: collectionMint,
+
+    async status(params): ReturnType<CollectionNamespace['status']> {
+      const plan = planCollectionContract(params);
+      const tokenPlan = params.tokenId === undefined
+        ? undefined
+        : planCollectionToken({ contract: plan.contract, tokenId: params.tokenId });
+      const royaltyPlan = params.tokenId === undefined
+        ? undefined
+        : planCollectionRoyaltyInfo({ contract: plan.contract, tokenId: params.tokenId, price: params.price });
+
+      const [
+        name,
+        symbol,
+        owner,
+        totalSupply,
+        maxTokens,
+        disabled,
+        tokenUrisLocked,
+        batchCount,
+        defaultRoyalty,
+        mintConfig,
+        interfaces,
+        tokenOwner,
+        tokenUri,
+        tokenCreator,
+        tokenRoyalty,
+      ] = await Promise.all([
+        readOptionalStatusString(publicClient, plan.contract, 'name'),
+        readOptionalStatusString(publicClient, plan.contract, 'symbol'),
+        readOptionalStatusAddress(publicClient, plan.contract, 'owner'),
+        readOptionalStatusBigint(publicClient, plan.contract, 'totalSupply'),
+        readOptionalStatusBigint(publicClient, plan.contract, 'maxTokens'),
+        readOptionalStatusBoolean(publicClient, plan.contract, 'disabled'),
+        readOptionalStatusBoolean(publicClient, plan.contract, 'areTokenURIsLocked'),
+        readOptionalStatusBigint(publicClient, plan.contract, 'getBatchCount'),
+        readBestEffortDefaultRoyalty(publicClient, plan.contract),
+        readOptionalMintConfig(publicClient, plan.contract),
+        readSupportedInterfaces(publicClient, plan.contract),
+        tokenPlan === undefined
+          ? Promise.resolve(undefined)
+          : readOptionalTokenOwner(publicClient, plan.contract, tokenPlan.tokenId),
+        tokenPlan === undefined
+          ? Promise.resolve(undefined)
+          : readOptionalTokenUri(publicClient, plan.contract, tokenPlan.tokenId),
+        tokenPlan === undefined
+          ? Promise.resolve(undefined)
+          : readOptionalTokenCreator(publicClient, plan.contract, tokenPlan.tokenId),
+        royaltyPlan === undefined
+          ? Promise.resolve(undefined)
+          : readOptionalRoyaltyInfo(publicClient, plan.contract, royaltyPlan.tokenId, royaltyPlan.salePrice),
+      ]);
+
+      return {
+        contract: plan.contract,
+        ...(name === undefined ? {} : { name }),
+        ...(symbol === undefined ? {} : { symbol }),
+        ...(owner === undefined ? {} : { owner }),
+        ...(totalSupply === undefined ? {} : { totalSupply }),
+        ...(maxTokens === undefined ? {} : { maxTokens }),
+        ...(disabled === undefined ? {} : { disabled }),
+        ...(tokenUrisLocked === undefined ? {} : { tokenUrisLocked }),
+        ...(batchCount === undefined ? {} : { batchCount }),
+        ...defaultRoyalty,
+        ...(mintConfig === undefined
+          ? {}
+          : {
+            mintConfig: {
+              tokenCount: mintConfig.numberOfTokens,
+              baseUri: mintConfig.baseURI,
+              lockedMetadata: mintConfig.lockedMetadata,
+            },
+          }),
+        ...(interfaces === undefined ? {} : { interfaces }),
+        ...(tokenPlan === undefined
+          ? {}
+          : {
+            token: {
+              tokenId: tokenPlan.tokenId,
+              ...(tokenOwner === undefined ? {} : { owner: tokenOwner }),
+              ...(tokenUri === undefined ? {} : { tokenUri }),
+              ...(tokenCreator === undefined ? {} : { creator: tokenCreator }),
+              ...(tokenRoyalty === undefined
+                ? {}
+                : {
+                  royalty: {
+                    salePrice: tokenRoyalty.salePrice,
+                    receiver: tokenRoyalty.receiver,
+                    amount: tokenRoyalty.amount,
+                  },
+                }),
+            },
+          }),
+      };
+    },
 
     deploy: {
       ...collectionDeploy,
@@ -257,12 +352,16 @@ export function createCollectionNamespace(
     metadata: {
       async status(params): ReturnType<CollectionNamespace['metadata']['status']> {
         const plan = planCollectionContract(params);
-        const mintConfig = await readMintConfig(publicClient, plan.contract);
+        const mintConfig = await readOptionalMintConfig(publicClient, plan.contract);
         return {
           contract: plan.contract,
-          tokenCount: mintConfig.numberOfTokens,
-          baseUri: mintConfig.baseURI,
-          lockedMetadata: mintConfig.lockedMetadata,
+          ...(mintConfig === undefined
+            ? {}
+            : {
+              tokenCount: mintConfig.numberOfTokens,
+              baseUri: mintConfig.baseURI,
+              lockedMetadata: mintConfig.lockedMetadata,
+            }),
         };
       },
     },
@@ -416,6 +515,27 @@ async function readTokenCreator(
   }
 }
 
+async function readOptionalTokenCreator(
+  publicClient: PublicClient,
+  contract: Address,
+  tokenId: bigint,
+): Promise<Address | undefined> {
+  try {
+    return await publicClient.readContract({
+      address: contract,
+      abi: collectionOwnerAbi,
+      functionName: 'tokenCreator',
+      args: [tokenId],
+    });
+  } catch (error) {
+    if (isBestEffortReadError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
 async function readRoyaltyInfo(
   publicClient: PublicClient,
   contract: Address,
@@ -434,12 +554,51 @@ async function readRoyaltyInfo(
   }
 }
 
+async function readOptionalRoyaltyInfo(
+  publicClient: PublicClient,
+  contract: Address,
+  tokenId: bigint,
+  salePrice: bigint,
+): Promise<{ salePrice: bigint; receiver: Address; amount: bigint } | undefined> {
+  try {
+    const [receiver, amount] = await publicClient.readContract({
+      address: contract,
+      abi: collectionOwnerAbi,
+      functionName: 'royaltyInfo',
+      args: [tokenId, salePrice],
+    });
+
+    return { salePrice, receiver, amount };
+  } catch (error) {
+    if (isBestEffortReadError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
 async function readDefaultRoyalty(
   publicClient: PublicClient,
   contract: Address,
 ): Promise<{ defaultReceiver?: Address; defaultPercentage?: bigint }> {
   const defaultReceiver = await readOptionalDefaultRoyaltyReceiver(publicClient, contract);
   const defaultPercentage = await readOptionalDefaultRoyaltyPercentage(publicClient, contract);
+
+  return {
+    ...(defaultReceiver === undefined ? {} : { defaultReceiver }),
+    ...(defaultPercentage === undefined ? {} : { defaultPercentage }),
+  };
+}
+
+async function readBestEffortDefaultRoyalty(
+  publicClient: PublicClient,
+  contract: Address,
+): Promise<{ defaultReceiver?: Address; defaultPercentage?: bigint }> {
+  const [defaultReceiver, defaultPercentage] = await Promise.all([
+    readBestEffortDefaultRoyaltyReceiver(publicClient, contract),
+    readBestEffortDefaultRoyaltyPercentage(publicClient, contract),
+  ]);
 
   return {
     ...(defaultReceiver === undefined ? {} : { defaultReceiver }),
@@ -473,6 +632,40 @@ function isUnsupportedOptionalRead(error: unknown): boolean {
   );
 }
 
+function isBestEffortReadError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  if (
+    error instanceof ContractFunctionExecutionError ||
+    error instanceof ContractFunctionZeroDataError
+  ) {
+    return true;
+  }
+
+  return isBestEffortReadError(error.cause);
+}
+
+async function readBestEffortDefaultRoyaltyReceiver(
+  publicClient: PublicClient,
+  contract: Address,
+): Promise<Address | undefined> {
+  try {
+    return await publicClient.readContract({
+      address: contract,
+      abi: collectionOwnerAbi,
+      functionName: 'getDefaultRoyaltyReceiver',
+    });
+  } catch (error) {
+    if (isBestEffortReadError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
 async function readOptionalDefaultRoyaltyPercentage(
   publicClient: PublicClient,
   contract: Address,
@@ -492,6 +685,25 @@ async function readOptionalDefaultRoyaltyPercentage(
   }
 }
 
+async function readBestEffortDefaultRoyaltyPercentage(
+  publicClient: PublicClient,
+  contract: Address,
+): Promise<bigint | undefined> {
+  try {
+    return await publicClient.readContract({
+      address: contract,
+      abi: collectionOwnerAbi,
+      functionName: 'getDefaultRoyaltyPercentage',
+    });
+  } catch (error) {
+    if (isBestEffortReadError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
 async function readMintConfig(
   publicClient: PublicClient,
   contract: Address,
@@ -505,6 +717,192 @@ async function readMintConfig(
   } catch (error) {
     throw contractSupportError('getMintConfig', contract, error);
   }
+}
+
+async function readOptionalMintConfig(
+  publicClient: PublicClient,
+  contract: Address,
+): Promise<{ numberOfTokens: bigint; baseURI: string; lockedMetadata: boolean } | undefined> {
+  try {
+    return await readMintConfig(publicClient, contract);
+  } catch (error) {
+    if (isBestEffortReadError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+async function readOptionalStatusString(
+  publicClient: PublicClient,
+  contract: Address,
+  functionName: 'name' | 'symbol',
+): Promise<string | undefined> {
+  try {
+    return await publicClient.readContract({
+      address: contract,
+      abi: collectionStatusAbi,
+      functionName,
+    });
+  } catch (error) {
+    if (isBestEffortReadError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+async function readOptionalStatusAddress(
+  publicClient: PublicClient,
+  contract: Address,
+  functionName: 'owner',
+): Promise<Address | undefined> {
+  try {
+    return await publicClient.readContract({
+      address: contract,
+      abi: collectionStatusAbi,
+      functionName,
+    });
+  } catch (error) {
+    if (isBestEffortReadError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+async function readOptionalStatusBigint(
+  publicClient: PublicClient,
+  contract: Address,
+  functionName: 'totalSupply' | 'maxTokens' | 'getBatchCount',
+): Promise<bigint | undefined> {
+  try {
+    return await publicClient.readContract({
+      address: contract,
+      abi: collectionStatusAbi,
+      functionName,
+    });
+  } catch (error) {
+    if (isBestEffortReadError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+async function readOptionalStatusBoolean(
+  publicClient: PublicClient,
+  contract: Address,
+  functionName: 'disabled' | 'areTokenURIsLocked',
+): Promise<boolean | undefined> {
+  try {
+    return await publicClient.readContract({
+      address: contract,
+      abi: collectionStatusAbi,
+      functionName,
+    });
+  } catch (error) {
+    if (isBestEffortReadError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+async function readOptionalTokenOwner(
+  publicClient: PublicClient,
+  contract: Address,
+  tokenId: bigint,
+): Promise<Address | undefined> {
+  try {
+    return await publicClient.readContract({
+      address: contract,
+      abi: collectionStatusAbi,
+      functionName: 'ownerOf',
+      args: [tokenId],
+    });
+  } catch (error) {
+    if (isBestEffortReadError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+async function readOptionalTokenUri(
+  publicClient: PublicClient,
+  contract: Address,
+  tokenId: bigint,
+): Promise<string | undefined> {
+  try {
+    return await publicClient.readContract({
+      address: contract,
+      abi: collectionStatusAbi,
+      functionName: 'tokenURI',
+      args: [tokenId],
+    });
+  } catch (error) {
+    if (isBestEffortReadError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+async function readOptionalSupportsInterface(
+  publicClient: PublicClient,
+  contract: Address,
+  interfaceId: `0x${string}`,
+): Promise<boolean | undefined> {
+  try {
+    return await publicClient.readContract({
+      address: contract,
+      abi: collectionStatusAbi,
+      functionName: 'supportsInterface',
+      args: [interfaceId],
+    });
+  } catch (error) {
+    if (isBestEffortReadError(error)) {
+      return undefined;
+    }
+
+    throw error;
+  }
+}
+
+async function readSupportedInterfaces(
+  publicClient: PublicClient,
+  contract: Address,
+): Promise<NonNullable<Awaited<ReturnType<CollectionNamespace['status']>>['interfaces']> | undefined> {
+  const [erc165, erc721, erc721Metadata, erc2981] = await Promise.all([
+    readOptionalSupportsInterface(publicClient, contract, '0x01ffc9a7'),
+    readOptionalSupportsInterface(publicClient, contract, '0x80ac58cd'),
+    readOptionalSupportsInterface(publicClient, contract, '0x5b5e139f'),
+    readOptionalSupportsInterface(publicClient, contract, '0x2a55205a'),
+  ]);
+
+  if (
+    erc165 === undefined &&
+    erc721 === undefined &&
+    erc721Metadata === undefined &&
+    erc2981 === undefined
+  ) {
+    return undefined;
+  }
+
+  return {
+    ...(erc165 === undefined ? {} : { erc165 }),
+    ...(erc721 === undefined ? {} : { erc721 }),
+    ...(erc721Metadata === undefined ? {} : { erc721Metadata }),
+    ...(erc2981 === undefined ? {} : { erc2981 }),
+  };
 }
 
 async function writeSetDefaultRoyaltyReceiver(
