@@ -9,10 +9,6 @@ import {
   resolveApiNftMerkleProofFromRoots,
 } from '../../../src/sdk/merkle-api.js';
 
-const publicClient = {
-  chain: { id: 11155111 },
-} as never;
-
 const hex32 = (byte: string): `0x${string}` => `0x${byte.repeat(64)}`;
 
 describe('SDK merkle API client', () => {
@@ -42,7 +38,7 @@ describe('SDK merkle API client', () => {
     });
 
     const proof = await resolveApiNftMerkleProof(
-      { publicClient, apiBaseUrl: 'https://rare-api.test', apiFetch: fetchImpl },
+      { apiBaseUrl: 'https://rare-api.test', apiFetch: fetchImpl },
       {
         chainId: 11155111,
         contractAddress: '0x1111111111111111111111111111111111111111',
@@ -65,7 +61,6 @@ describe('SDK merkle API client', () => {
   it('surfaces merkle endpoint failures as RareApiError', async () => {
     const request = generateApiNftMerkleRoot(
       {
-        publicClient,
         apiBaseUrl: 'https://rare-api.test',
         apiFetch: async () => jsonResponse({ error: 'rate limit exceeded' }, { status: 429, statusText: 'Too Many Requests' }),
       },
@@ -93,7 +88,7 @@ describe('SDK merkle API client', () => {
     });
 
     const root = await generateApiAddressMerkleRoot(
-      { publicClient, apiBaseUrl: 'https://rare-api.test', apiFetch: fetchImpl },
+      { apiBaseUrl: 'https://rare-api.test', apiFetch: fetchImpl },
       {
         addresses: ['0x1111111111111111111111111111111111111111'],
         storageTarget: 'collection-allowlist',
@@ -126,7 +121,7 @@ describe('SDK merkle API client', () => {
     });
 
     const proof = await resolveApiNftMerkleProofFromRoots(
-      { publicClient, apiBaseUrl: 'https://rare-api.test', apiFetch: fetchImpl },
+      { apiBaseUrl: 'https://rare-api.test', apiFetch: fetchImpl },
       {
         chainId: 11155111,
         contractAddress: '0x1111111111111111111111111111111111111111',
@@ -155,7 +150,7 @@ describe('SDK merkle API client', () => {
     });
 
     const request = resolveApiNftMerkleProofFromRoots(
-      { publicClient, apiBaseUrl: 'https://rare-api.test', apiFetch: fetchImpl },
+      { apiBaseUrl: 'https://rare-api.test', apiFetch: fetchImpl },
       {
         chainId: 11155111,
         contractAddress: '0x1111111111111111111111111111111111111111',
