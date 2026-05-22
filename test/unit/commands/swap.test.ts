@@ -13,7 +13,6 @@ const getWalletClient = vi.hoisted(() => vi.fn());
 const getConfiguredAccountAddress = vi.hoisted(() => vi.fn());
 const getConfiguredUniswapApiKey = vi.hoisted(() => vi.fn());
 const createRareClient = vi.hoisted(() => vi.fn());
-const printError = vi.hoisted(() => vi.fn());
 
 vi.mock('../../../src/client.js', () => ({
   getConfiguredAccountAddress,
@@ -24,10 +23,6 @@ vi.mock('../../../src/client.js', () => ({
 
 vi.mock('../../../src/sdk/client.js', () => ({
   createRareClient,
-}));
-
-vi.mock('../../../src/errors.js', () => ({
-  printError,
 }));
 
 const token = '0x197FaeF3f59eC80113e773Bb6206a17d183F97CB';
@@ -45,7 +40,6 @@ beforeEach(() => {
   getConfiguredAccountAddress.mockReset();
   getConfiguredUniswapApiKey.mockReset();
   createRareClient.mockReset();
-  printError.mockReset();
   quoteBuyToken.mockReset();
   quoteSellToken.mockReset();
   buyToken.mockReset();
@@ -96,7 +90,6 @@ test('buy-token quote-only does not require a configured wallet', async () => {
   ], { from: 'user' });
 
   assert.equal(getWalletClient.mock.calls.length, 0);
-  assert.equal(printError.mock.calls.length, 0);
   const rareConfig = createRareClient.mock.calls[0]?.[0];
   assert.equal(rareConfig.publicClient, publicClient);
   assert.equal(rareConfig.account, '0x1234567890123456789012345678901234567890');
@@ -125,7 +118,6 @@ test('sell-token quote-only does not require a configured wallet', async () => {
   ], { from: 'user' });
 
   assert.equal(getWalletClient.mock.calls.length, 0);
-  assert.equal(printError.mock.calls.length, 0);
   const rareConfig = createRareClient.mock.calls[0]?.[0];
   assert.equal(rareConfig.publicClient, publicClient);
   assert.equal(rareConfig.account, '0x1234567890123456789012345678901234567890');
@@ -172,7 +164,6 @@ test('buy-token raw route submits prebuilt router calldata through the consolida
     await rm(tempDir, { recursive: true, force: true });
   }
 
-  assert.equal(printError.mock.calls.length, 0);
   assert.deepEqual(createRareClient.mock.calls[0]?.[0], { publicClient, walletClient });
   assert.equal(quoteBuyToken.mock.calls.length, 0);
   assert.deepEqual(buyToken.mock.calls[0]?.[0], {
@@ -218,7 +209,6 @@ test('raw token swap supports the legacy swap alias', async () => {
     await rm(tempDir, { recursive: true, force: true });
   }
 
-  assert.equal(printError.mock.calls.length, 0);
   assert.deepEqual(createRareClient.mock.calls[0]?.[0], { publicClient, walletClient });
   assert.deepEqual(swapTokens.mock.calls[0]?.[0], {
     tokenIn: ETH_ADDRESS,
@@ -242,32 +232,32 @@ test('raw token swap requires confirmation before loading a wallet', async () =>
   try {
     await writeFile(inputsFile, JSON.stringify(['0x1234']), 'utf8');
 
-    await swapCommand().parseAsync([
-      'tokens',
-      '--token-in',
-      ETH_ADDRESS,
-      '--amount-in',
-      '0.001',
-      '--token-out',
-      token,
-      '--min-amount-out',
-      '1',
-      '--commands',
-      '0x10',
-      '--inputs-file',
-      inputsFile,
-      '--chain',
-      'sepolia',
-    ], { from: 'user' });
+    await assert.rejects(
+      swapCommand().parseAsync([
+        'tokens',
+        '--token-in',
+        ETH_ADDRESS,
+        '--amount-in',
+        '0.001',
+        '--token-out',
+        token,
+        '--min-amount-out',
+        '1',
+        '--commands',
+        '0x10',
+        '--inputs-file',
+        inputsFile,
+        '--chain',
+        'sepolia',
+      ], { from: 'user' }),
+      /rare swap tokens requires --yes when submitting a quoted swap/,
+    );
   } finally {
     // eslint-disable-next-line functional/immutable-data
     process.argv.splice(0, process.argv.length, ...originalArgv);
     await rm(tempDir, { recursive: true, force: true });
   }
 
-  const error = printError.mock.calls[0]?.[0];
-  assert.ok(error instanceof Error);
-  assert.match(error.message, /rare swap tokens requires --yes when submitting a quoted swap/);
   assert.equal(getWalletClient.mock.calls.length, 0);
   assert.equal(getPublicClient.mock.calls.length, 0);
   assert.equal(createRareClient.mock.calls.length, 0);

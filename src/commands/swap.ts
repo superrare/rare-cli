@@ -6,7 +6,6 @@ import { getActiveChain } from '../config.js';
 import { getConfiguredAccountAddress, getConfiguredUniswapApiKey, getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
 import { planTokenTradeLocalInputs } from '../swap/trade-core.js';
-import { printError } from '../errors.js';
 import { output, log, isJsonMode } from '../output.js';
 import {
   ensureHex,
@@ -31,16 +30,6 @@ export {
 
 async function readInputsFile(path: string): Promise<readonly `0x${string}`[]> {
   return parseInputsJson(await readFile(path, 'utf-8'), path);
-}
-
-function withErrorHandling<Args extends unknown[]>(action: (...args: Args) => Promise<void>): (...args: Args) => Promise<void> {
-  return async (...args: Args) => {
-    try {
-      await action(...args);
-    } catch (error) {
-      printError(error);
-    }
-  };
 }
 
 async function confirmQuotedSwapExecution(commandName: string): Promise<void> {
@@ -88,7 +77,7 @@ function swapTokensCommand(): Command {
     .option('--yes', 'skip the interactive transaction confirmation')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
-    .action(withErrorHandling(async (opts: {
+    .action(async (opts: {
       tokenIn: string;
       amountIn: string;
       tokenOut: string;
@@ -142,7 +131,7 @@ function swapTokensCommand(): Command {
           console.log(`Confirmed in block ${result.receipt.blockNumber}`);
         },
       );
-    }));
+    });
 
   return cmd;
 }
@@ -165,7 +154,7 @@ function swapBuyTokenCommand(): Command {
     .option('--deadline <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
-    .action(withErrorHandling(async (opts: {
+    .action(async (opts: {
       token: string;
       amountIn?: string;
       route?: string;
@@ -333,7 +322,7 @@ function swapBuyTokenCommand(): Command {
           console.log(`Min token out: ${formatQuotedAmount(result.minAmountOut, quote.outputDecimals)}`);
         },
       );
-    }));
+    });
 
   return cmd;
 }
@@ -356,7 +345,7 @@ function swapSellTokenCommand(): Command {
     .option('--deadline <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
-    .action(withErrorHandling(async (opts: {
+    .action(async (opts: {
       token: string;
       amountIn?: string;
       route?: string;
@@ -526,7 +515,7 @@ function swapSellTokenCommand(): Command {
           console.log(`Min ETH out: ${formatEther(result.minAmountOut)}`);
         },
       );
-    }));
+    });
 
   return cmd;
 }
@@ -545,7 +534,7 @@ function swapBuyRareCommand(): Command {
     .option('--deadline <seconds>', 'deadline as a unix timestamp in seconds')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
-    .action(withErrorHandling(async (opts: {
+    .action(async (opts: {
       amountIn?: string;
       slippageBps?: string;
       minAmountOut?: string;
@@ -639,7 +628,7 @@ function swapBuyRareCommand(): Command {
           console.log(`Min RARE out: ${formatEther(result.minRareOut)}`);
         },
       );
-    }));
+    });
 
   return cmd;
 }

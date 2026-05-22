@@ -5,7 +5,6 @@ import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
-import { printError } from '../errors.js';
 import {
   parseCurveConfig,
   type LiquidCurvePreview,
@@ -266,27 +265,24 @@ export function deployErc721Command(): Command {
       if (maxTokens !== undefined) log(`  Max tokens: ${maxTokens.toString()}`);
       log('Waiting for confirmation...');
 
-      try {
-        const result = await rare.collection.deploy.erc721({
-          name,
-          symbol,
-          maxTokens,
-        });
+      const result = await rare.collection.deploy.erc721({
+        name,
+        symbol,
+        maxTokens,
+      });
 
-        output(
-          {
-            txHash: result.txHash,
-            blockNumber: result.receipt.blockNumber.toString(),
-            contract: result.contract,
-          },
-          () => {
-            console.log(`Transaction sent: ${result.txHash}`);
-            console.log(`\nERC-721 contract deployed at: ${result.contract}`);
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
+      output(
+        {
+          txHash: result.txHash,
+          blockNumber: result.receipt.blockNumber.toString(),
+          contract: result.contract,
+        },
+        () => {
+          console.log(`Transaction sent: ${result.txHash}`);
+          console.log(`\nERC-721 contract deployed at: ${result.contract}`);
+        },
+      );
+
     });
 
   return cmd;
@@ -346,74 +342,71 @@ export function deployLiquidEditionCommand(): Command {
         const publicClient = getPublicClient(chain);
         const readOnlyRare = createRareClient({ publicClient });
 
-        try {
-          const curves = await resolveCurves({ ...opts, targetChain: chain }, readOnlyRare);
-          if (opts.preview) {
-            output(
-              {
-                chain,
-                source: curves.source,
-                rarePriceUsd: curves.rarePriceUsd ?? null,
-                preview: curves.preview,
-                curves: curves.curves,
-              },
-              () => {
-                printCurvePreview(curves.preview, curves.source, chain);
-              },
-            );
-            return;
-          }
-
-          await confirmLiquidEditionDeploy(chain, opts.yes);
-          const { client } = getWalletClient(chain);
-          const rare = createRareClient({ publicClient, walletClient: client });
-          const tokenUri = await resolveTokenUri(rare, name, opts);
-          log(`Deploying liquid edition on ${chain}...`);
-          log(`  Factory: ${rare.contracts.liquidFactory}`);
-          log(`  Name: ${name}`);
-          log(`  Symbol: ${symbol}`);
-          log(`  Token URI: ${tokenUri}`);
-          log(`  Curve source: ${curves.source}`);
-          if (opts.initialRareLiquidity) {
-            log(`  Initial RARE liquidity: ${opts.initialRareLiquidity}`);
-          }
-          if (opts.totalSupply) {
-            log(`  Total supply: ${opts.totalSupply}`);
-          }
-          log('Waiting for confirmation...');
-
-          const result = await rare.liquidEdition.deploy.multiCurve({
-            name,
-            symbol,
-            tokenUri,
-            initialRareLiquidity: opts.initialRareLiquidity,
-            totalSupply: opts.totalSupply,
-            curves: curves.curves,
-          });
-          const liquidEditionUrl = formatLiquidEditionUrl(rare.chainId, result.contract);
-
+        const curves = await resolveCurves({ ...opts, targetChain: chain }, readOnlyRare);
+        if (opts.preview) {
           output(
             {
-              txHash: result.txHash,
-              blockNumber: result.receipt.blockNumber.toString(),
-              contract: result.contract,
-              chainId: rare.chainId,
-              liquidEditionUrl,
-              tokenUri,
-              totalSupply: opts.totalSupply ?? null,
-              curves: curves.curves,
+              chain,
               source: curves.source,
               rarePriceUsd: curves.rarePriceUsd ?? null,
+              preview: curves.preview,
+              curves: curves.curves,
             },
             () => {
-              console.log(`Transaction sent: ${result.txHash}`);
-              console.log(`\nLiquid Edition deployed at: ${result.contract}`);
-              console.log(`Liquid Editions URL: ${liquidEditionUrl}`);
+              printCurvePreview(curves.preview, curves.source, chain);
             },
           );
-        } catch (error) {
-          printError(error);
+          return;
         }
+
+        await confirmLiquidEditionDeploy(chain, opts.yes);
+        const { client } = getWalletClient(chain);
+        const rare = createRareClient({ publicClient, walletClient: client });
+        const tokenUri = await resolveTokenUri(rare, name, opts);
+        log(`Deploying liquid edition on ${chain}...`);
+        log(`  Factory: ${rare.contracts.liquidFactory}`);
+        log(`  Name: ${name}`);
+        log(`  Symbol: ${symbol}`);
+        log(`  Token URI: ${tokenUri}`);
+        log(`  Curve source: ${curves.source}`);
+        if (opts.initialRareLiquidity) {
+          log(`  Initial RARE liquidity: ${opts.initialRareLiquidity}`);
+        }
+        if (opts.totalSupply) {
+          log(`  Total supply: ${opts.totalSupply}`);
+        }
+        log('Waiting for confirmation...');
+
+        const result = await rare.liquidEdition.deploy.multiCurve({
+          name,
+          symbol,
+          tokenUri,
+          initialRareLiquidity: opts.initialRareLiquidity,
+          totalSupply: opts.totalSupply,
+          curves: curves.curves,
+        });
+        const liquidEditionUrl = formatLiquidEditionUrl(rare.chainId, result.contract);
+
+        output(
+          {
+            txHash: result.txHash,
+            blockNumber: result.receipt.blockNumber.toString(),
+            contract: result.contract,
+            chainId: rare.chainId,
+            liquidEditionUrl,
+            tokenUri,
+            totalSupply: opts.totalSupply ?? null,
+            curves: curves.curves,
+            source: curves.source,
+            rarePriceUsd: curves.rarePriceUsd ?? null,
+          },
+          () => {
+            console.log(`Transaction sent: ${result.txHash}`);
+            console.log(`\nLiquid Edition deployed at: ${result.contract}`);
+            console.log(`Liquid Editions URL: ${liquidEditionUrl}`);
+          },
+        );
+
       },
     );
 

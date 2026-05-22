@@ -4,7 +4,6 @@ import { getPublicClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
 import type { RareClientNftGetParams } from '../sdk/client.js';
 import { parseAddress } from '../sdk/validation.js';
-import { printError } from '../errors.js';
 import { log, output, printNft } from '../output.js';
 
 type NftReadOptions = {
@@ -32,14 +31,11 @@ export function nftCommand(): Command {
 
       log(`Fetching NFT ${nft.contract}/${nft.tokenId.toString()} on ${chain}...`);
 
-      try {
-        const result = await rare.nft.get(nft);
-        output(result, () => {
-          printNft(result);
-        });
-      } catch (error) {
-        printError(error);
-      }
+      const result = await rare.nft.get(nft);
+      output(result, () => {
+        printNft(result);
+      });
+
     });
 
   return cmd;

@@ -6,7 +6,6 @@ import type { SupportedChain } from '../contracts/addresses.js';
 import type { NftSearchParams } from '../sdk/api.js';
 import type { RareClientEventSearchParams } from '../sdk/client.js';
 import { parseAddress, parseOptionalAddress } from '../sdk/validation.js';
-import { printError } from '../errors.js';
 import { output, log, printNftRow, printCollectionRow, printNftEventRow, printPagination } from '../output.js';
 import { collectOption, parseNftEventSort, parseNftEventTypes } from './event-options.js';
 import { parsePositiveInteger } from './pagination-core.js';
@@ -132,36 +131,33 @@ export function searchCommand(): Command {
 
       log(`Searching ${label} on ${chain}...`);
 
-      try {
-        const result = await rare.search.nfts({
-          query: opts.query,
-          perPage,
-          page,
-          ownerAddress,
-          hasAuction: hasAuction ? true : undefined,
-          auctionState,
-          auctionCreatorAddress,
-          auctionBidderAddress,
-          hasListing: hasListing ? true : undefined,
-          listingType,
-          hasOffer: hasOffer ? true : undefined,
-          offerBuyerAddress,
-        });
+      const result = await rare.search.nfts({
+        query: opts.query,
+        perPage,
+        page,
+        ownerAddress,
+        hasAuction: hasAuction ? true : undefined,
+        auctionState,
+        auctionCreatorAddress,
+        auctionBidderAddress,
+        hasListing: hasListing ? true : undefined,
+        listingType,
+        hasOffer: hasOffer ? true : undefined,
+        offerBuyerAddress,
+      });
 
-        output(result, () => {
-          console.log(`\n${label} (${result.pagination.totalCount} total):`);
-          if (result.data.length === 0) {
-            console.log('  No results found.');
-            return;
-          }
-          for (const nft of result.data) {
-            printNftRow(nft);
-          }
-          printPagination(result.pagination);
-        });
-      } catch (error) {
-        printError(error);
-      }
+      output(result, () => {
+        console.log(`\n${label} (${result.pagination.totalCount} total):`);
+        if (result.data.length === 0) {
+          console.log('  No results found.');
+          return;
+        }
+        for (const nft of result.data) {
+          printNftRow(nft);
+        }
+        printPagination(result.pagination);
+      });
+
     });
 
   // --- rare search collections ---
@@ -181,27 +177,24 @@ export function searchCommand(): Command {
 
       log(`Searching collections on ${chain}...`);
 
-      try {
-        const result = await rare.search.collections({
-          query: opts.query,
-          perPage,
-          page,
-        });
+      const result = await rare.search.collections({
+        query: opts.query,
+        perPage,
+        page,
+      });
 
-        output(result, () => {
-          console.log(`\nCollections (${result.pagination.totalCount} total):`);
-          if (result.data.length === 0) {
-            console.log('  No results found.');
-            return;
-          }
-          for (const col of result.data) {
-            printCollectionRow(col);
-          }
-          printPagination(result.pagination);
-        });
-      } catch (error) {
-        printError(error);
-      }
+      output(result, () => {
+        console.log(`\nCollections (${result.pagination.totalCount} total):`);
+        if (result.data.length === 0) {
+          console.log('  No results found.');
+          return;
+        }
+        for (const col of result.data) {
+          printCollectionRow(col);
+        }
+        printPagination(result.pagination);
+      });
+
     });
 
   // --- rare search events ---
@@ -240,22 +233,19 @@ export function searchCommand(): Command {
 
       log(`Searching events for ${label}...`);
 
-      try {
-        const result = await rare.search.events(params);
-        output(result, () => {
-          console.log(`\nEvents (${result.pagination.totalCount} total):`);
-          if (result.data.length === 0) {
-            console.log('  No events found.');
-            return;
-          }
-          for (const event of result.data) {
-            printNftEventRow(event);
-          }
-          printPagination(result.pagination);
-        });
-      } catch (error) {
-        printError(error);
-      }
+      const result = await rare.search.events(params);
+      output(result, () => {
+        console.log(`\nEvents (${result.pagination.totalCount} total):`);
+        if (result.data.length === 0) {
+          console.log('  No events found.');
+          return;
+        }
+        for (const event of result.data) {
+          printNftEventRow(event);
+        }
+        printPagination(result.pagination);
+      });
+
     });
 
   return cmd;

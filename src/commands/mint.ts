@@ -12,7 +12,6 @@ import {
   type MintMetadataUploadRole,
 } from '../sdk/mint-core.js';
 import { parseAddress, parseOptionalAddress } from '../sdk/validation.js';
-import { printError } from '../errors.js';
 import { output, log } from '../output.js';
 
 type MintOptions = {
@@ -48,66 +47,63 @@ export function mintCommand(): Command {
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: MintOptions): Promise<void> => {
-      try {
-        const tokenUriPlan = planMintTokenUri({
-          tokenUri: opts.tokenUri,
-          name: opts.name,
-          description: opts.description,
-          image: opts.image,
-          video: opts.video,
-          tags: opts.tag,
-          attributes: opts.attribute,
-        });
+      const tokenUriPlan = planMintTokenUri({
+        tokenUri: opts.tokenUri,
+        name: opts.name,
+        description: opts.description,
+        image: opts.image,
+        video: opts.video,
+        tags: opts.tag,
+        attributes: opts.attribute,
+      });
 
-        const contractAddress = parseAddress(opts.contract, '--contract');
-        const to = parseOptionalAddress(opts.to, '--to');
-        const royaltyReceiver = parseOptionalAddress(opts.royaltyReceiver, '--royalty-receiver');
-        if (tokenUriPlan.mode === 'metadata') {
-          await preflightMetadataUploads(tokenUriPlan.metadata);
-        }
+      const contractAddress = parseAddress(opts.contract, '--contract');
+      const to = parseOptionalAddress(opts.to, '--to');
+      const royaltyReceiver = parseOptionalAddress(opts.royaltyReceiver, '--royalty-receiver');
+      if (tokenUriPlan.mode === 'metadata') {
+        await preflightMetadataUploads(tokenUriPlan.metadata);
+      }
 
-        const chain = getActiveChain(opts.chain, opts.chainId);
-        const publicClient = getPublicClient(chain);
-        const { client, account } = getWalletClient(chain);
-        const rare = createRareClient({ publicClient, walletClient: client });
-        const tokenUri = tokenUriPlan.mode === 'provided'
-          ? tokenUriPlan.tokenUri
-          : await uploadAndPinMetadata(tokenUriPlan.metadata);
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const publicClient = getPublicClient(chain);
+      const { client, account } = getWalletClient(chain);
+      const rare = createRareClient({ publicClient, walletClient: client });
+      const tokenUri = tokenUriPlan.mode === 'provided'
+        ? tokenUriPlan.tokenUri
+        : await uploadAndPinMetadata(tokenUriPlan.metadata);
 
-        log(`\nMinting NFT on ${chain}...`);
-        log(`  Contract: ${contractAddress}`);
-        log(`  URI: ${tokenUri}`);
-        if (opts.to || opts.royaltyReceiver) {
-          const receiver = to ?? account.address;
-          const resolvedRoyaltyReceiver = royaltyReceiver ?? account.address;
-          log(`  To: ${receiver}`);
-          log(`  Royalty receiver: ${resolvedRoyaltyReceiver}`);
-        }
+      log(`\nMinting NFT on ${chain}...`);
+      log(`  Contract: ${contractAddress}`);
+      log(`  URI: ${tokenUri}`);
+      if (opts.to || opts.royaltyReceiver) {
+        const receiver = to ?? account.address;
+        const resolvedRoyaltyReceiver = royaltyReceiver ?? account.address;
+        log(`  To: ${receiver}`);
+        log(`  Royalty receiver: ${resolvedRoyaltyReceiver}`);
+      }
 
-        log('Waiting for confirmation...');
-        const result = await rare.collection.mint({
+      log('Waiting for confirmation...');
+      const result = await rare.collection.mint({
+        contract: contractAddress,
+        tokenUri,
+        to,
+        royaltyReceiver,
+      });
+
+      output(
+        {
+          txHash: result.txHash,
+          blockNumber: result.receipt.blockNumber.toString(),
+          tokenId: result.tokenId.toString(),
           contract: contractAddress,
           tokenUri,
-          to,
-          royaltyReceiver,
-        });
+        },
+        () => {
+          console.log(`Transaction sent: ${result.txHash}`);
+          console.log(`\nNFT minted! Token ID: ${result.tokenId}`);
+        },
+      );
 
-        output(
-          {
-            txHash: result.txHash,
-            blockNumber: result.receipt.blockNumber.toString(),
-            tokenId: result.tokenId.toString(),
-            contract: contractAddress,
-            tokenUri,
-          },
-          () => {
-            console.log(`Transaction sent: ${result.txHash}`);
-            console.log(`\nNFT minted! Token ID: ${result.tokenId}`);
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
     });
 
   return cmd;
