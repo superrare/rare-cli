@@ -303,10 +303,10 @@ function createPrepareLazyMintCommand(): Command {
           chain,
           '--minter',
         );
+        const plan = planCollectionPrepareLazyMint({ contract, baseUri: opts.baseUri, amount, minter });
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
-        const plan = planCollectionPrepareLazyMint({ contract, baseUri: opts.baseUri, amount, minter });
 
         log(`Preparing Lazy Sovereign mint on ${chain}...`);
         log(`  Contract: ${contract}`);

@@ -187,7 +187,9 @@ describeLive('live auction CLI writes', () => {
         }),
       );
     } finally {
-      await step('wait for auction to end', waitForAuctionToEnd);
+      await step('wait for auction to end', () =>
+        waitForAuctionToEnd(fixture, fixture.collection.contract, fixture.auctionSettleToken.tokenId),
+      );
       await expectAuctionStatus(fixture, fixture.sellerHome, fixture.collection.contract, fixture.auctionSettleToken.tokenId, 'ENDED');
       expectTx(await step('settle auction', () =>
         jsonCommand<TxResult>(fixture.sellerHome, [
@@ -255,7 +257,9 @@ describeLive('live auction CLI writes', () => {
         fixture.chain,
       ]),
     ));
-    await step('wait for RARE auction to end', waitForAuctionToEnd);
+    await step('wait for RARE auction to end', () =>
+      waitForAuctionToEnd(fixture, fixture.collection.contract, fixture.rareAuctionSettleToken.tokenId),
+    );
     await expectAuctionStatus(fixture, fixture.sellerHome, fixture.collection.contract, fixture.rareAuctionSettleToken.tokenId, 'ENDED');
     expectTx(await step('settle RARE auction', () =>
       jsonCommand<TxResult>(fixture.sellerHome, [
