@@ -19,6 +19,7 @@ rare --help
 ```
 
 See [CHANGELOG.md](./CHANGELOG.md) for release notes and migration guidance.
+For generated reference maps, see [rare-cli-commands.md](./rare-cli-commands.md) and [rare-cli-sdk-client-functions.md](./rare-cli-sdk-client-functions.md).
 
 ## Getting Started
 
