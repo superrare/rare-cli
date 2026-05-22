@@ -1,8 +1,10 @@
 import {
   erc20Abi,
+  hexToBigInt,
   isAddressEqual,
   parseEventLogs,
   type Address,
+  type Hex,
   type PublicClient,
   type TransactionReceipt,
 } from 'viem';
@@ -341,14 +343,15 @@ export function createReleaseNamespace(
       async setConfig(params): ReturnType<ReleaseNamespace['allowlist']['setConfig']> {
         const rareMinter = requireRareMinterAddress(addresses.rareMinter);
         const { walletClient, account, accountAddress } = requireWallet(config);
-        const resolvedParams = await resolveReleaseAllowlistConfigParams(config, params);
-        const plan = planReleaseAllowlistConfig(resolvedParams);
+        const plan = planReleaseAllowlistConfig(params);
 
         await assertCollectionOwnerForReleaseWrite({
           publicClient,
           contract: plan.contract,
           accountAddress,
         });
+
+        await uploadReleaseAllowlistArtifact(config, params, plan.root);
 
         const txHash = await walletClient.writeContract({
           address: rareMinter,
@@ -646,12 +649,13 @@ function currentUnixTimestamp(): bigint {
   return BigInt(Math.floor(Date.now() / 1000));
 }
 
-async function resolveReleaseAllowlistConfigParams(
+async function uploadReleaseAllowlistArtifact(
   config: RareClientConfig,
   params: Parameters<ReleaseNamespace['allowlist']['setConfig']>[0],
-): Promise<Parameters<ReleaseNamespace['allowlist']['setConfig']>[0]> {
+  expectedRoot: Hex,
+): Promise<void> {
   if (params.root !== undefined || params.artifact === undefined) {
-    return params;
+    return;
   }
 
   const root = await generateApiAddressMerkleRoot(config, {
@@ -659,9 +663,7 @@ async function resolveReleaseAllowlistConfigParams(
     storageTarget: 'collection-allowlist',
   });
 
-  return {
-    ...params,
-    root,
-    artifact: undefined,
-  };
+  if (hexToBigInt(root) !== hexToBigInt(expectedRoot)) {
+    throw new Error(`rare-api allowlist root ${root} does not match artifact root ${expectedRoot}.`);
+  }
 }

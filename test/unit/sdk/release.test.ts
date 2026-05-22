@@ -1,5 +1,5 @@
 /* eslint-disable no-restricted-syntax, @typescript-eslint/explicit-function-return-type */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Address } from 'viem';
 import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import { createReleaseNamespace } from '../../../src/sdk/release.js';
@@ -10,6 +10,7 @@ const collection = '0x1000000000000000000000000000000000000000' as Address;
 const customCurrency = '0x3000000000000000000000000000000000000000' as Address;
 const rareMinter = '0x2000000000000000000000000000000000000000' as Address;
 const auction = '0x4000000000000000000000000000000000000000' as Address;
+const otherAddress = '0x5000000000000000000000000000000000000000' as Address;
 
 function createReleaseTestNamespace(publicClient: unknown, opts: {
   apiFetch?: typeof fetch;
@@ -167,4 +168,73 @@ describe('release namespace shell errors', () => {
       proof: [],
     })).rejects.toBe(writeReached);
   });
+
+  it('validates allowlist config before uploading artifact addresses', async () => {
+    const artifact = buildReleaseAllowlistArtifact([accountAddress]);
+    const apiFetch = vi.fn<typeof fetch>();
+    const release = createReleaseTestNamespace({
+      async readContract(): Promise<never> {
+        throw new Error('unexpected owner read');
+      },
+    }, { apiFetch });
+
+    await expect(release.allowlist.setConfig({
+      contract: collection,
+      artifact,
+      endTime: 'not-a-time',
+    })).rejects.toThrow('endTime must be a unix timestamp or ISO date string.');
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('checks collection ownership before uploading allowlist artifact addresses', async () => {
+    const artifact = buildReleaseAllowlistArtifact([accountAddress]);
+    const apiFetch = vi.fn<typeof fetch>();
+    const release = createReleaseTestNamespace({
+      async readContract(params: { functionName: string }) {
+        expect(params.functionName).toBe('owner');
+        return otherAddress;
+      },
+    }, { apiFetch });
+
+    await expect(release.allowlist.setConfig({
+      contract: collection,
+      artifact,
+      endTime: 2_000,
+    })).rejects.toThrow(
+      `Connected wallet ${accountAddress} is not the owner of collection ${collection}. Contract owner is ${otherAddress}.`,
+    );
+    expect(apiFetch).not.toHaveBeenCalled();
+  });
+
+  it('rejects mismatched rare-api allowlist roots before writing config', async () => {
+    const artifact = buildReleaseAllowlistArtifact([accountAddress]);
+    const apiRoot = `0x${'11'.repeat(32)}` as const;
+    const writeContract = vi.fn(async (): Promise<`0x${string}`> => {
+      throw new Error('unexpected allowlist write');
+    });
+    const release = createReleaseTestNamespace({
+      async readContract(params: { functionName: string }) {
+        expect(params.functionName).toBe('owner');
+        return accountAddress;
+      },
+    }, {
+      apiFetch: async (): Promise<Response> => jsonResponse({ merkleRoot: apiRoot }),
+      writeContract,
+    });
+
+    await expect(release.allowlist.setConfig({
+      contract: collection,
+      artifact,
+      endTime: 2_000,
+    })).rejects.toThrow(`rare-api allowlist root ${apiRoot} does not match artifact root ${artifact.root}.`);
+    expect(writeContract).not.toHaveBeenCalled();
+  });
 });
+
+function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'content-type': 'application/json' },
+    ...init,
+  });
+}
