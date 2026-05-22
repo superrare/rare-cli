@@ -18,7 +18,9 @@ npm install && npm run build
 
 ## Commands
 
-All commands accept `--chain <sepolia|mainnet>` to override the default network.
+See [rare-cli-commands.md](./rare-cli-commands.md) for the current command map and [rare-cli-sdk-client-functions.md](./rare-cli-sdk-client-functions.md) for the public SDK surface.
+
+Most commands accept `--chain <chain>` or `--chain-id <id>` to override the configured default network.
 
 ### Configuration & Wallet
 
@@ -36,7 +38,7 @@ A wallet is auto-generated on first use if none is configured.
 ### Deploy ERC-721
 
 ```bash
-rare deploy erc721 "<name>" "<symbol>" [--max-tokens <n>] [--chain <chain>]
+rare collection deploy erc721 "<name>" "<symbol>" [--max-tokens <n>] [--chain <chain>]
 ```
 
 Deploys via RARE factory. Outputs the new contract address.
@@ -54,23 +56,23 @@ Imports an existing ERC-721 contract into the RARE Protocol registry.
 With local media upload (uploads image/video to IPFS, builds metadata, then mints):
 
 ```bash
-rare mint --contract <address> --name "My NFT" --description "A description" --image ./art.png [--video ./animation.mp4] [--tag art --tag digital] [--attribute "Base=Starfish" --attribute '{"trait_type":"Power","value":40,"display_type":"boost_number"}'] [--to <address>] [--royalty-receiver <address>] [--chain <chain>]
+rare collection mint --contract <address> --name "My NFT" --description "A description" --image ./art.png [--video ./animation.mp4] [--tag art --tag digital] [--attribute "Base=Starfish" --attribute '{"trait_type":"Power","value":40,"display_type":"boost_number"}'] [--to <address>] [--royalty-receiver <address>] [--chain <chain>]
 ```
 
 With a pre-built metadata URI:
 
 ```bash
-rare mint --contract <address> --token-uri <ipfs://...> [--to <address>] [--royalty-receiver <address>] [--chain <chain>]
+rare collection mint --contract <address> --token-uri <ipfs://...> [--to <address>] [--royalty-receiver <address>] [--chain <chain>]
 ```
 
 ### Auction Lifecycle
 
 ```bash
 # Create (auto-approves if needed)
-rare auction create --contract <addr> --token-id <id> --starting-price <eth> --duration <seconds> [--currency <erc20>]
+rare auction create --contract <addr> --token-id <id> --price <eth> --end-time <time> [--currency <erc20>]
 
 # Bid
-rare auction bid --contract <addr> --token-id <id> --amount <eth> [--currency <erc20>]
+rare auction bid --contract <addr> --token-id <id> --price <eth> [--currency <erc20>]
 
 # Settle (after auction ends)
 rare auction settle --contract <addr> --token-id <id>
@@ -86,13 +88,13 @@ rare auction status --contract <addr> --token-id <id>
 
 ```bash
 # Create an offer on a token
-rare offer create --contract <addr> --token-id <id> --amount <eth> [--currency <currency>] [--convertible]
+rare offer create --contract <addr> --token-id <id> --price <eth> [--currency <currency>] [--yes]
 
 # Cancel an offer
 rare offer cancel --contract <addr> --token-id <id> [--currency <currency>]
 
 # Accept an offer on a token you own
-rare offer accept --contract <addr> --token-id <id> --amount <eth> [--currency <currency>]
+rare offer accept --contract <addr> --token-id <id> --price <eth> [--currency <currency>] [--yes]
 
 # Check offer status (read-only)
 rare offer status --contract <addr> --token-id <id> [--currency <currency>]
@@ -108,7 +110,7 @@ rare listing create --contract <addr> --token-id <id> --price <eth> [--currency 
 rare listing cancel --contract <addr> --token-id <id> [--target <address>]
 
 # Buy a listed token
-rare listing buy --contract <addr> --token-id <id> --amount <eth> [--currency <currency>]
+rare listing buy --contract <addr> --token-id <id> --price <eth> [--currency <currency>] [--yes]
 
 # Check listing status (read-only)
 rare listing status --contract <addr> --token-id <id> [--target <address>]
@@ -127,10 +129,10 @@ rare currencies [--chain <chain>]
 
 ```bash
 # Search NFTs
-rare search tokens [--query <text>] [--owner <address>] [--mine] [--per-page <n>] [--page <n>] [--chain <chain>]
+rare search nfts [--query <text>] [--owner <address>] [--mine] [--per-page <n>] [--page <n>] [--chain <chain>]
 
 # Filter NFT search by auctions, listings, or offers
-rare search tokens [--has-auction] [--auction-state <state>] [--has-listing] [--listing-type <type>] [--has-offer]
+rare search nfts [--has-auction] [--auction-state <state>] [--has-listing] [--listing-type <type>] [--has-offer]
 
 # Search collections
 rare search collections [--query <text>] [--per-page <n>] [--page <n>] [--chain <chain>]
