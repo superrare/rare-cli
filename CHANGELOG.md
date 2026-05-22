@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.2
+
+### Fixes
+
+- Read the CLI `--version` output from `package.json` instead of a hardcoded string.
+
+**Full changelog**: https://github.com/superrare/rare-cli/compare/v1.0.1...v1.0.2
+
 ## 1.0.1
 
 ### Fixes

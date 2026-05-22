@@ -16,6 +16,7 @@ import { swapCommand } from './commands/swap.js';
 import { userCommand } from './commands/user.js';
 import { utilsCommand } from './commands/utils.js';
 import { getConfirmationDecision, type ConfirmationOptions } from './confirmation.js';
+import pkg from '../package.json' with { type: 'json' };
 
 export function createRareProgram(): Command {
   const program = new Command();
@@ -23,7 +24,7 @@ export function createRareProgram(): Command {
   program
     .name('rare')
     .description('CLI tool for interacting with the RARE protocol smart contracts')
-    .version('1.0.0')
+    .version(pkg.version)
     .option('--json', 'output results as JSON');
 
   program.hook('preAction', async (_thisCommand, actionCommand) => {
