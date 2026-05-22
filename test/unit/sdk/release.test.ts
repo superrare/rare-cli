@@ -75,7 +75,10 @@ describe('release namespace shell errors', () => {
   it('preserves owner read and mintTo simulation failures as wrapped causes', async () => {
     const ownerCause = new Error('owner rpc failed');
     const ownerReadRelease = createReleaseTestNamespace({
-      async readContract(params: { functionName: string }): Promise<never> {
+      async readContract(params: { functionName: string }): Promise<unknown> {
+        if (params.functionName === 'isApprovedMinter') {
+          throw new Error('unsupported minter approval read');
+        }
         expect(params.functionName).toBe('owner');
         throw ownerCause;
       },
@@ -94,6 +97,9 @@ describe('release namespace shell errors', () => {
     const simulationCause = new Error('mintTo simulation failed');
     const simulationRelease = createReleaseTestNamespace({
       async readContract(params: { functionName: string }) {
+        if (params.functionName === 'isApprovedMinter') {
+          throw new Error('unsupported minter approval read');
+        }
         expect(params.functionName).toBe('owner');
         return accountAddress;
       },
@@ -111,6 +117,63 @@ describe('release namespace shell errors', () => {
       `Collection ${collection} must expose mintTo(address)`,
       simulationCause,
     );
+  });
+
+  it('requires and writes Lazy Sovereign minter approval before release configure', async () => {
+    let minterApproved = false;
+    const txHash = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const approvalTxHash = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const release = createReleaseTestNamespace({
+      async readContract(params: { functionName: string }) {
+        if (params.functionName === 'isApprovedMinter') {
+          return minterApproved;
+        }
+        if (params.functionName === 'owner') {
+          return accountAddress;
+        }
+        throw new Error(`unexpected read ${params.functionName}`);
+      },
+      async simulateContract(params: { functionName: string }) {
+        expect(params.functionName).toBe('mintTo');
+        return {};
+      },
+      async waitForTransactionReceipt(params: { hash: string }) {
+        if (params.hash === approvalTxHash) {
+          minterApproved = true;
+          return { blockNumber: 1n };
+        }
+
+        return { blockNumber: 2n };
+      },
+    }, {
+      async writeContract(params) {
+        if (params.functionName === 'setMinterApproval') {
+          expect(params.args).toEqual([rareMinter, true]);
+          return approvalTxHash;
+        }
+        if (params.functionName === 'prepareMintDirectSale') {
+          return txHash;
+        }
+
+        throw new Error(`unexpected write ${params.functionName}`);
+      },
+    });
+
+    await expect(release.configure({
+      contract: collection,
+      price: '1',
+      maxMints: 1,
+      autoApprove: false,
+    })).rejects.toThrow(`Minter approval is required for collection ${collection} and minter ${rareMinter}.`);
+
+    const configured = await release.configure({
+      contract: collection,
+      price: '1',
+      maxMints: 1,
+    });
+
+    expect(configured.txHash).toBe(txHash);
+    expect(configured.approvalTxHash).toBe(approvalTxHash);
   });
 
   it('does not resolve rare-api proofs when callers provide an explicit empty singleton proof', async () => {

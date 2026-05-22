@@ -9,6 +9,7 @@ export type ReleaseConfigureParams = {
   maxMints: IntegerInput;
   splitAddresses?: Address[];
   splitRatios?: number[];
+  autoApprove?: boolean;
 }
 
 export type ReleaseConfigureResult = {
@@ -20,6 +21,7 @@ export type ReleaseConfigureResult = {
   maxMints: bigint;
   splitRecipients: Address[];
   splitRatios: number[];
+  approvalTxHash?: Hash;
 } & TransactionResult
 
 export type ReleaseMintDirectSaleParams = {

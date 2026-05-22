@@ -105,6 +105,23 @@ export type CollectionPrepareLazyMintWrite = {
   args: [string, bigint] | [string, bigint, Address];
 };
 
+export type PlanCollectionMinterApprovalParams = {
+  contract: Address;
+  minter: Address;
+  approved?: boolean;
+}
+
+export type CollectionMinterApprovalPlan = {
+  contract: Address;
+  minter: Address;
+  approved: boolean;
+}
+
+export type CollectionMinterApprovalWrite = {
+  functionName: 'setMinterApproval';
+  args: [Address, boolean];
+};
+
 export type CollectionPrepareMintEventArgs =
   | { baseURI: string; numberOfTokens: bigint }
   | { baseURI: string; startTokenId: bigint; endTokenId: bigint };
@@ -380,6 +397,25 @@ export function buildCollectionPrepareLazyMintWrite(
   return {
     functionName: 'prepareMintWithMinter',
     args: [plan.baseUri, plan.tokenCount, plan.minter],
+  };
+}
+
+export function planCollectionMinterApproval(
+  params: PlanCollectionMinterApprovalParams,
+): CollectionMinterApprovalPlan {
+  return {
+    contract: params.contract,
+    minter: params.minter,
+    approved: params.approved ?? true,
+  };
+}
+
+export function buildCollectionMinterApprovalWrite(
+  plan: CollectionMinterApprovalPlan,
+): CollectionMinterApprovalWrite {
+  return {
+    functionName: 'setMinterApproval',
+    args: [plan.minter, plan.approved],
   };
 }
 

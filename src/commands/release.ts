@@ -23,7 +23,7 @@ import { toInteger, toNonNegativeInteger, toPositiveInteger } from '../sdk/amoun
 import { resolveCurrencyDecimals } from '../sdk/payments-shell.js';
 import { resolveCurrency } from '../contracts/addresses.js';
 import { output, log } from '../output.js';
-import { runWithPaymentApprovalConsent } from './approval-consent.js';
+import { runWithMinterApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, type SplitAccumulator } from './splits-core.js';
 
 const ETH_ADDRESS = zeroAddress;
@@ -36,6 +36,7 @@ type ReleaseConfigureOptions = {
   startTime?: string;
   start?: string;
   split?: SplitAccumulator;
+  yes?: boolean;
   chain?: string;
   chainId?: string;
 };
@@ -204,6 +205,7 @@ export function releaseCommand(): Command {
       'payout split recipient (repeatable). Format: 0xADDR=RATIO. Ratios must sum to 100. If omitted, 100% goes to the connected wallet.',
       collectSplit,
     )
+    .option('--yes', 'yes to all prompts and required approvals')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: ReleaseConfigureOptions): Promise<void> => {
@@ -246,7 +248,7 @@ export function releaseCommand(): Command {
           log(`  Splits:     ${account.address} = 100%`);
         }
 
-        const result = await rare.listing.release.configure({
+        const configureParams = {
           contract: opts.contract,
           currency,
           price: opts.price,
@@ -254,7 +256,22 @@ export function releaseCommand(): Command {
           maxMints: normalizedMaxMints,
           splitAddresses: splits?.addresses,
           splitRatios: splits?.ratios,
+        };
+        const result = await runWithMinterApprovalConsent({
+          commandName: 'rare listing release configure',
+          approvalMessage: 'RareMinter minter approval is required before configuring this release.',
+          runWithoutApproval: async () => rare.listing.release.configure({
+            ...configureParams,
+            autoApprove: opts.yes === true,
+          }),
+          runWithApproval: async () => rare.listing.release.configure({
+            ...configureParams,
+            autoApprove: true,
+          }),
         });
+        if (result === undefined) {
+          return;
+        }
 
         output(
           {
@@ -268,8 +285,12 @@ export function releaseCommand(): Command {
             maxMints: result.maxMints,
             splitRecipients: result.splitRecipients,
             splitRatios: result.splitRatios,
+            approvalTxHash: result.approvalTxHash ?? null,
           },
           () => {
+            if (result.approvalTxHash !== undefined) {
+              console.log(`Approval transaction sent: ${result.approvalTxHash}`);
+            }
             console.log(`\nTransaction sent: ${result.txHash}`);
             console.log(`Release configured! Block: ${result.receipt.blockNumber}`);
           },

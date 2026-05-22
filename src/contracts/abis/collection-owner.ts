@@ -76,6 +76,23 @@ export const collectionOwnerAbi = [
     type: 'function',
   },
   {
+    inputs: [{ internalType: 'address', name: '_address', type: 'address' }],
+    name: 'isApprovedMinter',
+    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'address', name: '_minter', type: 'address' },
+      { internalType: 'bool', name: '_isMinter', type: 'bool' },
+    ],
+    name: 'setMinterApproval',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
     inputs: [{ internalType: 'string', name: '_baseURI', type: 'string' }],
     name: 'updateBaseURI',
     outputs: [],

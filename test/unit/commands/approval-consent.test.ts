@@ -1,8 +1,12 @@
 /* eslint-disable functional/immutable-data */
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { NftApprovalRequiredError } from '../../../src/sdk/approvals-shell.js';
+import { MinterApprovalRequiredError, NftApprovalRequiredError } from '../../../src/sdk/approvals-shell.js';
 import { PaymentApprovalRequiredError } from '../../../src/sdk/payments-shell.js';
-import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from '../../../src/commands/approval-consent.js';
+import {
+  runWithMinterApprovalConsent,
+  runWithNftApprovalConsent,
+  runWithPaymentApprovalConsent,
+} from '../../../src/commands/approval-consent.js';
 
 const question = vi.hoisted(() => vi.fn(async (): Promise<string> => 'yes'));
 const close = vi.hoisted(() => vi.fn());
@@ -14,6 +18,7 @@ vi.mock('node:readline/promises', () => ({
 
 const spenderAddress = '0x8888888888888888888888888888888888888888';
 const nftAddress = '0x9999999999999999999999999999999999999999';
+const collectionAddress = '0x7777777777777777777777777777777777777777';
 const originalStdinIsTty = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
 let consoleLog: ReturnType<typeof vi.spyOn>;
 
@@ -99,6 +104,42 @@ test('NFT approval consent rejects declined prompts before retrying with approva
   expect(runWithApproval).not.toHaveBeenCalled();
   expect(createInterface).toHaveBeenCalledOnce();
   expect(close).toHaveBeenCalledOnce();
+});
+
+test('minter approval consent retries with approval after confirmation', async () => {
+  setStdinIsTty(true);
+  question.mockResolvedValueOnce('yes');
+  const runWithApproval = vi.fn(async (): Promise<string> => 'approved');
+
+  await expect(runWithMinterApprovalConsent({
+    commandName: 'rare listing release configure',
+    approvalMessage: 'RareMinter minter approval is required before configuring this release.',
+    runWithoutApproval: async () => {
+      throw new MinterApprovalRequiredError({ collection: collectionAddress, minter: spenderAddress });
+    },
+    runWithApproval,
+  })).resolves.toBe('approved');
+
+  expect(runWithApproval).toHaveBeenCalledOnce();
+  expect(createInterface).toHaveBeenCalledOnce();
+  expect(close).toHaveBeenCalledOnce();
+});
+
+test('minter approval consent rejects non-interactive prompts before retrying with approval', async () => {
+  setStdinIsTty(false);
+  const runWithApproval = vi.fn(async (): Promise<string> => 'approved');
+
+  await expect(runWithMinterApprovalConsent({
+    commandName: 'rare listing release configure',
+    approvalMessage: 'RareMinter minter approval is required before configuring this release.',
+    runWithoutApproval: async () => {
+      throw new MinterApprovalRequiredError({ collection: collectionAddress, minter: spenderAddress });
+    },
+    runWithApproval,
+  })).rejects.toThrow('rare listing release configure requires --yes when a minter approval is required in non-interactive mode.');
+
+  expect(runWithApproval).not.toHaveBeenCalled();
+  expect(createInterface).not.toHaveBeenCalled();
 });
 
 function setStdinIsTty(value: boolean): void {

@@ -88,6 +88,18 @@ export class NftApprovalRequiredError extends Error {
   }
 }
 
+export class MinterApprovalRequiredError extends Error {
+  readonly collection: Address;
+  readonly minter: Address;
+
+  constructor(params: { collection: Address; minter: Address }) {
+    super(`Minter approval is required for collection ${params.collection} and minter ${params.minter}.`);
+    this.name = 'MinterApprovalRequiredError';
+    this.collection = params.collection;
+    this.minter = params.minter;
+  }
+}
+
 export async function approveNftContractIfNeeded(opts: {
   publicClient: NftApprovalReadClient & TransactionReceiptClient;
   walletClient: NftApprovalWriteClient;
