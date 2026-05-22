@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.0.1
+
+### Fixes
+
+- Validated persisted private keys when reading wallet configuration.
+- Stopped loading `.env` files from the current working directory when running the CLI.
+- Honored the configured default chain when generating wallets.
+- Failed closed when allowance reads error instead of continuing with unsafe approval assumptions.
+- Failed approval consent prompts explicitly when consent cannot be confirmed.
+- Validated release allowlists before upload.
+- Removed stale Base batch auction house metadata.
+- Fixed the lint entrypoint, swap receipt fixture, and live suite regressions.
+- Fixed configuring Uniswap API keys.
+- Fixed RareMinter approval handling in release configuration.
+- Made collection status reads best effort for collection commands and SDK collection status flows.
+
+### Maintenance
+
+- Added TypeScript checking for tests.
+- Added targeted SDK boundary coverage for package exports, client API shaping, liquid validation, and Uniswap API behavior.
+- Removed the stale CLI overview document.
+
+**Full changelog**: https://github.com/superrare/rare-cli/compare/v1.0.0...v1.0.1
+
 ## 1.0.0
 
 ### Breaking changes
