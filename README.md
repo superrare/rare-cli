@@ -103,7 +103,7 @@ Most chain-aware commands accept `--chain` or `--chain-id` to select a network. 
 
 Supported chains: `mainnet`, `sepolia`, `base`, `base-sepolia`
 
-Feature deployment varies by chain. Batch listing, batch offer, RareMinter release, Liquid Edition, and swap flows are currently available on `mainnet` and `sepolia`; batch auction addresses are also configured for `base` and `base-sepolia`.
+Feature deployment varies by chain. Batch listing, batch offer, batch auction, RareMinter release, Liquid Edition, and swap flows are currently available on `mainnet` and `sepolia`.
 
 ### Deploy an NFT Collection
 
@@ -942,8 +942,8 @@ Batch, approval, Liquid Edition, and swap infrastructure:
 |---|---|---|---|---|---|---|---|---|---|
 | Sepolia | `0xF2bE72d4343beD375Cb6d0E799a3c003163860e0` | `0x371cca54ef859bb0c7b910581a528ee47773fd56` | `0x293AE7701A7830B1d38A7608EdF86A106d9E2645` | `0x972dEe8fa339ad2D9c6cbDA31b67f98Fac242d13` | `0x4619eB29e84392CE91C27FC936A5c94d1D14b93f` | `0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E` | `0xb1777091C953fa2aC1fD67f2b3e2f61343F5Ce5e` | `0x429c3Ee66E7f6CDA12C5BadE4104aF3277aA2305` | `0x61B3f2011A92d183C7dbaDBdA940a7555Ccf9227` |
 | Mainnet | `0x6a190885A806D39A0A8C348bfA1ac762D72E608d` | `0xe15cf80b25272ade261532efdb7912f9104851d4` | `0x71742c7196f1c334C4c038ce6dcDcEE98097F9Da` | `0x61DBF87164d33FD3695256DC8Ba74D3B1d304170` | `0xa837a7eAff154Ab837617Cf7250648D3Ec0A4436` | `0x4bb0Deea6d1A30C601338aAB776d394C2AE5c0F8` | `0xbb4341CFd588a098e9aCE1D224178836426c4a8E` | `0xEBd58EdA8408d9EA409f2c2bE8898BD9738f3583` | `0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203` |
-| Base Sepolia | — | — | `0x2b181ae0f1aea6fed75591b04991b1a3f9868d51` | — | — | — | — | — | — |
-| Base | — | — | `0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd` | — | — | — | — | — | — |
+| Base Sepolia | — | — | — | — | — | — | — | — | — |
+| Base | — | — | — | — | — | — | — | — | — |
 
 ## Underlying Solidity Contracts
 
