@@ -15,13 +15,7 @@ loadDotEnv();
 
 const describeRareApiMerkle = process.env.RARE_API_BASE_URL ? describe : describe.skip;
 
-const publicClient = {
-  chain: { id: 11155111 },
-} as never;
-
-const config = {
-  publicClient,
-};
+const config = {};
 
 const testNfts = [
   {

@@ -1,5 +1,4 @@
 import { getAddress, type Address, type Hex } from 'viem';
-import type { RareClientConfig } from './types/client.js';
 import { normalizeBytes32 } from './batch-core.js';
 import { createApiClient, type ApiClient } from '../data-access/index.js';
 
@@ -23,8 +22,13 @@ export type ApiAddressMerkleProof = {
   proof: Hex[];
 };
 
+type RareApiConfig = {
+  apiBaseUrl?: string;
+  apiFetch?: typeof fetch;
+};
+
 export async function generateApiNftMerkleRoot(
-  config: RareClientConfig,
+  config: RareApiConfig,
   nfts: readonly { contractAddress: Address; tokenId: string | number | bigint }[],
 ): Promise<Hex> {
   const { data } = await withApiTransportRetry(async () => await createConfiguredApiClient(config).POST(
@@ -45,7 +49,7 @@ export async function generateApiNftMerkleRoot(
 }
 
 export async function generateApiAddressMerkleRoot(
-  config: RareClientConfig,
+  config: RareApiConfig,
   params: {
     addresses: readonly Address[];
     storageTarget: 'batch-listing' | 'collection-allowlist' | 'both';
@@ -67,7 +71,7 @@ export async function generateApiAddressMerkleRoot(
 }
 
 export async function resolveApiNftMerkleProof(
-  config: RareClientConfig,
+  config: RareApiConfig,
   params: {
     chainId: number;
     contractAddress: Address;
@@ -103,7 +107,7 @@ export async function resolveApiNftMerkleProof(
 }
 
 export async function resolveApiNftMerkleProofFromRoots(
-  config: RareClientConfig,
+  config: RareApiConfig,
   params: {
     chainId: number;
     contractAddress: Address;
@@ -145,7 +149,7 @@ export function isApiNftMerkleProofResolutionError(error: unknown): boolean {
 }
 
 export async function resolveApiAddressMerkleProof(
-  config: RareClientConfig,
+  config: RareApiConfig,
   params: {
     root: Hex;
     address: Address;
@@ -167,7 +171,7 @@ export async function resolveApiAddressMerkleProof(
   };
 }
 
-function createConfiguredApiClient(config: RareClientConfig): ApiClient {
+function createConfiguredApiClient(config: RareApiConfig): ApiClient {
   return createApiClient(config.apiBaseUrl, config.apiFetch);
 }
 
@@ -189,7 +193,7 @@ async function withApiTransportRetry<T>(request: () => Promise<T>, attempt = 1):
 }
 
 async function collectApiNftMerkleProofMatches(
-  config: RareClientConfig,
+  config: RareApiConfig,
   params: {
     chainId: number;
     contractAddress: Address;
