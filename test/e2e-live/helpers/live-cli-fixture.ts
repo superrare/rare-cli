@@ -1,6 +1,7 @@
 import { expect } from 'vitest';
 import type { Address, PublicClient } from 'viem';
-import type { SupportedChain } from '../../../src/contracts/addresses.js';
+import { auctionAbi } from '../../../src/contracts/abis/auction.js';
+import { getContractAddresses, type SupportedChain } from '../../../src/contracts/addresses.js';
 import {
   cleanupTempHome,
   configureLiveHome,
@@ -402,9 +403,38 @@ export function liveAuctionDurationSeconds(): number {
   return Number.parseInt(process.env.E2E_AUCTION_DURATION_SECONDS ?? '60', 10);
 }
 
-export async function waitForAuctionToEnd(): Promise<void> {
-  const duration = liveAuctionDurationSeconds();
-  await sleep((duration + 10) * 1000);
+export async function waitForAuctionToEnd(
+  fixture: LiveCliFixture,
+  contract: Address,
+  tokenId: string,
+): Promise<void> {
+  const timeoutAt = Date.now() + (liveAuctionDurationSeconds() + 180) * 1000;
+  let latestBlockTimestamp: bigint | undefined;
+  let endTime: bigint | undefined;
+
+  while (Date.now() < timeoutAt) {
+    const details = await fixture.publicClient.readContract({
+      address: getContractAddresses(fixture.chain).auction,
+      abi: auctionAbi,
+      functionName: 'getAuctionDetails',
+      args: [contract, BigInt(tokenId)],
+    });
+    const startingTime = details[2];
+    const lengthOfAuction = details[3];
+    endTime = startingTime > 0n ? startingTime + lengthOfAuction : undefined;
+    latestBlockTimestamp = (await fixture.publicClient.getBlock()).timestamp;
+
+    if (endTime !== undefined && latestBlockTimestamp >= endTime) {
+      return;
+    }
+
+    await sleep(5_000);
+  }
+
+  throw new Error(
+    `Timed out waiting for auction to end. Last block timestamp: ${String(latestBlockTimestamp)}, ` +
+      `endTime: ${String(endTime)}.`,
+  );
 }
 
 async function sleep(ms: number): Promise<void> {
