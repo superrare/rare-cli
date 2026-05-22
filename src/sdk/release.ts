@@ -4,10 +4,12 @@ import {
   isAddressEqual,
   parseEventLogs,
   type Address,
+  type Hash,
   type Hex,
   type PublicClient,
   type TransactionReceipt,
 } from 'viem';
+import { collectionOwnerAbi } from '../contracts/abis/collection-owner.js';
 import { rareMinterAbi } from '../contracts/abis/rare-minter.js';
 import { tokenAbi } from '../contracts/abis/token.js';
 import type { SupportedChain } from '../contracts/addresses.js';
@@ -15,8 +17,10 @@ import type { ReleaseNamespace } from './types/release.js';
 import type { RareClientConfig } from './types/client.js';
 import { ETH_ADDRESS } from '../contracts/addresses.js';
 import { preparePaymentForSpender } from './payments-shell.js';
+import { MinterApprovalRequiredError } from './approvals-shell.js';
 import { requireWallet } from './wallet-shell.js';
 import { resolveCurrencyForSdk } from './currency.js';
+import { buildCollectionMinterApprovalWrite, planCollectionMinterApproval } from './collection-core.js';
 import {
   assertReleaseContractOwner,
   assertReleaseAllowlistConfigMatches,
@@ -136,10 +140,86 @@ async function assertConfigurableReleaseContract(opts: {
   } catch (error) {
     throw new Error(
       `Collection ${contract} must expose mintTo(address) callable by RareMinter ${rareMinter}. ` +
+        `For LazySovereignNFT collections, approve RareMinter as a minter or prepare lazy mint metadata with RareMinter as the minter. ` +
         `Simulation failed: ${errorMessage(error)}`,
       { cause: error },
     );
   }
+}
+
+async function readReleaseMinterApproval(opts: {
+  publicClient: PublicClient;
+  contract: Address;
+  minter: Address;
+}): Promise<boolean | null> {
+  try {
+    return await opts.publicClient.readContract({
+      address: opts.contract,
+      abi: collectionOwnerAbi,
+      functionName: 'isApprovedMinter',
+      args: [opts.minter],
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function approveReleaseMinterIfNeeded(opts: {
+  publicClient: PublicClient;
+  walletClient: NonNullable<RareClientConfig['walletClient']>;
+  account: ReturnType<typeof requireWallet>['account'];
+  contract: Address;
+  minter: Address;
+  autoApprove?: boolean;
+}): Promise<Hash | undefined> {
+  const approved = await readReleaseMinterApproval({
+    publicClient: opts.publicClient,
+    contract: opts.contract,
+    minter: opts.minter,
+  });
+
+  if (approved !== false) {
+    return undefined;
+  }
+
+  if (opts.autoApprove === false) {
+    throw new MinterApprovalRequiredError({
+      collection: opts.contract,
+      minter: opts.minter,
+    });
+  }
+
+  const plan = planCollectionMinterApproval({
+    contract: opts.contract,
+    minter: opts.minter,
+    approved: true,
+  });
+  const write = buildCollectionMinterApprovalWrite(plan);
+  const approvalTxHash = await opts.walletClient.writeContract({
+    address: plan.contract,
+    abi: collectionOwnerAbi,
+    functionName: write.functionName,
+    args: write.args,
+    account: opts.account,
+    chain: undefined,
+  });
+
+  await opts.publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
+
+  const confirmed = await readReleaseMinterApproval({
+    publicClient: opts.publicClient,
+    contract: opts.contract,
+    minter: opts.minter,
+  });
+
+  if (confirmed !== true) {
+    throw new Error(
+      `Lazy Sovereign minter approval verification failed for ${opts.minter}. ` +
+        `The approval tx was mined but the collection still does not report RareMinter as approved.`,
+    );
+  }
+
+  return approvalTxHash;
 }
 
 async function optionalRead<T>(read: () => Promise<T>): Promise<T | null> {
@@ -516,6 +596,15 @@ export function createReleaseNamespace(
         nowSeconds: currentUnixTimestamp(),
       });
 
+      const approvalTxHash = await approveReleaseMinterIfNeeded({
+        publicClient,
+        walletClient,
+        account,
+        contract: plan.contract,
+        minter: rareMinter,
+        autoApprove: params.autoApprove,
+      });
+
       await assertConfigurableReleaseContract({
         publicClient,
         contract: plan.contract,
@@ -553,6 +642,7 @@ export function createReleaseNamespace(
         maxMints: plan.maxMints,
         splitRecipients: plan.splitRecipients,
         splitRatios: plan.splitRatios,
+        approvalTxHash,
       };
     },
 

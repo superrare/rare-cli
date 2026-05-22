@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildCollectionMintBatchWrite,
+  buildCollectionMinterApprovalWrite,
   buildCollectionPrepareLazyMintWrite,
   buildCollectionRoyaltyPercentageWrite,
   buildCreateLazySovereignCollectionWrite,
@@ -11,6 +12,7 @@ import {
   planCollectionBaseUri,
   planCollectionContract,
   planCollectionMintBatch,
+  planCollectionMinterApproval,
   planCollectionPrepareLazyMint,
   planCollectionReceiver,
   planCollectionRoyaltyPercentage,
@@ -255,6 +257,32 @@ describe('Sovereign collection core', () => {
     expect(buildCollectionPrepareLazyMintWrite(minterPlan)).toEqual({
       functionName: 'prepareMintWithMinter',
       args: ['ipfs://lazy', 3n, MINTER_ADDRESS],
+    });
+  });
+
+  it('plans Lazy Sovereign minter approval writes', () => {
+    const defaultApproval = planCollectionMinterApproval({
+      contract: COLLECTION_ADDRESS,
+      minter: MINTER_ADDRESS,
+    });
+    expect(defaultApproval).toEqual({
+      contract: COLLECTION_ADDRESS,
+      minter: MINTER_ADDRESS,
+      approved: true,
+    });
+    expect(buildCollectionMinterApprovalWrite(defaultApproval)).toEqual({
+      functionName: 'setMinterApproval',
+      args: [MINTER_ADDRESS, true],
+    });
+
+    const revoked = planCollectionMinterApproval({
+      contract: COLLECTION_ADDRESS,
+      minter: MINTER_ADDRESS,
+      approved: false,
+    });
+    expect(buildCollectionMinterApprovalWrite(revoked)).toEqual({
+      functionName: 'setMinterApproval',
+      args: [MINTER_ADDRESS, false],
     });
   });
 

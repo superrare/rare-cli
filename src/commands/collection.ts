@@ -3,7 +3,7 @@ import { getAddress, isAddress, type Address } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
-import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
+import { getContractAddresses, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
 import type { RareClient } from '../sdk/client.js';
 import {
   lazySovereignCollectionContractTypes,
@@ -286,7 +286,7 @@ function createPrepareLazyMintCommand(): Command {
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--base-uri <uri>', 'base URI for token metadata')
     .requiredOption('--amount <number>', 'number of tokens to prepare')
-    .option('--minter <address>', 'optional approved minter address')
+    .option('--minter <address|rare-minter>', 'optional approved minter address')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionPrepareLazyMintOptions) => {
@@ -296,14 +296,17 @@ function createPrepareLazyMintCommand(): Command {
         if (amount === undefined) {
           throw new Error('collection prepare-lazy-mint requires --amount.');
         }
-        const minter = opts.minter === undefined
-          ? undefined
-          : parseAddressOption(opts.minter, '--minter');
-        const plan = planCollectionPrepareLazyMint({ contract, baseUri: opts.baseUri, amount, minter });
         const chain = getActiveChain(opts.chain, opts.chainId);
+        const minter = resolveOptionalCollectionMinter(
+          opts.minter,
+          getContractAddresses(chain).rareMinter,
+          chain,
+          '--minter',
+        );
         const { client } = getWalletClient(chain);
         const publicClient = getPublicClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
+        const plan = planCollectionPrepareLazyMint({ contract, baseUri: opts.baseUri, amount, minter });
 
         log(`Preparing Lazy Sovereign mint on ${chain}...`);
         log(`  Contract: ${contract}`);
@@ -924,4 +927,41 @@ function parseAddressOption(value: string, optionName: string): Address {
   }
 
   return getAddress(value);
+}
+
+function resolveOptionalCollectionMinter(
+  value: string | undefined,
+  rareMinter: Address | undefined,
+  chain: ReturnType<typeof getActiveChain>,
+  optionName: string,
+): Address | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return resolveCollectionMinter(value, rareMinter, chain, optionName);
+}
+
+function resolveCollectionMinter(
+  value: string | undefined,
+  rareMinter: Address | undefined,
+  chain: ReturnType<typeof getActiveChain>,
+  optionName: string,
+): Address {
+  if (value === undefined || isRareMinterAlias(value)) {
+    if (rareMinter === undefined) {
+      throw new Error(
+        `${optionName} must be a valid 0x address because RareMinter is not configured on "${chain}".`,
+      );
+    }
+
+    return rareMinter;
+  }
+
+  return parseAddressOption(value, optionName);
+}
+
+function isRareMinterAlias(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized === 'rare-minter' || normalized === 'rareminter';
 }

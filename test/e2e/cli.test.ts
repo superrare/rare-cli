@@ -2738,6 +2738,7 @@ describe('built CLI deterministic behavior', () => {
       const configureHelp = await runCli(['listing', 'release', 'configure', '--help'], { home });
       expect(configureHelp.code).toBe(0);
       expect(configureHelp.stdout).toContain('--chain-id <id>');
+      expect(configureHelp.stdout).toContain('--yes');
 
       const statusHelp = await runCli(['listing', 'release', 'status', '--help'], { home });
       expect(statusHelp.code).toBe(0);
@@ -2900,7 +2901,7 @@ describe('built CLI deterministic behavior', () => {
       expect(result.stdout).toContain('--base-uri <uri>');
       expect(result.stdout).toContain('--amount <number>');
       expect(result.stdout).not.toContain('--token-count <number>');
-      expect(result.stdout).toContain('--minter <address>');
+      expect(result.stdout).toContain('--minter <address|rare-minter>');
       expect(result.stderr).toBe('');
     });
   });
