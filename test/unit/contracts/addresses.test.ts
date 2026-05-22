@@ -85,6 +85,14 @@ describe('chain and currency helpers', () => {
     expect(() => requireContractAddress('base', 'batchOfferCreator')).toThrow(
       'RARE Protocol batchOfferCreator contract is not configured on "base".',
     );
+    expect(() => requireContractAddress('base', 'batchAuctionHouse')).toThrow(
+      'RARE Protocol batchAuctionHouse contract is not configured on "base".',
+    );
+    expect(() => requireContractAddress('base-sepolia', 'batchAuctionHouse')).toThrow(
+      'RARE Protocol batchAuctionHouse contract is not configured on "base-sepolia".',
+    );
+    expect(getContractAddresses('base').factory).toBe(getAddress('0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd'));
+    expect(getContractAddresses('base-sepolia').factory).toBe(getAddress('0x2b181ae0f1aea6fed75591b04991b1a3f9868d51'));
   });
 
   it('resolves named currencies and custom ERC20 addresses', () => {

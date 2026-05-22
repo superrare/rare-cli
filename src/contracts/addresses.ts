@@ -101,12 +101,10 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
   base: {
     factory: getAddress('0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd'),
     auction: getAddress('0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2'),
-    batchAuctionHouse: getAddress('0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd'),
   },
   'base-sepolia': {
     factory: getAddress('0x2b181ae0f1aea6fed75591b04991b1a3f9868d51'),
     auction: getAddress('0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2'),
-    batchAuctionHouse: getAddress('0x2b181ae0f1aea6fed75591b04991b1a3f9868d51'),
   },
 };
 
