@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import { getUser } from '../sdk/api.js';
 import { parseAddress } from '../sdk/validation.js';
-import { printError } from '../errors.js';
 import { log, output, printUser } from '../output.js';
 
 export function userCommand(): Command {
@@ -17,14 +16,11 @@ export function userCommand(): Command {
 
       log(`Getting user ${userAddress}...`);
 
-      try {
-        const result = await getUser(userAddress);
-        output(result, () => {
-          printUser(result);
-        });
-      } catch (error) {
-        printError(error);
-      }
+      const result = await getUser(userAddress);
+      output(result, () => {
+        printUser(result);
+      });
+
     });
 
   return cmd;

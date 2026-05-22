@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient } from '../client.js';
-import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import type { Nft } from '../sdk/api.js';
 import { parseAddress } from '../sdk/validation.js';
@@ -42,33 +41,30 @@ export function createCollectionListCommand(): Command {
     .option('--per-page <n>', 'number of results per page', '24')
     .option('--page <n>', 'page number', '1')
     .action(async (opts: AccountListOptions): Promise<void> => {
-      try {
-        const account = parseAddress(opts.account, '--account');
-        const { chain, rare } = createReadClient(opts);
-        const page = parsePositiveInteger(opts.page, '--page');
-        const perPage = parsePositiveInteger(opts.perPage, '--per-page');
+      const account = parseAddress(opts.account, '--account');
+      const { chain, rare } = createReadClient(opts);
+      const page = parsePositiveInteger(opts.page, '--page');
+      const perPage = parsePositiveInteger(opts.perPage, '--per-page');
 
-        log(`Listing collections owned by ${account} on ${chain}...`);
-        const result = await rare.search.collections({
-          ownerAddress: account,
-          page,
-          perPage,
-        });
+      log(`Listing collections owned by ${account} on ${chain}...`);
+      const result = await rare.search.collections({
+        ownerAddress: account,
+        page,
+        perPage,
+      });
 
-        output(result, () => {
-          console.log(`\nCollections owned by ${account} (${result.pagination.totalCount} total):`);
-          if (result.data.length === 0) {
-            console.log('  No results found.');
-            return;
-          }
-          for (const collection of result.data) {
-            printCollectionRow(collection);
-          }
-          printPagination(result.pagination);
-        });
-      } catch (error) {
-        printError(error);
-      }
+      output(result, () => {
+        console.log(`\nCollections owned by ${account} (${result.pagination.totalCount} total):`);
+        if (result.data.length === 0) {
+          console.log('  No results found.');
+          return;
+        }
+        for (const collection of result.data) {
+          printCollectionRow(collection);
+        }
+        printPagination(result.pagination);
+      });
+
     });
 
   return cmd;
@@ -84,29 +80,26 @@ export function createListingListCommand(): Command {
     .option('--per-page <n>', 'number of results per page', '24')
     .option('--page <n>', 'page number', '1')
     .action(async (opts: AccountListOptions): Promise<void> => {
-      try {
-        const account = parseAddress(opts.account, '--account');
-        const { chain, rare } = createReadClient(opts);
-        const page = parsePositiveInteger(opts.page, '--page');
-        const perPage = parsePositiveInteger(opts.perPage, '--per-page');
+      const account = parseAddress(opts.account, '--account');
+      const { chain, rare } = createReadClient(opts);
+      const page = parsePositiveInteger(opts.page, '--page');
+      const perPage = parsePositiveInteger(opts.perPage, '--per-page');
 
-        log(`Listing active token listings on NFTs held by ${account} on ${chain}...`);
-        const result = await rare.search.nfts({
-          ownerAddress: account,
-          hasListing: true,
-          listingType: 'SALE_PRICE',
-          page,
-          perPage,
-        });
+      log(`Listing active token listings on NFTs held by ${account} on ${chain}...`);
+      const result = await rare.search.nfts({
+        ownerAddress: account,
+        hasListing: true,
+        listingType: 'SALE_PRICE',
+        page,
+        perPage,
+      });
 
-        output(result, () => {
-          console.log(`\nActive token listings on NFTs held by ${account} (${result.pagination.totalCount} tokens):`);
-          printListingRows(result.data, 'SALE_PRICE');
-          printPagination(result.pagination);
-        });
-      } catch (error) {
-        printError(error);
-      }
+      output(result, () => {
+        console.log(`\nActive token listings on NFTs held by ${account} (${result.pagination.totalCount} tokens):`);
+        printListingRows(result.data, 'SALE_PRICE');
+        printPagination(result.pagination);
+      });
+
     });
 
   return cmd;
@@ -122,29 +115,26 @@ export function createBatchListingListCommand(): Command {
     .option('--per-page <n>', 'number of results per page', '24')
     .option('--page <n>', 'page number', '1')
     .action(async (opts: AccountListOptions): Promise<void> => {
-      try {
-        const account = parseAddress(opts.account, '--account');
-        const { chain, rare } = createReadClient(opts);
-        const page = parsePositiveInteger(opts.page, '--page');
-        const perPage = parsePositiveInteger(opts.perPage, '--per-page');
+      const account = parseAddress(opts.account, '--account');
+      const { chain, rare } = createReadClient(opts);
+      const page = parsePositiveInteger(opts.page, '--page');
+      const perPage = parsePositiveInteger(opts.perPage, '--per-page');
 
-        log(`Listing active batch listings on NFTs held by ${account} on ${chain}...`);
-        const result = await rare.search.nfts({
-          ownerAddress: account,
-          hasListing: true,
-          listingType: 'BATCH_SALE_PRICE',
-          page,
-          perPage,
-        });
+      log(`Listing active batch listings on NFTs held by ${account} on ${chain}...`);
+      const result = await rare.search.nfts({
+        ownerAddress: account,
+        hasListing: true,
+        listingType: 'BATCH_SALE_PRICE',
+        page,
+        perPage,
+      });
 
-        output(result, () => {
-          console.log(`\nActive batch listings on NFTs held by ${account} (${result.pagination.totalCount} tokens):`);
-          printListingRows(result.data, 'BATCH_SALE_PRICE');
-          printPagination(result.pagination);
-        });
-      } catch (error) {
-        printError(error);
-      }
+      output(result, () => {
+        console.log(`\nActive batch listings on NFTs held by ${account} (${result.pagination.totalCount} tokens):`);
+        printListingRows(result.data, 'BATCH_SALE_PRICE');
+        printPagination(result.pagination);
+      });
+
     });
 
   return cmd;
@@ -161,32 +151,29 @@ export function createOfferListCommand(): Command {
     .option('--per-page <n>', 'number of results per page', '24')
     .option('--page <n>', 'page number', '1')
     .action(async (opts: AccountSideListOptions): Promise<void> => {
-      try {
-        const account = parseAddress(opts.account, '--account');
-        const side = parseMarketSide(opts.side);
-        const { chain, rare } = createReadClient(opts);
-        const page = parsePositiveInteger(opts.page, '--page');
-        const perPage = parsePositiveInteger(opts.perPage, '--per-page');
-        const makerParams = side === 'maker' ? { offerBuyerAddress: account } : {};
-        const takerParams = side === 'taker' ? { ownerAddress: account } : {};
+      const account = parseAddress(opts.account, '--account');
+      const side = parseMarketSide(opts.side);
+      const { chain, rare } = createReadClient(opts);
+      const page = parsePositiveInteger(opts.page, '--page');
+      const perPage = parsePositiveInteger(opts.perPage, '--per-page');
+      const makerParams = side === 'maker' ? { offerBuyerAddress: account } : {};
+      const takerParams = side === 'taker' ? { ownerAddress: account } : {};
 
-        log(`Listing active offers for ${account} as ${side} on ${chain}...`);
-        const result = await rare.search.nfts({
-          ...makerParams,
-          ...takerParams,
-          hasOffer: true,
-          page,
-          perPage,
-        });
+      log(`Listing active offers for ${account} as ${side} on ${chain}...`);
+      const result = await rare.search.nfts({
+        ...makerParams,
+        ...takerParams,
+        hasOffer: true,
+        page,
+        perPage,
+      });
 
-        output(result, () => {
-          console.log(`\nActive offers for ${account} as ${side} (${result.pagination.totalCount} tokens):`);
-          printOfferRows(result.data, side, account);
-          printPagination(result.pagination);
-        });
-      } catch (error) {
-        printError(error);
-      }
+      output(result, () => {
+        console.log(`\nActive offers for ${account} as ${side} (${result.pagination.totalCount} tokens):`);
+        printOfferRows(result.data, side, account);
+        printPagination(result.pagination);
+      });
+
     });
 
   return cmd;
@@ -203,32 +190,29 @@ export function createAuctionListCommand(): Command {
     .option('--per-page <n>', 'number of results per page', '24')
     .option('--page <n>', 'page number', '1')
     .action(async (opts: AccountSideListOptions): Promise<void> => {
-      try {
-        const account = parseAddress(opts.account, '--account');
-        const side = parseMarketSide(opts.side);
-        const { chain, rare } = createReadClient(opts);
-        const page = parsePositiveInteger(opts.page, '--page');
-        const perPage = parsePositiveInteger(opts.perPage, '--per-page');
-        const makerParams = side === 'maker' ? { auctionCreatorAddress: account } : {};
-        const takerParams = side === 'taker' ? { auctionBidderAddress: account } : {};
+      const account = parseAddress(opts.account, '--account');
+      const side = parseMarketSide(opts.side);
+      const { chain, rare } = createReadClient(opts);
+      const page = parsePositiveInteger(opts.page, '--page');
+      const perPage = parsePositiveInteger(opts.perPage, '--per-page');
+      const makerParams = side === 'maker' ? { auctionCreatorAddress: account } : {};
+      const takerParams = side === 'taker' ? { auctionBidderAddress: account } : {};
 
-        log(`Listing auctions for ${account} as ${side} on ${chain}...`);
-        const result = await rare.search.nfts({
-          ...makerParams,
-          ...takerParams,
-          hasAuction: true,
-          page,
-          perPage,
-        });
+      log(`Listing auctions for ${account} as ${side} on ${chain}...`);
+      const result = await rare.search.nfts({
+        ...makerParams,
+        ...takerParams,
+        hasAuction: true,
+        page,
+        perPage,
+      });
 
-        output(result, () => {
-          console.log(`\nAuctions for ${account} as ${side} (${result.pagination.totalCount} tokens):`);
-          printAuctionRows(result.data, side, account);
-          printPagination(result.pagination);
-        });
-      } catch (error) {
-        printError(error);
-      }
+      output(result, () => {
+        console.log(`\nAuctions for ${account} as ${side} (${result.pagination.totalCount} tokens):`);
+        printAuctionRows(result.data, side, account);
+        printPagination(result.pagination);
+      });
+
     });
 
   return cmd;

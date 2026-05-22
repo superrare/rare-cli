@@ -4,7 +4,6 @@ import { getPublicClient, getWalletClient } from '../client.js';
 import { chainIds } from '../contracts/addresses.js';
 import { createRareClient } from '../sdk/client.js';
 import { parseAddress } from '../sdk/validation.js';
-import { printError } from '../errors.js';
 import { output, log } from '../output.js';
 
 type ImportErc721Options = {
@@ -37,21 +36,18 @@ export function importCommand(): Command {
       log(`  Contract: ${contractAddress}`);
       log(`  Owner:    ${ownerAddress}`);
 
-      try {
-        await rare.import.erc721({
-          contract: contractAddress,
-          owner: ownerAddress,
-        });
+      await rare.import.erc721({
+        contract: contractAddress,
+        owner: ownerAddress,
+      });
 
-        output(
-          { imported: true, chain, chainId, contract: contractAddress, owner: ownerAddress },
-          () => {
-            console.log(`\nContract imported successfully.`);
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
+      output(
+        { imported: true, chain, chainId, contract: contractAddress, owner: ownerAddress },
+        () => {
+          console.log(`\nContract imported successfully.`);
+        },
+      );
+
     });
 
   return cmd;

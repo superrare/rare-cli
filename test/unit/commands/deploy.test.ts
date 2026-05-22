@@ -8,7 +8,6 @@ import { deployLiquidEditionCommand } from '../../../src/commands/deploy.js';
 const getPublicClient = vi.hoisted(() => vi.fn());
 const getWalletClient = vi.hoisted(() => vi.fn());
 const createRareClient = vi.hoisted(() => vi.fn());
-const printError = vi.hoisted(() => vi.fn());
 
 vi.mock('../../../src/client.js', () => ({
   getPublicClient,
@@ -17,10 +16,6 @@ vi.mock('../../../src/client.js', () => ({
 
 vi.mock('../../../src/sdk/client.js', () => ({
   createRareClient,
-}));
-
-vi.mock('../../../src/errors.js', () => ({
-  printError,
 }));
 
 const publicClient = { kind: 'public-client' };
@@ -33,7 +28,6 @@ beforeEach(() => {
   getPublicClient.mockReset();
   getWalletClient.mockReset();
   createRareClient.mockReset();
-  printError.mockReset();
   generatePresetCurves.mockReset();
   mediaUpload.mockReset();
   pinMetadata.mockReset();
@@ -93,27 +87,27 @@ test('liquid edition deploy requires confirmation before wallet setup and metada
   try {
     await writeFile(imagePath, 'image-bytes', 'utf8');
 
-    await deployLiquidEditionCommand().parseAsync([
-      'Test',
-      'TST',
-      '--curve-preset',
-      'low-demand',
-      '--description',
-      'Test description',
-      '--image',
-      imagePath,
-      '--chain',
-      'sepolia',
-    ], { from: 'user' });
+    await assert.rejects(
+      deployLiquidEditionCommand().parseAsync([
+        'Test',
+        'TST',
+        '--curve-preset',
+        'low-demand',
+        '--description',
+        'Test description',
+        '--image',
+        imagePath,
+        '--chain',
+        'sepolia',
+      ], { from: 'user' }),
+      /rare liquid-edition deploy multicurve requires --yes when --json is enabled/,
+    );
   } finally {
     // eslint-disable-next-line functional/immutable-data
     process.argv.splice(0, process.argv.length, ...originalArgv);
     await rm(tempDir, { recursive: true, force: true });
   }
 
-  const error = printError.mock.calls[0]?.[0];
-  assert.ok(error instanceof Error);
-  assert.match(error.message, /rare liquid-edition deploy multicurve requires --yes when --json is enabled/);
   assert.equal(getWalletClient.mock.calls.length, 0);
   assert.equal(mediaUpload.mock.calls.length, 0);
   assert.equal(pinMetadata.mock.calls.length, 0);

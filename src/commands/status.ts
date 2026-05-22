@@ -3,7 +3,6 @@ import { getActiveChain } from '../config.js';
 import { getPublicClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
 import { parseAddress } from '../sdk/validation.js';
-import { printError } from '../errors.js';
 import { output } from '../output.js';
 import type { RareClient } from '../sdk/client.js';
 
@@ -34,39 +33,36 @@ export function statusCommand(): Command {
       const rare = createRareClient({ publicClient });
       const contractAddress = parseAddress(opts.contract, '--contract');
 
-      try {
-        const { contract: contractInfo } = await rare.token.status({ contract: contractAddress });
-        const tokenInfo = opts.tokenId === undefined
-          ? undefined
-          : await readTokenInfo(rare, contractAddress, opts.tokenId);
+      const { contract: contractInfo } = await rare.token.status({ contract: contractAddress });
+      const tokenInfo = opts.tokenId === undefined
+        ? undefined
+        : await readTokenInfo(rare, contractAddress, opts.tokenId);
 
-        output(
-          {
-            contract: contractInfo,
-            ...(opts.tokenId !== undefined ? { token: tokenInfo } : {}),
-          },
-          () => {
-            console.log('\nContract Info:');
-            console.log(`  Address:      ${contractInfo.contract}`);
-            console.log(`  Chain:        ${contractInfo.chain}`);
-            console.log(`  Name:         ${contractInfo.name}`);
-            console.log(`  Symbol:       ${contractInfo.symbol}`);
-            console.log(`  Total Supply: ${contractInfo.totalSupply?.toString() ?? 'unavailable'}`);
+      output(
+        {
+          contract: contractInfo,
+          ...(opts.tokenId !== undefined ? { token: tokenInfo } : {}),
+        },
+        () => {
+          console.log('\nContract Info:');
+          console.log(`  Address:      ${contractInfo.contract}`);
+          console.log(`  Chain:        ${contractInfo.chain}`);
+          console.log(`  Name:         ${contractInfo.name}`);
+          console.log(`  Symbol:       ${contractInfo.symbol}`);
+          console.log(`  Total Supply: ${contractInfo.totalSupply?.toString() ?? 'unavailable'}`);
 
-            if (opts.tokenId !== undefined) {
-              if (tokenInfo) {
-                console.log(`\nToken #${tokenInfo.tokenId}:`);
-                console.log(`  Owner:    ${tokenInfo.owner}`);
-                console.log(`  URI:      ${tokenInfo.tokenUri}`);
-              } else {
-                console.log(`\nToken #${opts.tokenId}: not found`);
-              }
+          if (opts.tokenId !== undefined) {
+            if (tokenInfo) {
+              console.log(`\nToken #${tokenInfo.tokenId}:`);
+              console.log(`  Owner:    ${tokenInfo.owner}`);
+              console.log(`  URI:      ${tokenInfo.tokenUri}`);
+            } else {
+              console.log(`\nToken #${opts.tokenId}: not found`);
             }
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
+          }
+        },
+      );
+
     });
 
   return cmd;

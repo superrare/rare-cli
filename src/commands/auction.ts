@@ -2,7 +2,6 @@ import { Command } from 'commander';
 import { formatUnits } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { printError } from '../errors.js';
 import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
 import {
@@ -119,53 +118,50 @@ export function auctionCommand(): Command {
         });
       }
 
-      try {
-        const auctionParams = {
-          contract,
-          tokenId: localPlan.tokenId,
-          price,
-          endTime: opts.endTime,
-          currency,
-          auctionType,
-          startTime: opts.startTime,
-          splitAddresses: splits?.addresses,
-          splitRatios: splits?.ratios,
-        };
-        const result = await runWithNftApprovalConsent({
-          commandName: 'rare auction create',
-          approvalMessage: 'NFT approval is required before creating this auction.',
-          runWithoutApproval: async () => rare.auction.create({
-            ...auctionParams,
-            autoApprove: opts.yes === true,
-          }),
-          runWithApproval: async () => rare.auction.create({
-            ...auctionParams,
-            autoApprove: true,
-          }),
-        });
-        if (result === undefined) {
-          return;
-        }
-
-        output(
-          {
-            txHash: result.txHash,
-            blockNumber: result.receipt.blockNumber.toString(),
-            approvalTxHash: result.approvalTxHash ?? null,
-            auctionType: result.auctionType,
-            startTime: result.startTime,
-          },
-          () => {
-            if (result.approvalTxHash) {
-              console.log(`Approval tx sent: ${result.approvalTxHash}`);
-            }
-            console.log(`\nTransaction sent: ${result.txHash}`);
-            console.log(`${result.auctionType === 'scheduled' ? 'Scheduled' : 'Reserve'} auction created! Block: ${result.receipt.blockNumber}`);
-          },
-        );
-      } catch (error) {
-        printError(error);
+      const auctionParams = {
+        contract,
+        tokenId: localPlan.tokenId,
+        price,
+        endTime: opts.endTime,
+        currency,
+        auctionType,
+        startTime: opts.startTime,
+        splitAddresses: splits?.addresses,
+        splitRatios: splits?.ratios,
+      };
+      const result = await runWithNftApprovalConsent({
+        commandName: 'rare auction create',
+        approvalMessage: 'NFT approval is required before creating this auction.',
+        runWithoutApproval: async () => rare.auction.create({
+          ...auctionParams,
+          autoApprove: opts.yes === true,
+        }),
+        runWithApproval: async () => rare.auction.create({
+          ...auctionParams,
+          autoApprove: true,
+        }),
+      });
+      if (result === undefined) {
+        return;
       }
+
+      output(
+        {
+          txHash: result.txHash,
+          blockNumber: result.receipt.blockNumber.toString(),
+          approvalTxHash: result.approvalTxHash ?? null,
+          auctionType: result.auctionType,
+          startTime: result.startTime,
+        },
+        () => {
+          if (result.approvalTxHash) {
+            console.log(`Approval tx sent: ${result.approvalTxHash}`);
+          }
+          console.log(`\nTransaction sent: ${result.txHash}`);
+          console.log(`${result.auctionType === 'scheduled' ? 'Scheduled' : 'Reserve'} auction created! Block: ${result.receipt.blockNumber}`);
+        },
+      );
+
     });
 
   // auction bid
@@ -199,46 +195,43 @@ export function auctionCommand(): Command {
       log(`  Token ID: ${localPlan.tokenId.toString()}`);
       log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
 
-      try {
-        const bidParams = {
-          contract,
-          tokenId: localPlan.tokenId,
-          price,
-          currency,
-        };
-        const result = await runWithPaymentApprovalConsent({
-          commandName: 'rare auction bid',
-          approvalMessage: 'ERC20 approval is required before placing this bid.',
-          runWithoutApproval: async () => rare.auction.bid({
-            ...bidParams,
-            autoApprove: opts.yes === true,
-          }),
-          runWithApproval: async () => rare.auction.bid({
-            ...bidParams,
-            autoApprove: true,
-          }),
-        });
-        if (result === undefined) {
-          return;
-        }
-
-        output(
-          {
-            txHash: result.txHash,
-            blockNumber: result.receipt.blockNumber.toString(),
-            approvalTxHash: result.approvalTxHash ?? null,
-          },
-          () => {
-            if (result.approvalTxHash) {
-              console.log(`Approval tx sent: ${result.approvalTxHash}`);
-            }
-            console.log(`\nTransaction sent: ${result.txHash}`);
-            console.log(`Bid placed! Block: ${result.receipt.blockNumber}`);
-          },
-        );
-      } catch (error) {
-        printError(error);
+      const bidParams = {
+        contract,
+        tokenId: localPlan.tokenId,
+        price,
+        currency,
+      };
+      const result = await runWithPaymentApprovalConsent({
+        commandName: 'rare auction bid',
+        approvalMessage: 'ERC20 approval is required before placing this bid.',
+        runWithoutApproval: async () => rare.auction.bid({
+          ...bidParams,
+          autoApprove: opts.yes === true,
+        }),
+        runWithApproval: async () => rare.auction.bid({
+          ...bidParams,
+          autoApprove: true,
+        }),
+      });
+      if (result === undefined) {
+        return;
       }
+
+      output(
+        {
+          txHash: result.txHash,
+          blockNumber: result.receipt.blockNumber.toString(),
+          approvalTxHash: result.approvalTxHash ?? null,
+        },
+        () => {
+          if (result.approvalTxHash) {
+            console.log(`Approval tx sent: ${result.approvalTxHash}`);
+          }
+          console.log(`\nTransaction sent: ${result.txHash}`);
+          console.log(`Bid placed! Block: ${result.receipt.blockNumber}`);
+        },
+      );
+
     });
 
   // auction settle
@@ -259,22 +252,19 @@ export function auctionCommand(): Command {
 
       log(`Settling auction on ${chain}...`);
 
-      try {
-        const result = await rare.auction.settle({
-          contract,
-          tokenId: localPlan.tokenId,
-        });
+      const result = await rare.auction.settle({
+        contract,
+        tokenId: localPlan.tokenId,
+      });
 
-        output(
-          { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
-          () => {
-            console.log(`Transaction sent: ${result.txHash}`);
-            console.log(`Auction settled! Block: ${result.receipt.blockNumber}`);
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
+      output(
+        { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
+        () => {
+          console.log(`Transaction sent: ${result.txHash}`);
+          console.log(`Auction settled! Block: ${result.receipt.blockNumber}`);
+        },
+      );
+
     });
 
   // auction cancel
@@ -295,22 +285,19 @@ export function auctionCommand(): Command {
 
       log(`Cancelling auction on ${chain}...`);
 
-      try {
-        const result = await rare.auction.cancel({
-          contract,
-          tokenId: localPlan.tokenId,
-        });
+      const result = await rare.auction.cancel({
+        contract,
+        tokenId: localPlan.tokenId,
+      });
 
-        output(
-          { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
-          () => {
-            console.log(`Transaction sent: ${result.txHash}`);
-            console.log(`Auction cancelled! Block: ${result.receipt.blockNumber}`);
-          },
-        );
-      } catch (error) {
-        printError(error);
-      }
+      output(
+        { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
+        () => {
+          console.log(`Transaction sent: ${result.txHash}`);
+          console.log(`Auction cancelled! Block: ${result.receipt.blockNumber}`);
+        },
+      );
+
     });
 
   // auction status
