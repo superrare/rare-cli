@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
+import type { Address } from 'viem';
 import { getContractAddresses } from '../../src/contracts/addresses.js';
 import { describeLive, expectTx, jsonCommand, step, type TxResult } from './live-helpers.js';
 import {
@@ -30,6 +31,86 @@ type CollectionFixture = LiveCliFixture & {
 };
 
 const live = new LiveCliFixtureRef<CollectionFixture>('Live collection CLI fixture has not been initialized.');
+const statusFixtures = [
+  {
+    label: 'ERC-721 collection',
+    contract: '0x3BBbEB163aD57c29BBA356B3d3456EacbD38DD0E',
+    expectedName: 'Rare CLI User Test 1779449555',
+    expectedSymbol: 'RCU9555',
+    expectedMaxTokens: '80',
+    expectsMintConfig: false,
+    expectsBatchCount: true,
+    expectsTokenOwner: true,
+  },
+  {
+    label: 'Lazy ERC-721 collection',
+    contract: '0xBFE00EDfAd8A8BcE2CBCaaE4B26D65FfBD411c27',
+    expectedName: 'Rare CLI Lazy User Test 1779449555',
+    expectedSymbol: 'RCL9555',
+    expectedMaxTokens: '5',
+    expectsMintConfig: true,
+    expectsBatchCount: false,
+    expectsTokenOwner: false,
+  },
+  {
+    label: 'Lazy batch mint collection',
+    contract: '0x408410b7cf8315e0e9705b4A744A1D4471b09449',
+    expectedName: 'Rare CLI Lazy Batch User Test 1779449555',
+    expectedSymbol: 'RLB9555',
+    expectedMaxTokens: '5',
+    expectsMintConfig: false,
+    expectsBatchCount: true,
+    expectsTokenOwner: false,
+  },
+] as const satisfies readonly CollectionStatusFixture[];
+
+type CollectionStatusFixture = {
+  label: string;
+  contract: Address;
+  expectedName: string;
+  expectedSymbol: string;
+  expectedMaxTokens: string;
+  expectsMintConfig: boolean;
+  expectsBatchCount: boolean;
+  expectsTokenOwner: boolean;
+};
+
+type CollectionStatusResult = {
+  chain: string;
+  contract: Address;
+  name?: string;
+  symbol?: string;
+  owner?: Address;
+  totalSupply?: string;
+  maxTokens?: string;
+  disabled?: boolean;
+  tokenUrisLocked?: boolean;
+  batchCount?: string;
+  defaultReceiver?: Address;
+  defaultPercentage?: string;
+  interfaces?: {
+    erc165?: boolean;
+    erc721?: boolean;
+    erc721Metadata?: boolean;
+    erc2981?: boolean;
+  };
+  mintConfig?: {
+    tokenCount: string;
+    baseUri: string;
+    lockedMetadata: boolean;
+  };
+  token?: {
+    tokenId: string;
+    owner?: Address;
+    tokenUri?: string;
+    creator?: Address;
+    royalty?: {
+      salePrice: string;
+      receiver: Address;
+      amount: string;
+    };
+  };
+};
 
 describeLive('live collection CLI writes', () => {
   beforeAll(async () => {
@@ -60,6 +141,74 @@ describeLive('live collection CLI writes', () => {
     expectTx(fixture.buyerMintToken);
     expect(fixture.buyerMintToken.contract).toBe(fixture.collection.contract);
     expect(fixture.buyerMintToken.tokenId).toMatch(/^\d+$/);
+  });
+
+  it.each(statusFixtures)('reads best-effort status for a fixed Sepolia $label', async (statusFixture) => {
+    const fixture = live.value;
+    if (fixture.chain !== 'sepolia') {
+      return;
+    }
+
+    const status = await step(`read fixed ${statusFixture.label} status`, () =>
+      jsonCommand<CollectionStatusResult>(fixture.sellerHome, [
+        'collection',
+        'status',
+        '--contract',
+        statusFixture.contract,
+        '--token-id',
+        '1',
+        '--chain',
+        fixture.chain,
+      ]),
+    );
+
+    expect(status.chain).toBe('sepolia');
+    expect(status.contract.toLowerCase()).toBe(statusFixture.contract.toLowerCase());
+    expect(status.name).toBe(statusFixture.expectedName);
+    expect(status.symbol).toBe(statusFixture.expectedSymbol);
+    expect(status.owner).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(status.totalSupply).toMatch(/^\d+$/);
+    expect(status.maxTokens).toBe(statusFixture.expectedMaxTokens);
+    expect(status.disabled).toBe(false);
+    expect(status.defaultReceiver).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(status.defaultPercentage).toMatch(/^\d+$/);
+    expect(status.interfaces).toMatchObject({
+      erc165: true,
+      erc721: true,
+      erc721Metadata: true,
+      erc2981: true,
+    });
+    expect(status.token).toMatchObject({
+      tokenId: '1',
+      creator: expect.stringMatching(/^0x[0-9a-fA-F]{40}$/),
+      royalty: {
+        salePrice: '10000',
+        receiver: expect.stringMatching(/^0x[0-9a-fA-F]{40}$/),
+        amount: expect.stringMatching(/^\d+$/),
+      },
+    });
+
+    if (statusFixture.expectsMintConfig) {
+      expect(status.mintConfig).toMatchObject({
+        tokenCount: '2',
+        baseUri: expect.stringContaining('ipfs://'),
+        lockedMetadata: true,
+      });
+    } else {
+      expect(status).not.toHaveProperty('mintConfig');
+    }
+
+    if (statusFixture.expectsBatchCount) {
+      expect(status.batchCount).toMatch(/^\d+$/);
+    } else {
+      expect(status).not.toHaveProperty('batchCount');
+    }
+
+    if (statusFixture.expectsTokenOwner) {
+      expect(status.token?.owner).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    } else {
+      expect(status.token).not.toHaveProperty('owner');
+    }
   });
 
   it('mints with a custom royalty receiver', async () => {

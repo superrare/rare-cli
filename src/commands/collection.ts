@@ -62,6 +62,11 @@ type CollectionRoyaltyStatusOptions = CollectionTokenOptions & {
   price?: string;
 };
 
+type CollectionStatusOptions = CollectionContractOptions & {
+  tokenId?: string;
+  price?: string;
+};
+
 type CollectionRoyaltyReceiverOptions = {
   contract: string;
   receiver: string;
@@ -575,9 +580,90 @@ function createRoyaltyCommand(): Command {
   return cmd;
 }
 
+function createCollectionStatusCommand(): Command {
+  const cmd = new Command('status');
+  cmd.description('Read best-effort status from any supported NFT collection contract');
+
+  cmd
+    .requiredOption('--contract <address>', 'collection contract address')
+    .option('--token-id <id>', 'optional token ID for token-specific status')
+    .option('--price <raw>', 'raw sale price units used for the token royalty quote')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
+    .action(async (opts: CollectionStatusOptions) => {
+      try {
+        const contract = parseAddressOption(opts.contract, '--contract');
+        const { chain, rare } = createReadCollectionClient(opts.chain, opts.chainId);
+        const result = await rare.collection.status({
+          contract,
+          tokenId: opts.tokenId,
+          price: opts.price,
+        });
+
+        output(
+          {
+            chain,
+            ...result,
+          },
+          () => {
+            console.log(`Contract: ${result.contract}`);
+            if (result.name !== undefined) console.log(`Name: ${result.name}`);
+            if (result.symbol !== undefined) console.log(`Symbol: ${result.symbol}`);
+            if (result.owner !== undefined) console.log(`Owner: ${result.owner}`);
+            if (result.totalSupply !== undefined) console.log(`Total supply: ${result.totalSupply.toString()}`);
+            if (result.maxTokens !== undefined) console.log(`Max tokens: ${result.maxTokens.toString()}`);
+            if (result.disabled !== undefined) console.log(`Disabled: ${result.disabled ? 'yes' : 'no'}`);
+            if (result.tokenUrisLocked !== undefined) {
+              console.log(`Token URIs locked: ${result.tokenUrisLocked ? 'yes' : 'no'}`);
+            }
+            if (result.batchCount !== undefined) console.log(`Batch count: ${result.batchCount.toString()}`);
+            if (result.defaultReceiver !== undefined) console.log(`Default royalty receiver: ${result.defaultReceiver}`);
+            if (result.defaultPercentage !== undefined) {
+              console.log(`Default royalty percentage: ${result.defaultPercentage.toString()}%`);
+            }
+            if (result.mintConfig !== undefined) {
+              console.log(`Mint config token count: ${result.mintConfig.tokenCount.toString()}`);
+              console.log(`Mint config base URI: ${result.mintConfig.baseUri}`);
+              console.log(`Mint config locked metadata: ${result.mintConfig.lockedMetadata ? 'yes' : 'no'}`);
+            }
+            if (result.interfaces !== undefined) {
+              if (result.interfaces.erc165 !== undefined) {
+                console.log(`ERC-165: ${result.interfaces.erc165 ? 'yes' : 'no'}`);
+              }
+              if (result.interfaces.erc721 !== undefined) {
+                console.log(`ERC-721: ${result.interfaces.erc721 ? 'yes' : 'no'}`);
+              }
+              if (result.interfaces.erc721Metadata !== undefined) {
+                console.log(`ERC-721 metadata: ${result.interfaces.erc721Metadata ? 'yes' : 'no'}`);
+              }
+              if (result.interfaces.erc2981 !== undefined) {
+                console.log(`ERC-2981 royalties: ${result.interfaces.erc2981 ? 'yes' : 'no'}`);
+              }
+            }
+            if (result.token !== undefined) {
+              console.log(`Token ID: ${result.token.tokenId.toString()}`);
+              if (result.token.owner !== undefined) console.log(`Token owner: ${result.token.owner}`);
+              if (result.token.tokenUri !== undefined) console.log(`Token URI: ${result.token.tokenUri}`);
+              if (result.token.creator !== undefined) console.log(`Token creator: ${result.token.creator}`);
+              if (result.token.royalty !== undefined) {
+                console.log(`Token royalty receiver: ${result.token.royalty.receiver}`);
+                console.log(`Token royalty amount: ${result.token.royalty.amount.toString()}`);
+                console.log(`Token royalty sale price: ${result.token.royalty.salePrice.toString()}`);
+              }
+            }
+          },
+        );
+      } catch (error) {
+        printError(error);
+      }
+    });
+
+  return cmd;
+}
+
 function createMetadataStatusCommand(): Command {
   const cmd = new Command('status');
-  cmd.description('Read Lazy Sovereign mint metadata configuration');
+  cmd.description('Read Lazy Sovereign mint metadata configuration when available');
 
   cmd
     .requiredOption('--contract <address>', 'collection contract address')
@@ -598,9 +684,18 @@ function createMetadataStatusCommand(): Command {
             lockedMetadata: result.lockedMetadata,
           },
           () => {
-            console.log(`Base URI: ${result.baseUri}`);
-            console.log(`Token count: ${result.tokenCount.toString()}`);
-            console.log(`Locked metadata: ${result.lockedMetadata ? 'yes' : 'no'}`);
+            if (result.baseUri !== undefined) console.log(`Base URI: ${result.baseUri}`);
+            if (result.tokenCount !== undefined) console.log(`Token count: ${result.tokenCount.toString()}`);
+            if (result.lockedMetadata !== undefined) {
+              console.log(`Locked metadata: ${result.lockedMetadata ? 'yes' : 'no'}`);
+            }
+            if (
+              result.baseUri === undefined &&
+              result.tokenCount === undefined &&
+              result.lockedMetadata === undefined
+            ) {
+              console.log('Lazy mint metadata: not available');
+            }
           },
         );
       } catch (error) {
@@ -766,6 +861,7 @@ export function collectionCommand(): Command {
   const cmd = new Command('collection');
   cmd.description('Create and manage NFT collections');
   cmd.addCommand(createCollectionGetCommand());
+  cmd.addCommand(createCollectionStatusCommand());
   cmd.addCommand(createCollectionListCommand());
   cmd.addCommand(createCollectionDeployCommand());
   cmd.addCommand(mintCommand());

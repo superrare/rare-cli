@@ -95,6 +95,48 @@ export type CollectionRoyaltyInfoResult = {
   defaultPercentage?: bigint;
 }
 
+export type CollectionStatusParams = {
+  contract: Address;
+  tokenId?: IntegerInput;
+  price?: IntegerInput;
+}
+
+export type CollectionStatusResult = {
+  contract: Address;
+  name?: string;
+  symbol?: string;
+  owner?: Address;
+  totalSupply?: bigint;
+  maxTokens?: bigint;
+  disabled?: boolean;
+  tokenUrisLocked?: boolean;
+  batchCount?: bigint;
+  defaultReceiver?: Address;
+  defaultPercentage?: bigint;
+  interfaces?: {
+    erc165?: boolean;
+    erc721?: boolean;
+    erc721Metadata?: boolean;
+    erc2981?: boolean;
+  };
+  mintConfig?: {
+    tokenCount: bigint;
+    baseUri: string;
+    lockedMetadata: boolean;
+  };
+  token?: {
+    tokenId: bigint;
+    owner?: Address;
+    tokenUri?: string;
+    creator?: Address;
+    royalty?: {
+      salePrice: bigint;
+      receiver: Address;
+      amount: bigint;
+    };
+  };
+}
+
 export type CollectionSetDefaultRoyaltyReceiverParams = {
   contract: Address;
   receiver: Address;
@@ -133,9 +175,9 @@ export type CollectionMintConfigParams = {
 
 export type CollectionMintConfigResult = {
   contract: Address;
-  tokenCount: bigint;
-  baseUri: string;
-  lockedMetadata: boolean;
+  tokenCount?: bigint;
+  baseUri?: string;
+  lockedMetadata?: boolean;
 }
 
 export type CollectionUpdateBaseUriParams = {
@@ -188,6 +230,7 @@ export type CollectionDeployNamespace = {
 
 export type CollectionNamespace = {
   get: (id: string) => Promise<Collection>;
+  status: (params: CollectionStatusParams) => Promise<CollectionStatusResult>;
   deploy: CollectionDeployNamespace;
   mint: (params: CollectionMintParams) => Promise<CollectionMintResult>;
   mintBatch: (params: CollectionMintBatchParams) => Promise<CollectionMintBatchResult>;
