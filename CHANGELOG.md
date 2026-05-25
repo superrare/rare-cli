@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.1.0
+
+### Fixes
+
+- Cleaned up integration test dependencies by @KeeganEad in https://github.com/superrare/rare-cli/pull/76.
+- Routed command errors through the top-level handler by @KeeganEad in https://github.com/superrare/rare-cli/pull/77.
+
+### New features
+
+- Added the sdk-parity MCP server by @KeeganEad in https://github.com/superrare/rare-cli/pull/79.
+
+### Maintenance
+
+- Moved the config filesystem test to integration by @KeeganEad in https://github.com/superrare/rare-cli/pull/78.
+
+**Full changelog**: https://github.com/superrare/rare-cli/compare/v1.0.2...v1.1.0
+
 ## 1.0.2
 
 ### Fixes
