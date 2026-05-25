@@ -271,7 +271,10 @@ function printAuctionRows(nfts: Nft[], side: MarketSide, account: string): void 
   const rows = nfts.flatMap((nft) => {
     const auctions = side === 'maker'
       ? nft.market.auctions.filter((auction) => isSameAddress(auction.sellerAddress, account))
-      : nft.market.auctions.filter((auction) => isSameAddress(auction.highestBidder.address, account));
+      : nft.market.auctions.filter((auction) => {
+        const bidderAddress = getHighestBidderAddress(auction);
+        return bidderAddress !== undefined && isSameAddress(bidderAddress, account);
+      });
     return auctions.map((auction) => ({ nft, auction }));
   });
   for (const row of rows) {
@@ -284,4 +287,8 @@ function printAuctionRows(nfts: Nft[], side: MarketSide, account: string): void 
 
 function isSameAddress(left: string, right: string): boolean {
   return left.toLowerCase() === right.toLowerCase();
+}
+
+function getHighestBidderAddress(auction: { highestBidder: { address: string } | null }): string | undefined {
+  return auction.highestBidder?.address;
 }

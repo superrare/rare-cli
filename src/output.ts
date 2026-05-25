@@ -108,11 +108,18 @@ export function printOfferMarketRow(nft: Nft, offer: Nft['market']['offers'][num
 
 export function printAuctionMarketRow(nft: Nft, auction: Nft['market']['auctions'][number]): void {
   const name = nft.metadata.name ?? 'Untitled';
-  const bidder = auction.highestBidder.username ?? shortValue(auction.highestBidder.address);
+  const bidder = formatAuctionBidder(auction);
   const root = auction.merkleRoot === undefined ? '' : ` root:${shortValue(auction.merkleRoot)}`;
   console.log(
     `  ${nft.universalTokenId}  ${name}  ${auction.type}/${auction.state}  bid:${formatCryptoValue(auction.currentBid)}  seller:${shortValue(auction.sellerAddress)}  bidder:${bidder}${root}`,
   );
+}
+
+function formatAuctionBidder(auction: {
+  highestBidder: { username?: string | null; address: string } | null;
+}): string {
+  const bidder = auction.highestBidder;
+  return bidder === null ? 'none' : bidder.username ?? shortValue(bidder.address);
 }
 
 function nftMarketSummary(nft: Nft): string {

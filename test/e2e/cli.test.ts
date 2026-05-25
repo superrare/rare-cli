@@ -3143,7 +3143,7 @@ type AuctionSearchAuction = {
   sellerAddress: string;
   highestBidder: {
     address: string;
-  };
+  } | null;
 };
 
 type AuctionListCandidate = {
@@ -3155,8 +3155,8 @@ type AuctionListCandidate = {
 function findAuctionListCandidate(nfts: AuctionSearchNft[]): AuctionListCandidate | undefined {
   for (const nft of nfts) {
     for (const auction of nft.market.auctions) {
-      const bidder = auction.highestBidder.address;
-      if (isAddress(auction.sellerAddress) && isAddress(bidder) && bidder !== zeroAddress) {
+      const bidder = auction.highestBidder?.address;
+      if (isAddress(auction.sellerAddress) && bidder !== undefined && isAddress(bidder) && bidder !== zeroAddress) {
         return { nft, auction, bidder };
       }
     }
@@ -3176,7 +3176,7 @@ function expectAuctionSearchResult(
     nft.market.auctions.some((auction) =>
       side === 'maker'
         ? auction.sellerAddress.toLowerCase() === candidate.auction.sellerAddress.toLowerCase()
-        : auction.highestBidder.address.toLowerCase() === candidate.bidder.toLowerCase(),
+        : auction.highestBidder?.address.toLowerCase() === candidate.bidder.toLowerCase(),
     ),
   );
   expect(matched).toBe(true);

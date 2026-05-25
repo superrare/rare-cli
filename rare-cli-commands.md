@@ -12,6 +12,7 @@ Global behavior:
 
 rare configure [--chain <chain>] [--chain-id <id>] [--private-key <key>] [--private-key-ref <ref>] [--rpc-url <url>] [--uniswap-api-key <key>] [--uniswap-api-key-ref <ref>] [--default-chain <chain>] [--show]
 rare configure delete [--yes]
+rare mcp serve [--allow-writes]
 
 rare status --contract <address> [--token-id <id>] [--chain <chain>] [--chain-id <id>]
 rare wallet generate [--chain <chain>] [--chain-id <id>] [--save]

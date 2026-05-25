@@ -19,7 +19,7 @@ rare --help
 ```
 
 See [CHANGELOG.md](./CHANGELOG.md) for release notes and migration guidance.
-For generated reference maps, see [rare-cli-commands.md](./rare-cli-commands.md) and [rare-cli-sdk-client-functions.md](./rare-cli-sdk-client-functions.md).
+For generated reference maps, see [rare-cli-commands.md](./rare-cli-commands.md), [rare-cli-sdk-client-functions.md](./rare-cli-sdk-client-functions.md), and [rare-cli-mcp-tools.md](./rare-cli-mcp-tools.md).
 
 ## Getting Started
 
@@ -104,6 +104,35 @@ Most chain-aware commands accept `--chain` or `--chain-id` to select a network. 
 Supported chains: `mainnet`, `sepolia`, `base`, `base-sepolia`
 
 Feature deployment varies by chain. Batch listing, batch offer, batch auction, RareMinter release, Liquid Edition, and swap flows are currently available on `mainnet` and `sepolia`.
+
+### MCP Server
+
+`rare mcp serve` starts a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for MCP clients such as Claude Desktop, Codex, Cursor, Windsurf, or the MCP Inspector. By default it registers read-only tools around the public Rare SDK surface:
+
+```bash
+rare mcp serve
+```
+
+Write-capable tools are available only when explicitly enabled:
+
+```bash
+rare mcp serve --allow-writes
+```
+
+Because MCP stdio reserves stdout for protocol messages, the command waits quietly when run directly in a terminal. For manual inspection and sample tool calls, use the MCP Inspector:
+
+```bash
+npx @modelcontextprotocol/inspector rare mcp serve
+npx @modelcontextprotocol/inspector rare mcp serve --allow-writes
+```
+
+When testing a local build instead of a globally installed `rare`, point Inspector at the built entrypoint:
+
+```bash
+npx @modelcontextprotocol/inspector node dist/index.js mcp serve
+```
+
+See [rare-cli-mcp-tools.md](./rare-cli-mcp-tools.md) for the complete tool inventory, naming conventions, and structured error codes.
 
 ### Deploy an NFT Collection
 
