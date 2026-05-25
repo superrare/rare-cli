@@ -288,3 +288,16 @@ Consistency notes:
 - Batch marketplaces are nested under their sale type: `listing.batch.*`, `offer.batch.*`, and `auction.batch.*`. Offline tree helpers live under `utils.tree.*`.
 - Marketplace currency aliases are first-class SDK inputs. `eth`, `rare`, `usdc`, and ERC20 addresses are accepted by marketplace methods that take `currency`; `rare.currency.*` exposes the same chain-aware resolver/list contract used by the CLI.
 - Swap token flows accept `route?: 'auto' | 'local' | 'uniswap'`; execution methods also accept `route: 'raw'` with `commands` and `inputs` for prebuilt liquid-router calldata. `rare.swap.buy` and `rare.swap.sell` remain lower-level raw router methods.
+
+## MCP coverage
+
+`rare mcp serve` exposes an agent-friendly stdio MCP server over the public `RareClient` surface. Tool names are SDK-path-shaped snake_case:
+
+```text
+rare.collection.deploy.erc721 -> collection_deploy_erc721
+rare.liquidEdition.deploy.multiCurve -> liquid_edition_deploy_multi_curve
+rare.listing.release.allowlist.setConfig -> listing_release_allowlist_set_config
+rare.swap.quoteBuyToken -> swap_quote_buy_token
+```
+
+Read-only SDK methods and pure helper flows are registered by default. Write-capable SDK methods are registered only when the server is started with `--allow-writes`. See `rare-cli-mcp-tools.md` for the complete MCP tool inventory.

@@ -1,7 +1,10 @@
+import { fileURLToPath } from 'node:url';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { Address } from 'viem';
 import { getContractAddresses } from '../../src/contracts/addresses.js';
-import { describeLive, expectTx, jsonCommand, step, type TxResult } from './live-helpers.js';
+import { describeLive, expectTx, jsonCommand, retryNonceConflict, step, withLiveTransactionLock, type TxResult } from './live-helpers.js';
 import {
   cleanupLiveCliFixture,
   createLiveCliFixture,
@@ -24,6 +27,10 @@ import {
   type LiveCliFixture,
   LiveCliFixtureRef,
 } from './helpers/live-cli-fixture.js';
+
+const cliPath = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
+const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
+const E2E_MCP_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/mcp-token.json';
 
 type CollectionFixture = LiveCliFixture & {
   collection: DeployResult;
@@ -486,4 +493,109 @@ describeLive('live collection CLI writes', () => {
       fixture.buyerAddress,
     );
   });
+
+  it('mints through the MCP stdio server with write tools enabled', async () => {
+    const fixture = live.value;
+    const minted = await step('mint token through MCP write tool', () =>
+      withLiveMcpClient(fixture, async (client) => {
+        const result = await client.callTool({
+          name: 'collection_mint',
+          arguments: {
+            chain: fixture.chain,
+            contract: fixture.collection.contract,
+            tokenUri: E2E_MCP_TOKEN_URI,
+          },
+        });
+        expect(result.isError).not.toBe(true);
+        return parseMcpJsonContent(result);
+      }),
+    );
+
+    if (!isMcpMintResult(minted)) {
+      throw new Error('MCP collection_mint result did not match expected mint shape.');
+    }
+    expectTx(minted);
+    expect(minted.contract.toLowerCase()).toBe(fixture.collection.contract.toLowerCase());
+    expect(minted.tokenUri).toBe(E2E_MCP_TOKEN_URI);
+    const status = await jsonCommand<{
+      token: { owner: Address; tokenUri: string; tokenId: string } | null;
+    }>(fixture.sellerHome, [
+      'status',
+      '--contract',
+      fixture.collection.contract,
+      '--token-id',
+      minted.tokenId,
+      '--chain',
+      fixture.chain,
+    ]);
+    expect(status.token).not.toBeNull();
+    expect(status.token?.owner.toLowerCase()).toBe(fixture.sellerAddress.toLowerCase());
+    expect(status.token?.tokenUri).toBe(E2E_MCP_TOKEN_URI);
+  });
 });
+
+async function withLiveMcpClient<T>(
+  fixture: LiveCliFixture,
+  fn: (client: Client) => Promise<T>,
+): Promise<T> {
+  const label = 'rare mcp serve --allow-writes';
+  return retryNonceConflict(label, () =>
+    withLiveTransactionLock(fixture.sellerAddress, label, async () => {
+      const transport = new StdioClientTransport({
+        command: process.execPath,
+        args: [cliPath, 'mcp', 'serve', '--allow-writes'],
+        cwd: repoRoot,
+        env: {
+          ...process.env,
+          HOME: fixture.sellerHome,
+          USERPROFILE: fixture.sellerHome,
+        },
+        stderr: 'pipe',
+      });
+      const client = new Client({ name: 'rare-cli-live-e2e', version: '1.0.0' });
+      await client.connect(transport);
+      try {
+        return await fn(client);
+      } finally {
+        await client.close();
+      }
+    }),
+  );
+}
+
+function parseMcpJsonContent(result: Awaited<ReturnType<Client['callTool']>>): unknown {
+  if (!Array.isArray(result.content)) {
+    throw new Error('MCP tool result did not include content.');
+  }
+  const content = result.content[0];
+  if (!isMcpTextContent(content)) {
+    throw new Error('MCP tool result did not include JSON text content.');
+  }
+  return JSON.parse(content.text) as unknown;
+}
+
+function isMcpTextContent(value: unknown): value is { type: 'text'; text: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'type' in value &&
+    value.type === 'text' &&
+    'text' in value &&
+    typeof value.text === 'string'
+  );
+}
+
+function isMcpMintResult(value: unknown): value is MintResult & { contract: Address; tokenUri: string } {
+  return (
+    isRecord(value) &&
+    typeof value.txHash === 'string' &&
+    typeof value.blockNumber === 'string' &&
+    typeof value.tokenId === 'string' &&
+    typeof value.contract === 'string' &&
+    typeof value.tokenUri === 'string'
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
