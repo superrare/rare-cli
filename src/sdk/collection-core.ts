@@ -274,7 +274,7 @@ export function normalizeLazySovereignCollectionContractType(
 export function planCreateSovereignCollection(
   params: PlanCreateSovereignCollectionParams,
 ): CreateSovereignCollectionPlan {
-  const contractType = params.contractType ?? 'standard';
+  const contractType = normalizeSovereignCollectionContractType(params.contractType) ?? 'standard';
   const maxTokens = params.maxTokens === undefined
     ? undefined
     : toPositiveInteger(params.maxTokens, 'maxTokens');
@@ -323,7 +323,7 @@ export function buildCreateSovereignCollectionWrite(
 export function planCreateLazySovereignCollection(
   params: PlanCreateLazySovereignCollectionParams,
 ): CreateLazySovereignCollectionPlan {
-  const contractType = params.contractType ?? 'lazy';
+  const contractType = normalizeLazySovereignCollectionContractType(params.contractType) ?? 'lazy';
 
   return {
     name: params.name,

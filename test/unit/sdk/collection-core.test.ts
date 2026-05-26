@@ -126,6 +126,15 @@ describe('Sovereign collection core', () => {
     );
   });
 
+  it('rejects invalid runtime Sovereign contract types before selecting a factory path', () => {
+    expect(() => planCreateSovereignCollection({
+      name: 'Typo',
+      symbol: 'TPO',
+      maxTokens: 10,
+      contractType: 'royalty-gaurd' as never,
+    })).toThrow('Unsupported Sovereign collection contract type "royalty-gaurd".');
+  });
+
   it('normalizes supported lazy contract type aliases', () => {
     expect(normalizeLazySovereignCollectionContractType(undefined)).toBeUndefined();
     expect(normalizeLazySovereignCollectionContractType('lazy')).toBe('lazy');
@@ -173,6 +182,15 @@ describe('Sovereign collection core', () => {
       functionName: 'createSovereignNFTContract',
       args: ['Release', 'REL', 100n, contractType],
     });
+  });
+
+  it('rejects invalid runtime Lazy Sovereign contract types before selecting a factory constant', () => {
+    expect(() => planCreateLazySovereignCollection({
+      name: 'Typo',
+      symbol: 'TPO',
+      maxTokens: 10,
+      contractType: 'lazy-royalty-gaurd' as never,
+    })).toThrow('Unsupported Lazy Sovereign collection contract type "lazy-royalty-gaurd".');
   });
 
   it('plans collection batch mint with positive token count', () => {
