@@ -25,6 +25,78 @@ type NftApprovalWriteClient = {
   }) => Promise<Hash>;
 };
 
+export type ApprovalSideEffect = {
+  type: 'nft' | 'erc20' | 'minter' | 'erc20-reset';
+  approvalTxHash: Hash | undefined;
+  target: Address;
+  operator?: Address;
+  spender?: Address;
+  minter?: Address;
+}
+
+export class ApprovalSideEffectError extends Error {
+  readonly operation: string;
+  readonly approvals: ApprovalSideEffect[];
+
+  constructor(params: {
+    operation: string;
+    approvals: ApprovalSideEffect[];
+    cause: unknown;
+  }) {
+    super(
+      `${approvalSummary(params.approvals)} before ${params.operation}, but ${params.operation} did not complete. ` +
+        `The approval remains valid; retry the operation or revoke approval if it should not remain active.`,
+      { cause: params.cause },
+    );
+    this.name = 'ApprovalSideEffectError';
+    this.operation = params.operation;
+    this.approvals = params.approvals;
+  }
+}
+
+export async function runWithApprovalSideEffectAlert<Result>(params: {
+  operation: string;
+  approvals: readonly ApprovalSideEffect[];
+  run: () => Promise<Result>;
+}): Promise<Result> {
+  try {
+    return await params.run();
+  } catch (error) {
+    const approvals = params.approvals.filter(hasApprovalTxHash);
+    if (approvals.length === 0) {
+      throw error;
+    }
+
+    throw new ApprovalSideEffectError({
+      operation: params.operation,
+      approvals,
+      cause: error,
+    });
+  }
+}
+
+function hasApprovalTxHash(approval: ApprovalSideEffect): approval is ApprovalSideEffect & { approvalTxHash: Hash } {
+  return approval.approvalTxHash !== undefined;
+}
+
+function approvalSummary(approvals: ApprovalSideEffect[]): string {
+  const [approval] = approvals;
+  return approvals.length === 1 && approval !== undefined
+    ? `Approval transaction ${approval.approvalTxHash} was mined (${approvalDetails(approval)})`
+    : `Approval transactions were mined: ${approvals.map((sideEffect) => `${sideEffect.approvalTxHash} (${approvalDetails(sideEffect)})`).join(', ')}`;
+}
+
+function approvalDetails(approval: ApprovalSideEffect): string {
+  if (approval.type === 'erc20' || approval.type === 'erc20-reset') {
+    return `${approval.type}; token ${approval.target}; spender ${approval.spender ?? 'unknown'}`;
+  }
+  if (approval.type === 'minter') {
+    return `minter; collection ${approval.target}; minter ${approval.minter ?? 'unknown'}`;
+  }
+
+  return `nft; contract ${approval.target}; operator ${approval.operator ?? 'unknown'}`;
+}
+
 export const approvalAbi = [
   {
     inputs: [{ name: 'owner', type: 'address' }, { name: 'operator', type: 'address' }],

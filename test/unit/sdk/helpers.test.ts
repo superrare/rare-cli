@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createPublicClient, createWalletClient, custom, http, type PublicClient, type WalletClient } from 'viem';
+import { createPublicClient, createWalletClient, custom, http, type Hash, type PublicClient, type WalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { mainnet } from 'viem/chains';
 import {
@@ -119,6 +119,8 @@ describe('SDK helper normalization', () => {
 });
 
 describe('payment approval planning', () => {
+  const approvalTxHash = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
   it('does not approve when ERC20 allowance reads fail', async () => {
     const currency = '0x9999999999999999999999999999999999999999';
     const spender = '0x8888888888888888888888888888888888888888';
@@ -182,6 +184,101 @@ describe('payment approval planning', () => {
     await expect(payment).rejects.toMatchObject({
       requiredAmount: 5n,
       spenderAddress: spender,
+    });
+  });
+
+  it('rejects a reverted ERC20 approval receipt before returning the approval hash', async () => {
+    const currency = '0x9999999999999999999999999999999999999999';
+    const spender = '0x8888888888888888888888888888888888888888';
+    const payment = preparePaymentAmountForSpender({
+      // eslint-disable-next-line no-restricted-syntax
+      publicClient: {
+        async readContract(params: { functionName: string }): Promise<bigint> {
+          expect(params.functionName).toBe('allowance');
+          return 4n;
+        },
+        async waitForTransactionReceipt() {
+          return { status: 'reverted' };
+        },
+      } as never,
+      walletClient: {
+        async writeContract(): Promise<Hash> {
+          return approvalTxHash;
+        },
+      },
+      account: sellerAddress,
+      accountAddress: sellerAddress,
+      spenderAddress: spender,
+      currency,
+      requiredAmount: 5n,
+    });
+
+    await expect(payment).rejects.toThrow(`ERC20 approval transaction ${approvalTxHash} did not succeed.`);
+  });
+
+  it('verifies ERC20 allowance after a mined approval', async () => {
+    const currency = '0x9999999999999999999999999999999999999999';
+    const spender = '0x8888888888888888888888888888888888888888';
+    const payment = preparePaymentAmountForSpender({
+      // eslint-disable-next-line no-restricted-syntax
+      publicClient: {
+        async readContract(params: { functionName: string }): Promise<bigint> {
+          expect(params.functionName).toBe('allowance');
+          return 4n;
+        },
+        async waitForTransactionReceipt() {
+          return { status: 'success' };
+        },
+      } as never,
+      walletClient: {
+        async writeContract(): Promise<Hash> {
+          return approvalTxHash;
+        },
+      },
+      account: sellerAddress,
+      accountAddress: sellerAddress,
+      spenderAddress: spender,
+      currency,
+      requiredAmount: 5n,
+    });
+
+    await expect(payment).rejects.toThrow(
+      `ERC20 approval transaction ${approvalTxHash} was mined but allowance for spender ${spender}`,
+    );
+  });
+
+  it('returns ERC20 approval details after the allowance is confirmed', async () => {
+    const currency = '0x9999999999999999999999999999999999999999';
+    const spender = '0x8888888888888888888888888888888888888888';
+    let allowanceReads = 0;
+    const payment = await preparePaymentAmountForSpender({
+      // eslint-disable-next-line no-restricted-syntax
+      publicClient: {
+        async readContract(params: { functionName: string }): Promise<bigint> {
+          expect(params.functionName).toBe('allowance');
+          allowanceReads += 1;
+          return allowanceReads === 1 ? 4n : 5n;
+        },
+        async waitForTransactionReceipt() {
+          return { status: 'success' };
+        },
+      } as never,
+      walletClient: {
+        async writeContract(): Promise<Hash> {
+          return approvalTxHash;
+        },
+      },
+      account: sellerAddress,
+      accountAddress: sellerAddress,
+      spenderAddress: spender,
+      currency,
+      requiredAmount: 5n,
+    });
+
+    expect(payment).toMatchObject({
+      value: 0n,
+      requiredAmount: 5n,
+      approvalTxHash,
     });
   });
 

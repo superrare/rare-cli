@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { maxUint256, type Address, type Hash, type PublicClient, type WalletClient } from 'viem';
+import type { ApprovalSideEffectError } from '../../../src/sdk/approvals-shell.js';
 import { PaymentApprovalRequiredError } from '../../../src/sdk/payments-shell.js';
 import { createRareClient } from '../../../src/sdk/client.js';
 import { encodeBridgeDistribution, getBridgeInfo } from '../../../src/sdk/bridge-core.js';
@@ -68,10 +69,14 @@ describe('bridge SDK namespace', () => {
   it('approves RARE when allowance is below the bridge amount and sends with the quoted native fee', async () => {
     const writeContract = vi.fn(async (params: WriteContractParams): Promise<Hash> =>
       params.functionName === 'approve' ? approvalHash : bridgeHash);
+    let allowanceReads = 0;
     const publicClient = makePublicClient({
       async readContract(params) {
         if (params.functionName === 'getFee') return 321n;
-        if (params.functionName === 'allowance') return 0n;
+        if (params.functionName === 'allowance') {
+          allowanceReads += 1;
+          return allowanceReads === 1 ? 0n : maxUint256;
+        }
         throw new Error(`unexpected read: ${String(params.functionName)}`);
       },
       async waitForTransactionReceipt() {
@@ -109,6 +114,48 @@ describe('bridge SDK namespace', () => {
     expect(result.txHash).toBe(bridgeHash);
     expect(result.approvalTxHash).toBe(approvalHash);
     expect(result.ccipExplorerUrl).toBe(`https://ccip.chain.link/tx/${bridgeHash}`);
+  });
+
+  it('reports a mined approval when bridge gas estimation fails afterward', async () => {
+    const writeContract = vi.fn(async (_params: WriteContractParams): Promise<Hash> => approvalHash);
+    const estimateFailure = new Error('estimate failed');
+    let allowanceReads = 0;
+    const publicClient = makePublicClient({
+      async readContract(params) {
+        if (params.functionName === 'getFee') return 321n;
+        if (params.functionName === 'allowance') {
+          allowanceReads += 1;
+          return allowanceReads === 1 ? 0n : maxUint256;
+        }
+        throw new Error(`unexpected read: ${String(params.functionName)}`);
+      },
+      async estimateGas(): Promise<never> {
+        throw estimateFailure;
+      },
+      async waitForTransactionReceipt() {
+        return receipt;
+      },
+    });
+    const walletClient = makeWalletClient({ writeContract });
+    const rare = createRareClient({ publicClient, walletClient });
+
+    await expect(rare.bridge.send({
+      amount: 2n,
+      destinationChain: 'base-sepolia',
+      recipient: recipientAddress,
+    })).rejects.toMatchObject({
+      name: 'ApprovalSideEffectError',
+      operation: 'bridge send',
+      approvals: [{
+        type: 'erc20',
+        approvalTxHash: approvalHash,
+        target: getBridgeInfo('sepolia').rareTokenAddress,
+        spender: getBridgeInfo('sepolia').rareBridgeAddress,
+      }],
+      cause: estimateFailure,
+    } satisfies Partial<ApprovalSideEffectError>);
+
+    expect(writeContract).toHaveBeenCalledOnce();
   });
 
   it('does not approve when allowance already covers the bridge amount and defaults recipient to the wallet account', async () => {

@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Address } from 'viem';
 import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
+import { ApprovalSideEffectError } from '../../../src/sdk/approvals-shell.js';
 import { createReleaseNamespace } from '../../../src/sdk/release.js';
 import { buildReleaseAllowlistArtifact } from '../../../src/sdk/release-core.js';
 
@@ -174,6 +175,85 @@ describe('release namespace shell errors', () => {
 
     expect(configured.txHash).toBe(txHash);
     expect(configured.approvalTxHash).toBe(approvalTxHash);
+  });
+
+  it('rejects owner mismatch before writing Lazy Sovereign minter approval', async () => {
+    const writeContract = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected write');
+    });
+    const release = createReleaseTestNamespace({
+      async readContract(params: { functionName: string }) {
+        if (params.functionName === 'owner') {
+          return otherAddress;
+        }
+        throw new Error(`unexpected read ${params.functionName}`);
+      },
+    }, { writeContract });
+
+    await expect(release.configure({
+      contract: collection,
+      price: '1',
+      maxMints: 1,
+    })).rejects.toThrow(`Contract owner is ${otherAddress}.`);
+
+    expect(writeContract).not.toHaveBeenCalled();
+  });
+
+  it('reports mined minter approval when a later release configure check fails', async () => {
+    let minterApproved = false;
+    const approvalTxHash = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const simulationCause = new Error('mintTo simulation failed');
+    const release = createReleaseTestNamespace({
+      async readContract(params: { functionName: string }) {
+        if (params.functionName === 'owner') {
+          return accountAddress;
+        }
+        if (params.functionName === 'isApprovedMinter') {
+          return minterApproved;
+        }
+        throw new Error(`unexpected read ${params.functionName}`);
+      },
+      async simulateContract(): Promise<never> {
+        throw simulationCause;
+      },
+      async waitForTransactionReceipt(params: { hash: string }) {
+        expect(params.hash).toBe(approvalTxHash);
+        minterApproved = true;
+        return { blockNumber: 1n };
+      },
+    }, {
+      async writeContract(params) {
+        expect(params.functionName).toBe('setMinterApproval');
+        expect(params.args).toEqual([rareMinter, true]);
+        return approvalTxHash;
+      },
+    });
+
+    let caught: unknown;
+    try {
+      await release.configure({
+        contract: collection,
+        price: '1',
+        maxMints: 1,
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(ApprovalSideEffectError);
+    expect(caught).toMatchObject({
+      operation: 'release configure',
+      approvals: [{
+        type: 'minter',
+        approvalTxHash,
+        target: collection,
+        minter: rareMinter,
+      }],
+    });
+    expect((caught as Error).message).toContain(`Approval transaction ${approvalTxHash} was mined`);
+    expect((caught as Error).message).toContain('The approval remains valid; retry the operation or revoke approval');
+    expect((caught as Error).cause).toBeInstanceOf(Error);
+    expect(((caught as Error).cause as Error).cause).toBe(simulationCause);
   });
 
   it('does not resolve rare-api proofs when callers provide an explicit empty singleton proof', async () => {

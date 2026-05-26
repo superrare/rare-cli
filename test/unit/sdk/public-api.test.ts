@@ -6,6 +6,7 @@ import * as utils from '../../../src/sdk/public-utils.js';
 describe('public SDK API surface', () => {
   it('keeps the client runtime exports focused on the high-level SDK', () => {
     expect(Object.keys(client).sort()).toEqual([
+      'ApprovalSideEffectError',
       'NftApprovalRequiredError',
       'PaymentApprovalRequiredError',
       'createRareClient',

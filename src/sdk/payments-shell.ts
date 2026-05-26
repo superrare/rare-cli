@@ -2,6 +2,7 @@ import {
   type Address,
   type Hash,
   type PublicClient,
+  type TransactionReceipt,
   type WalletClient,
   erc20Abi,
   isAddressEqual,
@@ -14,7 +15,7 @@ import type { AmountInput, WalletAccount } from './types/common.js';
 import { stringifyAmountInput } from './amounts-core.js';
 
 type TransactionReceiptClient = {
-  waitForTransactionReceipt: (params: { hash: Hash }) => Promise<unknown>;
+  waitForTransactionReceipt: (params: { hash: Hash }) => Promise<TransactionReceipt>;
 };
 
 type PaymentAllowanceReadClient = {
@@ -133,9 +134,9 @@ export async function ensureTokenAllowance(
   token: Address,
   spender: Address,
   amount: bigint,
-): Promise<void> {
+): Promise<Hash | undefined> {
   if (isAddressEqual(token, ETH_ADDRESS) || amount === 0n) {
-    return;
+    return undefined;
   }
 
   const allowance = await publicClient.readContract({
@@ -146,7 +147,7 @@ export async function ensureTokenAllowance(
   });
 
   if (allowance >= amount) {
-    return;
+    return undefined;
   }
 
   const approveTx = await walletClient.writeContract({
@@ -158,7 +159,14 @@ export async function ensureTokenAllowance(
     chain: undefined,
   });
 
-  await publicClient.waitForTransactionReceipt({ hash: approveTx });
+  await confirmErc20Approval(publicClient, {
+    approvalTxHash: approveTx,
+    currency: token,
+    accountAddress: owner,
+    spenderAddress: spender,
+    requiredAmount: amount,
+  });
+  return approveTx;
 }
 
 export class PaymentApprovalRequiredError extends Error {
@@ -293,7 +301,13 @@ export async function preparePaymentAmountForSpender(opts: {
     account,
     chain: undefined,
   });
-  await publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
+  await confirmErc20Approval(publicClient, {
+    approvalTxHash,
+    currency,
+    accountAddress,
+    spenderAddress,
+    requiredAmount,
+  });
 
   return {
     value: 0n,
@@ -350,4 +364,33 @@ async function readAllowance(
     functionName: 'allowance',
     args: [accountAddress, spenderAddress],
   });
+}
+
+async function confirmErc20Approval(
+  publicClient: PaymentAllowanceReadClient & TransactionReceiptClient,
+  params: {
+    approvalTxHash: Hash;
+    currency: Address;
+    accountAddress: Address;
+    spenderAddress: Address;
+    requiredAmount: bigint;
+  },
+): Promise<void> {
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: params.approvalTxHash });
+  if (receipt.status !== 'success') {
+    throw new Error(`ERC20 approval transaction ${params.approvalTxHash} did not succeed.`);
+  }
+
+  const allowance = await readAllowance(
+    publicClient,
+    params.currency,
+    params.accountAddress,
+    params.spenderAddress,
+  );
+  if (allowance < params.requiredAmount) {
+    throw new Error(
+      `ERC20 approval transaction ${params.approvalTxHash} was mined but allowance for spender ${params.spenderAddress} ` +
+        `is ${allowance.toString()} raw units, below the required ${params.requiredAmount.toString()} raw units.`,
+    );
+  }
 }

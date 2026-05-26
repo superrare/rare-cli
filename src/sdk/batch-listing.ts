@@ -12,7 +12,7 @@ import type {
 } from './types/batch-listing.js';
 import type { RareClientConfig } from './types/client.js';
 import type { IntegerInput, TransactionResult, WalletAccount } from './types/common.js';
-import { approveNftContractIfNeeded } from './approvals-shell.js';
+import { approveNftContractIfNeeded, runWithApprovalSideEffectAlert } from './approvals-shell.js';
 import {
   calculateMarketplacePaymentAmountFromSettings,
   preparePaymentAmountForSpender,
@@ -88,7 +88,7 @@ export function createBatchListingNamespace(
         }
       }
 
-      const approvalTxHashes = await approveNftContracts({
+      const nftApprovals = await approveNftContracts({
         publicClient,
         walletClient,
         account,
@@ -98,26 +98,38 @@ export function createBatchListingNamespace(
         autoApprove: params.autoApprove,
       });
 
-      const txHash = await walletClient.writeContract({
-        address: addresses.batchListing,
-        abi: batchListingAbi,
-        functionName: 'registerSalePriceMerkleRoot',
-        args: [
-          artifact.root,
-          artifact.currency,
-          BigInt(artifact.amount),
-          splitConfig.splitAddresses,
-          splitConfig.splitRatios,
-        ],
-        account,
-        chain: undefined,
+      const { txHash, receipt } = await runWithApprovalSideEffectAlert({
+        operation: 'batch listing create',
+        approvals: nftApprovals.map((approval) => ({
+          type: 'nft',
+          approvalTxHash: approval.txHash,
+          target: approval.nftAddress,
+          operator: addresses.erc721ApprovalManager,
+        })),
+        run: async () => {
+          const targetTxHash = await walletClient.writeContract({
+            address: addresses.batchListing,
+            abi: batchListingAbi,
+            functionName: 'registerSalePriceMerkleRoot',
+            args: [
+              artifact.root,
+              artifact.currency,
+              BigInt(artifact.amount),
+              splitConfig.splitAddresses,
+              splitConfig.splitRatios,
+            ],
+            account,
+            chain: undefined,
+          });
+          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          return { txHash: targetTxHash, receipt: targetReceipt };
+        },
       });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       return {
         txHash,
         receipt,
         root: artifact.root,
-        approvalTxHashes: approvalTxHashes.length > 0 ? approvalTxHashes : undefined,
+        approvalTxHashes: nftApprovals.length > 0 ? nftApprovals.map((approval) => approval.txHash) : undefined,
       };
     },
 
@@ -131,7 +143,7 @@ export function createBatchListingNamespace(
         creator: accountAddress,
         params,
       });
-      const txHash = await walletClient.writeContract({
+      const targetTxHash = await walletClient.writeContract({
         address: addresses.batchListing,
         abi: batchListingAbi,
         functionName: 'cancelSalePriceMerkleRoot',
@@ -139,8 +151,8 @@ export function createBatchListingNamespace(
         account,
         chain: undefined,
       });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return { txHash, receipt, root };
+      const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+      return { txHash: targetTxHash, receipt: targetReceipt, root };
     },
 
     async buy(params): Promise<TransactionResult & { approvalTxHash?: Hash }> {
@@ -176,25 +188,37 @@ export function createBatchListingNamespace(
         autoApprove: params.autoApprove,
       });
 
-      const txHash = await walletClient.writeContract({
-        address: addresses.batchListing,
-        abi: batchListingAbi,
-        functionName: 'buyWithMerkleProof',
-        args: [
-          proofArtifact.contract,
-          tokenIdBig,
-          currency,
-          amount,
-          params.creator,
-          proofArtifact.root,
-          proofArtifact.proof,
-          allowListProof,
-        ],
-        account,
-        chain: undefined,
-        value: payment.value,
+      const { txHash, receipt } = await runWithApprovalSideEffectAlert({
+        operation: 'batch listing buy',
+        approvals: [{
+          type: 'erc20',
+          approvalTxHash: payment.approvalTxHash,
+          target: currency,
+          spender: addresses.erc20ApprovalManager,
+        }],
+        run: async () => {
+          const targetTxHash = await walletClient.writeContract({
+            address: addresses.batchListing,
+            abi: batchListingAbi,
+            functionName: 'buyWithMerkleProof',
+            args: [
+              proofArtifact.contract,
+              tokenIdBig,
+              currency,
+              amount,
+              params.creator,
+              proofArtifact.root,
+              proofArtifact.proof,
+              allowListProof,
+            ],
+            account,
+            chain: undefined,
+            value: payment.value,
+          });
+          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          return { txHash: targetTxHash, receipt: targetReceipt };
+        },
       });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       return { txHash, receipt, approvalTxHash: payment.approvalTxHash };
     },
 
@@ -213,7 +237,7 @@ export function createBatchListingNamespace(
         requireInput(params.endTime ?? params.artifact?.allowList?.endTimestamp, 'endTime'),
         'endTime',
       );
-      const txHash = await walletClient.writeContract({
+      const targetTxHash = await walletClient.writeContract({
         address: addresses.batchListing,
         abi: batchListingAbi,
         functionName: 'setAllowListConfig',
@@ -221,8 +245,8 @@ export function createBatchListingNamespace(
         account,
         chain: undefined,
       });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return { txHash, receipt, root, allowListRoot, endTime };
+      const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+      return { txHash: targetTxHash, receipt: targetReceipt, root, allowListRoot, endTime };
     },
 
     async status(params): Promise<BatchListingStatus> {
@@ -550,9 +574,9 @@ async function approveNftContracts(opts: {
   operator: Address;
   nftAddresses: readonly Address[];
   autoApprove?: boolean;
-}): Promise<Hash[]> {
-  return opts.nftAddresses.reduce<Promise<Hash[]>>(async (previous, nftAddress) => {
-    const hashes = await previous;
+}): Promise<Array<{ nftAddress: Address; txHash: Hash }>> {
+  return opts.nftAddresses.reduce<Promise<Array<{ nftAddress: Address; txHash: Hash }>>>(async (previous, nftAddress) => {
+    const approvals = await previous;
     const txHash = await approveNftContractIfNeeded({
       publicClient: opts.publicClient,
       walletClient: opts.walletClient,
@@ -563,7 +587,7 @@ async function approveNftContracts(opts: {
       autoApprove: opts.autoApprove,
     });
 
-    return isHash(txHash) ? [...hashes, txHash] : hashes;
+    return isHash(txHash) ? [...approvals, { nftAddress, txHash }] : approvals;
   }, Promise.resolve([]));
 }
 

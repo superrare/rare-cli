@@ -11,6 +11,7 @@ describe('published package subpath exports', () => {
     const utils = await import('@rareprotocol/rare-cli/utils');
 
     expect(Object.keys(client).sort()).toEqual([
+      'ApprovalSideEffectError',
       'NftApprovalRequiredError',
       'PaymentApprovalRequiredError',
       'createRareClient',

@@ -68,7 +68,7 @@ describeLive('SDK contract read integration', () => {
 
     expect(isAddress(auction.seller)).toBe(true);
     expect(['PENDING', 'RUNNING', 'ENDED']).toContain(auction.status);
-    expect(auction.started).toBe(auction.startingTime > 0n);
+    expect(auction.started).toBe(auction.status !== 'PENDING');
     if (auction.started) {
       expect(auction.endTime).toBe(auction.startingTime + auction.lengthOfAuction);
     } else {

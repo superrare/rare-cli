@@ -18,7 +18,8 @@ export type * from './types/utils.js';
 export type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '../liquid/curve-config.js';
 export type { LiquidFactoryConfig } from '../liquid/factory-config.js';
 
-export { NftApprovalRequiredError } from './approvals-shell.js';
+export { ApprovalSideEffectError, NftApprovalRequiredError } from './approvals-shell.js';
+export type { ApprovalSideEffect } from './approvals-shell.js';
 export { PaymentApprovalRequiredError } from './payments-shell.js';
 export type {
   CollectionSearchParams,

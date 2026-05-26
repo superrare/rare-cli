@@ -9,7 +9,7 @@ import {
 } from 'viem';
 import { batchAuctionHouseAbi } from '../contracts/abis/batch-auctionhouse.js';
 import { ETH_ADDRESS, chainIds, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
-import { approveNftContractIfNeeded } from './approvals-shell.js';
+import { approveNftContractIfNeeded, runWithApprovalSideEffectAlert } from './approvals-shell.js';
 import {
   preparePaymentAmountForSpender,
   resolveCurrencyDecimals,
@@ -67,7 +67,7 @@ export function createBatchAuctionNamespace(
       const erc721ApprovalManager = plan.approvalContracts.length === 0
         ? undefined
         : requireContractAddress(chain, 'erc721ApprovalManager');
-      const approvalTxHashes = await approveNftContracts({
+      const nftApprovals = await approveNftContracts({
         publicClient,
         account,
         accountAddress,
@@ -77,32 +77,45 @@ export function createBatchAuctionNamespace(
         autoApprove: params.autoApprove,
       });
 
-      const txHash = await walletClient.writeContract({
-        address: batchAuctionHouse,
-        abi: batchAuctionHouseAbi,
-        functionName: 'registerAuctionMerkleRoot',
-        args: [
-          plan.root,
-          plan.currency,
-          plan.reserveAmount,
-          plan.duration,
-          plan.splitAddresses,
-          plan.splitRatios,
-        ],
-        account,
-        chain: undefined,
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const logs = parseEventLogs({
-        abi: batchAuctionHouseAbi,
-        logs: receipt.logs,
-        eventName: 'AuctionMerkleRootRegistered',
-      });
-      const [registered] = logs;
+      const { txHash, receipt, registered } = await runWithApprovalSideEffectAlert({
+        operation: 'batch auction create',
+        approvals: nftApprovals.map((approval) => ({
+          type: 'nft',
+          approvalTxHash: approval.txHash,
+          target: approval.nftAddress,
+          operator: erc721ApprovalManager,
+        })),
+        run: async () => {
+          const targetTxHash = await walletClient.writeContract({
+            address: batchAuctionHouse,
+            abi: batchAuctionHouseAbi,
+            functionName: 'registerAuctionMerkleRoot',
+            args: [
+              plan.root,
+              plan.currency,
+              plan.reserveAmount,
+              plan.duration,
+              plan.splitAddresses,
+              plan.splitRatios,
+            ],
+            account,
+            chain: undefined,
+          });
+          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          const logs = parseEventLogs({
+            abi: batchAuctionHouseAbi,
+            logs: targetReceipt.logs,
+            eventName: 'AuctionMerkleRootRegistered',
+          });
+          const [registeredLog] = logs;
 
-      if (!registered) {
-        throw new Error('Batch auction create transaction succeeded but AuctionMerkleRootRegistered was not found in logs.');
-      }
+          if (!registeredLog) {
+            throw new Error('Batch auction create transaction succeeded but AuctionMerkleRootRegistered was not found in logs.');
+          }
+
+          return { txHash: targetTxHash, receipt: targetReceipt, registered: registeredLog };
+        },
+      });
 
       return {
         txHash,
@@ -114,7 +127,7 @@ export function createBatchAuctionNamespace(
         reserveAmount: registered.args.startingAmount,
         duration: registered.args.duration,
         nonce: registered.args.nonce,
-        approvalTxHashes,
+        approvalTxHashes: nftApprovals.map((approval) => approval.txHash),
       };
     },
 
@@ -129,7 +142,7 @@ export function createBatchAuctionNamespace(
       );
       const plan = planBatchAuctionRoot(resolvedParams);
 
-      const txHash = await walletClient.writeContract({
+      const targetTxHash = await walletClient.writeContract({
         address: batchAuctionHouse,
         abi: batchAuctionHouseAbi,
         functionName: 'cancelAuctionMerkleRoot',
@@ -137,10 +150,10 @@ export function createBatchAuctionNamespace(
         account,
         chain: undefined,
       });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
       const logs = parseEventLogs({
         abi: batchAuctionHouseAbi,
-        logs: receipt.logs,
+        logs: targetReceipt.logs,
         eventName: 'AuctionMerkleRootCancelled',
       });
       const [cancelled] = logs;
@@ -150,8 +163,8 @@ export function createBatchAuctionNamespace(
       }
 
       return {
-        txHash,
-        receipt,
+        txHash: targetTxHash,
+        receipt: targetReceipt,
         batchAuctionHouse,
         creator: cancelled.args.creator,
         root: cancelled.args.merkleRoot,
@@ -201,34 +214,47 @@ export function createBatchAuctionNamespace(
         autoApprove: params.autoApprove,
       });
 
-      const txHash = await walletClient.writeContract({
-        address: batchAuctionHouse,
-        abi: batchAuctionHouseAbi,
-        functionName: 'bidWithAuctionMerkleProof',
-        args: [
-          plan.currency,
-          plan.contract,
-          plan.tokenId,
-          plan.creator,
-          plan.root,
-          plan.amount,
-          plan.proof,
-        ],
-        account,
-        chain: undefined,
-        value: payment.value,
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const logs = parseEventLogs({
-        abi: batchAuctionHouseAbi,
-        logs: receipt.logs,
-        eventName: 'AuctionMerkleBid',
-      });
-      const [bid] = logs;
+      const { txHash, receipt, bid } = await runWithApprovalSideEffectAlert({
+        operation: 'batch auction bid',
+        approvals: [{
+          type: 'erc20',
+          approvalTxHash: payment.approvalTxHash,
+          target: plan.currency,
+          spender: erc20ApprovalManager,
+        }],
+        run: async () => {
+          const targetTxHash = await walletClient.writeContract({
+            address: batchAuctionHouse,
+            abi: batchAuctionHouseAbi,
+            functionName: 'bidWithAuctionMerkleProof',
+            args: [
+              plan.currency,
+              plan.contract,
+              plan.tokenId,
+              plan.creator,
+              plan.root,
+              plan.amount,
+              plan.proof,
+            ],
+            account,
+            chain: undefined,
+            value: payment.value,
+          });
+          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          const logs = parseEventLogs({
+            abi: batchAuctionHouseAbi,
+            logs: targetReceipt.logs,
+            eventName: 'AuctionMerkleBid',
+          });
+          const [bidLog] = logs;
 
-      if (!bid) {
-        throw new Error('Batch auction bid transaction succeeded but AuctionMerkleBid was not found in logs.');
-      }
+          if (!bidLog) {
+            throw new Error('Batch auction bid transaction succeeded but AuctionMerkleBid was not found in logs.');
+          }
+
+          return { txHash: targetTxHash, receipt: targetReceipt, bid: bidLog };
+        },
+      });
 
       return {
         txHash,
@@ -252,7 +278,7 @@ export function createBatchAuctionNamespace(
       const { walletClient, account } = requireWallet(config);
       const plan = planBatchAuctionStatus(params);
 
-      const txHash = await walletClient.writeContract({
+      const targetTxHash = await walletClient.writeContract({
         address: batchAuctionHouse,
         abi: batchAuctionHouseAbi,
         functionName: 'settleAuction',
@@ -260,10 +286,10 @@ export function createBatchAuctionNamespace(
         account,
         chain: undefined,
       });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
       const logs = parseEventLogs({
         abi: batchAuctionHouseAbi,
-        logs: receipt.logs,
+        logs: targetReceipt.logs,
         eventName: 'AuctionSettled',
       });
       const [settled] = logs;
@@ -273,8 +299,8 @@ export function createBatchAuctionNamespace(
       }
 
       return {
-        txHash,
-        receipt,
+        txHash: targetTxHash,
+        receipt: targetReceipt,
         batchAuctionHouse,
         seller: settled.args.seller,
         bidder: settled.args.bidder,
@@ -512,7 +538,7 @@ async function approveNftContracts(opts: {
   operator: Address | undefined;
   nftAddresses: readonly Address[];
   autoApprove?: boolean;
-}): Promise<Hash[]> {
+}): Promise<Array<{ nftAddress: Address; txHash: Hash }>> {
   if (opts.walletClient === undefined) {
     throw new Error('walletClient is required for write operations.');
   }
@@ -524,8 +550,8 @@ async function approveNftContracts(opts: {
   }
   const { walletClient, operator } = opts;
 
-  return opts.nftAddresses.reduce<Promise<Hash[]>>(async (previous, nftAddress) => {
-    const hashes = await previous;
+  return opts.nftAddresses.reduce<Promise<Array<{ nftAddress: Address; txHash: Hash }>>>(async (previous, nftAddress) => {
+    const approvals = await previous;
     const txHash = await approveNftContract({
       publicClient: opts.publicClient,
       walletClient,
@@ -535,7 +561,7 @@ async function approveNftContracts(opts: {
       nftAddress,
       autoApprove: opts.autoApprove,
     });
-    return txHash === undefined ? hashes : [...hashes, txHash];
+    return txHash === undefined ? approvals : [...approvals, { nftAddress, txHash }];
   }, Promise.resolve([]));
 }
 
