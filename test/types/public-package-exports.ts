@@ -1,5 +1,5 @@
-import { createRareClient, type RareClient } from '@rareprotocol/rare-cli/client';
-import { getContractAddresses, type SupportedChain } from '@rareprotocol/rare-cli/contracts';
+import { createRareClient, type BridgeNamespace, type RareClient } from '@rareprotocol/rare-cli/client';
+import { getContractAddresses, getRareBridgeAddress, getCcipChainSelector, type SupportedChain } from '@rareprotocol/rare-cli/contracts';
 import {
   buildUtilsTree,
   type UtilsTreeArtifact,
@@ -8,6 +8,8 @@ import {
 
 const supportedChain: SupportedChain = 'sepolia';
 const addresses = getContractAddresses(supportedChain);
+const rareBridgeAddress = getRareBridgeAddress(supportedChain);
+const ccipChainSelector = getCcipChainSelector(supportedChain);
 const tree: UtilsTreeArtifact = buildUtilsTree({
   content: 'contract_address,token_id\n0x1111111111111111111111111111111111111111,1\n',
   format: 'csv',
@@ -20,9 +22,13 @@ const merkleProof: UtilsMerkleProofArtifact = {
 };
 const clientFactory: typeof createRareClient = createRareClient;
 declare const maybeClient: RareClient | undefined;
+declare const maybeBridge: BridgeNamespace | undefined;
 
 void addresses;
+void rareBridgeAddress;
+void ccipChainSelector;
 void tree;
 void merkleProof;
 void clientFactory;
 void maybeClient;
+void maybeBridge;

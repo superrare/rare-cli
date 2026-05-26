@@ -1,6 +1,7 @@
 export {
   canonicalV4Pools,
   chainIds,
+  ccipChainSelectors,
   contractAddresses,
   currencyNames,
   defaultRpcUrls,
@@ -10,8 +11,10 @@ export {
   getCanonicalUsdcEthPool,
   getCanonicalV4Pools,
   getContractAddresses,
+  getCcipChainSelector,
   getErc721ApprovalManagerAddress,
   getLiquidFactoryAddress,
+  getRareBridgeAddress,
   getRareMinterAddress,
   getSwapRouterAddress,
   getV4QuoterAddress,
@@ -50,6 +53,7 @@ export { liquidEditionAbi } from '../contracts/abis/liquid-edition.js';
 export { liquidFactoryAbi } from '../contracts/abis/liquid-factory.js';
 export { liquidRouterAbi } from '../contracts/abis/liquid-router.js';
 export { rareMinterAbi } from '../contracts/abis/rare-minter.js';
+export { rareBridgeAbi } from '../contracts/abis/rare-bridge.js';
 export { sovereignFactoryAbi } from '../contracts/abis/sovereign-factory.js';
 export { tokenAbi } from '../contracts/abis/token.js';
 export { uniswapV4QuoterAbi } from '../contracts/abis/uniswap-v4-quoter.js';

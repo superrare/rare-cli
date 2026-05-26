@@ -16,7 +16,10 @@ describe('published package subpath exports', () => {
       'createRareClient',
     ]);
     expect(contracts).toHaveProperty('getContractAddresses');
+    expect(contracts).toHaveProperty('getRareBridgeAddress');
+    expect(contracts).toHaveProperty('getCcipChainSelector');
     expect(contracts).toHaveProperty('liquidRouterAbi');
+    expect(contracts).toHaveProperty('rareBridgeAbi');
     expect(Object.keys(utils).sort()).toEqual([
       'buildUtilsMerkleProof',
       'buildUtilsTree',

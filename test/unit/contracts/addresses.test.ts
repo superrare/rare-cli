@@ -7,6 +7,8 @@ import {
   getCanonicalUsdcEthPool,
   getContractAddresses,
   getErc721ApprovalManagerAddress,
+  getCcipChainSelector,
+  getRareBridgeAddress,
   getRareMinterAddress,
   isSupportedChain,
   listCurrencies,
@@ -27,6 +29,7 @@ describe('chain and currency helpers', () => {
     expect(getContractAddresses('sepolia')).toEqual({
       factory: getAddress('0x3c7526a0975156299ceef369b8ff3c01cc670523'),
       auction: getAddress('0xC8Edc7049b233641ad3723D6C60019D1c8771612'),
+      rareBridge: getAddress('0xdC168291658f6C5F1D0b33E573c4d289DCA9dD08'),
       sovereignFactory: getAddress('0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf'),
       lazySovereignFactory: getAddress('0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA'),
       rareMinter: getAddress('0xd28Dc0B89104d7BBd902F338a0193fF063617ccE'),
@@ -42,6 +45,8 @@ describe('chain and currency helpers', () => {
       v4Quoter: getAddress('0x61B3f2011A92d183C7dbaDBdA940a7555Ccf9227'),
     });
     expect(getRareMinterAddress('sepolia')).toBe('0xd28Dc0B89104d7BBd902F338a0193fF063617ccE');
+    expect(getRareBridgeAddress('sepolia')).toBe('0xdC168291658f6C5F1D0b33E573c4d289DCA9dD08');
+    expect(getCcipChainSelector('sepolia')).toBe(16015286601757825753n);
     expect(getContractAddresses('mainnet').liquidFactory).toBe('0xbb4341CFd588a098e9aCE1D224178836426c4a8E');
   });
 
