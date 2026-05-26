@@ -221,8 +221,12 @@ export function shapeBatchAuctionStatus(
   nowSeconds: bigint,
 ): BatchAuctionStatus {
   const hasAuction = details.startingTime > 0n && !isAddressEqual(details.seller, zeroAddress);
-  const hasRootConfig = rootContext !== undefined && rootContext.config.duration > 0n;
-  const duration = hasAuction ? details.duration : rootContext?.config.duration ?? 0n;
+  const hasCurrentRootConfig = rootContext !== undefined &&
+    rootContext.config.duration > 0n &&
+    rootContext.rootNonce === rootContext.config.nonce;
+  const currentRootConfig = hasCurrentRootConfig ? rootContext.config : undefined;
+  const hasRootConfig = currentRootConfig !== undefined;
+  const duration = hasAuction ? details.duration : currentRootConfig?.duration ?? 0n;
   const startingTime = hasAuction ? details.startingTime : 0n;
   const endTime = hasAuction ? startingTime + duration : null;
   const ended = endTime !== null && nowSeconds >= endTime;
@@ -230,11 +234,11 @@ export function shapeBatchAuctionStatus(
     ? currentBid.bidder
     : null;
   const seller = hasAuction ? details.seller : rootContext?.creator ?? zeroAddress;
-  const currency = hasAuction ? details.currency : rootContext?.config.currency ?? ETH_ADDRESS;
-  const reserveAmount = hasAuction ? details.reserveAmount : rootContext?.config.reserveAmount ?? 0n;
+  const currency = hasAuction ? details.currency : currentRootConfig?.currency ?? ETH_ADDRESS;
+  const reserveAmount = hasAuction ? details.reserveAmount : currentRootConfig?.reserveAmount ?? 0n;
   const tokenNonceConsumed = rootContext === undefined
     ? null
-    : rootContext.tokenNonce >= rootContext.config.nonce;
+    : !hasCurrentRootConfig || rootContext.tokenNonce >= rootContext.config.nonce;
 
   return {
     seller,
@@ -245,8 +249,8 @@ export function shapeBatchAuctionStatus(
     creationBlock: details.creationBlock,
     startingTime,
     endTime,
-    splitAddresses: resolveStatusSplitAddresses(hasAuction, details, rootContext),
-    splitRatios: resolveStatusSplitRatios(hasAuction, details, rootContext),
+    splitAddresses: resolveStatusSplitAddresses(hasAuction, details, currentRootConfig),
+    splitRatios: resolveStatusSplitRatios(hasAuction, details, currentRootConfig),
     hasRootConfig,
     rootNonce: rootContext?.rootNonce ?? null,
     tokenNonce: rootContext?.tokenNonce ?? null,
@@ -433,29 +437,29 @@ function addMinimumBidIncrease(amount: bigint): bigint {
 function resolveStatusSplitAddresses(
   hasAuction: boolean,
   details: BatchAuctionReadDetails,
-  rootContext: BatchAuctionRootContext | undefined,
+  rootConfig: BatchAuctionRootContext['config'] | undefined,
 ): Address[] {
   if (hasAuction) {
     return [...details.splitAddresses];
   }
-  if (rootContext === undefined) {
+  if (rootConfig === undefined) {
     return [];
   }
-  return [...rootContext.config.splitAddresses];
+  return [...rootConfig.splitAddresses];
 }
 
 function resolveStatusSplitRatios(
   hasAuction: boolean,
   details: BatchAuctionReadDetails,
-  rootContext: BatchAuctionRootContext | undefined,
+  rootConfig: BatchAuctionRootContext['config'] | undefined,
 ): number[] {
   if (hasAuction) {
     return [...details.splitRatios];
   }
-  if (rootContext === undefined) {
+  if (rootConfig === undefined) {
     return [];
   }
-  return [...rootContext.config.splitRatios];
+  return [...rootConfig.splitRatios];
 }
 
 function resolveBatchAuctionState(params: {

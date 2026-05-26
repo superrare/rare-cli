@@ -170,6 +170,23 @@ describe('batch auction core', () => {
       root: ROOT,
     });
 
+    expect(shapeBatchAuctionStatus(inactiveDetails, emptyBid, {
+      ...rootContext,
+      rootNonce: 2,
+    }, 100n)).toMatchObject({
+      state: 'NONE',
+      hasRootConfig: false,
+      tokenNonceConsumed: true,
+      hasAuction: false,
+      reserveAmount: 0n,
+      duration: 0n,
+      splitAddresses: [],
+      splitRatios: [],
+      seller: CREATOR,
+      root: ROOT,
+      rootNonce: 2,
+    });
+
     const activeDetails = {
       ...inactiveDetails,
       seller: CREATOR,
