@@ -68,14 +68,7 @@ async function executeBridge(
     destinationBridgeInfo: getBridgeInfo(quote.destinationChain),
     distributionData: quote.distributionData,
   });
-  const estimatedGas = await estimateBridgeGas(publicClient, {
-    account: accountAddress,
-    sourceBridgeAddress: quote.sourceBridgeAddress,
-    args: sendArgs,
-    nativeFee: quote.nativeFee,
-  });
-
-  const { txHash, receipt } = await runWithApprovalSideEffectAlert({
+  const { txHash, receipt, estimatedGas } = await runWithApprovalSideEffectAlert({
     operation: 'bridge send',
     approvals: [{
       type: 'erc20',
@@ -84,6 +77,12 @@ async function executeBridge(
       spender: quote.sourceBridgeAddress,
     }],
     run: async () => {
+      const gas = await estimateBridgeGas(publicClient, {
+        account: accountAddress,
+        sourceBridgeAddress: quote.sourceBridgeAddress,
+        args: sendArgs,
+        nativeFee: quote.nativeFee,
+      });
       const targetTxHash = await walletClient.writeContract({
         address: quote.sourceBridgeAddress,
         abi: rareBridgeAbi,
@@ -95,7 +94,7 @@ async function executeBridge(
       });
       const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
 
-      return { txHash: targetTxHash, receipt: targetReceipt };
+      return { txHash: targetTxHash, receipt: targetReceipt, estimatedGas: gas };
     },
   });
 
