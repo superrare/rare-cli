@@ -51,6 +51,9 @@ rare liquid-edition status --contract <address> [--chain <chain>] [--chain-id <i
 rare liquid-edition token-uri --contract <address> [--chain <chain>] [--chain-id <id>]
 rare liquid-edition set-render-contract --contract <address> --render-contract <address> [--chain <chain>] [--chain-id <id>]
 
+rare bridge quote --amount <amount> --destination-chain <chain> [--recipient <address>] [--chain <chain>] [--chain-id <id>]
+rare bridge send --amount <amount> --destination-chain <chain> [--recipient <address>] [--chain <chain>] [--chain-id <id>] [--yes]
+
 rare listing list --account <address> [--chain <chain>] [--chain-id <id>] [--per-page <n>] [--page <n>]
 rare listing create --contract <address> --token-id <id> --price <amount> [--currency <currency>] [--target <address>] [--split <addr=ratio>] [--yes] [--chain <chain>] [--chain-id <id>]
 rare listing buy --contract <address> --token-id <id> --price <amount> [--currency <currency>] [--yes] [--chain <chain>] [--chain-id <id>]

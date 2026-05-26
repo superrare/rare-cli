@@ -215,6 +215,14 @@ const toolHandlers: Record<string, ToolHandler> = {
     inputSchema: { ...optionalChain, tokenIn: addressSchema, tokenOut: addressSchema, amountIn: amountSchema, ...rawRouteSchema, recipient: addressSchema.optional(), deadline: integerSchema.optional() },
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.swap.swapTokens(args as never))),
   },
+  bridge_quote: {
+    inputSchema: { ...optionalChain, amount: amountSchema, destinationChain: chainSchema, recipient: addressSchema.optional() },
+    handler: ({ chain, ...args }) => callRead(chain, (rare) => rare.bridge.quote(args as never)),
+  },
+  bridge_send: {
+    inputSchema: { ...optionalChain, amount: amountSchema, destinationChain: chainSchema, recipient: addressSchema.optional(), ...autoApproveSchema },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.bridge.send(args as never))),
+  },
   swap_quote_buy_token: {
     inputSchema: { ...optionalChain, token: addressSchema, amountIn: amountSchema, minAmountOut: amountSchema.optional(), slippageBps: integerSchema.optional(), recipient: addressSchema.optional(), deadline: integerSchema.optional() },
     handler: ({ chain, ...args }) => callRead(chain, (rare) => rare.swap.quoteBuyToken(args as never)),
@@ -582,6 +590,7 @@ function readRare(chain: unknown): ReturnType<typeof createRareClient> {
   const selected = resolveChain(chain);
   return createRareClient({
     publicClient: getPublicClient(selected),
+    account: getConfiguredAccountAddress(selected),
     resolveUniswapApiKey: () => getConfiguredUniswapApiKey(selected),
   });
 }

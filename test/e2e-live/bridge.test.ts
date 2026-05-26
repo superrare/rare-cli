@@ -1,16 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createPublicClient, createWalletClient, http } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { createRareClient } from '../../src/sdk/client.js';
 import { getBridgeInfo } from '../../src/sdk/bridge-core.js';
-import { viemChains } from '../../src/contracts/addresses.js';
 import {
   approveToken,
   cleanupLiveFixture,
   createLiveFixture,
   expectTokenBalanceAtLeast,
   LiveFixtureRef,
-  liveRpcUrl,
+  jsonCommand,
   missingEnv,
   parseTokenAmount,
   readTokenAllowance,
@@ -21,7 +17,27 @@ import {
 const describeLive = missingEnv.length === 0 ? describe.sequential : describe.skip;
 const live = new LiveFixtureRef<LiveFixture>(`Live environment is not configured: ${missingEnv.join(', ')}`);
 
-describeLive('live RARE bridge SDK write flow', () => {
+type BridgeCliResult = {
+  txHash: string;
+  blockNumber: string;
+  approvalTxHash: string | null;
+  ccipExplorerUrl: string;
+  sourceChain: string;
+  sourceChainId: number;
+  destinationChain: string;
+  destinationChainId: number;
+  sourceBridgeAddress: string;
+  destinationBridgeAddress: string;
+  rareTokenAddress: string;
+  destinationCcipChainSelector: string;
+  amount: string;
+  recipient: string;
+  nativeFee: string;
+  estimatedGas: string | null;
+  distributionData: `0x${string}`;
+};
+
+describeLive('live RARE bridge CLI write flow', () => {
   beforeAll(async () => {
     live.set(await createLiveFixture());
   });
@@ -51,24 +67,19 @@ describeLive('live RARE bridge SDK write flow', () => {
       bridgeInfo.rareBridgeAddress,
     )).toBe(0n);
 
-    const account = privateKeyToAccount(fixture.sellerWallet.privateKey);
-    const publicClient = createPublicClient({
-      chain: viemChains.sepolia,
-      transport: http(liveRpcUrl()),
-    });
-    const walletClient = createWalletClient({
-      account,
-      chain: viemChains.sepolia,
-      transport: http(liveRpcUrl()),
-    });
-    const rare = createRareClient({ publicClient, walletClient });
-
     const result = await step('bridge RARE from Sepolia to Base Sepolia', () =>
-      rare.bridge.send({
+      jsonCommand<BridgeCliResult>(fixture.sellerHome, [
+        'bridge',
+        'send',
+        '--amount',
         amount,
-        destinationChain: 'base-sepolia',
-        recipient: fixture.sellerAddress,
-      }),
+        '--destination-chain',
+        'base-sepolia',
+        '--recipient',
+        fixture.sellerAddress,
+        '--chain',
+        'sepolia',
+      ], 360_000),
     );
     console.error(`[live e2e] bridge approval tx: ${result.approvalTxHash ?? 'none'}`);
     console.error(`[live e2e] bridge source tx: ${result.txHash}`);
@@ -76,13 +87,16 @@ describeLive('live RARE bridge SDK write flow', () => {
 
     expect(result.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
     expect(result.approvalTxHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+    expect(result.blockNumber).toMatch(/^\d+$/);
     expect(result.ccipExplorerUrl).toBe(`https://ccip.chain.link/tx/${result.txHash}`);
-    expect(result.amount).toBe(amountWei);
+    expect(result.amount).toBe(amountWei.toString());
     expect(result.sourceChain).toBe('sepolia');
+    expect(result.sourceChainId).toBe(11155111);
     expect(result.destinationChain).toBe('base-sepolia');
+    expect(result.destinationChainId).toBe(84532);
     expect(result.sourceBridgeAddress).toBe(bridgeInfo.rareBridgeAddress);
     expect(result.destinationBridgeAddress).toBe(getBridgeInfo('base-sepolia').rareBridgeAddress);
-    expect(result.nativeFee).toBeGreaterThan(0n);
+    expect(BigInt(result.nativeFee)).toBeGreaterThan(0n);
     expect(await readTokenAllowance(
       fixture,
       fixture.rareAddress,

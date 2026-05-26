@@ -480,6 +480,30 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('exposes RARE bridge help', async () => {
+    await withTempHome(async (home) => {
+      const bridge = await runCli(['bridge', '--help'], { home });
+      expect(bridge.code).toBe(0);
+      expect(bridge.stdout).toContain('quote');
+      expect(bridge.stdout).toContain('send');
+      expect(bridge.stderr).toBe('');
+
+      const quote = await runCli(['bridge', 'quote', '--help'], { home });
+      expect(quote.code).toBe(0);
+      expect(quote.stdout).toContain('Usage: rare bridge quote [options]');
+      expect(quote.stdout).toContain('--amount <amount>');
+      expect(quote.stdout).toContain('--destination-chain <chain>');
+      expect(quote.stderr).toBe('');
+
+      const send = await runCli(['bridge', 'send', '--help'], { home });
+      expect(send.code).toBe(0);
+      expect(send.stdout).toContain('Usage: rare bridge send [options]');
+      expect(send.stdout).toContain('--recipient <address>');
+      expect(send.stdout).toContain('--yes');
+      expect(send.stderr).toBe('');
+    });
+  });
+
   it('exposes lazy batch mint collection help', async () => {
     await withTempHome(async (home) => {
       const collection = await runCli(['collection', '--help'], { home });

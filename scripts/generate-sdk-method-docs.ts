@@ -9,6 +9,7 @@ const CLIENT_NAME = 'rare';
 const MAX_DEPTH = 8;
 const CLIENT_NAMESPACE_NAMES = new Set([
   'auction',
+  'bridge',
   'collection',
   'currency',
   'import',

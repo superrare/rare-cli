@@ -44,6 +44,9 @@ function acceptsLiveWriteConsent(args: string[]): boolean {
       subcommand === 'sell-token' ||
       subcommand === 'buy-rare';
   }
+  if (command === 'bridge') {
+    return subcommand === 'send';
+  }
   return false;
 }
 
@@ -116,6 +119,9 @@ export function isLiveWriteCommand(args: string[]): boolean {
       subcommand === 'buy-token' ||
       subcommand === 'sell-token' ||
       subcommand === 'buy-rare';
+  }
+  if (command === 'bridge') {
+    return subcommand === 'send';
   }
   return false;
 }

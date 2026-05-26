@@ -78,6 +78,12 @@ liquid_edition_get_current_price
 liquid_edition_status
 ```
 
+Bridge:
+
+```text
+bridge_quote
+```
+
 Swap quotes:
 
 ```text
@@ -153,6 +159,12 @@ Liquid Edition:
 ```text
 liquid_edition_deploy_multi_curve
 liquid_edition_set_render_contract
+```
+
+Bridge:
+
+```text
+bridge_send
 ```
 
 Swap execution:
@@ -242,6 +254,7 @@ Camel-case SDK segments are converted to snake_case:
 rare.liquidEdition.deploy.multiCurve -> liquid_edition_deploy_multi_curve
 rare.listing.release.allowlist.setConfig -> listing_release_allowlist_set_config
 rare.swap.quoteBuyToken -> swap_quote_buy_token
+rare.bridge.send -> bridge_send
 ```
 
 The complete source of truth for tool inventory is `src/mcp/core.ts`; the MCP server registers tools from that inventory.

@@ -42,6 +42,8 @@ requireContractAddress
 isSupportedChain
 getBatchListingAddress
 getErc721ApprovalManagerAddress
+getCcipChainSelector
+getRareBridgeAddress
 getRareMinterAddress
 getLiquidFactoryAddress
 getSwapRouterAddress
@@ -66,6 +68,7 @@ lazySovereignFactoryAbi
 liquidEditionAbi
 liquidFactoryAbi
 liquidRouterAbi
+rareBridgeAbi
 rareMinterAbi
 sovereignFactoryAbi
 tokenAbi
@@ -119,6 +122,7 @@ rare.chain: SupportedChain
 rare.chainId: number
 rare.contracts.factory: Address
 rare.contracts.auction: Address
+rare.contracts.rareBridge?: Address
 rare.contracts.sovereignFactory?: Address
 rare.contracts.lazySovereignFactory?: Address
 rare.contracts.rareMinter?: Address
@@ -152,6 +156,11 @@ rare.liquidEdition.getPoolInfo(params: { contract: Address }): Promise<LiquidEdi
 rare.liquidEdition.getMarketState(params: { contract: Address }): Promise<LiquidEditionMarketState>
 rare.liquidEdition.getCurrentPrice(params: { contract: Address }): Promise<LiquidEditionCurrentPrice>
 rare.liquidEdition.status(params: { contract: Address }): Promise<LiquidEditionTelemetry>
+
+Bridge:
+
+rare.bridge.quote(params: BridgeParams): Promise<BridgeQuote>
+rare.bridge.send(params: BridgeSendParams): Promise<BridgeResult>
 
 Swap:
 
