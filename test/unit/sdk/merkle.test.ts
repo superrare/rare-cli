@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Address } from 'viem';
+import { isHex, type Address } from 'viem';
 import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import {
   buildMerkleProofArtifact,
@@ -33,6 +33,14 @@ const allowListedRootArtifact = {
   },
 } satisfies BatchListingRootArtifact;
 
+function uppercaseHexDigits(hex: `0x${string}`): `0x${string}` {
+  const value = `0x${hex.slice(2).toUpperCase()}`;
+  if (!isHex(value, { strict: true })) {
+    throw new Error(`Invalid uppercase hex fixture: ${value}`);
+  }
+  return value;
+}
+
 describe('merkle artifact core utilities', () => {
   it('builds token proofs from a service-provided root artifact', () => {
     const proof = buildMerkleProofArtifact(rootArtifact, contract, '1');
@@ -48,6 +56,47 @@ describe('merkle artifact core utilities', () => {
   it('includes allowListProof for an allowlisted buyer', () => {
     const proof = buildMerkleProofArtifact(allowListedRootArtifact, contract, '1', buyer);
 
+    expect(proof.allowListProof).toEqual([
+      '0x8dfad888a2f79bcfe6633c369a5652e94379f63f5849d8e8fe519c586bb49633',
+    ]);
+    expect(proof.allowListAddress).toBe(buyer);
+  });
+
+  it('builds token proofs when artifact roots use uppercase hex', () => {
+    const artifact = {
+      ...rootArtifact,
+      root: uppercaseHexDigits(rootArtifact.root),
+    };
+
+    expect(() => validateRootArtifact(artifact)).not.toThrow();
+
+    const proof = buildMerkleProofArtifact(artifact, contract, '1');
+
+    expect(proof).toEqual({
+      root: rootArtifact.root,
+      contract,
+      tokenId: '1',
+      proof: ['0xfde38319eec56e703ba771c1e2abddca86188674940372bdfed26cec392ec314'],
+    });
+  });
+
+  it('builds allowlist proofs when allowlist roots use uppercase hex', () => {
+    const artifact = {
+      ...allowListedRootArtifact,
+      allowList: {
+        ...allowListedRootArtifact.allowList,
+        root: uppercaseHexDigits(allowListedRootArtifact.allowList.root),
+      },
+    };
+
+    expect(() => validateRootArtifact(artifact)).not.toThrow();
+
+    const proof = buildMerkleProofArtifact(artifact, contract, '1', buyer);
+
+    expect(proof.root).toBe(rootArtifact.root);
+    expect(proof.proof).toEqual([
+      '0xfde38319eec56e703ba771c1e2abddca86188674940372bdfed26cec392ec314',
+    ]);
     expect(proof.allowListProof).toEqual([
       '0x8dfad888a2f79bcfe6633c369a5652e94379f63f5849d8e8fe519c586bb49633',
     ]);

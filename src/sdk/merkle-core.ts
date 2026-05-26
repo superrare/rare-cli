@@ -56,10 +56,14 @@ function addressLeaf(address: Address): Buffer {
 }
 
 function parseBytes32(value: string, field: string): `0x${string}` {
-  if (!isHex(value) || value.length !== 66) {
+  if (!isHex(value, { strict: true }) || value.length !== 66) {
     throw new Error(`${field} must be a 0x-prefixed bytes32 hex string`);
   }
-  return value;
+  const normalized = value.toLowerCase();
+  if (!isHex(normalized, { strict: true }) || normalized.length !== 66) {
+    throw new Error(`${field} must be a 0x-prefixed bytes32 hex string`);
+  }
+  return normalized;
 }
 
 function parseBytes32Array(values: string[], field: string): `0x${string}`[] {
@@ -162,7 +166,8 @@ export function buildMerkleProofArtifact(
   const { tree, root } = buildBatchListingTree(
     artifact.tokens.map((token) => ({ contract: token.contract, tokenId: token.tokenId })),
   );
-  if (root !== artifact.root) {
+  const artifactRoot = parseBytes32(artifact.root, 'artifact.root');
+  if (root !== artifactRoot) {
     throw new Error(
       `Recomputed NFT tree root (${root}) does not match artifact root (${artifact.root}). Artifact is corrupt or tree encoding has drifted.`,
     );
@@ -170,7 +175,7 @@ export function buildMerkleProofArtifact(
 
   const allowListProofFields = buildAllowListProofFields(artifact, buyer);
   return {
-    root: artifact.root,
+    root: artifactRoot,
     contract: contractChecksum,
     tokenId: tokenIdBig.toString(),
     proof: getTokenProof(tree, contractChecksum, tokenIdBig),
@@ -197,7 +202,8 @@ function buildAllowListProofFields(
   }
 
   const { tree, root } = buildAllowListTree(artifact.allowList.addresses);
-  if (root !== artifact.allowList.root) {
+  const artifactAllowListRoot = parseBytes32(artifact.allowList.root, 'allowList.root');
+  if (root !== artifactAllowListRoot) {
     throw new Error(
       `Recomputed allowlist root (${root}) does not match artifact (${artifact.allowList.root})`,
     );
@@ -216,7 +222,7 @@ function assertRecord(value: unknown, field: string): asserts value is Record<st
 }
 
 function assertHexRoot(value: unknown, field: string): asserts value is `0x${string}` {
-  if (typeof value !== 'string' || !isHex(value) || value.length !== 66) {
+  if (typeof value !== 'string' || !isHex(value, { strict: true }) || value.length !== 66) {
     throw new Error(`${field} must be a 0x-prefixed bytes32 hex string`);
   }
 }
