@@ -9,6 +9,7 @@ describe('CLI program factory', () => {
     expect(commandNames).toContain('configure');
     expect(commandNames).toContain('collection');
     expect(commandNames).toContain('auction');
+    expect(commandNames).toContain('bridge');
     expect(commandNames).toContain('utils');
     expect(program.opts()).toEqual({});
   });

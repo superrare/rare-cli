@@ -23,6 +23,8 @@ describe('mcp core helpers', () => {
     ]);
     expect(new Set(mcpToolSpecs.map((tool) => tool.name)).size).toBe(mcpToolSpecs.length);
     expect(mcpReadToolNames).toContain('liquid_edition_status');
+    expect(mcpReadToolNames).toContain('bridge_quote');
+    expect(mcpWriteToolNames).toContain('bridge_send');
     expect(mcpWriteToolNames).toContain('liquid_edition_deploy_multi_curve');
     expect(mcpWriteToolNames).toContain('collection_deploy_erc721');
   });
@@ -32,6 +34,7 @@ describe('mcp core helpers', () => {
     expect(sdkPathToMcpToolName('rare.liquidEdition.deploy.multiCurve')).toBe('liquid_edition_deploy_multi_curve');
     expect(sdkPathToMcpToolName('rare.listing.release.allowlist.setConfig')).toBe('listing_release_allowlist_set_config');
     expect(sdkPathToMcpToolName('rare.swap.quoteBuyToken')).toBe('swap_quote_buy_token');
+    expect(sdkPathToMcpToolName('rare.bridge.send')).toBe('bridge_send');
   });
 
   it('resolves MCP chains with config and sepolia fallback', () => {

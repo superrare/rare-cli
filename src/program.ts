@@ -12,6 +12,7 @@ import { nftCommand } from './commands/nft.js';
 import { collectionCommand } from './commands/collection.js';
 import { currenciesCommand } from './commands/currencies.js';
 import { liquidEditionCommand } from './commands/liquid-edition.js';
+import { bridgeCommand } from './commands/bridge.js';
 import { swapCommand } from './commands/swap.js';
 import { userCommand } from './commands/user.js';
 import { utilsCommand } from './commands/utils.js';
@@ -57,6 +58,7 @@ export function createRareProgram(): Command {
   program.addCommand(collectionCommand());
   program.addCommand(currenciesCommand());
   program.addCommand(liquidEditionCommand());
+  program.addCommand(bridgeCommand());
   program.addCommand(swapCommand());
   program.addCommand(userCommand());
   program.addCommand(utilsCommand());

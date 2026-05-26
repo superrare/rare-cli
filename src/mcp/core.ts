@@ -43,6 +43,8 @@ export const mcpToolSpecs = [
   sdkTool('write', 'rare.swap.buy', 'Execute a raw liquid-router token buy.'),
   sdkTool('write', 'rare.swap.sell', 'Execute a raw liquid-router token sell.'),
   sdkTool('write', 'rare.swap.swapTokens', 'Execute a raw liquid-router token swap.'),
+  sdkTool('read', 'rare.bridge.quote', 'Quote the native fee for bridging RARE.'),
+  sdkTool('write', 'rare.bridge.send', 'Bridge RARE to another supported chain.'),
   sdkTool('read', 'rare.swap.quoteBuyToken', 'Quote buying a token with ETH.'),
   sdkTool('write', 'rare.swap.buyToken', 'Buy a token with ETH.'),
   sdkTool('read', 'rare.swap.quoteSellToken', 'Quote selling a token for ETH.'),
