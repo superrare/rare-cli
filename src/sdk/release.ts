@@ -17,7 +17,7 @@ import type { ReleaseNamespace } from './types/release.js';
 import type { RareClientConfig } from './types/client.js';
 import { ETH_ADDRESS } from '../contracts/addresses.js';
 import { preparePaymentForSpender } from './payments-shell.js';
-import { MinterApprovalRequiredError } from './approvals-shell.js';
+import { MinterApprovalRequiredError, runWithApprovalSideEffectAlert } from './approvals-shell.js';
 import { requireWallet } from './wallet-shell.js';
 import { resolveCurrencyForSdk } from './currency.js';
 import { buildCollectionMinterApprovalWrite, planCollectionMinterApproval } from './collection-core.js';
@@ -118,16 +118,13 @@ async function readReleaseCollectionOwner(
   }
 }
 
-async function assertConfigurableReleaseContract(opts: {
+async function assertReleaseMinterCanMint(opts: {
   publicClient: PublicClient;
   contract: Address;
   accountAddress: Address;
   rareMinter: Address;
 }): Promise<void> {
   const { publicClient, contract, accountAddress, rareMinter } = opts;
-
-  const owner = await readReleaseCollectionOwner(publicClient, contract);
-  assertReleaseContractOwner({ contract, accountAddress, owner });
 
   try {
     await publicClient.simulateContract({
@@ -596,6 +593,12 @@ export function createReleaseNamespace(
         nowSeconds: currentUnixTimestamp(),
       });
 
+      await assertCollectionOwnerForReleaseWrite({
+        publicClient,
+        contract: plan.contract,
+        accountAddress,
+      });
+
       const approvalTxHash = await approveReleaseMinterIfNeeded({
         publicClient,
         walletClient,
@@ -605,31 +608,45 @@ export function createReleaseNamespace(
         autoApprove: params.autoApprove,
       });
 
-      await assertConfigurableReleaseContract({
-        publicClient,
-        contract: plan.contract,
-        accountAddress,
-        rareMinter,
-      });
+      // Approval is a persistent collection permission. If a later step fails,
+      // surface the mined approval tx so callers can retry or revoke explicitly.
+      const { txHash, receipt } = await runWithApprovalSideEffectAlert({
+        operation: 'release configure',
+        approvals: [{
+          type: 'minter',
+          approvalTxHash,
+          target: plan.contract,
+          minter: rareMinter,
+        }],
+        run: async (): Promise<{ txHash: Hash; receipt: TransactionReceipt }> => {
+          await assertReleaseMinterCanMint({
+            publicClient,
+            contract: plan.contract,
+            accountAddress,
+            rareMinter,
+          });
 
-      const txHash = await walletClient.writeContract({
-        address: rareMinter,
-        abi: rareMinterAbi,
-        functionName: 'prepareMintDirectSale',
-        args: [
-          plan.contract,
-          plan.currencyAddress,
-          plan.price,
-          plan.startTime,
-          plan.maxMints,
-          plan.splitRecipients,
-          plan.splitRatios,
-        ],
-        account,
-        chain: undefined,
-      });
+          const configureTxHash = await walletClient.writeContract({
+            address: rareMinter,
+            abi: rareMinterAbi,
+            functionName: 'prepareMintDirectSale',
+            args: [
+              plan.contract,
+              plan.currencyAddress,
+              plan.price,
+              plan.startTime,
+              plan.maxMints,
+              plan.splitRecipients,
+              plan.splitRatios,
+            ],
+            account,
+            chain: undefined,
+          });
+          const configureReceipt = await publicClient.waitForTransactionReceipt({ hash: configureTxHash });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+          return { txHash: configureTxHash, receipt: configureReceipt };
+        },
+      });
 
       return {
         txHash,
@@ -683,26 +700,38 @@ export function createReleaseNamespace(
         autoApprove: plan.autoApprove,
       });
 
-      const txHash = await walletClient.writeContract({
-        address: rareMinter,
-        abi: rareMinterAbi,
-        functionName: 'mintDirectSale',
-        args: [
-          mint.contract,
-          mint.currency,
-          mint.price,
-          mint.quantity,
-          mint.proof,
-        ],
-        account,
-        chain: undefined,
-        value: payment.value,
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const tokenRange = readMintDirectSaleTokenRange({
-        receipt,
-        contract: mint.contract,
-        buyer: accountAddress,
+      const { txHash, receipt, tokenRange } = await runWithApprovalSideEffectAlert({
+        operation: 'release mint',
+        approvals: [{
+          type: 'erc20',
+          approvalTxHash: payment.approvalTxHash,
+          target: mint.currency,
+          spender: rareMinter,
+        }],
+        run: async () => {
+          const targetTxHash = await walletClient.writeContract({
+            address: rareMinter,
+            abi: rareMinterAbi,
+            functionName: 'mintDirectSale',
+            args: [
+              mint.contract,
+              mint.currency,
+              mint.price,
+              mint.quantity,
+              mint.proof,
+            ],
+            account,
+            chain: undefined,
+            value: payment.value,
+          });
+          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          const mintedTokenRange = readMintDirectSaleTokenRange({
+            receipt: targetReceipt,
+            contract: mint.contract,
+            buyer: accountAddress,
+          });
+          return { txHash: targetTxHash, receipt: targetReceipt, tokenRange: mintedTokenRange };
+        },
       });
 
       return {

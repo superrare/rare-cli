@@ -9,7 +9,7 @@ import {
 import { batchOfferAbi } from '../contracts/abis/batch-offer.js';
 import { tokenAbi } from '../contracts/abis/token.js';
 import { ETH_ADDRESS, chainIds, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
-import { approveNftContractIfNeeded } from './approvals-shell.js';
+import { approveNftContractIfNeeded, runWithApprovalSideEffectAlert } from './approvals-shell.js';
 import {
   preparePaymentForSpender,
   resolveCurrencyDecimals,
@@ -70,26 +70,39 @@ export function createBatchOfferNamespace(
         autoApprove: params.autoApprove,
       });
 
-      const txHash = await walletClient.writeContract({
-        address: batchOfferCreator,
-        abi: batchOfferAbi,
-        functionName: 'createBatchOffer',
-        args: [plan.root, plan.amount, plan.currency, plan.expiry],
-        account,
-        chain: undefined,
-        value: payment.value,
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const logs = parseEventLogs({
-        abi: batchOfferAbi,
-        logs: receipt.logs,
-        eventName: 'BatchOfferCreated',
-      });
-      const [created] = logs;
+      const { txHash, receipt, created } = await runWithApprovalSideEffectAlert({
+        operation: 'batch offer create',
+        approvals: [{
+          type: 'erc20',
+          approvalTxHash: payment.approvalTxHash,
+          target: plan.currency,
+          spender: batchOfferCreator,
+        }],
+        run: async () => {
+          const targetTxHash = await walletClient.writeContract({
+            address: batchOfferCreator,
+            abi: batchOfferAbi,
+            functionName: 'createBatchOffer',
+            args: [plan.root, plan.amount, plan.currency, plan.expiry],
+            account,
+            chain: undefined,
+            value: payment.value,
+          });
+          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          const logs = parseEventLogs({
+            abi: batchOfferAbi,
+            logs: targetReceipt.logs,
+            eventName: 'BatchOfferCreated',
+          });
+          const [createdLog] = logs;
 
-      if (!created) {
-        throw new Error('Batch offer create transaction succeeded but BatchOfferCreated was not found in logs.');
-      }
+          if (!createdLog) {
+            throw new Error('Batch offer create transaction succeeded but BatchOfferCreated was not found in logs.');
+          }
+
+          return { txHash: targetTxHash, receipt: targetReceipt, created: createdLog };
+        },
+      });
 
       return {
         txHash,
@@ -118,7 +131,7 @@ export function createBatchOfferNamespace(
       });
       const plan = planBatchOfferRoot(resolvedParams);
 
-      const txHash = await walletClient.writeContract({
+      const targetTxHash = await walletClient.writeContract({
         address: batchOfferCreator,
         abi: batchOfferAbi,
         functionName: 'revokeBatchOffer',
@@ -126,10 +139,10 @@ export function createBatchOfferNamespace(
         account,
         chain: undefined,
       });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
       const logs = parseEventLogs({
         abi: batchOfferAbi,
-        logs: receipt.logs,
+        logs: targetReceipt.logs,
         eventName: 'BatchOfferRevoked',
       });
       const [revoked] = logs;
@@ -139,8 +152,8 @@ export function createBatchOfferNamespace(
       }
 
       return {
-        txHash,
-        receipt,
+        txHash: targetTxHash,
+        receipt: targetReceipt,
         batchOfferCreator,
         creator: revoked.args.creator,
         root: revoked.args.rootHash,
@@ -181,33 +194,46 @@ export function createBatchOfferNamespace(
           autoApprove: plan.autoApprove,
         });
 
-      const txHash = await walletClient.writeContract({
-        address: batchOfferCreator,
-        abi: batchOfferAbi,
-        functionName: 'acceptBatchOffer',
-        args: [
-          plan.creator,
-          plan.proof,
-          plan.root,
-          plan.contract,
-          plan.tokenId,
-          plan.splitAddresses,
-          plan.splitRatios,
-        ],
-        account,
-        chain: undefined,
-      });
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      const logs = parseEventLogs({
-        abi: batchOfferAbi,
-        logs: receipt.logs,
-        eventName: 'BatchOfferAccepted',
-      });
-      const [accepted] = logs;
+      const { txHash, receipt, accepted } = await runWithApprovalSideEffectAlert({
+        operation: 'batch offer accept',
+        approvals: [{
+          type: 'nft',
+          approvalTxHash,
+          target: plan.contract,
+          operator: batchOfferCreator,
+        }],
+        run: async () => {
+          const targetTxHash = await walletClient.writeContract({
+            address: batchOfferCreator,
+            abi: batchOfferAbi,
+            functionName: 'acceptBatchOffer',
+            args: [
+              plan.creator,
+              plan.proof,
+              plan.root,
+              plan.contract,
+              plan.tokenId,
+              plan.splitAddresses,
+              plan.splitRatios,
+            ],
+            account,
+            chain: undefined,
+          });
+          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          const logs = parseEventLogs({
+            abi: batchOfferAbi,
+            logs: targetReceipt.logs,
+            eventName: 'BatchOfferAccepted',
+          });
+          const [acceptedLog] = logs;
 
-      if (!accepted) {
-        throw new Error('Batch offer accept transaction succeeded but BatchOfferAccepted was not found in logs.');
-      }
+          if (!acceptedLog) {
+            throw new Error('Batch offer accept transaction succeeded but BatchOfferAccepted was not found in logs.');
+          }
+
+          return { txHash: targetTxHash, receipt: targetReceipt, accepted: acceptedLog };
+        },
+      });
 
       return {
         txHash,

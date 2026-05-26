@@ -17,6 +17,7 @@ import {
   getTokenDecimals,
   toTokenAmount,
 } from './payments-shell.js';
+import { runWithApprovalSideEffectAlert } from './approvals-shell.js';
 import {
   getConfiguredAccountAddress,
   requireWallet,
@@ -382,7 +383,7 @@ async function executeRawRouterBuy(params: {
   const minAmountOutInput = requireInput(params.minAmountOut, 'minAmountOut');
   const ethAmount = toWei(amountIn);
   const minTokensOut = await toTokenAmount(params.publicClient, params.token, minAmountOutInput, 'minAmountOut');
-  const txHash = await walletClient.writeContract({
+  const targetTxHash = await walletClient.writeContract({
     address: router,
     abi: liquidRouterAbi,
     functionName: 'buy',
@@ -392,8 +393,8 @@ async function executeRawRouterBuy(params: {
     value: ethAmount,
   });
 
-  const receipt = await params.publicClient.waitForTransactionReceipt({ hash: txHash });
-  return { txHash, receipt, minAmountOut: minTokensOut };
+  const targetReceipt = await params.publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+  return { txHash: targetTxHash, receipt: targetReceipt, minAmountOut: minTokensOut };
 }
 
 async function executeRawRouterSell(params: {
@@ -408,7 +409,7 @@ async function executeRawRouterSell(params: {
   inputs: readonly `0x${string}`[];
   recipient?: Address;
   deadline?: IntegerInput;
-}): Promise<TransactionResult & { minAmountOut: bigint; tokenAmount: bigint }> {
+}): Promise<TransactionResult & { minAmountOut: bigint; tokenAmount: bigint; approvalTxHash?: `0x${string}` }> {
   const { walletClient, account, accountAddress } = requireWallet(params.config);
   const router = requireConfiguredAddress(params.addresses.swapRouter, 'Liquid router', params.chain);
   validateRouterPayload(params.commands, params.inputs);
@@ -418,27 +419,39 @@ async function executeRawRouterSell(params: {
   const tokenAmount = await toTokenAmount(params.publicClient, params.token, amountIn, 'amountIn');
   const minEthOut = toWei(minAmountOutInput);
 
-  await ensureTokenAllowance(params.publicClient, walletClient, account, accountAddress, params.token, router, tokenAmount);
+  const approvalTxHash = await ensureTokenAllowance(params.publicClient, walletClient, account, accountAddress, params.token, router, tokenAmount);
 
-  const txHash = await walletClient.writeContract({
-    address: router,
-    abi: liquidRouterAbi,
-    functionName: 'sell',
-    args: [
-      params.token,
-      tokenAmount,
-      params.recipient ?? accountAddress,
-      minEthOut,
-      params.commands,
-      [...params.inputs],
-      resolveDeadline(params.deadline),
-    ],
-    account,
-    chain: undefined,
+  const { txHash, receipt } = await runWithApprovalSideEffectAlert({
+    operation: 'swap sell',
+    approvals: [{
+      type: 'erc20',
+      approvalTxHash,
+      target: params.token,
+      spender: router,
+    }],
+    run: async () => {
+      const targetTxHash = await walletClient.writeContract({
+        address: router,
+        abi: liquidRouterAbi,
+        functionName: 'sell',
+        args: [
+          params.token,
+          tokenAmount,
+          params.recipient ?? accountAddress,
+          minEthOut,
+          params.commands,
+          [...params.inputs],
+          resolveDeadline(params.deadline),
+        ],
+        account,
+        chain: undefined,
+      });
+
+      const targetReceipt = await params.publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+      return { txHash: targetTxHash, receipt: targetReceipt };
+    },
   });
-
-  const receipt = await params.publicClient.waitForTransactionReceipt({ hash: txHash });
-  return { txHash, receipt, minAmountOut: minEthOut, tokenAmount };
+  return { txHash, receipt, minAmountOut: minEthOut, tokenAmount, approvalTxHash };
 }
 
 function isRawTokenTradeParams(params: BuyTokenParams | SellTokenParams): params is TokenTradeRawRouteParams {
@@ -496,30 +509,42 @@ export function createSwapNamespace(
       const amountIn = await toTokenAmount(publicClient, params.tokenIn, params.amountIn, 'amountIn');
       const minAmountOut = await toTokenAmount(publicClient, params.tokenOut, params.minAmountOut, 'minAmountOut');
 
-      if (params.tokenIn !== ETH_ADDRESS) {
-        await ensureTokenAllowance(publicClient, walletClient, account, accountAddress, params.tokenIn, router, amountIn);
-      }
+      const approvalTxHash = params.tokenIn === ETH_ADDRESS
+        ? undefined
+        : await ensureTokenAllowance(publicClient, walletClient, account, accountAddress, params.tokenIn, router, amountIn);
 
-      const txHash = await walletClient.writeContract({
-        address: router,
-        abi: liquidRouterAbi,
-        functionName: 'swap',
-        args: [
-          params.tokenIn,
-          amountIn,
-          params.tokenOut,
-          params.recipient ?? accountAddress,
-          minAmountOut,
-          params.commands,
-          [...params.inputs],
-          resolveDeadline(params.deadline),
-        ],
-        account,
-        chain: undefined,
-        value: params.tokenIn === ETH_ADDRESS ? amountIn : undefined,
+      const { txHash, receipt } = await runWithApprovalSideEffectAlert({
+        operation: 'swap tokens',
+        approvals: [{
+          type: 'erc20',
+          approvalTxHash,
+          target: params.tokenIn,
+          spender: router,
+        }],
+        run: async () => {
+          const targetTxHash = await walletClient.writeContract({
+            address: router,
+            abi: liquidRouterAbi,
+            functionName: 'swap',
+            args: [
+              params.tokenIn,
+              amountIn,
+              params.tokenOut,
+              params.recipient ?? accountAddress,
+              minAmountOut,
+              params.commands,
+              [...params.inputs],
+              resolveDeadline(params.deadline),
+            ],
+            account,
+            chain: undefined,
+            value: params.tokenIn === ETH_ADDRESS ? amountIn : undefined,
+          });
+
+          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          return { txHash: targetTxHash, receipt: targetReceipt };
+        },
       });
-
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
       return { txHash, receipt };
     },
 
@@ -591,7 +616,7 @@ export function createSwapNamespace(
       if (quoteDetails.kind === 'local') {
         const router = requireConfiguredAddress(addresses.swapRouter, 'Liquid router', chain);
 
-        const txHash = await walletClient.writeContract({
+        const targetTxHash = await walletClient.writeContract({
           address: router,
           abi: liquidRouterAbi,
           functionName: 'buy',
@@ -608,10 +633,10 @@ export function createSwapNamespace(
           value: quoteDetails.quote.amountIn,
         });
 
-        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+        const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
         return {
-          txHash,
-          receipt,
+          txHash: targetTxHash,
+          receipt: targetReceipt,
           estimatedAmountOut: quoteDetails.quote.estimatedAmountOut,
           minAmountOut: quoteDetails.quote.minAmountOut,
           routeSource: quoteDetails.quote.routeSource,
@@ -709,26 +734,39 @@ export function createSwapNamespace(
 
         const amountIn = requireInput(params.amountIn, 'amountIn');
         const tokenAmount = await toTokenAmount(publicClient, params.token, amountIn, 'amountIn');
-        await ensureTokenAllowance(publicClient, walletClient, account, accountAddress, params.token, router, tokenAmount);
+        const approvalTxHash = await ensureTokenAllowance(publicClient, walletClient, account, accountAddress, params.token, router, tokenAmount);
 
-        const txHash = await walletClient.writeContract({
-          address: router,
-          abi: liquidRouterAbi,
-          functionName: 'sell',
-          args: [
-            params.token,
-            tokenAmount,
-            params.recipient ?? accountAddress,
-            quoteDetails.quote.minAmountOut,
-            quoteDetails.quote.commands,
-            [...quoteDetails.quote.inputs],
-            resolveDeadline(params.deadline),
-          ],
-          account,
-          chain: undefined,
+        const { txHash, receipt } = await runWithApprovalSideEffectAlert({
+          operation: 'sell token',
+          approvals: [{
+            type: 'erc20',
+            approvalTxHash,
+            target: params.token,
+            spender: router,
+          }],
+          run: async () => {
+            const targetTxHash = await walletClient.writeContract({
+              address: router,
+              abi: liquidRouterAbi,
+              functionName: 'sell',
+              args: [
+                params.token,
+                tokenAmount,
+                params.recipient ?? accountAddress,
+                quoteDetails.quote.minAmountOut,
+                quoteDetails.quote.commands,
+                [...quoteDetails.quote.inputs],
+                resolveDeadline(params.deadline),
+              ],
+              account,
+              chain: undefined,
+            });
+
+            const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+            return { txHash: targetTxHash, receipt: targetReceipt };
+          },
         });
 
-        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
         return {
           txHash,
           receipt,
@@ -738,6 +776,7 @@ export function createSwapNamespace(
           execution: quoteDetails.quote.execution,
           commands: quoteDetails.quote.commands,
           inputs: quoteDetails.quote.inputs,
+          approvalTxHash,
         };
       }
 
@@ -763,14 +802,33 @@ export function createSwapNamespace(
           })).txHash
         : undefined;
 
-      const swapResponse = await requestUniswapSwap({
-        apiKey: quoteDetails.apiKey,
-        quote: quoteDetails.rawQuote,
-        deadline: uniswapDeadline,
-      });
-      const sent = await sendPreparedTransaction(publicClient, walletClient, account, swapResponse.swap, {
-        accountAddress,
-        chainId,
+      const sent = await runWithApprovalSideEffectAlert({
+        operation: 'sell token',
+        approvals: [
+          {
+            type: 'erc20-reset',
+            approvalTxHash: approvalResetTxHash,
+            target: params.token,
+            spender: approval.cancel?.to,
+          },
+          {
+            type: 'erc20',
+            approvalTxHash,
+            target: params.token,
+            spender: approval.approval?.to,
+          },
+        ],
+        run: async () => {
+          const swapResponse = await requestUniswapSwap({
+            apiKey: quoteDetails.apiKey,
+            quote: quoteDetails.rawQuote,
+            deadline: uniswapDeadline,
+          });
+          return sendPreparedTransaction(publicClient, walletClient, account, swapResponse.swap, {
+            accountAddress,
+            chainId,
+          });
+        },
       });
       return {
         ...sent,
@@ -792,7 +850,7 @@ export function createSwapNamespace(
       const router = requireConfiguredAddress(addresses.swapRouter, 'Liquid router', chain);
       const quote = await buildBuyRareQuote(publicClient, chain, addresses, params);
 
-      const txHash = await walletClient.writeContract({
+      const targetTxHash = await walletClient.writeContract({
         address: router,
         abi: liquidRouterAbi,
         functionName: 'buy',
@@ -802,10 +860,10 @@ export function createSwapNamespace(
         value: quote.ethAmount,
       });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
       return {
-        txHash,
-        receipt,
+        txHash: targetTxHash,
+        receipt: targetReceipt,
         estimatedRareOut: quote.estimatedRareOut,
         minRareOut: quote.minRareOut,
         commands: quote.commands,

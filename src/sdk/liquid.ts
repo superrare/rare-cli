@@ -10,6 +10,7 @@ import {
   ensureTokenAllowance,
   toTokenAmount,
 } from './payments-shell.js';
+import { runWithApprovalSideEffectAlert } from './approvals-shell.js';
 import { requireConfiguredAddress } from './validation-core.js';
 import { requireWallet } from './wallet-shell.js';
 import type {
@@ -225,8 +226,14 @@ export function createLiquidNamespace(
           params.initialRareLiquidity !== undefined
             ? await toTokenAmount(publicClient, factoryConfig.baseToken, params.initialRareLiquidity, 'initialRareLiquidity')
             : 0n;
+        const curves = validation.curves.map((curve) => ({
+          tickLower: curve.tickLower,
+          tickUpper: curve.tickUpper,
+          numPositions: curve.numPositions,
+          shares: parseUnits(curve.shares, 18),
+        }));
 
-        await ensureTokenAllowance(
+        const approvalTxHash = await ensureTokenAllowance(
           publicClient,
           walletClient,
           account,
@@ -236,47 +243,52 @@ export function createLiquidNamespace(
           initialRareLiquidity,
         );
 
-        const curves = validation.curves.map((curve) => ({
-          tickLower: curve.tickLower,
-          tickUpper: curve.tickUpper,
-          numPositions: curve.numPositions,
-          shares: parseUnits(curve.shares, 18),
-        }));
+        const { txHash, receipt, contract } = await runWithApprovalSideEffectAlert({
+          operation: 'liquid edition deploy',
+          approvals: [{
+            type: 'erc20',
+            approvalTxHash,
+            target: factoryConfig.baseToken,
+            spender: liquidFactory,
+          }],
+          run: async () => {
+            const targetTxHash = customMaxTotalSupply === undefined
+              ? await walletClient.writeContract({
+                  address: liquidFactory,
+                  abi: liquidFactoryAbi,
+                  functionName: 'createLiquidTokenMultiCurve',
+                  args: [
+                    accountAddress,
+                    params.tokenUri,
+                    params.name,
+                    params.symbol,
+                    initialRareLiquidity,
+                    curves,
+                  ],
+                  account,
+                  chain: undefined,
+                })
+              : await walletClient.writeContract({
+                  address: liquidFactory,
+                  abi: liquidFactoryAbi,
+                  functionName: 'createLiquidTokenMultiCurveWithSupply',
+                  args: [
+                    accountAddress,
+                    params.tokenUri,
+                    params.name,
+                    params.symbol,
+                    initialRareLiquidity,
+                    curves,
+                    customMaxTotalSupply,
+                  ],
+                  account,
+                  chain: undefined,
+                });
 
-        const txHash = customMaxTotalSupply === undefined
-          ? await walletClient.writeContract({
-              address: liquidFactory,
-              abi: liquidFactoryAbi,
-              functionName: 'createLiquidTokenMultiCurve',
-              args: [
-                accountAddress,
-                params.tokenUri,
-                params.name,
-                params.symbol,
-                initialRareLiquidity,
-                curves,
-              ],
-              account,
-              chain: undefined,
-            })
-          : await walletClient.writeContract({
-              address: liquidFactory,
-              abi: liquidFactoryAbi,
-              functionName: 'createLiquidTokenMultiCurveWithSupply',
-              args: [
-                accountAddress,
-                params.tokenUri,
-                params.name,
-                params.symbol,
-                initialRareLiquidity,
-                curves,
-                customMaxTotalSupply,
-              ],
-              account,
-              chain: undefined,
-            });
-
-        const { receipt, contract } = await waitForLiquidEditionAddress(publicClient, txHash);
+            const deployed = await waitForLiquidEditionAddress(publicClient, targetTxHash);
+            return { txHash: targetTxHash, receipt: deployed.receipt, contract: deployed.contract };
+          },
+        });
 
         return {
           txHash,

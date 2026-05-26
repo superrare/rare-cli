@@ -8,7 +8,7 @@ import type {
   ListingMarketplaceNamespace,
 } from './types/listing.js';
 import type { RareClientConfig } from './types/client.js';
-import { approveNftContractIfNeeded } from './approvals-shell.js';
+import { approveNftContractIfNeeded, runWithApprovalSideEffectAlert } from './approvals-shell.js';
 import {
   preparePaymentForSpender,
   toCurrencyAmount,
@@ -48,24 +48,36 @@ export function createListingNamespace(
         autoApprove: params.autoApprove,
       });
 
-      const txHash = await walletClient.writeContract({
-        address: addresses.auction,
-        abi: auctionAbi,
-        functionName: 'setSalePrice',
-        args: [
-          plan.nftAddress,
-          plan.tokenId,
-          plan.currency,
-          plan.price,
-          plan.target,
-          plan.splitAddresses,
-          plan.splitRatios,
-        ],
-        account,
-        chain: undefined,
-      });
+      const { txHash, receipt } = await runWithApprovalSideEffectAlert({
+        operation: 'listing create',
+        approvals: [{
+          type: 'nft',
+          approvalTxHash,
+          target: plan.nftAddress,
+          operator: addresses.auction,
+        }],
+        run: async () => {
+          const targetTxHash = await walletClient.writeContract({
+            address: addresses.auction,
+            abi: auctionAbi,
+            functionName: 'setSalePrice',
+            args: [
+              plan.nftAddress,
+              plan.tokenId,
+              plan.currency,
+              plan.price,
+              plan.target,
+              plan.splitAddresses,
+              plan.splitRatios,
+            ],
+            account,
+            chain: undefined,
+          });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          return { txHash: targetTxHash, receipt: targetReceipt };
+        },
+      });
       return { txHash, receipt, approvalTxHash };
     },
 
@@ -73,7 +85,7 @@ export function createListingNamespace(
       const { walletClient, account } = requireWallet(config);
       const plan = planListingCancel(params);
 
-      const txHash = await walletClient.writeContract({
+      const targetTxHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'removeSalePrice',
@@ -82,8 +94,8 @@ export function createListingNamespace(
         chain: undefined,
       });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return { txHash, receipt };
+      const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+      return { txHash: targetTxHash, receipt: targetReceipt };
     },
 
     async buy(params): ReturnType<ListingMarketplaceNamespace['buy']> {
@@ -102,17 +114,29 @@ export function createListingNamespace(
         autoApprove: params.autoApprove,
       });
 
-      const txHash = await walletClient.writeContract({
-        address: addresses.auction,
-        abi: auctionAbi,
-        functionName: 'buy',
-        args: [params.contract, plan.tokenId, plan.currency, plan.amount],
-        account,
-        chain: undefined,
-        value: payment.value,
-      });
+      const { txHash, receipt } = await runWithApprovalSideEffectAlert({
+        operation: 'listing buy',
+        approvals: [{
+          type: 'erc20',
+          approvalTxHash: payment.approvalTxHash,
+          target: plan.currency,
+          spender: addresses.auction,
+        }],
+        run: async () => {
+          const targetTxHash = await walletClient.writeContract({
+            address: addresses.auction,
+            abi: auctionAbi,
+            functionName: 'buy',
+            args: [params.contract, plan.tokenId, plan.currency, plan.amount],
+            account,
+            chain: undefined,
+            value: payment.value,
+          });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          return { txHash: targetTxHash, receipt: targetReceipt };
+        },
+      });
       return { txHash, receipt, approvalTxHash: payment.approvalTxHash };
     },
 

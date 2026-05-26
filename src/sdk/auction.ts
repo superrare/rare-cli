@@ -6,7 +6,7 @@ import { auctionAbi } from '../contracts/abis/auction.js';
 import { ETH_ADDRESS, type SupportedChain } from '../contracts/addresses.js';
 import type { RareClientConfig } from './types/client.js';
 import type { AuctionMarketplaceNamespace } from './types/auction.js';
-import { approveNftContractIfNeeded } from './approvals-shell.js';
+import { approveNftContractIfNeeded, runWithApprovalSideEffectAlert } from './approvals-shell.js';
 import {
   preparePaymentForSpender,
   toCurrencyAmount,
@@ -41,6 +41,11 @@ export function createAuctionNamespace(
         accountAddress,
         currentUnixTimestamp(),
       );
+      const auctionType = await publicClient.readContract({
+        address: addresses.auction,
+        abi: auctionAbi,
+        functionName: plan.auctionType === 'scheduled' ? 'SCHEDULED_AUCTION' : 'COLDIE_AUCTION',
+      });
       const approvalTxHash = await approveNftContractIfNeeded({
         publicClient,
         walletClient,
@@ -51,32 +56,38 @@ export function createAuctionNamespace(
         autoApprove: params.autoApprove,
       });
 
-      const auctionType = await publicClient.readContract({
-        address: addresses.auction,
-        abi: auctionAbi,
-        functionName: plan.auctionType === 'scheduled' ? 'SCHEDULED_AUCTION' : 'COLDIE_AUCTION',
-      });
+      const { txHash, receipt } = await runWithApprovalSideEffectAlert({
+        operation: 'auction create',
+        approvals: [{
+          type: 'nft',
+          approvalTxHash,
+          target: plan.nftAddress,
+          operator: addresses.auction,
+        }],
+        run: async () => {
+          const targetTxHash = await walletClient.writeContract({
+            address: addresses.auction,
+            abi: auctionAbi,
+            functionName: 'configureAuction',
+            args: [
+              auctionType,
+              plan.nftAddress,
+              plan.tokenId,
+              plan.startingPrice,
+              plan.currency,
+              plan.duration,
+              plan.startTime,
+              plan.splitAddresses,
+              plan.splitRatios,
+            ],
+            account,
+            chain: undefined,
+          });
 
-      const txHash = await walletClient.writeContract({
-        address: addresses.auction,
-        abi: auctionAbi,
-        functionName: 'configureAuction',
-        args: [
-          auctionType,
-          plan.nftAddress,
-          plan.tokenId,
-          plan.startingPrice,
-          plan.currency,
-          plan.duration,
-          plan.startTime,
-          plan.splitAddresses,
-          plan.splitRatios,
-        ],
-        account,
-        chain: undefined,
+          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          return { txHash: targetTxHash, receipt: targetReceipt };
+        },
       });
-
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
       return {
         txHash,
@@ -103,17 +114,29 @@ export function createAuctionNamespace(
         autoApprove: params.autoApprove,
       });
 
-      const txHash = await walletClient.writeContract({
-        address: addresses.auction,
-        abi: auctionAbi,
-        functionName: 'bid',
-        args: [params.contract, plan.tokenId, plan.currency, plan.amount],
-        account,
-        chain: undefined,
-        value: payment.value,
-      });
+      const { txHash, receipt } = await runWithApprovalSideEffectAlert({
+        operation: 'auction bid',
+        approvals: [{
+          type: 'erc20',
+          approvalTxHash: payment.approvalTxHash,
+          target: plan.currency,
+          spender: addresses.auction,
+        }],
+        run: async () => {
+          const targetTxHash = await walletClient.writeContract({
+            address: addresses.auction,
+            abi: auctionAbi,
+            functionName: 'bid',
+            args: [params.contract, plan.tokenId, plan.currency, plan.amount],
+            account,
+            chain: undefined,
+            value: payment.value,
+          });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          return { txHash: targetTxHash, receipt: targetReceipt };
+        },
+      });
       return { txHash, receipt, approvalTxHash: payment.approvalTxHash };
     },
 
@@ -121,7 +144,7 @@ export function createAuctionNamespace(
       const { walletClient, account } = requireWallet(config);
       const plan = planAuctionTokenAction(params);
 
-      const txHash = await walletClient.writeContract({
+      const targetTxHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'settleAuction',
@@ -130,15 +153,15 @@ export function createAuctionNamespace(
         chain: undefined,
       });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return { txHash, receipt };
+      const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+      return { txHash: targetTxHash, receipt: targetReceipt };
     },
 
     async cancel(params): ReturnType<AuctionMarketplaceNamespace['cancel']> {
       const { walletClient, account } = requireWallet(config);
       const plan = planAuctionTokenAction(params);
 
-      const txHash = await walletClient.writeContract({
+      const targetTxHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'cancelAuction',
@@ -147,8 +170,8 @@ export function createAuctionNamespace(
         chain: undefined,
       });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return { txHash, receipt };
+      const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+      return { txHash: targetTxHash, receipt: targetReceipt };
     },
 
     async status(params): ReturnType<AuctionMarketplaceNamespace['status']> {

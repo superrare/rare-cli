@@ -133,9 +133,9 @@ export async function ensureTokenAllowance(
   token: Address,
   spender: Address,
   amount: bigint,
-): Promise<void> {
+): Promise<Hash | undefined> {
   if (isAddressEqual(token, ETH_ADDRESS) || amount === 0n) {
-    return;
+    return undefined;
   }
 
   const allowance = await publicClient.readContract({
@@ -146,7 +146,7 @@ export async function ensureTokenAllowance(
   });
 
   if (allowance >= amount) {
-    return;
+    return undefined;
   }
 
   const approveTx = await walletClient.writeContract({
@@ -159,6 +159,7 @@ export async function ensureTokenAllowance(
   });
 
   await publicClient.waitForTransactionReceipt({ hash: approveTx });
+  return approveTx;
 }
 
 export class PaymentApprovalRequiredError extends Error {

@@ -8,7 +8,7 @@ import { tokenAbi } from '../contracts/abis/token.js';
 import { ETH_ADDRESS, type SupportedChain } from '../contracts/addresses.js';
 import type { RareClientConfig } from './types/client.js';
 import type { OfferMarketplaceNamespace } from './types/offer.js';
-import { approveNftContractIfNeeded } from './approvals-shell.js';
+import { approveNftContractIfNeeded, runWithApprovalSideEffectAlert } from './approvals-shell.js';
 import {
   preparePaymentForSpender,
   resolveCurrencyDecimals,
@@ -52,17 +52,29 @@ export function createOfferNamespace(
         autoApprove: params.autoApprove,
       });
 
-      const txHash = await walletClient.writeContract({
-        address: addresses.auction,
-        abi: auctionAbi,
-        functionName: 'offer',
-        args: [params.contract, plan.tokenId, plan.currency, plan.amount, false],
-        account,
-        chain: undefined,
-        value: payment.value,
-      });
+      const { txHash, receipt } = await runWithApprovalSideEffectAlert({
+        operation: 'offer create',
+        approvals: [{
+          type: 'erc20',
+          approvalTxHash: payment.approvalTxHash,
+          target: plan.currency,
+          spender: addresses.auction,
+        }],
+        run: async () => {
+          const targetTxHash = await walletClient.writeContract({
+            address: addresses.auction,
+            abi: auctionAbi,
+            functionName: 'offer',
+            args: [params.contract, plan.tokenId, plan.currency, plan.amount, false],
+            account,
+            chain: undefined,
+            value: payment.value,
+          });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          return { txHash: targetTxHash, receipt: targetReceipt };
+        },
+      });
       return { txHash, receipt, approvalTxHash: payment.approvalTxHash };
     },
 
@@ -71,7 +83,7 @@ export function createOfferNamespace(
       const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const plan = planOfferCancel({ ...params, currency });
 
-      const txHash = await walletClient.writeContract({
+      const targetTxHash = await walletClient.writeContract({
         address: addresses.auction,
         abi: auctionAbi,
         functionName: 'cancelOffer',
@@ -80,8 +92,8 @@ export function createOfferNamespace(
         chain: undefined,
       });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
-      return { txHash, receipt };
+      const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+      return { txHash: targetTxHash, receipt: targetReceipt };
     },
 
     async accept(params): ReturnType<OfferMarketplaceNamespace['accept']> {
@@ -103,23 +115,35 @@ export function createOfferNamespace(
         autoApprove: params.autoApprove,
       });
 
-      const txHash = await walletClient.writeContract({
-        address: addresses.auction,
-        abi: auctionAbi,
-        functionName: 'acceptOffer',
-        args: [
-          params.contract,
-          plan.tokenId,
-          plan.currency,
-          plan.amount,
-          plan.splitAddresses,
-          plan.splitRatios,
-        ],
-        account,
-        chain: undefined,
-      });
+      const { txHash, receipt } = await runWithApprovalSideEffectAlert({
+        operation: 'offer accept',
+        approvals: [{
+          type: 'nft',
+          approvalTxHash,
+          target: params.contract,
+          operator: addresses.auction,
+        }],
+        run: async () => {
+          const targetTxHash = await walletClient.writeContract({
+            address: addresses.auction,
+            abi: auctionAbi,
+            functionName: 'acceptOffer',
+            args: [
+              params.contract,
+              plan.tokenId,
+              plan.currency,
+              plan.amount,
+              plan.splitAddresses,
+              plan.splitRatios,
+            ],
+            account,
+            chain: undefined,
+          });
 
-      const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          return { txHash: targetTxHash, receipt: targetReceipt };
+        },
+      });
       return { txHash, receipt, approvalTxHash };
     },
 

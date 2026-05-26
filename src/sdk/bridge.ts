@@ -10,6 +10,7 @@ import {
 } from './bridge-core.js';
 import { toPositiveWei } from './amounts-core.js';
 import { preparePaymentAmountForSpender } from './payments-shell.js';
+import { runWithApprovalSideEffectAlert } from './approvals-shell.js';
 import { getConfiguredAccountAddress, requireWallet } from './wallet-shell.js';
 import type { RareClientConfig } from './types/client.js';
 import type {
@@ -74,16 +75,29 @@ async function executeBridge(
     nativeFee: quote.nativeFee,
   });
 
-  const txHash = await walletClient.writeContract({
-    address: quote.sourceBridgeAddress,
-    abi: rareBridgeAbi,
-    functionName: 'send',
-    args: sendArgs,
-    value: quote.nativeFee,
-    account,
-    chain: undefined,
+  const { txHash, receipt } = await runWithApprovalSideEffectAlert({
+    operation: 'bridge send',
+    approvals: [{
+      type: 'erc20',
+      approvalTxHash: approval.approvalTxHash,
+      target: quote.rareTokenAddress,
+      spender: quote.sourceBridgeAddress,
+    }],
+    run: async () => {
+      const targetTxHash = await walletClient.writeContract({
+        address: quote.sourceBridgeAddress,
+        abi: rareBridgeAbi,
+        functionName: 'send',
+        args: sendArgs,
+        value: quote.nativeFee,
+        account,
+        chain: undefined,
+      });
+      const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+
+      return { txHash: targetTxHash, receipt: targetReceipt };
+    },
   });
-  const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
 
   return {
     ...quote,
