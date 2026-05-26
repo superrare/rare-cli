@@ -15,8 +15,11 @@ describe('public SDK API surface', () => {
   it('exposes contract building blocks from the contracts subpath', () => {
     expect(contracts).toHaveProperty('auctionAbi');
     expect(contracts).toHaveProperty('contractAddresses');
+    expect(contracts).toHaveProperty('getCcipChainSelector');
     expect(contracts).toHaveProperty('getContractAddresses');
+    expect(contracts).toHaveProperty('getRareBridgeAddress');
     expect(contracts).toHaveProperty('isSupportedChain');
+    expect(contracts).toHaveProperty('rareBridgeAbi');
   });
 
   it('exposes standalone pure helpers from the utils subpath', () => {

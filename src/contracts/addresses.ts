@@ -43,6 +43,7 @@ export type CanonicalV4Pool = {
 export type ContractAddresses = {
   factory: Address;
   auction: Address;
+  rareBridge?: Address;
   sovereignFactory?: Address;
   lazySovereignFactory?: Address;
   rareMinter?: Address;
@@ -67,6 +68,7 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
   sepolia: {
     factory: getAddress('0x3c7526a0975156299ceef369b8ff3c01cc670523'),
     auction: getAddress('0xC8Edc7049b233641ad3723D6C60019D1c8771612'),
+    rareBridge: getAddress('0xdC168291658f6C5F1D0b33E573c4d289DCA9dD08'),
     sovereignFactory: getAddress('0x46B2850ba7787734F648A6848b5eDE0815C1F8Bf'),
     lazySovereignFactory: getAddress('0xc5B8Ad9003673a23d005A6448C74d8955a1a38fA'),
     rareMinter: getAddress('0xd28Dc0B89104d7BBd902F338a0193fF063617ccE'),
@@ -84,6 +86,7 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
   mainnet: {
     factory: getAddress('0xAe8E375a268Ed6442bEaC66C6254d6De5AeD4aB1'),
     auction: getAddress('0x6D7c44773C52D396F43c2D511B81aa168E9a7a42'),
+    rareBridge: getAddress('0x88135dd0e7a8a2e42272dda89849a997ce2e83f7'),
     sovereignFactory: getAddress('0xe980ec62378529d95ba446433f4deb6324129c59'),
     lazySovereignFactory: getAddress('0xba798BD606d86D207ca2751510173532899117a1'),
     rareMinter: getAddress('0x5fa112EFeD8297bec0010b312208d223E0cE891E'),
@@ -101,11 +104,20 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
   base: {
     factory: getAddress('0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd'),
     auction: getAddress('0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2'),
+    rareBridge: getAddress('0x3b41e21094611d152a08d3691a70837f1a077dae'),
   },
   'base-sepolia': {
     factory: getAddress('0x2b181ae0f1aea6fed75591b04991b1a3f9868d51'),
     auction: getAddress('0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2'),
+    rareBridge: getAddress('0xca491bb62A7730E97F500510132C47633DDD0229'),
   },
+};
+
+export const ccipChainSelectors: Record<SupportedChain, bigint> = {
+  mainnet: 5009297550715157269n,
+  sepolia: 16015286601757825753n,
+  base: 15971525489660198786n,
+  'base-sepolia': 10344971235874465080n,
 };
 
 export const canonicalV4Pools: Partial<Record<SupportedChain, CanonicalV4Pools>> = {
@@ -339,6 +351,18 @@ export function getRareMinterAddress(chain: SupportedChain): Address {
     );
   }
   return rareMinter;
+}
+
+export function getRareBridgeAddress(chain: SupportedChain): Address {
+  const address = getContractAddresses(chain).rareBridge;
+  if (!address) {
+    throw new Error(`RareBridge is not configured on "${chain}". Supported RareBridge chains: mainnet, sepolia, base, base-sepolia.`);
+  }
+  return address;
+}
+
+export function getCcipChainSelector(chain: SupportedChain): bigint {
+  return ccipChainSelectors[chain];
 }
 
 export function isSupportedChain(value: string): value is SupportedChain {

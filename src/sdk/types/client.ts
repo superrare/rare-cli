@@ -15,6 +15,7 @@ import type {
 import type { NftIdentityParams } from '../nft-core.js';
 import type { SupportedChain } from '../../contracts/addresses.js';
 import type { AuctionNamespace } from './auction.js';
+import type { BridgeNamespace } from './bridge.js';
 import type { CollectionNamespace } from './collection.js';
 import type { CurrencyInfo, CurrencyInput, ResolvedCurrency, ResolvedCurrencyWithDecimals, IntegerInput } from './common.js';
 import type { LiquidEditionNamespace } from './liquid.js';
@@ -71,6 +72,7 @@ export type RareClientNftGetParams = Omit<NftIdentityParams, 'chain' | 'chainId'
 export type RareClientContracts = {
   factory: Address;
   auction: Address;
+  rareBridge?: Address;
   sovereignFactory?: Address;
   lazySovereignFactory?: Address;
   rareMinter?: Address;
@@ -132,6 +134,7 @@ export type RareClient = {
    */
   contracts: RareClientContracts;
   liquidEdition: LiquidEditionNamespace;
+  bridge: BridgeNamespace;
   swap: SwapNamespace;
   auction: AuctionNamespace;
   offer: OfferNamespace;
