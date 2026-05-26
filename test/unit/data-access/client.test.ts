@@ -25,6 +25,24 @@ describe('API client configuration', () => {
     expect(resolveRareApiBaseUrl()).toBe(DEFAULT_RARE_API_BASE_URL);
   });
 
+  it('ignores blank base URL overrides', () => {
+    process.env.RARE_API_BASE_URL = '';
+    expect(resolveRareApiBaseUrl('https://rare-api.config.test')).toBe('https://rare-api.config.test');
+
+    process.env.RARE_API_BASE_URL = '   ';
+    expect(resolveRareApiBaseUrl('https://rare-api.config.test')).toBe('https://rare-api.config.test');
+    expect(resolveRareApiBaseUrl('')).toBe(DEFAULT_RARE_API_BASE_URL);
+    expect(resolveRareApiBaseUrl('   ')).toBe(DEFAULT_RARE_API_BASE_URL);
+  });
+
+  it('trims base URL overrides before use', () => {
+    process.env.RARE_API_BASE_URL = '  https://rare-api.env.test  ';
+    expect(resolveRareApiBaseUrl('https://rare-api.config.test')).toBe('https://rare-api.env.test');
+
+    delete process.env.RARE_API_BASE_URL;
+    expect(resolveRareApiBaseUrl('  https://rare-api.config.test  ')).toBe('https://rare-api.config.test');
+  });
+
   it('uses RARE_API_BASE_URL as the global base URL override', async () => {
     process.env.RARE_API_BASE_URL = 'https://rare-api.test';
     const requests: Request[] = [];

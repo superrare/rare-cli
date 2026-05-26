@@ -131,7 +131,8 @@ describe('Sovereign collection core', () => {
       name: 'Typo',
       symbol: 'TPO',
       maxTokens: 10,
-      contractType: 'royalty-gaurd' as never,
+      // @ts-expect-error exercises runtime validation for invalid external input.
+      contractType: 'royalty-gaurd',
     })).toThrow('Unsupported Sovereign collection contract type "royalty-gaurd".');
   });
 
@@ -189,7 +190,8 @@ describe('Sovereign collection core', () => {
       name: 'Typo',
       symbol: 'TPO',
       maxTokens: 10,
-      contractType: 'lazy-royalty-gaurd' as never,
+      // @ts-expect-error exercises runtime validation for invalid external input.
+      contractType: 'lazy-royalty-gaurd',
     })).toThrow('Unsupported Lazy Sovereign collection contract type "lazy-royalty-gaurd".');
   });
 
