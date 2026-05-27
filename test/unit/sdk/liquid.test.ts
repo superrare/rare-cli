@@ -16,6 +16,8 @@ const accountAddress = '0x1000000000000000000000000000000000000000' as Address;
 const liquidFactory = '0x2000000000000000000000000000000000000000' as Address;
 const baseToken = '0x3000000000000000000000000000000000000000' as Address;
 const deployedToken = '0x4000000000000000000000000000000000000000' as Address;
+const liquidEdition = '0x5000000000000000000000000000000000000000' as Address;
+const renderContract = '0x6000000000000000000000000000000000000000' as Address;
 const txHash = `0x${'12'.repeat(32)}` satisfies Hex;
 const curves: LiquidCurveSegment[] = [
   { tickLower: -16080, tickUpper: -9180, numPositions: 3, shares: '0.1' },
@@ -69,11 +71,37 @@ describe('Liquid Edition SDK shell receipt handling', () => {
     );
   });
 
+  it('rejects reverted setRenderContract receipts before returning success', async () => {
+    const namespace = createTestLiquidNamespace({
+      async waitForTransactionReceipt() {
+        return receipt({ status: 'reverted', logs: [] });
+      },
+      async getTransactionReceipt(): Promise<never> {
+        throw new Error('unexpected delayed receipt lookup');
+      },
+      expectedWrite: {
+        functionName: 'setRenderContract',
+        args: [renderContract],
+      },
+    });
+
+    await expect(namespace.setRenderContract({
+      contract: liquidEdition,
+      renderContract,
+    })).rejects.toThrow(
+      `Liquid Edition setRenderContract transaction was confirmed with status "reverted". Transaction hash: ${txHash}. Block: 123.`,
+    );
+  });
+
 });
 
 function createTestLiquidNamespace(publicClientOverrides: {
   waitForTransactionReceipt: () => Promise<TransactionReceipt>;
   getTransactionReceipt: () => Promise<TransactionReceipt>;
+  expectedWrite?: {
+    functionName: string;
+    args?: readonly unknown[];
+  };
 }) {
   const publicClient = {
     readContract: readLiquidFactoryConfigContract,
@@ -87,8 +115,14 @@ function createTestLiquidNamespace(publicClientOverrides: {
       walletClient: {
         account: { address: accountAddress },
         async writeContract(params: { functionName: string; args?: readonly unknown[] }) {
-          expect(params.functionName).toBe('createLiquidTokenMultiCurve');
-          expect(params.args?.[0]).toBe(accountAddress);
+          const expectedWrite = publicClientOverrides.expectedWrite ?? {
+            functionName: 'createLiquidTokenMultiCurve',
+            args: [accountAddress],
+          };
+          expect(params.functionName).toBe(expectedWrite.functionName);
+          for (const [index, expectedArg] of (expectedWrite.args ?? []).entries()) {
+            expect(params.args?.[index]).toBe(expectedArg);
+          }
           return txHash;
         },
       } as never,
