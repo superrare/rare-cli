@@ -8,6 +8,7 @@ import {
   selectMcpToolNames,
   serializeForMcp,
   shapeMcpConfigSummary,
+  shapeMcpToolAnnotations,
   shapeMcpTransactionResult,
   resolveMcpChain,
 } from '../../../src/mcp/core.js';
@@ -35,6 +36,19 @@ describe('mcp core helpers', () => {
     expect(sdkPathToMcpToolName('rare.listing.release.allowlist.setConfig')).toBe('listing_release_allowlist_set_config');
     expect(sdkPathToMcpToolName('rare.swap.quoteBuyToken')).toBe('swap_quote_buy_token');
     expect(sdkPathToMcpToolName('rare.bridge.send')).toBe('bridge_send');
+  });
+
+  it('shapes MCP tool annotations by access level', () => {
+    expect(shapeMcpToolAnnotations('read')).toEqual({
+      readOnlyHint: true,
+      destructiveHint: undefined,
+      openWorldHint: true,
+    });
+    expect(shapeMcpToolAnnotations('write')).toEqual({
+      readOnlyHint: false,
+      destructiveHint: true,
+      openWorldHint: true,
+    });
   });
 
   it('resolves MCP chains with config and sepolia fallback', () => {

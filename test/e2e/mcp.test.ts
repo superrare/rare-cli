@@ -31,6 +31,12 @@ describe('MCP stdio server', () => {
           expect(names).not.toContain(writeToolName);
         }
 
+        const configSummary = tools.tools.find((tool) => tool.name === 'config_summary');
+        expect(configSummary?.annotations).toEqual({
+          readOnlyHint: true,
+          openWorldHint: true,
+        });
+
         const config = await client.callTool({ name: 'config_summary', arguments: {} });
         expect(config.structuredContent).toEqual({
           defaultChain: 'sepolia',
@@ -80,6 +86,13 @@ describe('MCP stdio server', () => {
         const names = tools.tools.map((tool) => tool.name).sort();
 
         expect(names).toEqual([...mcpReadToolNames, ...mcpWriteToolNames].sort());
+
+        const collectionMint = tools.tools.find((tool) => tool.name === 'collection_mint');
+        expect(collectionMint?.annotations).toEqual({
+          readOnlyHint: false,
+          destructiveHint: true,
+          openWorldHint: true,
+        });
 
         const result = await client.callTool({
           name: 'collection_mint',

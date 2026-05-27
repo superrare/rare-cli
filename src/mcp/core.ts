@@ -11,6 +11,12 @@ export type McpToolSpec = {
   description: string;
 }
 
+export type McpToolAnnotations = {
+  readOnlyHint: boolean;
+  destructiveHint?: boolean;
+  openWorldHint: true;
+};
+
 function sdkTool(access: McpToolAccess, sdkPath: string, description: string): McpToolSpec {
   return {
     name: sdkPathToMcpToolName(sdkPath),
@@ -157,6 +163,14 @@ export function selectMcpToolNames(opts: { allowWrites: boolean }): string[] {
   return opts.allowWrites
     ? [...mcpReadToolNames, ...mcpWriteToolNames]
     : [...mcpReadToolNames];
+}
+
+export function shapeMcpToolAnnotations(access: McpToolAccess): McpToolAnnotations {
+  return {
+    readOnlyHint: access === 'read',
+    destructiveHint: access === 'write' ? true : undefined,
+    openWorldHint: true,
+  };
 }
 
 export function sdkPathToMcpToolName(sdkPath: string): string {
