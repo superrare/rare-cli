@@ -106,10 +106,26 @@ function missingLiquidEditionAddressError(txHash: Hash, receipt: TransactionRece
   return cause instanceof Error ? new Error(message, { cause }) : new Error(message);
 }
 
-function liquidEditionDeployRevertedError(txHash: Hash, receipt: TransactionReceipt): Error {
+function liquidEditionRevertedReceiptError(message: string, txHash: Hash, receipt: TransactionReceipt): Error {
   return new Error(
-    `Liquid Edition deploy transaction reverted before emitting LiquidTokenCreated. ` +
+    `${message} ` +
       `Transaction hash: ${txHash}. Block: ${receipt.blockNumber}.`,
+  );
+}
+
+function liquidEditionDeployRevertedError(txHash: Hash, receipt: TransactionReceipt): Error {
+  return liquidEditionRevertedReceiptError(
+    'Liquid Edition deploy transaction reverted before emitting LiquidTokenCreated.',
+    txHash,
+    receipt,
+  );
+}
+
+function liquidEditionSetRenderContractRevertedError(txHash: Hash, receipt: TransactionReceipt): Error {
+  return liquidEditionRevertedReceiptError(
+    'Liquid Edition setRenderContract transaction was confirmed with status "reverted".',
+    txHash,
+    receipt,
   );
 }
 
@@ -327,6 +343,9 @@ export function createLiquidNamespace(
         chain: undefined,
       });
       const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash });
+      if (receipt.status === 'reverted') {
+        throw liquidEditionSetRenderContractRevertedError(txHash, receipt);
+      }
 
       return {
         txHash,
