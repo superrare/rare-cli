@@ -1,8 +1,10 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
+import { parseUnits } from 'viem';
 import {
   buildCurvePreview,
   generatePresetCurves,
+  parseCurveConfig,
   validateCurves,
   type LiquidCurveSegment,
 } from '../../../src/liquid/curve-config.js';
@@ -53,6 +55,40 @@ test('validateCurves rejects share sums that do not add to 1', () => {
   const result = validateCurves(curves, baseFactoryConfig);
   assert.equal(result.isValid, false);
   assert.match(result.errorMessage ?? '', /add up to 1/i);
+});
+
+test('validateCurves rejects exponent notation share strings', () => {
+  const curves: LiquidCurveSegment[] = [
+    { tickLower: 0, tickUpper: 60_000, numPositions: 1, shares: '1e-7' },
+    { tickLower: 60_000, tickUpper: 120_000, numPositions: 1, shares: '0.9999999' },
+  ];
+
+  const result = validateCurves(curves, baseFactoryConfig);
+
+  assert.equal(result.isValid, false);
+  assert.equal(result.error, 'invalid-segment');
+});
+
+test('parseCurveConfig normalizes numeric exponent shares into deployable decimal strings', () => {
+  const curves = parseCurveConfig(JSON.stringify([
+    { tickLower: 0, tickUpper: 60_000, numPositions: 1, shares: 1e-7 },
+    { tickLower: 60_000, tickUpper: 120_000, numPositions: 1, shares: '0.9999999' },
+  ]), baseFactoryConfig.curvePoolSupplyTokens, baseFactoryConfig.poolTickSpacing);
+
+  assert.deepEqual(curves.map((curve) => curve.shares), ['0.0000001', '0.9999999']);
+  assert.doesNotThrow(() => curves.forEach((curve) => parseUnits(curve.shares, 18)));
+});
+
+test('validateCurves rejects share precision that cannot be represented in 18 decimals', () => {
+  const curves: LiquidCurveSegment[] = [
+    { tickLower: 0, tickUpper: 60_000, numPositions: 1, shares: '0.0000000000000000001' },
+    { tickLower: 60_000, tickUpper: 120_000, numPositions: 1, shares: '0.9999999999999999999' },
+  ];
+
+  const result = validateCurves(curves, baseFactoryConfig);
+
+  assert.equal(result.isValid, false);
+  assert.equal(result.error, 'invalid-segment');
 });
 
 test('validateCurves rejects too many positions', () => {
