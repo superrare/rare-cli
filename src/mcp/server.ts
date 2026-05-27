@@ -14,6 +14,7 @@ import {
   selectMcpToolNames,
   serializeForMcp,
   shapeMcpConfigSummary,
+  shapeMcpToolAnnotations,
   shapeMcpTransactionResult,
   type McpToolSpec,
 } from './core.js';
@@ -111,11 +112,7 @@ function registerTool(server: McpServer, spec: McpToolSpec): void {
   server.registerTool(spec.name, {
     description: spec.description,
     inputSchema: tool.inputSchema,
-    annotations: {
-      readOnlyHint: spec.access === 'read',
-      destructiveHint: spec.access === 'write' ? false : undefined,
-      openWorldHint: true,
-    },
+    annotations: shapeMcpToolAnnotations(spec.access),
   }, async (args) => withToolErrors(async () => tool.handler(args)));
 }
 
