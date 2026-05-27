@@ -70,8 +70,16 @@ type UsdTokenPriceCurveInput = {
 };
 
 type TokenSupplyAmount = string | number;
+type NormalizedShare = {
+  decimal: string;
+  scaledUnits: bigint;
+}
+type NormalizedCurveSegmentEntry = {
+  segment: LiquidCurveSegment;
+  shareScaledUnits: bigint;
+}
 type NormalizedSegmentResult =
-  | { isValid: true; segment: LiquidCurveSegment }
+  | { isValid: true; entry: NormalizedCurveSegmentEntry }
   | { isValid: false; result: LiquidCurvesValidationResult };
 type GrossLiquidityTickEntry = {
   tick: number;
@@ -82,6 +90,7 @@ type GrossLiquidityTickEntry = {
 const TICK_BASE = 1.0001;
 const TICK_LOG_BASE = Math.log(TICK_BASE);
 const TOKEN_BASE_UNITS = 1e18;
+const SHARE_SCALE_UNITS = 10n ** 18n;
 const RESERVE_TAIL_SHARES_PERCENT = 2;
 const RESERVE_TAIL_END_PRICE_MULTIPLE = 100;
 const SHARES_SUM_TOLERANCE = 1e-6;
@@ -145,12 +154,79 @@ function toValidNumber(value: unknown): number | null {
   return value;
 }
 
-function toValidShareNumber(value: unknown): number | null {
-  const numeric = typeof value === 'string' ? Number(value) : toValidNumber(value);
-  if (numeric === null || numeric <= 0 || numeric > 1) {
+function toNormalizedShare(value: unknown): NormalizedShare | null {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value <= 0 || value > 1) {
+      return null;
+    }
+    return parseShareDecimalString(expandFiniteNumber(value));
+  }
+
+  if (typeof value !== 'string') {
     return null;
   }
-  return numeric;
+
+  return parseShareDecimalString(value);
+}
+
+function expandFiniteNumber(value: number): string {
+  const rawValue = value.toString();
+  const [coefficient = '', exponentValue] = rawValue.toLowerCase().split('e');
+  if (exponentValue === undefined) {
+    return rawValue;
+  }
+
+  const exponent = Number(exponentValue);
+  const [integerPart = '', fractionalPart = ''] = coefficient.split('.');
+  const digits = `${integerPart}${fractionalPart}`;
+  const decimalIndex = integerPart.length + exponent;
+
+  if (decimalIndex <= 0) {
+    return `0.${'0'.repeat(Math.abs(decimalIndex))}${digits}`;
+  }
+  if (decimalIndex >= digits.length) {
+    return `${digits}${'0'.repeat(decimalIndex - digits.length)}`;
+  }
+  return `${digits.slice(0, decimalIndex)}.${digits.slice(decimalIndex)}`;
+}
+
+function parseShareDecimalString(value: string): NormalizedShare | null {
+  const normalized = value.trim();
+  if (!/^(?:\d+\.?\d*|\.\d+)$/.test(normalized)) {
+    return null;
+  }
+
+  const shareParts = normalized.startsWith('.')
+    ? ['0', normalized.slice(1)]
+    : normalized.split('.');
+  const integerPart = shareParts[0] ?? '';
+  const fractionalDigits = shareParts[1] ?? '';
+  const excessFractionalDigits = fractionalDigits.slice(18);
+  if (/[1-9]/.test(excessFractionalDigits)) {
+    return null;
+  }
+
+  const integerUnits = BigInt(integerPart === '' ? '0' : integerPart);
+  const fractionalUnits = BigInt(fractionalDigits.slice(0, 18).padEnd(18, '0'));
+  const scaledUnits = integerUnits * SHARE_SCALE_UNITS + fractionalUnits;
+  if (scaledUnits <= 0n || scaledUnits > SHARE_SCALE_UNITS) {
+    return null;
+  }
+
+  return {
+    decimal: formatScaledShareDecimal(scaledUnits),
+    scaledUnits,
+  };
+}
+
+function formatScaledShareDecimal(scaledUnits: bigint): string {
+  const integerUnits = scaledUnits / SHARE_SCALE_UNITS;
+  const fractionalUnits = scaledUnits % SHARE_SCALE_UNITS;
+  if (fractionalUnits === 0n) {
+    return integerUnits.toString();
+  }
+
+  return `${integerUnits}.${fractionalUnits.toString().padStart(18, '0').replace(/0+$/, '')}`;
 }
 
 function toApproxTokenAmount(value: TokenSupplyAmount, label: string): number {
@@ -350,11 +426,11 @@ function validateAndNormalizeSegments(
     return invalidResult.result;
   }
 
-  const parsedSegments = normalizedResults
+  const parsedEntries = normalizedResults
     .filter((result): result is Extract<NormalizedSegmentResult, { isValid: true }> => result.isValid)
-    .map((result) => result.segment);
+    .map((result) => result.entry);
 
-  const totalPositions = parsedSegments.reduce((sum, segment) => sum + segment.numPositions, 0);
+  const totalPositions = parsedEntries.reduce((sum, entry) => sum + entry.segment.numPositions, 0);
   if (totalPositions > MAX_TOTAL_POSITIONS) {
     return {
       isValid: false,
@@ -363,10 +439,10 @@ function validateAndNormalizeSegments(
     };
   }
 
-  const sortedSegments = [...parsedSegments].sort((a, b) => a.tickLower - b.tickLower);
-  const hasGapOrOverlap = sortedSegments
+  const sortedEntries = [...parsedEntries].sort((a, b) => a.segment.tickLower - b.segment.tickLower);
+  const hasGapOrOverlap = sortedEntries
     .slice(1)
-    .some((current, index) => current.tickLower !== sortedSegments[index]?.tickUpper);
+    .some((current, index) => current.segment.tickLower !== sortedEntries[index]?.segment.tickUpper);
   if (hasGapOrOverlap) {
     return {
       isValid: false,
@@ -375,11 +451,12 @@ function validateAndNormalizeSegments(
     };
   }
 
-  const shareSum = sortedSegments.reduce((sum, segment) => sum + Number(segment.shares), 0);
-  if (Math.abs(shareSum - 1) > SHARES_SUM_TOLERANCE) {
+  const shareSum = sortedEntries.reduce((sum, entry) => sum + entry.shareScaledUnits, 0n);
+  if (shareSum !== SHARE_SCALE_UNITS) {
     return { isValid: false, error: 'share-sum-invalid', errorMessage: 'Curve share values must add up to 1' };
   }
 
+  const sortedSegments = sortedEntries.map((entry) => entry.segment);
   const narrowSegment = sortedSegments.find((segment) => {
     const minSpan = segment.numPositions * tickSpacing;
     return segment.tickUpper - segment.tickLower < minSpan ||
@@ -413,8 +490,8 @@ function normalizeSegment(segment: unknown, tickSpacing: number): NormalizedSegm
   const tickLower = toValidNumber(segment.tickLower);
   const tickUpper = toValidNumber(segment.tickUpper);
   const numPositions = toValidNumber(segment.numPositions);
-  const shares = toValidShareNumber(segment.shares);
-  if (tickLower === null || tickUpper === null || numPositions === null || shares === null) {
+  const share = toNormalizedShare(segment.shares);
+  if (tickLower === null || tickUpper === null || numPositions === null || share === null) {
     return invalidSegmentResult();
   }
   if (!Number.isInteger(tickLower) || !Number.isInteger(tickUpper) || !Number.isInteger(numPositions) || numPositions <= 0) {
@@ -432,11 +509,14 @@ function normalizeSegment(segment: unknown, tickSpacing: number): NormalizedSegm
 
   return {
     isValid: true,
-    segment: {
-      tickLower,
-      tickUpper,
-      numPositions,
-      shares: `${shares}`,
+    entry: {
+      segment: {
+        tickLower,
+        tickUpper,
+        numPositions,
+        shares: share.decimal,
+      },
+      shareScaledUnits: share.scaledUnits,
     },
   };
 }

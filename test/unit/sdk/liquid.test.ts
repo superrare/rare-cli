@@ -68,6 +68,7 @@ describe('Liquid Edition SDK shell receipt handling', () => {
       `Liquid Edition deploy transaction reverted before emitting LiquidTokenCreated. Transaction hash: ${txHash}. Block: 123.`,
     );
   });
+
 });
 
 function createTestLiquidNamespace(publicClientOverrides: {
@@ -75,16 +76,7 @@ function createTestLiquidNamespace(publicClientOverrides: {
   getTransactionReceipt: () => Promise<TransactionReceipt>;
 }) {
   const publicClient = {
-    async readContract(params: { functionName: string }) {
-      if (params.functionName === 'baseToken') return baseToken;
-      if (params.functionName === 'maxTotalSupply') return parseEther('1000000');
-      if (params.functionName === 'creatorLaunchReward') return parseEther('100000');
-      if (params.functionName === 'minRareLiquidityWei') return 0n;
-      if (params.functionName === 'lpTickLower') return -887_220;
-      if (params.functionName === 'lpTickUpper') return 887_220;
-      if (params.functionName === 'poolTickSpacing') return 60;
-      throw new Error(`unexpected readContract ${params.functionName}`);
-    },
+    readContract: readLiquidFactoryConfigContract,
     waitForTransactionReceipt: publicClientOverrides.waitForTransactionReceipt,
     getTransactionReceipt: publicClientOverrides.getTransactionReceipt,
   };
@@ -104,6 +96,17 @@ function createTestLiquidNamespace(publicClientOverrides: {
     'sepolia',
     { liquidFactory },
   );
+}
+
+async function readLiquidFactoryConfigContract(params: { functionName: string }) {
+  if (params.functionName === 'baseToken') return baseToken;
+  if (params.functionName === 'maxTotalSupply') return parseEther('1000000');
+  if (params.functionName === 'creatorLaunchReward') return parseEther('100000');
+  if (params.functionName === 'minRareLiquidityWei') return 0n;
+  if (params.functionName === 'lpTickLower') return -887_220;
+  if (params.functionName === 'lpTickUpper') return 887_220;
+  if (params.functionName === 'poolTickSpacing') return 60;
+  throw new Error(`unexpected readContract ${params.functionName}`);
 }
 
 function receipt(params: {
