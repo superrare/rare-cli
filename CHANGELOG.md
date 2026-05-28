@@ -1,5 +1,29 @@
 # Changelog
 
+## 1.2.0
+
+### Fixes
+
+- Fixed uppercase Merkle artifact roots by @KeeganEad in https://github.com/superrare/rare-cli/pull/81.
+- Validated SDK collection contract types by @KeeganEad in https://github.com/superrare/rare-cli/pull/84.
+- Fixed stale batch auction root status by @KeeganEad in https://github.com/superrare/rare-cli/pull/85.
+- Fixed blank Rare API base URL overrides by @KeeganEad in https://github.com/superrare/rare-cli/pull/86.
+- Fixed liquid curve share validation by @KeeganEad in https://github.com/superrare/rare-cli/pull/87.
+- Fixed liquid `setRenderContract` reverted receipts by @KeeganEad in https://github.com/superrare/rare-cli/pull/88.
+- Fixed MCP write tool destructive hints by @KeeganEad in https://github.com/superrare/rare-cli/pull/89.
+
+### New features
+
+- Added Rare bridge SDK support by @KeeganEad in https://github.com/superrare/rare-cli/pull/80.
+- Added Rare bridge CLI and MCP tools by @KeeganEad in https://github.com/superrare/rare-cli/pull/82.
+
+### Maintenance
+
+- Alerted on release approval side effects by @KeeganEad in https://github.com/superrare/rare-cli/pull/83.
+- Updated liquid edition factory addresses by @KeeganEad in https://github.com/superrare/rare-cli/pull/90.
+
+**Full changelog**: https://github.com/superrare/rare-cli/compare/v1.1.0...v1.2.0
+
 ## 1.1.0
 
 ### Fixes
