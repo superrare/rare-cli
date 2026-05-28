@@ -47,7 +47,7 @@ describe('chain and currency helpers', () => {
     expect(getRareMinterAddress('sepolia')).toBe('0xd28Dc0B89104d7BBd902F338a0193fF063617ccE');
     expect(getRareBridgeAddress('sepolia')).toBe('0xdC168291658f6C5F1D0b33E573c4d289DCA9dD08');
     expect(getCcipChainSelector('sepolia')).toBe(16015286601757825753n);
-    expect(getContractAddresses('mainnet').liquidFactory).toBe('0xbb4341CFd588a098e9aCE1D224178836426c4a8E');
+    expect(getContractAddresses('mainnet').liquidFactory).toBe('0x25f993C222fE5e891128a782A5168f1C78629540');
   });
 
   it('resolves canonical V4 pools separately from contract addresses', () => {

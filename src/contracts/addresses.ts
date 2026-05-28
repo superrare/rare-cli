@@ -97,7 +97,7 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
     marketplaceSettings: getAddress('0x61DBF87164d33FD3695256DC8Ba74D3B1d304170'),
     erc20ApprovalManager: getAddress('0xa837a7eAff154Ab837617Cf7250648D3Ec0A4436'),
     erc721ApprovalManager: getAddress('0x4bb0Deea6d1A30C601338aAB776d394C2AE5c0F8'),
-    liquidFactory: getAddress('0xbb4341CFd588a098e9aCE1D224178836426c4a8E'),
+    liquidFactory: getAddress('0x25f993C222fE5e891128a782A5168f1C78629540'),
     swapRouter: getAddress('0xEBd58EdA8408d9EA409f2c2bE8898BD9738f3583'),
     v4Quoter: getAddress('0x52F0E24D1c21C8A0cB1e5a5dD6198556BD9E1203'),
   },
