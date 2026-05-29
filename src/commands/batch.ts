@@ -21,17 +21,17 @@ import {
   type BatchTokenListInputFormat,
   type BatchTokenProofInput,
 } from '../sdk/batch-core.js';
-import { planBatchListingRootRegistrationLocalInputs } from '../sdk/batch-listing-core.js';
+import {
+  parseBatchListingCreateRootArtifactInput,
+  planBatchListingCreateArtifact,
+} from '../sdk/batch-listing-core.js';
 import {
   planBatchAuctionBidLocalInputs,
   planBatchAuctionCreateLocalInputs,
   planBatchAuctionToken,
 } from '../sdk/batch-auction-core.js';
 import { planBatchOfferAcceptLocalInputs, planBatchOfferCreateLocalInputs } from '../sdk/batch-offer-core.js';
-import {
-  buildMerkleProofArtifact,
-  validateRootArtifact,
-} from '../sdk/merkle-core.js';
+import { buildMerkleProofArtifact } from '../sdk/merkle-core.js';
 import { requireInput, toUnixTimestamp } from '../sdk/validation-core.js';
 import {
   loadMerkleProofArtifact,
@@ -1108,7 +1108,6 @@ function addBatchListingCommands(cmd: Command): void {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const artifact = await resolveBatchListingCreateArtifact(opts, { chain, publicClient });
-      planBatchListingRootRegistrationLocalInputs(artifact);
       const { client } = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
 
@@ -1414,28 +1413,29 @@ async function resolveBatchListingCreateArtifact(
   const content = await readFile(opts.input, 'utf8');
   const parsedObject = parseJsonObjectInput(content);
   const splits = finalizeSplits(opts.split);
+  const rootArtifact = parsedObject === undefined
+    ? undefined
+    : parseBatchListingCreateRootArtifactInput(parsedObject);
 
-  if (parsedObject !== undefined && !isBatchTokenTreeInputObject(parsedObject)) {
-    validateRootArtifact(parsedObject);
-    if (opts.currency !== undefined && opts.price === undefined) {
-      throw new Error('--currency requires --price when overriding a batch listing root artifact.');
-    }
-    const currency = opts.currency === undefined ? parsedObject.currency : resolveCurrency(opts.currency, context.chain);
-    const amount = opts.price === undefined
-      ? parsedObject.amount
-      : (await parseBatchAmount(context.publicClient, context.chain, currency, opts.price)).toString();
+  if (rootArtifact !== undefined) {
+    const currencyOverride = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, context.chain);
+    const amountOverride = opts.price === undefined
+      ? undefined
+      : (await parseBatchAmount(
+          context.publicClient,
+          context.chain,
+          currencyOverride ?? rootArtifact.currency,
+          opts.price,
+        )).toString();
 
-    return {
-      ...parsedObject,
-      currency,
-      amount,
-      ...(splits === undefined
-        ? {}
-        : {
-            splitAddresses: splits.addresses,
-            splitRatios: splits.ratios,
-          }),
-    };
+    return planBatchListingCreateArtifact({
+      kind: 'root-artifact',
+      artifact: rootArtifact,
+      currencyOverride,
+      amountOverride,
+      splitAddresses: splits?.addresses,
+      splitRatios: splits?.ratios,
+    });
   }
 
   if (opts.price === undefined) {
@@ -1453,17 +1453,14 @@ async function resolveBatchListingCreateArtifact(
     chainId: resolveTreeChainId(opts),
   });
 
-  return {
-    root: tokenTreeArtifact.root,
+  return planBatchListingCreateArtifact({
+    kind: 'token-tree',
+    artifact: tokenTreeArtifact,
     currency,
     amount: amount.toString(),
-    splitAddresses: splits?.addresses ?? [],
-    splitRatios: splits?.ratios ?? [],
-    tokens: tokenTreeArtifact.tokens.map((token) => ({
-      contract: token.contractAddress,
-      tokenId: token.tokenId,
-    })),
-  };
+    splitAddresses: splits?.addresses,
+    splitRatios: splits?.ratios,
+  });
 }
 
 function parseJsonObjectInput(content: string): Record<string, unknown> | undefined {
@@ -1474,23 +1471,6 @@ function parseJsonObjectInput(content: string): Record<string, unknown> | undefi
 
   const parsed: unknown = JSON.parse(content);
   return isRecord(parsed) ? parsed : undefined;
-}
-
-function isBatchTokenTreeInputObject(value: Record<string, unknown>): boolean {
-  if (value.type === 'rare-batch-token-list') {
-    return true;
-  }
-  if (
-    'currency' in value ||
-    'amount' in value ||
-    'splitAddresses' in value ||
-    'splitRatios' in value ||
-    !Array.isArray(value.tokens)
-  ) {
-    return false;
-  }
-
-  return true;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -5,6 +5,8 @@ import type {
   BatchListingRootArtifact,
   BatchListingStatus,
 } from './types/batch-listing.js';
+import type { BatchTokenListArtifact } from './batch-core.js';
+import { validateRootArtifact } from './merkle-core.js';
 import { planPayoutSplits, planProvidedPayoutSplits } from './splits-core.js';
 
 export type BatchListingReadConfig = {
@@ -20,11 +22,57 @@ export type BatchListingAllowListConfig = {
   endTimestamp: bigint;
 };
 
+export type BatchListingCreateArtifactPlan =
+  | {
+      kind: 'root-artifact';
+      artifact: BatchListingRootArtifact;
+      currencyOverride?: Address;
+      amountOverride?: string;
+      splitAddresses?: Address[];
+      splitRatios?: number[];
+    }
+  | {
+      kind: 'token-tree';
+      artifact: BatchTokenListArtifact;
+      currency: Address;
+      amount: string;
+      splitAddresses?: Address[];
+      splitRatios?: number[];
+    };
+
 export function uniqueAddresses(addresses: readonly Address[]): Address[] {
   return addresses.reduce<Address[]>(
     (unique, address) => unique.some((existing) => isAddressEqual(existing, address)) ? unique : [...unique, address],
     [],
   );
+}
+
+export function parseBatchListingCreateRootArtifactInput(
+  value: unknown,
+): BatchListingRootArtifact | undefined {
+  if (!isRecord(value)) {
+    validateRootArtifact(value);
+    throw new Error('unreachable: non-object root artifact validation did not throw');
+  }
+
+  if (isBatchTokenTreeInputObject(value)) {
+    return undefined;
+  }
+
+  validateRootArtifact(value);
+  return value;
+}
+
+export function planBatchListingCreateArtifact(
+  plan: BatchListingCreateArtifactPlan,
+): BatchListingRootArtifact {
+  const splitOverride = planOptionalSplitOverride(plan.splitAddresses, plan.splitRatios);
+  const artifact = plan.kind === 'root-artifact'
+    ? planBatchListingCreateRootArtifact(plan, splitOverride)
+    : planBatchListingCreateTokenTreeArtifact(plan, splitOverride);
+
+  planBatchListingRootRegistrationLocalInputs(artifact);
+  return artifact;
 }
 
 export function planBatchListingRootRegistration(
@@ -38,6 +86,84 @@ export function planBatchListingRootRegistration(
 
   const splits = planPayoutSplits(undefined, undefined, accountAddress);
   return { splitAddresses: splits.addresses, splitRatios: splits.ratios };
+}
+
+function planBatchListingCreateRootArtifact(
+  plan: Extract<BatchListingCreateArtifactPlan, { kind: 'root-artifact' }>,
+  splitOverride: PayoutSplitOverride | undefined,
+): BatchListingRootArtifact {
+  if (plan.currencyOverride !== undefined && plan.amountOverride === undefined) {
+    throw new Error('--currency requires --price when overriding a batch listing root artifact.');
+  }
+
+  return {
+    ...plan.artifact,
+    currency: plan.currencyOverride ?? plan.artifact.currency,
+    amount: plan.amountOverride ?? plan.artifact.amount,
+    ...(splitOverride === undefined
+      ? {}
+      : {
+          splitAddresses: splitOverride.addresses,
+          splitRatios: splitOverride.ratios,
+        }),
+  };
+}
+
+function planBatchListingCreateTokenTreeArtifact(
+  plan: Extract<BatchListingCreateArtifactPlan, { kind: 'token-tree' }>,
+  splitOverride: PayoutSplitOverride | undefined,
+): BatchListingRootArtifact {
+  return {
+    root: plan.artifact.root,
+    currency: plan.currency,
+    amount: plan.amount,
+    splitAddresses: splitOverride?.addresses ?? [],
+    splitRatios: splitOverride?.ratios ?? [],
+    tokens: plan.artifact.tokens.map((token) => ({
+      contract: token.contractAddress,
+      tokenId: token.tokenId,
+    })),
+  };
+}
+
+type PayoutSplitOverride = {
+  addresses: Address[];
+  ratios: number[];
+};
+
+function planOptionalSplitOverride(
+  splitAddresses: Address[] | undefined,
+  splitRatios: number[] | undefined,
+): PayoutSplitOverride | undefined {
+  if (splitAddresses === undefined && splitRatios === undefined) {
+    return undefined;
+  }
+  if (splitAddresses === undefined || splitRatios === undefined) {
+    throw new Error('splitAddresses and splitRatios must both be provided.');
+  }
+
+  return planProvidedPayoutSplits(splitAddresses, splitRatios);
+}
+
+function isBatchTokenTreeInputObject(value: Record<string, unknown>): boolean {
+  if (value.type === 'rare-batch-token-list') {
+    return true;
+  }
+  if (
+    'currency' in value ||
+    'amount' in value ||
+    'splitAddresses' in value ||
+    'splitRatios' in value ||
+    !Array.isArray(value.tokens)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export function planBatchListingRootRegistrationLocalInputs(
