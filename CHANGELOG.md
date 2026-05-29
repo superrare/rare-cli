@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.1
+
+### Fixes
+
+- Fixed batch listing token tree inputs by @KeeganEad in https://github.com/superrare/rare-cli/pull/91.
+
+**Full changelog**: https://github.com/superrare/rare-cli/compare/v1.2.0...v1.2.1
+
 ## 1.2.0
 
 ### Fixes
