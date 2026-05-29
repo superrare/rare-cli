@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.2.2
+
+### New features
+
+- Added Base liquid edition contracts by @KeeganEad in https://github.com/superrare/rare-cli/pull/92.
+
+**Full changelog**: https://github.com/superrare/rare-cli/compare/v1.2.1...v1.2.2
+
 ## 1.2.1
 
 ### Fixes
