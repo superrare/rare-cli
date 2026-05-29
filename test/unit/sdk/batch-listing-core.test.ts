@@ -70,6 +70,24 @@ describe('batch listing core', () => {
     ).toThrow(/Allowlist must contain at least two addresses/);
   });
 
+  it('rejects invalid explicit root registration splits', () => {
+    expect(() =>
+      planBatchListingRootRegistration({
+        ...artifact,
+        splitAddresses: [seller, collaborator],
+        splitRatios: [100],
+      }, seller),
+    ).toThrow('splitAddresses and splitRatios must have the same length.');
+
+    expect(() =>
+      planBatchListingRootRegistration({
+        ...artifact,
+        splitAddresses: [seller, collaborator],
+        splitRatios: [80, 10],
+      }, seller),
+    ).toThrow('splitRatios must sum to 100 (got 90).');
+  });
+
   it('decides when an active allowlist proof needs API resolution', () => {
     const tokenProof: BatchListingProofArtifact = {
       root,

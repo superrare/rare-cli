@@ -1,10 +1,9 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
-import { Buffer } from 'node:buffer';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { MerkleTree } from 'merkletreejs';
-import { encodePacked, getAddress, keccak256, parseEther, type Address } from 'viem';
-import { chainIds, ETH_ADDRESS } from '../../src/contracts/addresses.js';
+import { fileURLToPath } from 'node:url';
+import { isAddressEqual, zeroAddress, type Address } from 'viem';
+import { chainIds } from '../../src/contracts/addresses.js';
 import { describeLive, expectTx, jsonCommand, step, type TxResult } from './live-helpers.js';
 import {
   cleanupLiveCliFixture,
@@ -69,10 +68,21 @@ type BatchListingCreateResult = TxResult & {
 type BatchListingStatus = {
   root: `0x${string}`;
   seller: Address;
+  amount: string;
+  currencyAddress: Address;
+  splitRecipients: Address[];
+  splitRatios: number[];
   hasListing: boolean;
 };
 
+type BatchListingSetAllowlistResult = TxResult & {
+  root: `0x${string}`;
+  allowListRoot: `0x${string}`;
+  endTime: string;
+};
+
 const live = new LiveCliFixtureRef<BatchFixture>('Live batch marketplace CLI fixture has not been initialized.');
+const batchMarketplaceCsvFixture = fileURLToPath(new URL('../fixtures/batch-marketplace-tokens.csv', import.meta.url));
 
 describeLive('live batch marketplace CLI commands', () => {
   beforeAll(async () => {
@@ -97,15 +107,23 @@ describeLive('live batch marketplace CLI commands', () => {
     const fixture = live.value;
     const tokens = await mintBatchTokenPair(fixture, 'batch listing');
     const [token] = tokens;
-    const listing = await buildBatchListingArtifact(fixture, 'listing-buy', tokens);
+    const csvInput = await writeBatchTokenCsv(fixture, 'listing-buy', tokens);
 
-    const created = await step('create batch listing as maker', () =>
+    const created = await step('create batch listing directly from CSV as maker', () =>
       jsonCommand<BatchListingCreateResult>(fixture.sellerHome, [
         'listing',
         'batch',
         'create',
         '--input',
-        listing.artifactPath,
+        csvInput,
+        '--price',
+        '0.000001',
+        '--currency',
+        'eth',
+        '--split',
+        `${fixture.sellerAddress}=70`,
+        '--split',
+        `${fixture.buyerAddress}=30`,
         '--yes',
         '--chain',
         fixture.chain,
@@ -130,6 +148,36 @@ describeLive('live batch marketplace CLI commands', () => {
     expect(status.root).toBe(created.root);
     expect(status.seller.toLowerCase()).toBe(fixture.sellerAddress.toLowerCase());
     expect(status.hasListing).toBe(true);
+    expect(status.amount).toBe('1000000000000');
+    expect(isAddressEqual(status.currencyAddress, zeroAddress)).toBe(true);
+    expect(status.splitRecipients).toHaveLength(2);
+    expect(isAddressEqual(status.splitRecipients[0]!, fixture.sellerAddress)).toBe(true);
+    expect(isAddressEqual(status.splitRecipients[1]!, fixture.buyerAddress)).toBe(true);
+    expect(status.splitRatios).toEqual([70, 30]);
+
+    const allowlistEndTimestamp = Math.floor(Date.now() / 1000) + 3_600;
+    const allowlistInput = await writeBatchListingAllowlistArtifact(
+      fixture,
+      'listing-buy',
+      tokens,
+      created.root,
+      allowlistEndTimestamp,
+    );
+    const allowlisted = await step('set batch listing allowlist from artifact', () =>
+      jsonCommand<BatchListingSetAllowlistResult>(fixture.sellerHome, [
+        'listing',
+        'batch',
+        'set-allowlist',
+        '--input',
+        allowlistInput,
+        '--chain',
+        fixture.chain,
+      ], 240_000),
+    );
+    expectTx(allowlisted);
+    expect(allowlisted.root).toBe(created.root);
+    expect(allowlisted.allowListRoot).toMatch(/^0x[0-9a-fA-F]{64}$/);
+    expect(allowlisted.endTime).toBe(allowlistEndTimestamp.toString());
 
     const bought = await step('buy batch listing as taker', () =>
       retryRareApiMerkleResolution(() =>
@@ -386,30 +434,6 @@ describeLive('live batch marketplace CLI commands', () => {
   });
 });
 
-async function buildBatchListingArtifact(
-  fixture: BatchFixture,
-  name: string,
-  tokens: readonly [MintResult, MintResult],
-): Promise<{ artifactPath: string; root: `0x${string}` }> {
-  const artifactPath = join(fixture.sellerHome, `${name}-listing-root.json`);
-  const tokenEntries = tokens.map((token) => ({
-    contract: fixture.collection.contract,
-    tokenId: token.tokenId,
-  }));
-  const root = buildBatchListingRoot(tokenEntries);
-
-  await writeFile(artifactPath, `${JSON.stringify({
-    root,
-    currency: ETH_ADDRESS,
-    amount: parseEther('0.000001').toString(),
-    splitAddresses: [],
-    splitRatios: [],
-    tokens: tokenEntries,
-  }, null, 2)}\n`, 'utf8');
-
-  return { artifactPath, root };
-}
-
 async function mintBatchTokenPair(
   fixture: BatchFixture,
   label: string,
@@ -425,14 +449,8 @@ async function buildBatchTree(
   name: string,
   tokens: readonly [MintResult, MintResult],
 ): Promise<{ artifactPath: string; root: `0x${string}` }> {
-  const inputPath = join(fixture.sellerHome, `${name}-tokens.csv`);
+  const inputPath = await writeBatchTokenCsv(fixture, name, tokens);
   const artifactPath = join(fixture.sellerHome, `${name}-tree.json`);
-  await writeFile(inputPath, [
-    'contract_address,token_id,chain_id',
-    `${fixture.collection.contract},${tokens[0].tokenId},${chainIds[fixture.chain]}`,
-    `${fixture.collection.contract},${tokens[1].tokenId},${chainIds[fixture.chain]}`,
-    '',
-  ].join('\n'), 'utf8');
 
   const result = await jsonCommand<BatchTreeBuildResult>(fixture.sellerHome, [
     'utils',
@@ -449,34 +467,57 @@ async function buildBatchTree(
   return { artifactPath, root: result.root };
 }
 
-function buildBatchListingRoot(tokens: readonly { contract: Address; tokenId: string }[]): `0x${string}` {
-  const leaves = [...tokens]
-    .map((token) => ({
-      contract: getAddress(token.contract),
-      tokenId: BigInt(token.tokenId),
-    }))
-    .sort((a, b) => {
-      const addressSort = a.contract.localeCompare(b.contract);
-      return addressSort === 0 ? a.tokenId.toString().localeCompare(b.tokenId.toString()) : addressSort;
-    })
-    .map((token) => hexBuffer(keccak256(encodePacked(['address', 'uint256'], [token.contract, token.tokenId]))));
-  const tree = new MerkleTree(leaves, (data: Buffer) => hexBuffer(keccak256(data)), {
-    sortPairs: true,
-  });
-  const root = tree.getHexRoot();
-  assertBytes32(root);
-  return root;
+async function writeBatchTokenCsv(
+  fixture: BatchFixture,
+  name: string,
+  tokens: readonly [MintResult, MintResult],
+): Promise<string> {
+  const inputPath = join(fixture.sellerHome, `${name}-tokens.csv`);
+  const template = await readFile(batchMarketplaceCsvFixture, 'utf8');
+  await writeFile(
+    inputPath,
+    template
+      .replaceAll('{{CONTRACT_ADDRESS}}', fixture.collection.contract)
+      .replaceAll('{{TOKEN_ID_1}}', tokens[0].tokenId)
+      .replaceAll('{{TOKEN_ID_2}}', tokens[1].tokenId)
+      .replaceAll('{{CHAIN_ID}}', String(chainIds[fixture.chain])),
+    'utf8',
+  );
+  return inputPath;
 }
 
-function hexBuffer(hex: `0x${string}` | Buffer): Buffer {
-  if (Buffer.isBuffer(hex)) return hex;
-  return Buffer.from(hex.slice(2), 'hex');
-}
-
-function assertBytes32(value: string): asserts value is `0x${string}` {
-  if (!/^0x[0-9a-fA-F]{64}$/.test(value)) {
-    throw new Error(`Invalid batch listing root generated by test fixture: ${value}`);
-  }
+async function writeBatchListingAllowlistArtifact(
+  fixture: BatchFixture,
+  name: string,
+  tokens: readonly [MintResult, MintResult],
+  root: `0x${string}`,
+  endTimestamp: number,
+): Promise<string> {
+  const inputPath = join(fixture.sellerHome, `${name}-listing-allowlist-root.json`);
+  await writeFile(
+    inputPath,
+    `${JSON.stringify({
+      root,
+      currency: zeroAddress,
+      amount: '1000000000000',
+      splitAddresses: [],
+      splitRatios: [],
+      tokens: tokens.map((token) => ({
+        contract: fixture.collection.contract,
+        tokenId: token.tokenId,
+      })),
+      allowList: {
+        root: `0x${'00'.repeat(32)}`,
+        addresses: [
+          fixture.buyerAddress,
+          '0x0000000000000000000000000000000000000002',
+        ],
+        endTimestamp: endTimestamp.toString(),
+      },
+    }, null, 2)}\n`,
+    'utf8',
+  );
+  return inputPath;
 }
 
 async function readBatchAuctionStatus(

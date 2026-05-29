@@ -30,6 +30,7 @@ import {
 import { planBatchOfferAcceptLocalInputs, planBatchOfferCreateLocalInputs } from '../sdk/batch-offer-core.js';
 import {
   buildMerkleProofArtifact,
+  validateRootArtifact,
 } from '../sdk/merkle-core.js';
 import { requireInput, toUnixTimestamp } from '../sdk/validation-core.js';
 import {
@@ -37,6 +38,7 @@ import {
   loadMerkleRootArtifact,
   writeMerkleArtifact,
 } from '../sdk/merkle-file.js';
+import type { BatchListingRootArtifact } from '../sdk/types/batch-listing.js';
 import { parseAddress } from '../sdk/validation.js';
 import { createBatchListingListCommand } from './account-market-list.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
@@ -82,6 +84,10 @@ type MerkleProofOptions = {
 
 type BatchListingCreateOptions = ChainOptions & {
   input: string;
+  format?: string;
+  currency?: string;
+  price?: string;
+  split?: SplitAccumulator;
   yes?: boolean;
 };
 
@@ -1085,17 +1091,25 @@ function addBatchListingCommands(cmd: Command): void {
 
   cmd
     .command('create')
-    .description('Register a sale-price Merkle root from a root artifact')
-    .requiredOption('--input <path>', 'path to a root artifact JSON file')
+    .description('Register a sale-price Merkle root from a root artifact or token tree artifact')
+    .requiredOption('--input <path>', 'path to a root artifact JSON file, token tree artifact, CSV, or JSON token list')
+    .option('--format <format>', 'input format for --input (csv, json)')
+    .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth for token tree inputs)')
+    .option('--price <amount>', 'listing price in ETH or token units (required for token tree inputs)')
+    .option(
+      '--split <addr=ratio>',
+      'seller payout split recipient (repeatable). Format: 0xADDR=RATIO. Ratios must sum to 100. If omitted, 100% goes to the connected wallet.',
+      collectSplit,
+    )
     .option('--yes', 'yes to all prompts and required approvals')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: BatchListingCreateOptions): Promise<void> => {
-      const artifact = await loadMerkleRootArtifact(opts.input);
-      planBatchListingRootRegistrationLocalInputs(artifact);
       const chain = getActiveChain(opts.chain, opts.chainId);
-      const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
+      const artifact = await resolveBatchListingCreateArtifact(opts, { chain, publicClient });
+      planBatchListingRootRegistrationLocalInputs(artifact);
+      const { client } = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
 
       log(`Registering batch listing on ${chain}...`);
@@ -1106,6 +1120,15 @@ function addBatchListingCommands(cmd: Command): void {
         `  Amount: ${await formatBatchAmount(publicClient, chain, artifact.currency, BigInt(artifact.amount))}` +
           ` ${isAddressEqual(artifact.currency, ETH_ADDRESS) ? 'ETH' : artifact.currency}`,
       );
+      if (artifact.splitAddresses.length > 0) {
+        log('  Splits:');
+        formatSplitLines({
+          addresses: artifact.splitAddresses,
+          ratios: artifact.splitRatios,
+        }).forEach((line) => {
+          log(line);
+        });
+      }
       log(`  Auto-approve NFTs: ${opts.yes === true ? 'yes' : 'no'}`);
 
       const result = await runWithNftApprovalConsent({
@@ -1382,6 +1405,96 @@ async function readBatchTreeArtifact(opts: TreeInputOptions): Promise<BatchToken
     sourceName: opts.input,
     chainId: resolveTreeChainId(opts),
   });
+}
+
+async function resolveBatchListingCreateArtifact(
+  opts: BatchListingCreateOptions,
+  context: Pick<BatchCommandClient, 'chain' | 'publicClient'>,
+): Promise<BatchListingRootArtifact> {
+  const content = await readFile(opts.input, 'utf8');
+  const parsedObject = parseJsonObjectInput(content);
+  const splits = finalizeSplits(opts.split);
+
+  if (parsedObject !== undefined && !isBatchTokenTreeInputObject(parsedObject)) {
+    validateRootArtifact(parsedObject);
+    if (opts.currency !== undefined && opts.price === undefined) {
+      throw new Error('--currency requires --price when overriding a batch listing root artifact.');
+    }
+    const currency = opts.currency === undefined ? parsedObject.currency : resolveCurrency(opts.currency, context.chain);
+    const amount = opts.price === undefined
+      ? parsedObject.amount
+      : (await parseBatchAmount(context.publicClient, context.chain, currency, opts.price)).toString();
+
+    return {
+      ...parsedObject,
+      currency,
+      amount,
+      ...(splits === undefined
+        ? {}
+        : {
+            splitAddresses: splits.addresses,
+            splitRatios: splits.ratios,
+          }),
+    };
+  }
+
+  if (opts.price === undefined) {
+    throw new Error(
+      'rare listing batch create requires --price when --input is a token tree artifact from rare utils tree build.',
+    );
+  }
+
+  const currency = opts.currency === undefined ? ETH_ADDRESS : resolveCurrency(opts.currency, context.chain);
+  const amount = await parseBatchAmount(context.publicClient, context.chain, currency, opts.price);
+  const tokenTreeArtifact = parseBatchTokenListArtifactOrBuild({
+    content,
+    format: parseFormatOption(opts.format),
+    sourceName: opts.input,
+    chainId: resolveTreeChainId(opts),
+  });
+
+  return {
+    root: tokenTreeArtifact.root,
+    currency,
+    amount: amount.toString(),
+    splitAddresses: splits?.addresses ?? [],
+    splitRatios: splits?.ratios ?? [],
+    tokens: tokenTreeArtifact.tokens.map((token) => ({
+      contract: token.contractAddress,
+      tokenId: token.tokenId,
+    })),
+  };
+}
+
+function parseJsonObjectInput(content: string): Record<string, unknown> | undefined {
+  const trimmed = content.trimStart();
+  if (!trimmed.startsWith('{')) {
+    return undefined;
+  }
+
+  const parsed: unknown = JSON.parse(content);
+  return isRecord(parsed) ? parsed : undefined;
+}
+
+function isBatchTokenTreeInputObject(value: Record<string, unknown>): boolean {
+  if (value.type === 'rare-batch-token-list') {
+    return true;
+  }
+  if (
+    'currency' in value ||
+    'amount' in value ||
+    'splitAddresses' in value ||
+    'splitRatios' in value ||
+    !Array.isArray(value.tokens)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function resolveTreeChainId(opts: { chain?: string; chainId?: string }): string | undefined {

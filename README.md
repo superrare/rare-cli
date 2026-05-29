@@ -183,7 +183,7 @@ rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --amoun
 rare collection prepare-lazy-mint --contract 0x... --base-uri ipfs://... --amount 100 --minter 0x...
 ```
 
-Build token-list Merkle artifacts for offline proof checks and for batch offer and batch auction root inputs. CSV files should include contract and token ID columns such as `contract_address,token_id`; JSON files can be an array of `{ "contractAddress": "0x...", "tokenId": "1" }` objects or a generated artifact. Pass `--chain-id` or include a `chain_id` column when the artifact should carry chain context.
+Build token-list Merkle artifacts for offline proof checks, reusable root inputs, or workflows that want to inspect the root before creating a batch marketplace config. You do not need to run this before `rare listing batch create`, `rare offer batch create`, or `rare auction batch create`; those commands can build/register from CSV or JSON input directly. CSV files should include contract and token ID columns such as `contract_address,token_id`; JSON files can be an array of `{ "contractAddress": "0x...", "tokenId": "1" }` objects or a generated artifact. Pass `--chain-id` or include a `chain_id` column when the artifact should carry chain context.
 
 ```bash
 rare utils tree build --input batch-tokens.csv --chain-id 11155111 --output batch-token-artifact.json
@@ -458,10 +458,17 @@ rare listing status --contract 0x... --token-id 1
 
 ### Batch Listings
 
-Batch listings use Merkle artifacts: one root artifact describing the token set and listing config, and one proof artifact per token purchase.
-Root artifacts are produced outside the CLI. Token sets and allowlists must each contain at least two entries because the batch listing contract rejects empty Merkle proofs. If no split is provided, registration defaults to 100% to the connected seller wallet.
+Batch listing roots are built from token sets. For create flows, you can pass a CSV file, a JSON token list, a token tree artifact from `rare utils tree build`, or the older root artifact shape that already includes listing config. Running `rare utils tree build` first is optional; use it when you want a reusable artifact or want to inspect/share the root before registering it.
+Token sets and allowlists must each contain at least two entries because the batch listing contract rejects empty Merkle proofs. If no split is provided, registration defaults to 100% to the connected seller wallet.
 
 ```bash
+# Register the batch listing directly from CSV
+rare listing batch create \
+  --input ./tokens.csv \
+  --currency eth \
+  --price 0.012 \
+  --yes
+
 # Build a proof artifact for one token in the root
 rare utils merkle proof \
   --input ./root.json \
@@ -477,8 +484,12 @@ rare utils merkle proof \
   --buyer 0x... \
   --output ./proof.json
 
-# Register the batch listing from the root artifact
-rare listing batch create --input ./root.json --yes
+# Or register from a reusable token tree artifact
+rare listing batch create \
+  --input ./token-tree.json \
+  --currency usdc \
+  --price 25 \
+  --yes
 
 # Buy one token using a proof artifact
 rare listing batch buy \
@@ -516,12 +527,12 @@ Named currencies are parsed with chain-aware decimals. Arbitrary ERC20 addresses
 
 ### Batch Offers and Batch Auctions
 
-Batch offers and batch auctions use token Merkle roots. You can pass a token-list artifact with `--input` or a known bytes32 root with `--root`.
+Batch offers and batch auctions use token Merkle roots. You can pass CSV, JSON token lists, or token tree artifacts with `--input`, or a known bytes32 root with `--root`. `rare utils tree build` is optional here too; it is useful when you want a saved artifact or root ahead of the write command.
 
 ```bash
-# Create a batch offer over a token set
+# Create a batch offer directly from CSV
 rare offer batch create \
-  --input batch-token-artifact.json \
+  --input tokens.csv \
   --price 1 \
   --currency eth \
   --end-time 1778586400 \
@@ -535,9 +546,9 @@ rare offer batch accept \
   --root 0x... \
   --yes
 
-# Create a batch reserve auction over a token set
+# Create a batch reserve auction directly from CSV
 rare auction batch create \
-  --input batch-token-artifact.json \
+  --input tokens.csv \
   --price 0.1 \
   --end-time 1778586400 \
   --yes

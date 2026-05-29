@@ -154,16 +154,25 @@ export function parseBatchTokenList(params: BuildBatchTokenTreeParams): BatchTok
   return normalizeBatchTokens(rawTokens, params.chainId);
 }
 
-export function parseBatchTokenListArtifact(content: string): BatchTokenListArtifact {
+export function parseBatchTokenListArtifact(
+  content: string,
+  chainIdInput?: IntegerInput,
+): BatchTokenListArtifact {
   const parsed: unknown = parseJson(content, 'batch token artifact');
 
   if (!isRecord(parsed)) {
     throw new Error('Batch token artifact must be a JSON object.');
   }
-  if (parsed.type !== 'rare-batch-token-list') {
+  if (
+    parsed.type !== undefined &&
+    parsed.type !== 'rare-batch-token-list'
+  ) {
     throw new Error('Batch token artifact type must be "rare-batch-token-list".');
   }
-  if (parsed.version !== 1) {
+  if (parsed.type === undefined && !isUntypedBatchTokenListArtifactLike(parsed)) {
+    throw new Error('Batch token artifact type must be "rare-batch-token-list".');
+  }
+  if (parsed.version !== undefined && parsed.version !== 1) {
     throw new Error('Batch token artifact version must be 1.');
   }
   if (typeof parsed.root !== 'string') {
@@ -173,11 +182,25 @@ export function parseBatchTokenListArtifact(content: string): BatchTokenListArti
     throw new Error('Batch token artifact tokens must be an array.');
   }
 
+  const parsedChainId = parsed.chainId === undefined ? undefined : parseUnknownInteger(parsed.chainId, 'artifact chainId');
+  const expectedChainId = chainIdInput === undefined ? undefined : normalizeChainId(chainIdInput, 'chainId');
+  const artifactChainId = parsedChainId ?? expectedChainId;
+
+  if (
+    parsedChainId !== undefined &&
+    expectedChainId !== undefined &&
+    normalizeChainId(parsedChainId, 'artifact chainId') !== expectedChainId
+  ) {
+    throw new Error(
+      `Input chainId ${normalizeChainId(parsedChainId, 'artifact chainId')} does not match --chain-id ${expectedChainId}.`,
+    );
+  }
+
   const artifact = buildBatchTokenTreeArtifact({
     content: JSON.stringify(parsed.tokens),
     format: 'json',
     sourceName: 'batch token artifact tokens',
-    chainId: parsed.chainId === undefined ? undefined : parseUnknownInteger(parsed.chainId, 'artifact chainId'),
+    chainId: artifactChainId,
   });
   const root = normalizeBytes32(parsed.root, 'artifact root');
 
@@ -196,12 +219,26 @@ export function parseBatchTokenListArtifactOrBuild(
 ): BatchTokenListArtifact {
   if (params.content.trimStart().startsWith('{')) {
     const parsed: unknown = parseJson(params.content, 'batch token JSON');
-    if (isRecord(parsed) && parsed.type === 'rare-batch-token-list') {
-      return parseBatchTokenListArtifact(params.content);
+    if (isRecord(parsed) && (
+      parsed.type === 'rare-batch-token-list' ||
+      isUntypedBatchTokenListArtifactLike(parsed)
+    )) {
+      return parseBatchTokenListArtifact(params.content, params.chainId);
     }
   }
 
   return buildBatchTokenTreeArtifact(params);
+}
+
+function isUntypedBatchTokenListArtifactLike(value: Record<string, unknown>): boolean {
+  return (
+    typeof value.root === 'string' &&
+    Array.isArray(value.tokens) &&
+    !('currency' in value) &&
+    !('amount' in value) &&
+    !('splitAddresses' in value) &&
+    !('splitRatios' in value)
+  );
 }
 
 export function getBatchTokenProof(params: BatchTokenProofParams): BatchTokenProofArtifact {

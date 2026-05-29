@@ -106,6 +106,20 @@ describe('merkle artifact core utilities', () => {
   it('catches structural errors and root mismatches', () => {
     expect(() =>
       validateRootArtifact({
+        version: 1,
+        type: 'rare-batch-token-list',
+        root: `0x${'11'.repeat(32)}`,
+        count: 2,
+        tokens: [
+          { contractAddress: contract, tokenId: '1' },
+          { contractAddress: contract, tokenId: '2' },
+        ],
+        entries: [],
+      }),
+    ).toThrow(/Input looks like a token tree artifact from rare utils tree build/);
+
+    expect(() =>
+      validateRootArtifact({
         root: `0x${'11'.repeat(32)}`,
         currency: '0x1111111111111111111111111111111111111111',
         amount: '1',
