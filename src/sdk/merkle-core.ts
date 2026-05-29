@@ -235,6 +235,12 @@ function assertAddress(value: unknown, field: string): asserts value is Address 
 
 export function validateRootArtifact(value: unknown): asserts value is BatchListingRootArtifact {
   assertRecord(value, 'Root artifact');
+  if (isBatchTokenTreeArtifactLike(value)) {
+    throw new Error(
+      'Input looks like a token tree artifact from rare utils tree build, not a batch listing root artifact. ' +
+        'For rare listing batch create, pass --price and optionally --currency/--split with the token tree artifact.',
+    );
+  }
   assertHexRoot(value.root, 'root');
   assertAddress(value.currency, 'currency');
   if (typeof value.amount !== 'string') throw new Error('amount must be a string (base units)');
@@ -259,6 +265,19 @@ export function validateRootArtifact(value: unknown): asserts value is BatchList
       assertAddress(address, 'allowList.addresses entry');
     });
   }
+}
+
+function isBatchTokenTreeArtifactLike(value: Record<string, unknown>): boolean {
+  if (value.type === 'rare-batch-token-list') {
+    return true;
+  }
+  return (
+    Array.isArray(value.tokens) &&
+    !('currency' in value) &&
+    !('amount' in value) &&
+    !('splitAddresses' in value) &&
+    !('splitRatios' in value)
+  );
 }
 
 export function validateProofArtifact(value: unknown): asserts value is BatchListingProofArtifact {

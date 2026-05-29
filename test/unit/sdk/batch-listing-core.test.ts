@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Address } from 'viem';
 import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
+import { buildBatchTokenTreeArtifact } from '../../../src/sdk/batch-core.js';
 import {
+  parseBatchListingCreateRootArtifactInput,
+  planBatchListingCreateArtifact,
   planBatchListingRootRegistration,
   shapeBatchListingStatus,
   shouldResolveBatchListingAllowListProof,
@@ -32,6 +35,73 @@ const artifact = {
 describe('batch listing core', () => {
   it('deduplicates addresses without changing first-seen order', () => {
     expect(uniqueAddresses([contract, otherContract, contract])).toEqual([contract, otherContract]);
+  });
+
+  it('parses root artifact inputs without treating token trees as listing roots', () => {
+    expect(parseBatchListingCreateRootArtifactInput(artifact)).toBe(artifact);
+    expect(parseBatchListingCreateRootArtifactInput({
+      version: 1,
+      type: 'rare-batch-token-list',
+      root,
+      count: 2,
+      tokens: [
+        { contractAddress: contract, tokenId: '1' },
+        { contractAddress: contract, tokenId: '2' },
+      ],
+      entries: [],
+    })).toBeUndefined();
+    expect(() => parseBatchListingCreateRootArtifactInput({})).toThrow('root must be a 0x-prefixed bytes32 hex string');
+  });
+
+  it('plans batch listing create artifacts from root and token-tree inputs', () => {
+    expect(planBatchListingCreateArtifact({
+      kind: 'root-artifact',
+      artifact,
+      currencyOverride: collaborator,
+      amountOverride: '2',
+      splitAddresses: [seller, collaborator],
+      splitRatios: [60, 40],
+    })).toEqual({
+      ...artifact,
+      currency: collaborator,
+      amount: '2',
+      splitAddresses: [seller, collaborator],
+      splitRatios: [60, 40],
+    });
+
+    const tokenTree = buildBatchTokenTreeArtifact({
+      content: JSON.stringify([
+        { contractAddress: otherContract, tokenId: '2' },
+        { contractAddress: contract, tokenId: '1' },
+      ]),
+      format: 'json',
+      chainId: 11_155_111,
+    });
+
+    expect(planBatchListingCreateArtifact({
+      kind: 'token-tree',
+      artifact: tokenTree,
+      currency: ETH_ADDRESS,
+      amount: '10',
+    })).toEqual({
+      root: tokenTree.root,
+      currency: ETH_ADDRESS,
+      amount: '10',
+      splitAddresses: [],
+      splitRatios: [],
+      tokens: [
+        { contract, tokenId: '1' },
+        { contract: otherContract, tokenId: '2' },
+      ],
+    });
+  });
+
+  it('rejects incomplete root artifact overrides while planning batch listing create artifacts', () => {
+    expect(() => planBatchListingCreateArtifact({
+      kind: 'root-artifact',
+      artifact,
+      currencyOverride: collaborator,
+    })).toThrow('--currency requires --price when overriding a batch listing root artifact.');
   });
 
   it('plans default and explicit root registration splits', () => {
@@ -68,6 +138,24 @@ describe('batch listing core', () => {
         },
       }, seller),
     ).toThrow(/Allowlist must contain at least two addresses/);
+  });
+
+  it('rejects invalid explicit root registration splits', () => {
+    expect(() =>
+      planBatchListingRootRegistration({
+        ...artifact,
+        splitAddresses: [seller, collaborator],
+        splitRatios: [100],
+      }, seller),
+    ).toThrow('splitAddresses and splitRatios must have the same length.');
+
+    expect(() =>
+      planBatchListingRootRegistration({
+        ...artifact,
+        splitAddresses: [seller, collaborator],
+        splitRatios: [80, 10],
+      }, seller),
+    ).toThrow('splitRatios must sum to 100 (got 90).');
   });
 
   it('decides when an active allowlist proof needs API resolution', () => {

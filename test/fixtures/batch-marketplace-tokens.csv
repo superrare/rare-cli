@@ -1,0 +1,3 @@
+contract_address,token_id,chain_id
+{{CONTRACT_ADDRESS}},{{TOKEN_ID_1}},{{CHAIN_ID}}
+{{CONTRACT_ADDRESS}},{{TOKEN_ID_2}},{{CHAIN_ID}}

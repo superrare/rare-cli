@@ -2,11 +2,14 @@ import { access, chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { delimiter, join } from 'node:path';
 import { text } from 'node:stream/consumers';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it, type TestContext } from 'vitest';
 import { isAddress, zeroAddress } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import pkg from '../../package.json' with { type: 'json' };
 import { parseJsonStdout, runCli, withTempHome } from '../helpers/cli.js';
+
+const batchMarketplaceCsvFixture = fileURLToPath(new URL('../fixtures/batch-marketplace-tokens.csv', import.meta.url));
 
 const batchListingRootArtifact = {
   root: '0xa01f005c90f56c0f2b981e045caf4949f489bf82e5d3c49effb1334cab26043a',
@@ -30,6 +33,20 @@ const allowlistedBatchListingRootArtifact = {
     ],
     endTimestamp: '1234',
   },
+} as const;
+
+const batchTokenTreeArtifact = {
+  version: 1,
+  type: 'rare-batch-token-list',
+  root: '0xc7f290f1b2d1f0644c2b52ff9de94e33f0d877c8708cc9e2abbcbfb6af169f4e',
+  count: 3,
+  chainId: 11_155_111,
+  tokens: [
+    { contractAddress: '0x1111111111111111111111111111111111111111', tokenId: '1', chainId: 11_155_111 },
+    { contractAddress: '0x1111111111111111111111111111111111111111', tokenId: '10', chainId: 11_155_111 },
+    { contractAddress: '0x2222222222222222222222222222222222222222', tokenId: '2', chainId: 11_155_111 },
+  ],
+  entries: [],
 } as const;
 
 describe('built CLI deterministic behavior', () => {
@@ -1190,6 +1207,66 @@ describe('built CLI deterministic behavior', () => {
       'Error: splitAddresses and splitRatios must have the same length.',
     );
     await expectLocalValidationBeforeWalletSetup(
+      async (home) => {
+        const input = join(home, 'batch-token-tree.json');
+        await writeFile(input, JSON.stringify(batchTokenTreeArtifact), 'utf8');
+        return [
+          'listing',
+          'batch',
+          'create',
+          '--input',
+          input,
+          '--chain',
+          'sepolia',
+        ];
+      },
+      'Error: rare listing batch create requires --price when --input is a token tree artifact from rare utils tree build.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      async (home) => {
+        const input = join(home, 'batch-token-tree.json');
+        await writeFile(input, JSON.stringify(batchTokenTreeArtifact), 'utf8');
+        return [
+          'listing',
+          'batch',
+          'create',
+          '--input',
+          input,
+          '--price',
+          '0.012',
+          '--split',
+          '0x1111111111111111111111111111111111111111=50',
+          '--chain',
+          'sepolia',
+        ];
+      },
+      'Error: splitRatios must sum to 100 (got 50).',
+    );
+    await expectLocalValidationBeforeWalletSetup(
+      async (home) => {
+        const input = await writeRenderedBatchMarketplaceCsv(home, {
+          contractAddress: '0x1111111111111111111111111111111111111111',
+          tokenId1: '1',
+          tokenId2: '2',
+          chainId: '11155111',
+        });
+        return [
+          'listing',
+          'batch',
+          'create',
+          '--input',
+          input,
+          '--price',
+          '0.012',
+          '--currency',
+          'eth',
+          '--chain',
+          'base',
+        ];
+      },
+      'Error: Input chainId 11155111 does not match --chain-id 8453.',
+    );
+    await expectLocalValidationBeforeWalletSetup(
       () => [
         'listing',
         'batch',
@@ -1961,6 +2038,10 @@ describe('built CLI deterministic behavior', () => {
       const createHelp = await runCli(['listing', 'batch', 'create', '--help'], { home });
       expect(createHelp.code).toBe(0);
       expect(createHelp.stdout).toContain('--input <path>');
+      expect(createHelp.stdout).toContain('--format <format>');
+      expect(createHelp.stdout).toContain('--currency <currency>');
+      expect(createHelp.stdout).toContain('--price <amount>');
+      expect(createHelp.stdout).toContain('--split <addr=ratio>');
       expect(createHelp.stdout).not.toContain('--root <path>');
       expect(createHelp.stdout).toContain('--yes');
       expect(createHelp.stdout).toContain('--chain-id <id>');
@@ -2565,6 +2646,59 @@ describe('built CLI deterministic behavior', () => {
         tokenId: '1',
         valid: false,
       });
+    });
+  });
+
+  it('uses utility token tree artifacts as batch listing input before wallet setup', async () => {
+    await withTempHome(async (home) => {
+      const csvInput = await writeRenderedBatchMarketplaceCsv(home, {
+        contractAddress: '0x1111111111111111111111111111111111111111',
+        tokenId1: '1',
+        tokenId2: '2',
+        chainId: '11155111',
+      });
+      const artifactPath = join(home, 'batch-token-artifact.json');
+
+      const build = parseJsonStdout<{
+        root: string;
+        count: number;
+        chainId: number;
+        output: string;
+      }>(await runCli([
+        '--json',
+        'utils',
+        'tree',
+        'build',
+        '--input',
+        csvInput,
+        '--output',
+        artifactPath,
+      ], { home }));
+
+      expect(build.count).toBe(2);
+      expect(build.chainId).toBe(11_155_111);
+      expect(build.output).toBe(artifactPath);
+      expect(build.root).toMatch(/^0x[0-9a-fA-F]{64}$/);
+
+      const create = await runCli([
+        'listing',
+        'batch',
+        'create',
+        '--input',
+        artifactPath,
+        '--price',
+        '0.012',
+        '--currency',
+        'eth',
+        '--chain',
+        'base',
+      ], { home });
+
+      expect(create.code).toBe(1);
+      expect(create.stdout).toBe('');
+      expect(create.stderr).toContain('Error: Input chainId 11155111 does not match --chain-id 8453.');
+      expect(create.stderr).not.toContain('splitAddresses must be an array');
+      await expect(access(join(home, '.rare', 'config.json'))).rejects.toMatchObject({ code: 'ENOENT' });
     });
   });
 
@@ -3462,6 +3596,37 @@ async function expectLocalValidationBeforeWalletSetup(
     expect(result.stderr).toContain(expectedError);
     await expect(access(join(home, '.rare', 'config.json'))).rejects.toMatchObject({ code: 'ENOENT' });
   });
+}
+
+async function writeRenderedBatchMarketplaceCsv(
+  home: string,
+  values: {
+    contractAddress: string;
+    tokenId1: string;
+    tokenId2: string;
+    chainId: string;
+  },
+): Promise<string> {
+  const input = join(home, 'batch-marketplace-tokens.csv');
+  const template = await readFile(batchMarketplaceCsvFixture, 'utf8');
+  await writeFile(input, renderBatchMarketplaceCsv(template, values), 'utf8');
+  return input;
+}
+
+function renderBatchMarketplaceCsv(
+  template: string,
+  values: {
+    contractAddress: string;
+    tokenId1: string;
+    tokenId2: string;
+    chainId: string;
+  },
+): string {
+  return template
+    .replaceAll('{{CONTRACT_ADDRESS}}', values.contractAddress)
+    .replaceAll('{{TOKEN_ID_1}}', values.tokenId1)
+    .replaceAll('{{TOKEN_ID_2}}', values.tokenId2)
+    .replaceAll('{{CHAIN_ID}}', values.chainId);
 }
 
 async function createFakeOp(home: string): Promise<{ binDir: string; logPath: string }> {

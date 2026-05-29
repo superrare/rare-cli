@@ -149,6 +149,103 @@ describeFork('SDK fork integration write paths', () => {
     }
   }, 240_000);
 
+  it('creates and buys batch listings through the SDK directly', async (ctx) => {
+    const fork = await startLocalFork();
+    if ('skipReason' in fork) {
+      ctx.skip(fork.skipReason);
+      return;
+    }
+
+    const publicClient = createForkPublicClient();
+    let snapshotId: string | undefined;
+
+    try {
+      await fundForkAccounts(publicClient);
+      snapshotId = await createForkSnapshot(publicClient);
+
+      const chain = await detectForkChain(publicClient);
+      const seller = createForkRareClient(chain, forkSellerPrivateKey);
+      if (seller.rare.contracts.batchListing === undefined) {
+        ctx.skip(`Batch listing marketplace is not deployed on ${chain}.`);
+        return;
+      }
+
+      const collection = await seller.rare.collection.deploy.erc721({
+        name: `Rare SDK Fork Batch Listing ${Date.now().toString(36)}`,
+        symbol: 'RSFBL',
+        maxTokens: 2,
+      });
+      const tokens = [
+        await mintToken(seller.rare, collection.contract),
+        await mintToken(seller.rare, collection.contract),
+      ] as const;
+      const tree = seller.rare.utils.tree.build({
+        content: JSON.stringify([
+          { contractAddress: collection.contract, tokenId: tokens[0] },
+          { contractAddress: collection.contract, tokenId: tokens[1] },
+        ]),
+        format: 'json',
+        chainId: chainIds[chain],
+      });
+      const apiFetch = nftMerkleRootFetch(tree.root);
+      const listingSeller = createForkRareClient(chain, forkSellerPrivateKey, apiFetch);
+      const listingBuyer = createForkRareClient(chain, forkBuyerPrivateKey, apiFetch);
+      const listingArtifact = {
+        root: tree.root,
+        currency: zeroAddress,
+        amount: '1000000000000',
+        splitAddresses: [listingSeller.account, listingBuyer.account],
+        splitRatios: [70, 30],
+        tokens: tree.tokens.map((token) => ({
+          contract: token.contractAddress,
+          tokenId: token.tokenId,
+        })),
+      };
+
+      const created = await listingSeller.rare.listing.batch.create({
+        artifact: listingArtifact,
+        autoApprove: true,
+      });
+      expect(created.root).toBe(tree.root);
+
+      const status = await listingSeller.rare.listing.batch.status({
+        root: tree.root,
+        creator: listingSeller.account,
+      });
+      expect(status.hasListing).toBe(true);
+      expect(status.root).toBe(tree.root);
+      expect(status.amount).toBe(1000000000000n);
+      expect(isAddressEqual(status.currencyAddress, zeroAddress)).toBe(true);
+      expect(status.splitRecipients).toHaveLength(2);
+      expect(isAddressEqual(status.splitRecipients[0]!, listingSeller.account)).toBe(true);
+      expect(isAddressEqual(status.splitRecipients[1]!, listingBuyer.account)).toBe(true);
+      expect(status.splitRatios).toEqual([70, 30]);
+
+      const proof = listingSeller.rare.utils.tree.proof({
+        artifact: tree,
+        contractAddress: collection.contract,
+        tokenId: tokens[0],
+        chainId: chainIds[chain],
+      });
+      const bought = await listingBuyer.rare.listing.batch.buy({
+        creator: listingSeller.account,
+        currency: 'eth',
+        price: '0.000001',
+        proofArtifact: {
+          root: proof.root,
+          contract: proof.contractAddress,
+          tokenId: proof.tokenId,
+          proof: proof.proof,
+        },
+        autoApprove: true,
+      });
+      expect(bought.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+      await expectTokenOwner(listingBuyer.rare, collection.contract, tokens[0], listingBuyer.account);
+    } finally {
+      await cleanupFork(publicClient, fork, snapshotId);
+    }
+  }, 240_000);
+
   it('creates, reads, cancels, bids, and settles batch auctions through the SDK directly', async (ctx) => {
     const fork = await startLocalFork();
     if ('skipReason' in fork) {
@@ -440,6 +537,7 @@ function createForkPublicClient(chain?: SupportedChain): PublicClient {
 function createForkRareClient(
   chain: SupportedChain,
   privateKey: `0x${string}`,
+  apiFetch?: typeof fetch,
 ): ForkRareClient {
   const account = privateKeyToAccount(privateKey);
   const publicClient = createForkPublicClient(chain);
@@ -450,7 +548,20 @@ function createForkRareClient(
   });
   return {
     account: account.address,
-    rare: createRareClient({ publicClient, walletClient }),
+    rare: createRareClient({ publicClient, walletClient, apiFetch }),
+  };
+}
+
+function nftMerkleRootFetch(root: `0x${string}`): typeof fetch {
+  return async (input): Promise<Response> => {
+    const request = input instanceof Request ? input : new Request(input);
+    if (request.url.endsWith('/v1/merkle-roots/nfts')) {
+      return new Response(JSON.stringify({ merkleRoot: root }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    throw new Error(`Unexpected rare-api request in fork batch listing test: ${request.url}`);
   };
 }
 

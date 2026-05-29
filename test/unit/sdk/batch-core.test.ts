@@ -5,6 +5,7 @@ import {
   hashBatchToken,
   parseBatchTokenList,
   parseBatchTokenListArtifact,
+  parseBatchTokenListArtifactOrBuild,
   parseBatchTokenProofArtifact,
   parseBatchTokenProofInput,
   validateBatchTokenProofInputMatchesTarget,
@@ -135,10 +136,27 @@ describe('batch marketplace token tree core', () => {
     });
 
     expect(parseBatchTokenListArtifact(JSON.stringify(artifact)).root).toBe(artifact.root);
+    expect(parseBatchTokenListArtifact(JSON.stringify({
+      root: artifact.root,
+      count: artifact.count,
+      tokens: artifact.tokens,
+    })).root).toBe(artifact.root);
     expect(() => parseBatchTokenListArtifact(JSON.stringify({
       ...artifact,
       root: EXPECTED_ROOT,
     }))).toThrow('Batch token artifact root does not match its token list.');
+    expect(() => parseBatchTokenListArtifactOrBuild({
+      content: JSON.stringify({
+        root: EXPECTED_ROOT,
+        count: artifact.count,
+        tokens: artifact.tokens,
+      }),
+      format: 'json',
+    })).toThrow('Batch token artifact root does not match its token list.');
+    expect(() => parseBatchTokenListArtifact(JSON.stringify({
+      ...artifact,
+      chainId: 11_155_111,
+    }), 8453)).toThrow('Input chainId 11155111 does not match --chain-id 8453.');
   });
 
   it('parses proof artifacts and rejects mismatched leaves', () => {

@@ -71,7 +71,7 @@ rare listing release limits set-mint --contract <address> --limit <number> [--ch
 rare listing release limits set-tx --contract <address> --limit <number> [--chain <chain>] [--chain-id <id>]
 
 rare listing batch list --account <address> [--chain <chain>] [--chain-id <id>] [--per-page <n>] [--page <n>]
-rare listing batch create --input <path> [--yes] [--chain <chain>] [--chain-id <id>]
+rare listing batch create --input <path> [--format <format>] [--currency <currency>] [--price <amount>] [--split <addr=ratio>] [--yes] [--chain <chain>] [--chain-id <id>]
 rare listing batch buy [--proof <path>] [--root <hex>] [--contract <address>] [--token-id <id>] --creator <address> --currency <currency> --price <amount> [--yes] [--chain <chain>] [--chain-id <id>]
 rare listing batch cancel [--input <path>] [--root <hex>] [--contract <address>] [--token-id <id>] [--chain <chain>] [--chain-id <id>]
 rare listing batch set-allowlist [--input <path>] [--root <hex>] [--contract <address>] [--token-id <id>] [--allowlist-root <hex>] [--end-time <unix>] [--chain <chain>] [--chain-id <id>]
