@@ -105,11 +105,17 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
     factory: getAddress('0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd'),
     auction: getAddress('0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2'),
     rareBridge: getAddress('0x3b41e21094611d152a08d3691a70837f1a077dae'),
+    liquidFactory: getAddress('0x54016106A92895a38E54cA286216416750e517b1'),
+    swapRouter: getAddress('0x6d078A410ee2AD08cACD8d22b486365433e98b7b'),
+    v4Quoter: getAddress('0x0d5e0f971ed27fbff6c2837bf31316121532048d'),
   },
   'base-sepolia': {
     factory: getAddress('0x2b181ae0f1aea6fed75591b04991b1a3f9868d51'),
     auction: getAddress('0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2'),
     rareBridge: getAddress('0xca491bb62A7730E97F500510132C47633DDD0229'),
+    liquidFactory: getAddress('0x912ecC55445d87149d09d83426D0aC41379bB643'),
+    swapRouter: getAddress('0x92438008608949E2C7eCef34c474792bAFe8a971'),
+    v4Quoter: getAddress('0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba'),
   },
 };
 
@@ -372,7 +378,7 @@ export function isSupportedChain(value: string): value is SupportedChain {
 export function getLiquidFactoryAddress(chain: SupportedChain): Address {
   const address = getContractAddresses(chain).liquidFactory;
   if (!address) {
-    throw new Error(`Liquid Editions factory is not configured for "${chain}". Supported chains: mainnet, sepolia`);
+    throw new Error(`Liquid Editions factory is not configured for "${chain}". Supported chains: mainnet, sepolia, base, base-sepolia`);
   }
   return address;
 }
@@ -380,7 +386,7 @@ export function getLiquidFactoryAddress(chain: SupportedChain): Address {
 export function getSwapRouterAddress(chain: SupportedChain): Address {
   const address = getContractAddresses(chain).swapRouter;
   if (!address) {
-    throw new Error(`Liquid router is not configured for "${chain}". Supported chains: mainnet, sepolia`);
+    throw new Error(`Liquid router is not configured for "${chain}". Supported chains: mainnet, sepolia, base, base-sepolia`);
   }
   return address;
 }
@@ -388,7 +394,7 @@ export function getSwapRouterAddress(chain: SupportedChain): Address {
 export function getV4QuoterAddress(chain: SupportedChain): Address {
   const address = getContractAddresses(chain).v4Quoter;
   if (!address) {
-    throw new Error(`Uniswap V4 quoter is not configured for "${chain}". Supported chains: mainnet, sepolia`);
+    throw new Error(`Uniswap V4 quoter is not configured for "${chain}". Supported chains: mainnet, sepolia, base, base-sepolia`);
   }
   return address;
 }
