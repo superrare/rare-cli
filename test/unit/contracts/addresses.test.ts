@@ -8,8 +8,11 @@ import {
   getContractAddresses,
   getErc721ApprovalManagerAddress,
   getCcipChainSelector,
+  getLiquidFactoryAddress,
   getRareBridgeAddress,
   getRareMinterAddress,
+  getSwapRouterAddress,
+  getV4QuoterAddress,
   isSupportedChain,
   listCurrencies,
   requireContractAddress,
@@ -48,6 +51,22 @@ describe('chain and currency helpers', () => {
     expect(getRareBridgeAddress('sepolia')).toBe('0xdC168291658f6C5F1D0b33E573c4d289DCA9dD08');
     expect(getCcipChainSelector('sepolia')).toBe(16015286601757825753n);
     expect(getContractAddresses('mainnet').liquidFactory).toBe('0x25f993C222fE5e891128a782A5168f1C78629540');
+    expect(getContractAddresses('base')).toMatchObject({
+      liquidFactory: getAddress('0x54016106A92895a38E54cA286216416750e517b1'),
+      swapRouter: getAddress('0x6d078A410ee2AD08cACD8d22b486365433e98b7b'),
+      v4Quoter: getAddress('0x0d5e0f971ed27fbff6c2837bf31316121532048d'),
+    });
+    expect(getLiquidFactoryAddress('base')).toBe('0x54016106A92895a38E54cA286216416750e517b1');
+    expect(getSwapRouterAddress('base')).toBe('0x6d078A410ee2AD08cACD8d22b486365433e98b7b');
+    expect(getV4QuoterAddress('base')).toBe(getAddress('0x0d5e0f971ed27fbff6c2837bf31316121532048d'));
+    expect(getContractAddresses('base-sepolia')).toMatchObject({
+      liquidFactory: getAddress('0x912ecC55445d87149d09d83426D0aC41379bB643'),
+      swapRouter: getAddress('0x92438008608949E2C7eCef34c474792bAFe8a971'),
+      v4Quoter: getAddress('0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba'),
+    });
+    expect(getLiquidFactoryAddress('base-sepolia')).toBe(getAddress('0x912ecC55445d87149d09d83426D0aC41379bB643'));
+    expect(getSwapRouterAddress('base-sepolia')).toBe(getAddress('0x92438008608949E2C7eCef34c474792bAFe8a971'));
+    expect(getV4QuoterAddress('base-sepolia')).toBe(getAddress('0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba'));
   });
 
   it('resolves canonical V4 pools separately from contract addresses', () => {
