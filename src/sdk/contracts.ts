@@ -13,6 +13,9 @@ export {
   getContractAddresses,
   getCcipChainSelector,
   getErc721ApprovalManagerAddress,
+  getErc1155ApprovalManagerAddress,
+  getErc1155ContractFactoryAddress,
+  getErc1155MarketplaceAddress,
   getLiquidFactoryAddress,
   getRareBridgeAddress,
   getRareMinterAddress,
@@ -46,6 +49,7 @@ export { batchListingAbi } from '../contracts/abis/batch-listing.js';
 export { batchOfferAbi } from '../contracts/abis/batch-offer.js';
 export { collectionMintAbi } from '../contracts/abis/collection-mint.js';
 export { collectionOwnerAbi } from '../contracts/abis/collection-owner.js';
+export { erc1155ApprovalManagerAbi } from '../contracts/abis/erc1155-approval-manager.js';
 export { factoryAbi } from '../contracts/abis/factory.js';
 export { lazyBatchMintFactoryAbi } from '../contracts/abis/lazy-batch-mint-factory.js';
 export { lazySovereignFactoryAbi } from '../contracts/abis/lazy-sovereign-factory.js';
@@ -54,6 +58,9 @@ export { liquidFactoryAbi } from '../contracts/abis/liquid-factory.js';
 export { liquidRouterAbi } from '../contracts/abis/liquid-router.js';
 export { rareMinterAbi } from '../contracts/abis/rare-minter.js';
 export { rareBridgeAbi } from '../contracts/abis/rare-bridge.js';
+export { rareErc1155Abi } from '../contracts/abis/rare-erc1155.js';
+export { rareErc1155ContractFactoryAbi } from '../contracts/abis/rare-erc1155-contract-factory.js';
+export { rareErc1155MarketplaceAbi } from '../contracts/abis/rare-erc1155-marketplace.js';
 export { sovereignFactoryAbi } from '../contracts/abis/sovereign-factory.js';
 export { tokenAbi } from '../contracts/abis/token.js';
 export { uniswapV4QuoterAbi } from '../contracts/abis/uniswap-v4-quoter.js';

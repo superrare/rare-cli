@@ -28,10 +28,14 @@ describe('mcp core helpers', () => {
     expect(mcpWriteToolNames).toContain('bridge_send');
     expect(mcpWriteToolNames).toContain('liquid_edition_deploy_multi_curve');
     expect(mcpWriteToolNames).toContain('collection_deploy_erc721');
+    expect(mcpWriteToolNames).toContain('collection_deploy_erc1155');
+    expect(mcpReadToolNames).toContain('listing_erc1155_release_status');
   });
 
   it('maps SDK paths to SDK-shaped snake_case tool names', () => {
     expect(sdkPathToMcpToolName('rare.collection.deploy.erc721')).toBe('collection_deploy_erc721');
+    expect(sdkPathToMcpToolName('rare.collection.erc1155.createToken')).toBe('collection_erc1155_create_token');
+    expect(sdkPathToMcpToolName('rare.listing.erc1155.release.allowlist.setConfig')).toBe('listing_erc1155_release_allowlist_set_config');
     expect(sdkPathToMcpToolName('rare.liquidEdition.deploy.multiCurve')).toBe('liquid_edition_deploy_multi_curve');
     expect(sdkPathToMcpToolName('rare.listing.release.allowlist.setConfig')).toBe('listing_release_allowlist_set_config');
     expect(sdkPathToMcpToolName('rare.swap.quoteBuyToken')).toBe('swap_quote_buy_token');

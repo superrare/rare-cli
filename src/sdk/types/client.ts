@@ -83,6 +83,9 @@ export type RareClientContracts = {
   marketplaceSettings?: Address;
   erc20ApprovalManager?: Address;
   erc721ApprovalManager?: Address;
+  erc1155Marketplace?: Address;
+  erc1155ContractFactory?: Address;
+  erc1155ApprovalManager?: Address;
   liquidFactory?: Address;
   swapRouter?: Address;
   v4Quoter?: Address;

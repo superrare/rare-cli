@@ -41,6 +41,9 @@ getContractAddresses
 requireContractAddress
 isSupportedChain
 getBatchListingAddress
+getErc1155MarketplaceAddress
+getErc1155ContractFactoryAddress
+getErc1155ApprovalManagerAddress
 getErc721ApprovalManagerAddress
 getCcipChainSelector
 getRareBridgeAddress
@@ -69,6 +72,10 @@ liquidEditionAbi
 liquidFactoryAbi
 liquidRouterAbi
 rareBridgeAbi
+rareErc1155Abi
+rareErc1155ContractFactoryAbi
+rareErc1155MarketplaceAbi
+erc1155ApprovalManagerAbi
 rareMinterAbi
 sovereignFactoryAbi
 tokenAbi
@@ -133,6 +140,9 @@ rare.contracts.batchAuctionHouse?: Address
 rare.contracts.marketplaceSettings?: Address
 rare.contracts.erc20ApprovalManager?: Address
 rare.contracts.erc721ApprovalManager?: Address
+rare.contracts.erc1155Marketplace?: Address
+rare.contracts.erc1155ContractFactory?: Address
+rare.contracts.erc1155ApprovalManager?: Address
 rare.contracts.liquidFactory?: Address
 rare.contracts.swapRouter?: Address
 rare.contracts.v4Quoter?: Address
@@ -198,6 +208,10 @@ rare.offer.batch.create(params: BatchOfferCreateParams): Promise<BatchOfferCreat
 rare.offer.batch.revoke(params: BatchOfferRevokeParams): Promise<BatchOfferRevokeResult>
 rare.offer.batch.accept(params: BatchOfferAcceptParams): Promise<BatchOfferAcceptResult>
 rare.offer.batch.status(params: BatchOfferStatusParams): Promise<BatchOfferStatus>
+rare.offer.erc1155.create(params: Erc1155OfferCreateParams): Promise<Erc1155OfferCreateResult>
+rare.offer.erc1155.cancel(params: Erc1155OfferCancelParams): Promise<TransactionResult>
+rare.offer.erc1155.accept(params: Erc1155OfferAcceptParams): Promise<Erc1155OfferAcceptResult>
+rare.offer.erc1155.status(params: Erc1155OfferStatusParams): Promise<Erc1155OfferStatus>
 
 Listing:
 
@@ -205,6 +219,11 @@ rare.listing.create(params: ListingCreateParams): Promise<ListingCreateResult>
 rare.listing.cancel(params: ListingCancelParams): Promise<TransactionResult>
 rare.listing.buy(params: ListingBuyParams): Promise<ListingBuyResult>
 rare.listing.status(params: ListingStatusParams): Promise<ListingStatus>
+rare.listing.erc1155.create(params: Erc1155ListingCreateParams): Promise<Erc1155ListingCreateResult>
+rare.listing.erc1155.cancel(params: Erc1155ListingCancelParams): Promise<TransactionResult>
+rare.listing.erc1155.buy(params: Erc1155ListingBuyParams): Promise<Erc1155ListingBuyResult>
+rare.listing.erc1155.checkout(params: Erc1155CheckoutParams): Promise<Erc1155CheckoutResult>
+rare.listing.erc1155.status(params: Erc1155ListingStatusParams): Promise<Erc1155ListingStatus>
 
 Listing release:
 
@@ -221,6 +240,22 @@ rare.listing.release.limits.setTx(params: ReleaseSetLimitParams): Promise<Releas
 rare.listing.release.configure(params: ReleaseConfigureParams): Promise<ReleaseConfigureResult>
 rare.listing.release.mint(params: ReleaseMintDirectSaleParams): Promise<ReleaseMintDirectSaleResult>
 rare.listing.release.status(params: ReleaseStatusParams): Promise<ReleaseStatus>
+
+ERC1155 listing release:
+
+rare.listing.erc1155.release.allowlist.build(params: { input: string; format: 'csv' | 'json' }): ReleaseAllowlistArtifact
+rare.listing.erc1155.release.allowlist.parse(params: { input: string }): ReleaseAllowlistArtifact
+rare.listing.erc1155.release.allowlist.proof(params: { artifact: ReleaseAllowlistArtifact; address: Address }): ReleaseAllowlistWalletProof | null
+rare.listing.erc1155.release.allowlist.getConfig(params: { contract: Address; tokenId: IntegerInput }): Promise<Erc1155ReleaseAllowlistConfig>
+rare.listing.erc1155.release.allowlist.setConfig(params: Erc1155ReleaseSetAllowlistConfigParams): Promise<Erc1155ReleaseSetAllowlistConfigResult>
+rare.listing.erc1155.release.allowlist.clear(params: { contract: Address; tokenId: IntegerInput }): Promise<Erc1155ReleaseSetAllowlistConfigResult>
+rare.listing.erc1155.release.limits.getMint(params: { contract: Address; tokenId: IntegerInput }): Promise<Erc1155ReleaseLimitConfig>
+rare.listing.erc1155.release.limits.setMint(params: Erc1155ReleaseSetLimitParams): Promise<Erc1155ReleaseSetLimitResult>
+rare.listing.erc1155.release.limits.getTx(params: { contract: Address; tokenId: IntegerInput }): Promise<Erc1155ReleaseLimitConfig>
+rare.listing.erc1155.release.limits.setTx(params: Erc1155ReleaseSetLimitParams): Promise<Erc1155ReleaseSetLimitResult>
+rare.listing.erc1155.release.configure(params: Erc1155ReleaseConfigureParams): Promise<Erc1155ReleaseConfigureResult>
+rare.listing.erc1155.release.mint(params: Erc1155ReleaseMintParams): Promise<Erc1155ReleaseMintResult>
+rare.listing.erc1155.release.status(params: Erc1155ReleaseStatusParams): Promise<Erc1155ReleaseStatus>
 
 Batch listing:
 
@@ -251,6 +286,7 @@ Collection:
 
 rare.collection.get(id: string): Promise<Collection>
 rare.collection.deploy.erc721(params: DeployErc721Params): Promise<DeployErc721Result>
+rare.collection.deploy.erc1155(params: DeployErc1155Params): Promise<DeployErc1155Result>
 rare.collection.deploy.lazyErc721(params: DeployLazyErc721Params): Promise<DeployLazyErc721Result>
 rare.collection.deploy.lazyBatchMint(params: DeployLazyBatchMintParams): Promise<DeployLazyBatchMintResult>
 rare.collection.mint(params: CollectionMintParams): Promise<CollectionMintResult>
@@ -265,6 +301,11 @@ rare.collection.metadata.status(params: CollectionMintConfigParams): Promise<Col
 rare.collection.updateBaseUri(params: CollectionUpdateBaseUriParams): Promise<CollectionUpdateBaseUriResult>
 rare.collection.updateTokenUri(params: CollectionUpdateTokenUriParams): Promise<CollectionUpdateTokenUriResult>
 rare.collection.lockBaseUri(params: CollectionLockBaseUriParams): Promise<CollectionLockBaseUriResult>
+rare.collection.erc1155.createToken(params: Erc1155CollectionCreateTokenParams): Promise<Erc1155CollectionCreateTokenResult>
+rare.collection.erc1155.mint(params: Erc1155CollectionMintParams): Promise<Erc1155CollectionMintResult>
+rare.collection.erc1155.mintBatch(params: Erc1155CollectionMintBatchParams): Promise<Erc1155CollectionMintBatchResult>
+rare.collection.erc1155.setMinterApproval(params: Erc1155CollectionSetMinterApprovalParams): Promise<Erc1155CollectionSetMinterApprovalResult>
+rare.collection.erc1155.status(params: Erc1155CollectionStatusParams): Promise<Erc1155CollectionStatus>
 
 User:
 
@@ -292,6 +333,7 @@ rare.currency.resolveDecimals(input: CurrencyInput): Promise<ResolvedCurrencyWit
 
 Consistency notes:
 - Collection deployments are grouped under `collection.deploy.*`, matching the CLI's `collection deploy ...` shape.
+- ERC1155 support is explicit under `.erc1155` namespaces. Existing shorthand collection, listing, and offer methods remain ERC721 compatibility behavior for v1.
 - Liquid Edition deployment is grouped under `liquidEdition.deploy.multiCurve`, matching the CLI's `liquid-edition deploy multicurve` shape and leaving room for future deployment types.
 - Collection single-token minting now lives at `collection.mint`, alongside `collection.mintBatch` and `collection.prepareLazyMint`.
 - Batch marketplaces are nested under their sale type: `listing.batch.*`, `offer.batch.*`, and `auction.batch.*`. Offline tree helpers live under `utils.tree.*`.

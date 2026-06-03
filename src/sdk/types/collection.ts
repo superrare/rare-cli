@@ -2,6 +2,11 @@ import type { Address } from 'viem';
 import type { LazySovereignCollectionContractType } from '../collection-core.js';
 import type { Collection } from '../api.js';
 import type { IntegerInput, TransactionResult } from './common.js';
+import type {
+  DeployErc1155Params,
+  DeployErc1155Result,
+  Erc1155CollectionNamespace,
+} from './erc1155.js';
 
 export type DeployErc721Params = {
   name: string;
@@ -224,6 +229,7 @@ export type CollectionMintResult = {
 
 export type CollectionDeployNamespace = {
   erc721: (params: DeployErc721Params) => Promise<DeployErc721Result>;
+  erc1155: (params: DeployErc1155Params) => Promise<DeployErc1155Result>;
   lazyErc721: (params: DeployLazyErc721Params) => Promise<DeployLazyErc721Result>;
   lazyBatchMint: (params: DeployLazyBatchMintParams) => Promise<DeployLazyBatchMintResult>;
 }
@@ -232,6 +238,7 @@ export type CollectionNamespace = {
   get: (id: string) => Promise<Collection>;
   status: (params: CollectionStatusParams) => Promise<CollectionStatusResult>;
   deploy: CollectionDeployNamespace;
+  erc1155: Erc1155CollectionNamespace;
   mint: (params: CollectionMintParams) => Promise<CollectionMintResult>;
   mintBatch: (params: CollectionMintBatchParams) => Promise<CollectionMintBatchResult>;
   prepareLazyMint: (params: CollectionPrepareLazyMintParams) => Promise<CollectionPrepareLazyMintResult>;

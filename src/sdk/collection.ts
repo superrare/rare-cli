@@ -40,11 +40,13 @@ export function createCollectionNamespace(
   config: RareClientConfig,
   chain: SupportedChain,
   baseCollection: Pick<CollectionNamespace, 'get'>,
-  collectionDeploy: Pick<CollectionNamespace['deploy'], 'erc721' | 'lazyBatchMint'>,
+  collectionDeploy: Pick<CollectionNamespace['deploy'], 'erc721' | 'erc1155' | 'lazyBatchMint'>,
+  erc1155: CollectionNamespace['erc1155'],
   collectionMint: CollectionNamespace['mint'],
 ): CollectionNamespace {
   return {
     ...baseCollection,
+    erc1155,
     mint: collectionMint,
 
     async status(params): ReturnType<CollectionNamespace['status']> {

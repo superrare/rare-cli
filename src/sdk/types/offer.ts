@@ -1,6 +1,7 @@
 import type { Address, Hash } from 'viem';
 import type { AmountInput, CurrencyInput, IntegerInput, TransactionResult } from './common.js';
 import type { BatchOfferNamespace } from './batch-offer.js';
+import type { Erc1155OfferNamespace } from './erc1155.js';
 
 export type OfferCreateParams = {
   contract: Address;
@@ -61,5 +62,6 @@ export type OfferMarketplaceNamespace = {
 }
 
 export type OfferNamespace = OfferMarketplaceNamespace & {
+  erc1155: Erc1155OfferNamespace;
   batch: BatchOfferNamespace;
 }

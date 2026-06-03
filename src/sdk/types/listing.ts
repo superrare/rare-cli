@@ -1,6 +1,7 @@
 import type { Address, Hash } from 'viem';
 import type { AmountInput, CurrencyInput, IntegerInput, TransactionResult } from './common.js';
 import type { BatchListingNamespace } from './batch-listing.js';
+import type { Erc1155ListingNamespace } from './erc1155.js';
 import type { ReleaseNamespace } from './release.js';
 
 export type ListingCreateParams = {
@@ -62,6 +63,7 @@ export type ListingMarketplaceNamespace = {
 }
 
 export type ListingNamespace = ListingMarketplaceNamespace & {
+  erc1155: Erc1155ListingNamespace;
   release: ReleaseNamespace;
   batch: BatchListingNamespace;
 }

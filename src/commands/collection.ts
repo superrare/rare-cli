@@ -19,6 +19,7 @@ import { output, log, printCollection } from '../output.js';
 import { createCollectionListCommand } from './account-market-list.js';
 import { mintCommand } from './mint.js';
 import { deployErc721Command } from './deploy.js';
+import { collectionErc1155Command, deployErc1155Command } from './erc1155.js';
 
 type LazyBatchMintOptions = {
   maxTokens?: string;
@@ -815,6 +816,7 @@ function createCollectionDeployCommand(): Command {
   const cmd = new Command('deploy');
   cmd.description('Deploy NFT collections through RARE factories');
   cmd.addCommand(deployErc721Command());
+  cmd.addCommand(deployErc1155Command());
   cmd.addCommand(deployLazyErc721CollectionCommand());
   cmd.addCommand(lazyBatchMintCmd());
   return cmd;
@@ -833,6 +835,7 @@ export function collectionCommand(): Command {
   cmd.addCommand(createTokenCreatorCommand());
   cmd.addCommand(createRoyaltyCommand());
   cmd.addCommand(createMetadataCommand());
+  cmd.addCommand(collectionErc1155Command());
   return cmd;
 }
 

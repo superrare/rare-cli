@@ -20,6 +20,12 @@ import { createReleaseNamespace } from './release.js';
 import { createCollectionNamespace } from './collection.js';
 import { createUtilsNamespace } from './utils.js';
 import { buildNftUniversalTokenId } from './nft-core.js';
+import {
+  createErc1155CollectionNamespace,
+  createErc1155DeployNamespace,
+  createErc1155ListingNamespace,
+  createErc1155OfferNamespace,
+} from './erc1155.js';
 
 export type * from './types/client.js';
 
@@ -77,8 +83,12 @@ export function createRareClient(config: RareClientConfig): RareClient {
     fetch: config.apiFetch,
   });
   const release = createReleaseNamespace(publicClient, config, chain, addresses);
-  const collectionDeploy = createDeployNamespace(publicClient, config, addresses);
+  const collectionDeploy = {
+    ...createDeployNamespace(publicClient, config, addresses),
+    ...createErc1155DeployNamespace(publicClient, config, chain, addresses),
+  };
   const collectionMint = createCollectionMint(publicClient, config);
+  const erc1155Collection = createErc1155CollectionNamespace(publicClient, config);
   const batchListingAddresses = {
     get batchListing(): Address {
       if (!addresses.batchListing) {
@@ -121,10 +131,12 @@ export function createRareClient(config: RareClientConfig): RareClient {
   };
   const offer = {
     ...createOfferNamespace(publicClient, config, chain, addresses),
+    erc1155: createErc1155OfferNamespace(publicClient, config, chain, addresses),
     batch: createBatchOfferNamespace(publicClient, config, chain),
   };
   const listing = {
     ...createListingNamespace(publicClient, config, chain, addresses),
+    erc1155: createErc1155ListingNamespace(publicClient, config, chain, addresses),
     release,
     batch: createBatchListingNamespace(publicClient, config, batchListingAddresses),
   };
@@ -146,6 +158,9 @@ export function createRareClient(config: RareClientConfig): RareClient {
       marketplaceSettings: addresses.marketplaceSettings,
       erc20ApprovalManager: addresses.erc20ApprovalManager,
       erc721ApprovalManager: addresses.erc721ApprovalManager,
+      erc1155Marketplace: addresses.erc1155Marketplace,
+      erc1155ContractFactory: addresses.erc1155ContractFactory,
+      erc1155ApprovalManager: addresses.erc1155ApprovalManager,
       liquidFactory: addresses.liquidFactory,
       swapRouter: addresses.swapRouter,
       v4Quoter: addresses.v4Quoter,
@@ -195,6 +210,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
         },
       },
       collectionDeploy,
+      erc1155Collection,
       collectionMint,
     ),
     user: {

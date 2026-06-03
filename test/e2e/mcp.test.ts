@@ -75,6 +75,40 @@ describe('MCP stdio server', () => {
           type: 'rare-batch-token-list',
           count: 1,
         });
+
+        expect(names).toContain('collection_erc1155_status');
+        expect(names).toContain('listing_erc1155_release_status');
+        expect(names).toContain('offer_erc1155_status');
+        expect(names).not.toContain('collection_deploy_erc1155');
+        expect(names).not.toContain('listing_erc1155_checkout');
+
+        const allowlist = await client.callTool({
+          name: 'listing_erc1155_release_allowlist_build',
+          arguments: {
+            input: JSON.stringify([
+              { wallet: '0x0000000000000000000000000000000000000001' },
+              { wallet: '0x0000000000000000000000000000000000000002' },
+            ]),
+            format: 'json',
+          },
+        });
+        expect(allowlist.structuredContent).toMatchObject({
+          kind: 'rare-release-allowlist-v1',
+          version: 1,
+          wallets: expect.any(Array),
+        });
+
+        const proof = await client.callTool({
+          name: 'listing_erc1155_release_allowlist_proof',
+          arguments: {
+            artifact: allowlist.structuredContent,
+            address: '0x0000000000000000000000000000000000000001',
+          },
+        });
+        expect(proof.structuredContent).toMatchObject({
+          address: '0x0000000000000000000000000000000000000001',
+          proof: expect.any(Array),
+        });
       });
     });
   });
@@ -93,6 +127,12 @@ describe('MCP stdio server', () => {
           destructiveHint: true,
           openWorldHint: true,
         });
+        expect(names).toContain('collection_deploy_erc1155');
+        expect(names).toContain('collection_erc1155_mint');
+        expect(names).toContain('listing_erc1155_create');
+        expect(names).toContain('listing_erc1155_checkout');
+        expect(names).toContain('listing_erc1155_release_mint');
+        expect(names).toContain('offer_erc1155_accept');
 
         const result = await client.callTool({
           name: 'collection_mint',
@@ -104,6 +144,43 @@ describe('MCP stdio server', () => {
         });
         expect(result.isError).toBe(true);
         expect(result.structuredContent).toEqual({
+          error: {
+            code: 'missing_wallet',
+            message: 'No private key configured for chain "sepolia". Run rare configure or use the CLI wallet setup outside MCP.',
+          },
+        });
+
+        const erc1155Result = await client.callTool({
+          name: 'collection_erc1155_mint',
+          arguments: {
+            chain: 'sepolia',
+            contract: '0x1111111111111111111111111111111111111111',
+            tokenId: '1',
+            quantity: '1',
+          },
+        });
+        expect(erc1155Result.isError).toBe(true);
+        expect(erc1155Result.structuredContent).toEqual({
+          error: {
+            code: 'missing_wallet',
+            message: 'No private key configured for chain "sepolia". Run rare configure or use the CLI wallet setup outside MCP.',
+          },
+        });
+
+        const checkoutResult = await client.callTool({
+          name: 'listing_erc1155_checkout',
+          arguments: {
+            chain: 'sepolia',
+            items: [{
+              kind: 'release',
+              contract: '0x1111111111111111111111111111111111111111',
+              tokenId: '1',
+              quantity: '1',
+            }],
+          },
+        });
+        expect(checkoutResult.isError).toBe(true);
+        expect(checkoutResult.structuredContent).toEqual({
           error: {
             code: 'missing_wallet',
             message: 'No private key configured for chain "sepolia". Run rare configure or use the CLI wallet setup outside MCP.',
@@ -121,6 +198,40 @@ describe('MCP stdio server', () => {
           arguments: {
             contract: 'not-an-address',
             tokenId: '1',
+          },
+        });
+        expect(result.isError).toBe(true);
+        expect(readTextContent(result)).toContain('Input validation error');
+        expect(readTextContent(result)).toContain('must be a valid 0x address');
+
+        const erc1155Result = await client.callTool({
+          name: 'collection_erc1155_status',
+          arguments: {
+            contract: 'not-an-address',
+            tokenId: '1',
+          },
+        });
+        expect(erc1155Result.isError).toBe(true);
+        expect(readTextContent(erc1155Result)).toContain('Input validation error');
+        expect(readTextContent(erc1155Result)).toContain('must be a valid 0x address');
+      });
+    });
+  });
+
+  it('validates ERC1155 checkout tool inputs at the protocol boundary', async () => {
+    await withTempHome(async (home) => {
+      await withMcpClient({ home, args: ['--allow-writes'] }, async (client) => {
+        const result = await client.callTool({
+          name: 'listing_erc1155_checkout',
+          arguments: {
+            items: [{
+              kind: 'listing',
+              contract: 'not-an-address',
+              seller: '0x2222222222222222222222222222222222222222',
+              tokenId: '1',
+              quantity: '1',
+              price: '1',
+            }],
           },
         });
         expect(result.isError).toBe(true);

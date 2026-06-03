@@ -16,6 +16,7 @@ import { createListingListCommand } from './account-market-list.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 import { listingBatchCommand } from './batch.js';
+import { listingErc1155Command } from './erc1155.js';
 import { releaseCommand } from './release.js';
 
 type ListingCreateOptions = {
@@ -60,6 +61,7 @@ export function listingCommand(): Command {
   const cmd = new Command('listing');
   cmd.description('Listing subcommands (list, create, cancel, buy, status, batch, release)');
   cmd.addCommand(createListingListCommand());
+  cmd.addCommand(listingErc1155Command());
   cmd.addCommand(listingBatchCommand());
   cmd.addCommand(releaseCommand());
 

@@ -20,6 +20,77 @@ Tip: Compare sdk functionality against actual contract implementations in core r
 - Pass dependencies into shell code instead of burying side effects inside core logic.
 - Return structured data from core logic instead of printing, exiting, or mutating external state.
 
+## SDK Write-Flow Policy
+
+SDK methods that perform durable side effects should order work from cheapest and safest to most expensive and irreversible:
+
+1. Local validation and planning.
+2. Remote reads and simulation.
+3. External API writes or uploads needed by the transaction.
+4. Approval or allowance writes.
+5. Final on-chain write.
+6. Receipt parsing and post-write verification.
+
+The goal is to fail before creating persistent external state whenever we reasonably can. Contract writes, approvals, uploads, and imports are product-visible actions; callers should not be surprised by a side effect that could have been avoided with local validation or a cheap remote preflight.
+
+### Local validation and planning
+
+- Normalize and validate user inputs before any RPC, HTTP, upload, wallet, or file side effect.
+- Put business decisions in pure `plan*`, `build*`, `normalize*`, or `validate*` helpers in core modules.
+- Plans should return structured data: normalized amounts, addresses, timestamps, roots, proofs, split recipients, write args, and branch decisions.
+- Reject impossible or unsupported inputs in the plan layer: missing required fields, invalid amounts, unsupported modes, malformed roots/proofs, duplicate split recipients, mismatched artifacts, and unsafe numeric inputs.
+- Keep SDK shell methods focused on dependency resolution, preflight reads, side effects, and result shaping.
+
+### Remote preflight before writes
+
+- Prefer remote validation before any durable write when the preflight is reliable and not more expensive than the write it protects.
+- Use contract reads to check ownership, permissions, active config, current sale state, balances, limits, existing roots, allowlist status, and token/currency metadata when those conditions affect whether a write can succeed.
+- Use `publicClient.simulateContract` before `walletClient.writeContract` for target writes when practical, especially for user-facing write flows, release configuration, marketplace actions, minting, and metadata/royalty mutations.
+- Simulate the final target operation before approval writes when the target call can be simulated without the approval already being present. If simulation requires a missing approval, document that limitation in the flow and rely on the best available reads.
+- Treat API-backed proof/root resolution as remote validation. Verify API results against local artifacts or on-chain active roots when possible before proceeding.
+- Do not add simulation only for appearances. If a contract is nondeterministic, state-dependent in a way simulation cannot model, or requires side effects that have not happened yet, use explicit reads and clear error messages instead.
+
+### Uploads, API writes, and other external side effects
+
+- Defer uploads, imports, and other API writes until local planning and relevant remote preflight have passed.
+- When an API write produces data consumed by an on-chain write, verify the API response against the local plan before writing on-chain. Examples: generated Merkle roots should match artifact roots; uploaded metadata should satisfy the planned token URI flow.
+- Keep upload/API request body construction in pure builders where possible, and keep the HTTP call in shell code.
+- If an upload must happen before the final transaction and the transaction later fails, return or throw enough context for the caller to retry without repeating expensive work when possible.
+
+### Approvals and allowance side effects
+
+- Approvals are persistent side effects. Only perform them after local validation and all feasible remote preflight for the target operation.
+- Prefer checking existing allowance/approval first. Do not write an approval if the current state is already sufficient.
+- Support `autoApprove: false` or an equivalent caller-controlled path for flows where users may want to stop before approval.
+- Wrap target-operation failures after a mined approval with a catchable error that includes the approval transaction and approved target/spender/minter. `ApprovalSideEffectError` is the model.
+- After writing an approval, verify that the approval or allowance is readable before continuing when the next operation depends on it.
+- Avoid broad approvals unless the protocol flow requires them. If broad approval is required, make that behavior explicit in the helper and result shape.
+
+### Final writes and post-write verification
+
+- Keep final `writeContract` / `sendTransaction` calls as late as possible in the method.
+- Parse receipts for expected events when the event is part of the public result contract.
+- Verify post-write state when event logs are insufficient or when the contract/API can report the updated configuration directly.
+- Throw with enough context to diagnose failed verification: operation name, contract, token/root/config, tx hash, and relevant observed values.
+- Return structured results from SDK methods: tx hash, receipt, normalized inputs, derived amounts, addresses, approval tx hashes, and parsed event/config data.
+
+### Acceptable exceptions
+
+- Some target writes cannot be fully simulated before an approval because the approval is itself a precondition. In those cases, do every other cheap preflight first, perform the approval, verify it, and wrap later failures as approval side-effect errors.
+- Some flows require uploads or API registration before an on-chain write because the transaction consumes a URI, CID, Merkle root, or server-generated proof. Validate everything available before the upload, verify the returned data, then proceed.
+- Some writes are intentionally simple pass-through operations. Even then, perform local normalization first and consider simulation if the write is user-facing or likely to fail for predictable reasons.
+- Reads used for status commands may be best-effort where contracts vary by generation. Do not apply best-effort swallowing to write preflight unless the write flow has a clear fallback and error story.
+
+### Review questions for new SDK writes
+
+- Did every input-dependent decision happen before the first side effect?
+- Is there a pure planner/builder for the meaningful business logic?
+- Can the final target write be simulated before approvals or uploads? If not, why not?
+- Are ownership, permission, allowance, active config, root/proof, and amount assumptions checked before writing?
+- Are durable pre-final side effects unavoidable, caller-controlled where appropriate, and surfaced in errors/results?
+- Does the method verify the receipt or final state rather than assuming the write did what we expected?
+- Would an SDK consumer have enough structured data to retry, recover, or clean up after a partial failure?
+
 ## Public SDK Design
 
 Treat package exports as product APIs. Only export symbols that we intend consumers to import, document, test, and rely on across releases.
