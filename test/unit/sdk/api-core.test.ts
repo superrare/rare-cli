@@ -3,6 +3,8 @@ import {
   buildCollectionSearchQuery,
   buildGeneratedMediaEntry,
   buildImportErc721Body,
+  buildIpfsJsonUploadPayload,
+  buildIpfsUploadPlan,
   buildMediaUploadPlan,
   buildNftSearchQuery,
   buildPinMetadataBody,
@@ -114,6 +116,29 @@ describe('SDK API request planning', () => {
       filename: 'art.PNG',
       mimeType: 'image/png',
     });
+  });
+
+  it('plans generic IPFS uploads from safe filenames', () => {
+    expect(buildIpfsUploadPlan(new Uint8Array([1, 2, 3]), 'nested/path/metadata.json')).toEqual({
+      fileSize: 3,
+      filename: 'metadata.json',
+    });
+  });
+
+  it('builds JSON upload payloads with a default metadata filename', () => {
+    const payload = buildIpfsJsonUploadPayload({ name: 'Token' });
+
+    expect(payload.filename).toBe('metadata.json');
+    expect(new TextDecoder().decode(payload.buffer)).toBe('{"name":"Token"}');
+  });
+
+  it('rejects non-serializable JSON upload values', () => {
+    expect(() => buildIpfsJsonUploadPayload(undefined)).toThrow('IPFS JSON upload value must be JSON-serializable.');
+  });
+
+  it('rejects empty IPFS uploads before request execution', () => {
+    expect(() => buildIpfsUploadPlan(new Uint8Array(), 'empty.json')).toThrow('IPFS upload file must not be empty.');
+    expect(() => buildIpfsUploadPlan(new Uint8Array([1]), '')).toThrow('IPFS upload filename must not be empty.');
   });
 
   it('builds generated media entries with parsed dimensions and fallback size', () => {

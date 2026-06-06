@@ -170,6 +170,48 @@ describe('Rare SDK client API request shaping', () => {
       });
     });
   });
+
+  it('pins arbitrary files without NFT media post-processing', async () => {
+    await withRareApiFixture(async ({ baseUrl, requests }) => {
+      const rare = createTestClient(baseUrl);
+
+      const pinned = await rare.ipfs.pinFile(new Uint8Array([1, 2, 3, 4]), 'folder/metadata.json');
+
+      expect(pinned).toEqual({
+        cid: 'bafymedia',
+        ipfsUrl: 'ipfs://bafymedia',
+        gatewayUrl: 'https://fixture.example/ipfs/bafymedia',
+      });
+      expect(requests.map((request) => request.pathname)).toEqual([
+        '/v1/nfts/metadata/media/uploads',
+        '/upload-part/1',
+        '/v1/nfts/metadata/media/uploads/complete',
+      ]);
+      expect(requests[0]?.body).toEqual({
+        fileSize: 4,
+        filename: 'metadata.json',
+      });
+    });
+  });
+
+  it('pins JSON objects with a metadata filename by default', async () => {
+    await withRareApiFixture(async ({ baseUrl, requests }) => {
+      const rare = createTestClient(baseUrl);
+
+      const pinned = await rare.ipfs.pinJson({ name: 'Standalone token URI' });
+
+      expect(pinned.ipfsUrl).toBe('ipfs://bafymedia');
+      expect(requests.map((request) => request.pathname)).toEqual([
+        '/v1/nfts/metadata/media/uploads',
+        '/upload-part/1',
+        '/v1/nfts/metadata/media/uploads/complete',
+      ]);
+      expect(requests[0]?.body).toEqual({
+        fileSize: 31,
+        filename: 'metadata.json',
+      });
+    });
+  });
 });
 
 function createTestClient(baseUrl: string, configuredAccount?: typeof account): ReturnType<typeof createRareClient> {
@@ -275,7 +317,11 @@ async function handleRequest(
     return;
   }
   if (url.pathname === '/v1/nfts/metadata/media/uploads/complete') {
-    writeJson(res, 200, { ipfsUrl: 'ipfs://bafymedia' });
+    writeJson(res, 200, {
+      cid: 'bafymedia',
+      ipfsUrl: 'ipfs://bafymedia',
+      gatewayUrl: 'https://fixture.example/ipfs/bafymedia',
+    });
     return;
   }
   if (url.pathname === '/v1/nfts/metadata/media/generate') {

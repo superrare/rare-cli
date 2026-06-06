@@ -123,6 +123,8 @@ export const mcpToolSpecs = [
   sdkTool('write', 'rare.collection.updateBaseUri', 'Update collection base URI.'),
   sdkTool('write', 'rare.collection.updateTokenUri', 'Update collection token URI.'),
   sdkTool('write', 'rare.collection.lockBaseUri', 'Lock collection base URI.'),
+  sdkTool('write', 'rare.ipfs.pinFile', 'Upload and pin an arbitrary local file path to IPFS.'),
+  sdkTool('write', 'rare.ipfs.pinJson', 'Upload and pin JSON data to IPFS.'),
   sdkTool('read', 'rare.user.get', 'Get a SuperRare user profile by address.'),
   sdkTool('write', 'rare.media.upload', 'Upload media from an explicit local file path.'),
   sdkTool('write', 'rare.media.pinMetadata', 'Pin NFT metadata.'),

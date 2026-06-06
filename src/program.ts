@@ -16,6 +16,7 @@ import { bridgeCommand } from './commands/bridge.js';
 import { swapCommand } from './commands/swap.js';
 import { userCommand } from './commands/user.js';
 import { utilsCommand } from './commands/utils.js';
+import { ipfsCommand } from './commands/ipfs.js';
 import { mcpCommand } from './commands/mcp.js';
 import { getConfirmationDecision, type ConfirmationOptions } from './confirmation.js';
 import pkg from '../package.json' with { type: 'json' };
@@ -62,6 +63,7 @@ export function createRareProgram(): Command {
   program.addCommand(swapCommand());
   program.addCommand(userCommand());
   program.addCommand(utilsCommand());
+  program.addCommand(ipfsCommand());
   program.addCommand(mcpCommand());
 
   return program;

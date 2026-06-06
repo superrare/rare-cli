@@ -24,6 +24,28 @@ describe('SDK API failure handling', () => {
     })).rejects.toThrow('Failed to pin metadata');
   });
 
+  it('rejects empty IPFS uploads before API requests', async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 204 }));
+    const api = createRareApi({
+      baseUrl: 'https://rare-api.test',
+      fetch: fetchImpl,
+    });
+
+    await expect(api.pinFile(new Uint8Array(), 'empty.bin')).rejects.toThrow('IPFS upload file must not be empty.');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-serializable JSON uploads before API requests', async () => {
+    const fetchImpl = vi.fn(async () => new Response(null, { status: 204 }));
+    const api = createRareApi({
+      baseUrl: 'https://rare-api.test',
+      fetch: fetchImpl,
+    });
+
+    await expect(api.pinJson(undefined)).rejects.toThrow('IPFS JSON upload value must be JSON-serializable.');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it('fails media uploads when a presigned part upload is rejected', async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const request = input instanceof Request ? input : new Request(input, init);

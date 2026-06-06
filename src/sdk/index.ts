@@ -25,6 +25,7 @@ export type {
   CollectionSearchParams,
   EventSearchParams,
   ImportErc721Params,
+  IpfsUploadResult,
   NftAttribute,
   NftMediaEntry,
   NftSearchParams,
