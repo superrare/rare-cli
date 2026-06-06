@@ -1,4 +1,5 @@
 import { getAddress, isHex, type Address } from 'viem';
+import { readOptionalProcessEnv } from '../runtime-env.js';
 
 export { getQuotedRecipientAmount } from './trade-core.js';
 
@@ -100,7 +101,7 @@ type QuoteRequestParams = {
 }
 
 function getBaseUrl(options?: UniswapApiRequestOptions): string {
-  return options?.baseUrl ?? process.env.UNISWAP_TRADE_API_BASE_URL ?? DEFAULT_UNISWAP_TRADE_API_BASE_URL;
+  return options?.baseUrl ?? readOptionalProcessEnv('UNISWAP_TRADE_API_BASE_URL') ?? DEFAULT_UNISWAP_TRADE_API_BASE_URL;
 }
 
 function requireApiKey(options?: UniswapApiRequestOptions): string {

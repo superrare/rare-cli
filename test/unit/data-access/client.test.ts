@@ -7,12 +7,12 @@ import { RareApiError } from '../../../src/data-access/errors.js';
 const originalRareApiBaseUrl = process.env.RARE_API_BASE_URL;
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   if (originalRareApiBaseUrl === undefined) {
     delete process.env.RARE_API_BASE_URL;
   } else {
     process.env.RARE_API_BASE_URL = originalRareApiBaseUrl;
   }
-  vi.unstubAllGlobals();
 });
 
 describe('API client configuration', () => {
@@ -21,6 +21,13 @@ describe('API client configuration', () => {
     expect(resolveRareApiBaseUrl('https://rare-api.config.test')).toBe('https://rare-api.env.test');
 
     delete process.env.RARE_API_BASE_URL;
+    expect(resolveRareApiBaseUrl('https://rare-api.config.test')).toBe('https://rare-api.config.test');
+    expect(resolveRareApiBaseUrl()).toBe(DEFAULT_RARE_API_BASE_URL);
+  });
+
+  it('falls back to explicit config and default values when process is unavailable', () => {
+    vi.stubGlobal('process', undefined);
+
     expect(resolveRareApiBaseUrl('https://rare-api.config.test')).toBe('https://rare-api.config.test');
     expect(resolveRareApiBaseUrl()).toBe(DEFAULT_RARE_API_BASE_URL);
   });
