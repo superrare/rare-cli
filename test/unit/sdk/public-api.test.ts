@@ -1,7 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createPublicClient, http } from 'viem';
+import { mainnet } from 'viem/chains';
 import * as client from '../../../src/sdk/index.js';
 import * as contracts from '../../../src/sdk/contracts.js';
 import * as utils from '../../../src/sdk/public-utils.js';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe('public SDK API surface', () => {
   it('keeps the client runtime exports focused on the high-level SDK', () => {
@@ -11,6 +17,20 @@ describe('public SDK API surface', () => {
       'PaymentApprovalRequiredError',
       'createRareClient',
     ]);
+  });
+
+  it('constructs the SDK client when process is unavailable', () => {
+    vi.stubGlobal('process', undefined);
+
+    const rare = client.createRareClient({
+      publicClient: createPublicClient({
+        chain: mainnet,
+        transport: http('http://127.0.0.1:8545'),
+      }),
+    });
+
+    expect(rare.chain).toBe('mainnet');
+    expect(rare.chainId).toBe(1);
   });
 
   it('exposes contract building blocks from the contracts subpath', () => {

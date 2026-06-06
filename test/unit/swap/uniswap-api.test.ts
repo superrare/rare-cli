@@ -84,6 +84,24 @@ describe('Uniswap Trade API client', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('uses the default base URL when process is unavailable', async () => {
+    const fetchMock = vi.fn(async (): Promise<Response> => Response.json(buildQuoteResponse()));
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('process', undefined);
+
+    await requestUniswapQuote({
+      apiKey: 'test-key',
+      chainId: 11_155_111,
+      tokenIn,
+      tokenOut,
+      amount: 1_000_000_000_000_000n,
+      swapper,
+      slippageBps: 125,
+    });
+
+    expect(getFetchCall(fetchMock).url).toBe('https://trade-api.gateway.uniswap.org/v1/quote');
+  });
+
   it('surfaces non-OK API errors with response messages', async () => {
     vi.stubGlobal('fetch', vi.fn(async (): Promise<Response> => Response.json(
       { message: 'route unavailable' },
