@@ -27,6 +27,9 @@ rare nft get --contract <address> --token-id <id> [--chain <chain>] [--chain-id 
 
 rare import erc721 --contract <address> [--chain <chain>] [--chain-id <id>]
 
+rare ipfs pin-file --file <path> [--filename <name>] [--uri-only]
+rare ipfs pin-json [--data <json>] [--stdin] [--filename <name>] [--uri-only]
+
 rare collection get <id> [--chain <chain>] [--chain-id <id>]
 rare collection list --account <address> [--chain <chain>] [--chain-id <id>] [--per-page <n>] [--page <n>]
 rare collection deploy erc721 <name> <symbol> [--max-tokens <number>] [--chain <chain>] [--chain-id <id>]

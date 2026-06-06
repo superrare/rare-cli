@@ -28,12 +28,16 @@ describe('mcp core helpers', () => {
     expect(mcpWriteToolNames).toContain('bridge_send');
     expect(mcpWriteToolNames).toContain('liquid_edition_deploy_multi_curve');
     expect(mcpWriteToolNames).toContain('collection_deploy_erc721');
+    expect(mcpWriteToolNames).toContain('ipfs_pin_file');
+    expect(mcpWriteToolNames).toContain('ipfs_pin_json');
   });
 
   it('maps SDK paths to SDK-shaped snake_case tool names', () => {
     expect(sdkPathToMcpToolName('rare.collection.deploy.erc721')).toBe('collection_deploy_erc721');
     expect(sdkPathToMcpToolName('rare.liquidEdition.deploy.multiCurve')).toBe('liquid_edition_deploy_multi_curve');
     expect(sdkPathToMcpToolName('rare.listing.release.allowlist.setConfig')).toBe('listing_release_allowlist_set_config');
+    expect(sdkPathToMcpToolName('rare.ipfs.pinFile')).toBe('ipfs_pin_file');
+    expect(sdkPathToMcpToolName('rare.ipfs.pinJson')).toBe('ipfs_pin_json');
     expect(sdkPathToMcpToolName('rare.swap.quoteBuyToken')).toBe('swap_quote_buy_token');
     expect(sdkPathToMcpToolName('rare.bridge.send')).toBe('bridge_send');
   });

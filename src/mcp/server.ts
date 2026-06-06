@@ -525,6 +525,17 @@ const toolHandlers: Record<string, ToolHandler> = {
     inputSchema: { ...optionalChain, contract: addressSchema },
     handler: ({ chain, contract }) => callWrite(chain, async (rare) => txResult(await rare.collection.lockBaseUri({ contract: contract as Address }))),
   },
+  ipfs_pin_file: {
+    inputSchema: { path: z.string(), filename: z.string().optional() },
+    handler: ({ path, filename }) => callRead(undefined, async (rare) => {
+      const buffer = await readFile(path as string);
+      return rare.ipfs.pinFile(new Uint8Array(buffer), (filename as string | undefined) ?? basename(path as string));
+    }),
+  },
+  ipfs_pin_json: {
+    inputSchema: { value: z.unknown(), filename: z.string().optional() },
+    handler: ({ value, filename }) => callRead(undefined, (rare) => rare.ipfs.pinJson(value, filename as string | undefined)),
+  },
   user_get: {
     inputSchema: { address: z.string() },
     handler: ({ address }) => callRead(undefined, (rare) => rare.user.get(address as string)),

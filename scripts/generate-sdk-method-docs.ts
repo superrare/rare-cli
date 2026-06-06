@@ -13,6 +13,7 @@ const CLIENT_NAMESPACE_NAMES = new Set([
   'collection',
   'currency',
   'import',
+  'ipfs',
   'liquidEdition',
   'listing',
   'media',

@@ -74,6 +74,16 @@ export type MultipartUploadPart = {
   PartNumber: number;
 };
 
+export type IpfsUploadPlan = {
+  fileSize: number;
+  filename: string;
+};
+
+export type IpfsJsonUploadPayload = {
+  buffer: Uint8Array;
+  filename: string;
+};
+
 export type MediaUploadPlan = {
   fileSize: number;
   filename: string;
@@ -120,12 +130,36 @@ export function parseDimensions(dimensions: string | undefined): { width: number
 }
 
 export function buildMediaUploadPlan(fileBuffer: Uint8Array, filename: string): MediaUploadPlan {
+  const upload = buildIpfsUploadPlan(fileBuffer, filename);
+  return {
+    ...upload,
+    mimeType: inferMimeType(upload.filename),
+  };
+}
+
+export function buildIpfsUploadPlan(fileBuffer: Uint8Array, filename: string): IpfsUploadPlan {
   const safeFilename = normalizeFilename(filename);
+  assertValidIpfsUpload(fileBuffer.byteLength, safeFilename);
   return {
     fileSize: fileBuffer.byteLength,
     filename: safeFilename,
-    mimeType: inferMimeType(safeFilename),
   };
+}
+
+export function buildIpfsJsonUploadPayload(value: unknown, filename = 'metadata.json'): IpfsJsonUploadPayload {
+  const body = stringifyJson(value);
+  if (body === undefined) {
+    throw new Error('IPFS JSON upload value must be JSON-serializable.');
+  }
+
+  return {
+    buffer: new TextEncoder().encode(body),
+    filename,
+  };
+}
+
+function stringifyJson(value: unknown): string | undefined {
+  return JSON.stringify(value);
 }
 
 export function buildGeneratedMediaEntry(
@@ -241,6 +275,15 @@ export function buildCollectionSearchQuery(params: CollectionSearchParams = {}):
 function assertPositiveInteger(value: number, fieldName: string): void {
   if (!Number.isInteger(value) || value <= 0) {
     throw new Error(`${fieldName} must be a positive integer`);
+  }
+}
+
+function assertValidIpfsUpload(fileSize: number, filename: string): void {
+  if (filename.length === 0) {
+    throw new Error('IPFS upload filename must not be empty.');
+  }
+  if (fileSize <= 0) {
+    throw new Error('IPFS upload file must not be empty.');
   }
 }
 
