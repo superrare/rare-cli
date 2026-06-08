@@ -205,8 +205,8 @@ export function releaseCommand(): Command {
       collectSplit,
     )
     .option('--yes', 'yes to all prompts and required approvals')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ReleaseConfigureOptions): Promise<void> => {
       const splits = finalizeSplits(opts.split);
       assertAddressOption(opts.contract, 'contract');
@@ -306,8 +306,8 @@ export function releaseCommand(): Command {
     .option('--proof <file>', 'allowlist proof JSON from rare listing release allowlist proof')
     .option('--recipient <address>', 'recipient when supported; RareMinter direct sales mint to the connected wallet')
     .option('--yes', 'yes to all prompts and required approvals')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ReleaseMintOptions): Promise<void> => {
       assertAddressOption(opts.contract, 'contract');
       if (opts.recipient !== undefined) {
@@ -472,8 +472,8 @@ export function releaseCommand(): Command {
     .requiredOption('--end-time <time>', 'allowlist end time as unix seconds or an ISO date')
     .option('--input <file>', 'allowlist proof artifact JSON; uses its root')
     .option('--root <bytes32>', 'allowlist Merkle root override')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: AllowlistSetOptions): Promise<void> => {
       assertAddressOption(opts.contract, 'contract');
       if (opts.input === undefined && opts.root === undefined) {
@@ -531,8 +531,8 @@ export function releaseCommand(): Command {
     .command('clear')
     .description('Clear the RareMinter allowlist config for a release')
     .requiredOption('--contract <address>', 'collection contract address')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ReleaseContractOptions): Promise<void> => {
       assertAddressOption(opts.contract, 'contract');
       const chain = getActiveChain(opts.chain, opts.chainId);
@@ -573,8 +573,8 @@ export function releaseCommand(): Command {
     .description('Set the RareMinter per-wallet mint limit for a release')
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--limit <number>', 'per-wallet mint limit; 0 disables the limit')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ReleaseLimitOptions): Promise<void> => {
       assertAddressOption(opts.contract, 'contract');
       const limit = opts.limit;
@@ -616,8 +616,8 @@ export function releaseCommand(): Command {
     .description('Set the RareMinter per-wallet transaction limit for a release')
     .requiredOption('--contract <address>', 'collection contract address')
     .requiredOption('--limit <number>', 'per-wallet mint transaction limit; 0 disables the limit')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ReleaseLimitOptions): Promise<void> => {
       assertAddressOption(opts.contract, 'contract');
       const limit = opts.limit;
@@ -661,8 +661,8 @@ export function releaseCommand(): Command {
     .description('Get RareMinter direct sale release details (read-only)')
     .requiredOption('--contract <address>', 'collection contract address')
     .option('--account <address>', 'account address to include mint and transaction usage')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ReleaseStatusOptions): Promise<void> => {
       assertAddressOption(opts.contract, 'contract');
       if (opts.account !== undefined) {
