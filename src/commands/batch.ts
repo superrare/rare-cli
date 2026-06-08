@@ -1102,8 +1102,8 @@ function addBatchListingCommands(cmd: Command): void {
       collectSplit,
     )
     .option('--yes', 'yes to all prompts and required approvals')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: BatchListingCreateOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
@@ -1172,8 +1172,8 @@ function addBatchListingCommands(cmd: Command): void {
     .option('--root <hex>', '0x-prefixed bytes32 root override')
     .option('--contract <address>', 'NFT contract address; used with --token-id when rare-api resolves the root')
     .option('--token-id <id>', 'token ID; used with --contract when rare-api resolves the root')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: BatchListingRootOptions): Promise<void> => {
       const artifact = opts.input === undefined ? undefined : await loadMerkleRootArtifact(opts.input);
       const root = opts.root === undefined ? undefined : parseBytes32(opts.root, '--root');
@@ -1215,8 +1215,8 @@ function addBatchListingCommands(cmd: Command): void {
     .requiredOption('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address')
     .requiredOption('--price <amount>', 'purchase price in ETH (or token units)')
     .option('--yes', 'yes to all prompts and required approvals')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: BatchListingBuyOptions): Promise<void> => {
       const proofArtifact = opts.proof === undefined ? undefined : await loadMerkleProofArtifact(opts.proof);
       const contract = proofArtifact?.contract ?? parseOptionalAddress(opts.contract, '--contract');
@@ -1295,8 +1295,8 @@ function addBatchListingCommands(cmd: Command): void {
     .option('--token-id <id>', 'token ID; used with --contract when rare-api resolves the root')
     .option('--allowlist-root <hex>', '0x-prefixed bytes32 allowlist root override')
     .option('--end-time <unix>', 'allowlist expiry (defaults to root artifact allowList.endTimestamp)')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: BatchListingSetAllowListOptions): Promise<void> => {
       const artifact = opts.input === undefined ? undefined : await loadMerkleRootArtifact(opts.input);
       const root = opts.root === undefined ? undefined : parseBytes32(opts.root, '--root');
@@ -1348,8 +1348,8 @@ function addBatchListingCommands(cmd: Command): void {
     .option('--contract <address>', 'NFT contract (with --token-id and --proof, populates tokenInRoot)')
     .option('--token-id <id>', 'token ID')
     .option('--proof <path>', 'path to a proof artifact JSON (its proof[] is used)')
-    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
-    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: BatchListingStatusOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);

@@ -100,21 +100,11 @@ describe('chain and currency helpers', () => {
     expect(() => requireContractAddress('base', 'sovereignFactory')).toThrow(
       'RARE Protocol sovereignFactory contract is not configured on "base".',
     );
-    expect(() => requireContractAddress('base', 'lazySovereignFactory')).toThrow(
-      'RARE Protocol lazySovereignFactory contract is not configured on "base".',
-    );
-    expect(() => requireContractAddress('base', 'rareMinter')).toThrow(
-      'RARE Protocol rareMinter contract is not configured on "base".',
-    );
-    expect(() => requireContractAddress('base', 'batchOfferCreator')).toThrow(
-      'RARE Protocol batchOfferCreator contract is not configured on "base".',
-    );
-    expect(() => requireContractAddress('base', 'batchAuctionHouse')).toThrow(
-      'RARE Protocol batchAuctionHouse contract is not configured on "base".',
-    );
-    expect(() => requireContractAddress('base-sepolia', 'batchAuctionHouse')).toThrow(
-      'RARE Protocol batchAuctionHouse contract is not configured on "base-sepolia".',
-    );
+    expect(requireContractAddress('base', 'lazySovereignFactory')).toBe(getAddress('0x61E161062ba4EC0556Df23E586bE8E13B435F7F1'));
+    expect(requireContractAddress('base', 'rareMinter')).toBe(getAddress('0xFb2bd8A5543c73D38BabA504520A48ff7ed6CF57'));
+    expect(requireContractAddress('base', 'batchOfferCreator')).toBe(getAddress('0xe52976E85393C344F01A3dDFbFDc2F68854427Cc'));
+    expect(requireContractAddress('base', 'batchAuctionHouse')).toBe(getAddress('0xc033BBef0Af25Db7523FCe16BaB1C39df0bF2Ae3'));
+    expect(requireContractAddress('base-sepolia', 'batchAuctionHouse')).toBe(getAddress('0x2982275aCd95B97cCe02fdd8552E31D0a916C03c'));
     expect(getContractAddresses('base').factory).toBe(getAddress('0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd'));
     expect(getContractAddresses('base-sepolia').factory).toBe(getAddress('0x2b181ae0f1aea6fed75591b04991b1a3f9868d51'));
   });

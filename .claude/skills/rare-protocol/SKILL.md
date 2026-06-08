@@ -50,7 +50,7 @@ Supported chains:
 `mainnet`, `sepolia`, `base`, `base-sepolia`, `arbitrum`, `arbitrum-sepolia`, `optimism`, `optimism-sepolia`, `zora`, `zora-sepolia`
 
 RARE protocol contracts used by `deploy` and `auction` are currently deployed on:
-`mainnet`, `sepolia`
+`mainnet`, `sepolia`, `base`, `base-sepolia`
 
 ## Command Reference
 

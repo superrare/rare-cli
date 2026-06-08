@@ -173,7 +173,7 @@ describeLive('Rare SDK client live integration', () => {
     ).rejects.toThrow('No owner available for import.');
   });
 
-  it('rejects lazy batch mint deploys on chains without a configured lazy factory before requiring a wallet', async () => {
+  it('requires a wallet for lazy batch mint deploys on chains with a configured lazy factory', async () => {
     const rare = createRareClient({
       // @ts-expect-error viem client transaction union differs between test and SDK entry imports.
       publicClient: createPublicClient({
@@ -183,8 +183,8 @@ describeLive('Rare SDK client live integration', () => {
     });
 
     await expect(
-      rare.collection.deploy.lazyBatchMint({ name: 'Unsupported Lazy Collection', symbol: 'ULC' }),
-    ).rejects.toThrow('Lazy batch mint factory is not deployed on this chain.');
+      rare.collection.deploy.lazyBatchMint({ name: 'Lazy Collection', symbol: 'LC' }),
+    ).rejects.toThrow('walletClient is required for write operations.');
   });
 });
 
