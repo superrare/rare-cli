@@ -3410,7 +3410,7 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('rejects Lazy ERC-721 collection deployment on chains without a configured factory before wallet setup', async () => {
+  it('rejects Lazy ERC-721 collection deployment with an invalid max-tokens before wallet setup', async () => {
     await withTempHome(async (home) => {
       const result = await runCli([
         'collection',
@@ -3419,14 +3419,14 @@ describe('built CLI deterministic behavior', () => {
         'Test',
         'TST',
         '--max-tokens',
-        '10',
+        '0',
         '--chain',
         'base',
       ], { home });
 
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
-      expect(result.stderr).toContain('RARE Protocol lazySovereignFactory contract is not configured on "base".');
+      expect(result.stderr).toContain('maxTokens must be greater than 0.');
     });
   });
 });

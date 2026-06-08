@@ -116,7 +116,7 @@ export type ReleaseMintTokenRange = {
 
 export function requireRareMinterAddress(address: Address | undefined): Address {
   if (!address) {
-    throw new Error('RareMinter is not configured for this chain. Supported RareMinter chains: mainnet, sepolia.');
+    throw new Error('RareMinter is not configured for this chain. Supported RareMinter chains: mainnet, sepolia, base, base-sepolia.');
   }
   return address;
 }
