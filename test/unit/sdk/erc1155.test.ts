@@ -1,0 +1,120 @@
+/* eslint-disable no-restricted-syntax */
+import { describe, expect, it, vi } from 'vitest';
+import type { Address } from 'viem';
+import { ETH_ADDRESS, type ContractAddresses } from '../../../src/contracts/addresses.js';
+import { createErc1155ListingNamespace } from '../../../src/sdk/erc1155.js';
+
+const account = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as Address;
+const contract = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as Address;
+const seller = '0xcccccccccccccccccccccccccccccccccccccccc' as Address;
+const erc20 = '0xdddddddddddddddddddddddddddddddddddddddd' as Address;
+const marketplace = '0x1111111111111111111111111111111111111111' as Address;
+const approvalManager = '0x2222222222222222222222222222222222222222' as Address;
+const marketplaceSettings = '0x3333333333333333333333333333333333333333' as Address;
+const hex32 = (byte: string): `0x${string}` => `0x${byte.repeat(64)}`;
+
+const addresses: ContractAddresses = {
+  factory: '0x4444444444444444444444444444444444444444',
+  auction: '0x5555555555555555555555555555555555555555',
+  erc1155Marketplace: marketplace,
+  erc1155ContractFactory: '0x6666666666666666666666666666666666666666',
+  erc1155ApprovalManager: approvalManager,
+  marketplaceSettings,
+};
+
+describe('ERC1155 listing namespace preflight', () => {
+  it('rejects insufficient seller balance before writing NFT approval', async () => {
+    const writeContract = vi.fn(async () => hex32('1'));
+    const namespace = createErc1155ListingNamespace(
+      {
+        async readContract(params: { functionName: string }) {
+          if (params.functionName === 'balanceOf') return 1n;
+          if (params.functionName === 'isApprovedForAll') return false;
+          throw new Error(`Unexpected readContract: ${params.functionName}`);
+        },
+      } as never,
+      {
+        publicClient: {} as never,
+        account,
+        walletClient: { writeContract } as never,
+      },
+      'sepolia',
+      addresses,
+    );
+
+    await expect(namespace.create({
+      contract,
+      tokenId: '1',
+      quantity: '2',
+      price: 1n,
+      currency: ETH_ADDRESS,
+    })).rejects.toThrow(`but ${account} owns 1.`);
+    expect(writeContract).not.toHaveBeenCalled();
+  });
+
+  it('rejects stale buy params before writing ERC20 approval', async () => {
+    const writeContract = vi.fn(async () => hex32('1'));
+    const namespace = createErc1155ListingNamespace(
+      {
+        async readContract(params: { functionName: string }) {
+          if (params.functionName === 'getSalePrice') {
+            return [erc20, 2n, 10n, 0n, [seller], [100]];
+          }
+          throw new Error(`Unexpected readContract: ${params.functionName}`);
+        },
+      } as never,
+      {
+        publicClient: {} as never,
+        account,
+        walletClient: { writeContract } as never,
+      },
+      'sepolia',
+      addresses,
+    );
+
+    await expect(namespace.buy({
+      contract,
+      seller,
+      tokenId: '1',
+      quantity: '1',
+      price: 1n,
+      currency: erc20,
+    })).rejects.toThrow('ERC1155 listing price changed during preflight.');
+    expect(writeContract).not.toHaveBeenCalled();
+  });
+
+  it('rejects insufficient ERC20 balance before writing ERC20 approval', async () => {
+    const writeContract = vi.fn(async () => hex32('1'));
+    const namespace = createErc1155ListingNamespace(
+      {
+        async readContract(params: { functionName: string; args?: unknown[] }) {
+          if (params.functionName === 'getSalePrice') {
+            return [erc20, 1n, 10n, 0n, [seller], [100]];
+          }
+          if (params.functionName === 'calculateMarketplaceFee') return 0n;
+          if (params.functionName === 'isApprovedForAll') return true;
+          if (params.functionName === 'balanceOf' && params.args?.length === 2) return 10n;
+          if (params.functionName === 'balanceOf' && params.args?.length === 1) return 0n;
+          throw new Error(`Unexpected readContract: ${params.functionName}`);
+        },
+      } as never,
+      {
+        publicClient: {} as never,
+        account,
+        walletClient: { writeContract } as never,
+      },
+      'sepolia',
+      addresses,
+    );
+
+    await expect(namespace.buy({
+      contract,
+      seller,
+      tokenId: '1',
+      quantity: '1',
+      price: 1n,
+      currency: erc20,
+    })).rejects.toThrow(`but ${account} owns 0.`);
+    expect(writeContract).not.toHaveBeenCalled();
+  });
+});

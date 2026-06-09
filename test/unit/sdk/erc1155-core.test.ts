@@ -307,6 +307,25 @@ describe('ERC1155 core planning', () => {
       endTimestamp: 1_800_000_100n,
     });
     expect(() => planErc1155ReleaseAllowlistConfig({ contract, tokenId: '1', endTime: '1800000100' })).toThrow('Pass root or artifact.');
+    expect(() => planErc1155ReleaseAllowlistConfig({
+      contract,
+      tokenId: '1',
+      endTime: '1800000100',
+      root: '0x1234',
+    })).toThrow('root must be a bytes32 hex string.');
+    expect(() => planErc1155ReleaseAllowlistConfig({
+      contract,
+      tokenId: '1',
+      endTime: '1800000100',
+      artifact: {
+        kind: 'rare-release-allowlist-v1',
+        version: 1,
+        leafEncoding: 'keccak256(address)',
+        tree: 'sorted-addresses-sort-pairs',
+        root: '0x1234',
+        wallets: [],
+      },
+    })).toThrow('root must be a bytes32 hex string.');
   });
 
   it('plans release mint, clear allowlist, and limit configs', () => {
@@ -325,6 +344,12 @@ describe('ERC1155 core planning', () => {
       price: 8n,
       proof: [`0x${'22'.repeat(32)}`],
     });
+    expect(() => planErc1155ReleaseMint({
+      contract,
+      tokenId: '2',
+      quantity: '3',
+      proof: ['0x1234'],
+    })).toThrow('proof[0] must be a bytes32 hex string.');
     expect(planErc1155ReleaseClearAllowlistConfig({ contract, tokenId: '2' })).toEqual({
       contract,
       tokenId: 2n,

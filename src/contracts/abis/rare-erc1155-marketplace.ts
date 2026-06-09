@@ -32,6 +32,15 @@ export const rareErc1155MarketplaceAbi = [
   {
     anonymous: false,
     inputs: [
+      { indexed: true, internalType: 'address', name: 'contractAddress', type: 'address' },
+      { indexed: true, internalType: 'uint256', name: 'tokenId', type: 'uint256' },
+    ],
+    name: 'MintDirectSaleCancelled',
+    type: 'event',
+  },
+  {
+    anonymous: false,
+    inputs: [
       { indexed: true, internalType: 'uint256', name: 'itemIndex', type: 'uint256' },
       { indexed: true, internalType: 'uint8', name: 'itemKind', type: 'uint8' },
       { indexed: true, internalType: 'address', name: 'contractAddress', type: 'address' },
@@ -80,6 +89,16 @@ export const rareErc1155MarketplaceAbi = [
       { internalType: 'uint8[]', name: '_splitRatios', type: 'uint8[]' },
     ],
     name: 'prepareMintDirectSales',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      { internalType: 'address', name: '_contractAddress', type: 'address' },
+      { internalType: 'uint256[]', name: '_tokenIds', type: 'uint256[]' },
+    ],
+    name: 'cancelMintDirectSales',
     outputs: [],
     stateMutability: 'nonpayable',
     type: 'function',

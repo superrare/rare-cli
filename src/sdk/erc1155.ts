@@ -5,6 +5,7 @@ import {
   isHex,
   parseEventLogs,
   zeroAddress,
+  erc20Abi,
   type Address,
   type Hash,
   type Hex,
@@ -66,6 +67,8 @@ import {
   totalPrice,
   validateErc1155CheckoutLogs,
   type Erc1155CheckoutProcessedItemInput,
+  type Erc1155ListingBuyPlan,
+  type Erc1155ListingCreatePlan,
 } from './erc1155-core.js';
 import {
   buildReleaseAllowlistArtifactFromInput,
@@ -328,6 +331,14 @@ export function createErc1155ListingNamespace(
       const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const price = await toCurrencyAmount(publicClient, chain, currency, params.price, 'price');
       const plan = planErc1155ListingCreate({ ...params, currency, price }, accountAddress);
+      await preflightErc1155ListingCreate({
+        publicClient,
+        marketplace: erc1155.erc1155Marketplace,
+        approvalManager: erc1155.erc1155ApprovalManager,
+        account,
+        accountAddress,
+        plan,
+      });
       const approvalTxHash = await approveNftContractIfNeeded({
         publicClient,
         walletClient,
@@ -388,6 +399,15 @@ export function createErc1155ListingNamespace(
       const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const price = await toCurrencyAmount(publicClient, chain, currency, params.price, 'price');
       const plan = planErc1155ListingBuy({ ...params, currency, price });
+      const requiredAmount = await preflightErc1155ListingBuy({
+        publicClient,
+        marketplace: erc1155.erc1155Marketplace,
+        approvalManager: erc1155.erc1155ApprovalManager,
+        marketplaceSettings: erc1155.marketplaceSettings,
+        account,
+        accountAddress,
+        plan,
+      });
       const payment = await prepareMarketplacePayment({
         publicClient,
         walletClient,
@@ -398,6 +418,12 @@ export function createErc1155ListingNamespace(
         amount: plan.totalPrice,
         autoApprove: params.autoApprove,
       });
+      if (payment.requiredAmount !== requiredAmount) {
+        throw new Error(
+          `ERC1155 listing buy payment changed during preflight. Expected ${requiredAmount.toString()} raw units, ` +
+            `read ${payment.requiredAmount.toString()} raw units.`,
+        );
+      }
       const { txHash, receipt } = await runWithApprovalSideEffectAlert({
         operation: 'erc1155 listing buy',
         approvals: [{
@@ -1112,6 +1138,165 @@ async function waitForSuccessfulReceipt(
     throw new Error(`${operation} transaction ${hash} was mined with status "${receipt.status}".`);
   }
   return receipt;
+}
+
+async function preflightErc1155ListingCreate(opts: {
+  publicClient: PublicClient;
+  marketplace: Address;
+  approvalManager: Address;
+  account: Address | WalletAccount;
+  accountAddress: Address;
+  plan: Erc1155ListingCreatePlan;
+}): Promise<void> {
+  const [balance, approved] = await Promise.all([
+    opts.publicClient.readContract({
+      address: opts.plan.contract,
+      abi: rareErc1155Abi,
+      functionName: 'balanceOf',
+      args: [opts.accountAddress, opts.plan.tokenId],
+    }),
+    opts.publicClient.readContract({
+      address: opts.plan.contract,
+      abi: rareErc1155Abi,
+      functionName: 'isApprovedForAll',
+      args: [opts.accountAddress, opts.approvalManager],
+    }),
+  ]);
+  if (balance < opts.plan.quantity) {
+    throw new Error(
+      `ERC1155 listing create requires ${opts.plan.quantity.toString()} units of token ` +
+        `${opts.plan.contract}/${opts.plan.tokenId.toString()}, but ${opts.accountAddress} owns ${balance.toString()}.`,
+    );
+  }
+
+  if (!approved) {
+    return;
+  }
+
+  await opts.publicClient.simulateContract({
+    address: opts.marketplace,
+    abi: rareErc1155MarketplaceAbi,
+    functionName: 'setSalePrices',
+    args: [
+      opts.plan.contract,
+      opts.plan.currency,
+      [{
+        tokenId: opts.plan.tokenId,
+        price: opts.plan.price,
+        quantity: opts.plan.quantity,
+        expirationTime: opts.plan.expirationTime,
+      }],
+      opts.plan.splitAddresses,
+      opts.plan.splitRatios,
+    ],
+    account: opts.account,
+  });
+}
+
+async function preflightErc1155ListingBuy(opts: {
+  publicClient: PublicClient;
+  marketplace: Address;
+  approvalManager: Address;
+  marketplaceSettings: Address;
+  account: Address | WalletAccount;
+  accountAddress: Address;
+  plan: Erc1155ListingBuyPlan;
+}): Promise<bigint> {
+  const rawSale = await opts.publicClient.readContract({
+    address: opts.marketplace,
+    abi: rareErc1155MarketplaceAbi,
+    functionName: 'getSalePrice',
+    args: [opts.plan.contract, opts.plan.tokenId, opts.plan.seller],
+  });
+  const [currencyAddress, price, quantity, expirationTime] = normalizeSalePrice(rawSale);
+  if (price === 0n || quantity === 0n) {
+    throw new Error(
+      `ERC1155 listing is not active for ${opts.plan.contract}/${opts.plan.tokenId.toString()} from seller ${opts.plan.seller}.`,
+    );
+  }
+  if (expirationTime > 0n && nowSeconds() > expirationTime) {
+    throw new Error(
+      `ERC1155 listing for ${opts.plan.contract}/${opts.plan.tokenId.toString()} from seller ${opts.plan.seller} expired at ` +
+        `${expirationTime.toString()}.`,
+    );
+  }
+  if (!isAddressEqual(currencyAddress, opts.plan.currency)) {
+    throw new Error(
+      `ERC1155 listing currency changed during preflight. Expected ${opts.plan.currency}, read ${currencyAddress}.`,
+    );
+  }
+  if (price !== opts.plan.price) {
+    throw new Error(
+      `ERC1155 listing price changed during preflight. Expected ${opts.plan.price.toString()} raw units, read ${price.toString()}.`,
+    );
+  }
+  if (quantity < opts.plan.quantity) {
+    throw new Error(
+      `ERC1155 listing quantity is below the requested buy quantity. Requested ${opts.plan.quantity.toString()}, ` +
+        `available ${quantity.toString()}.`,
+    );
+  }
+
+  const requiredAmount = await calculateMarketplacePaymentAmountFromSettings(
+    opts.publicClient,
+    opts.marketplaceSettings,
+    opts.plan.totalPrice,
+  );
+  const [sellerBalance, sellerApproved] = await Promise.all([
+    opts.publicClient.readContract({
+      address: opts.plan.contract,
+      abi: rareErc1155Abi,
+      functionName: 'balanceOf',
+      args: [opts.plan.seller, opts.plan.tokenId],
+    }),
+    opts.publicClient.readContract({
+      address: opts.plan.contract,
+      abi: rareErc1155Abi,
+      functionName: 'isApprovedForAll',
+      args: [opts.plan.seller, opts.approvalManager],
+    }),
+  ]);
+  if (sellerBalance < opts.plan.quantity) {
+    throw new Error(
+      `ERC1155 listing seller balance is below the requested buy quantity. Requested ${opts.plan.quantity.toString()}, ` +
+        `seller owns ${sellerBalance.toString()}.`,
+    );
+  }
+  if (!sellerApproved) {
+    throw new Error(
+      `ERC1155 listing seller ${opts.plan.seller} has not approved operator ${opts.approvalManager} for ${opts.plan.contract}.`,
+    );
+  }
+
+  if (isAddressEqual(opts.plan.currency, ETH_ADDRESS)) {
+    await opts.publicClient.simulateContract({
+      address: opts.marketplace,
+      abi: rareErc1155MarketplaceAbi,
+      functionName: 'buyBatch',
+      args: [
+        opts.plan.contract,
+        opts.plan.seller,
+        opts.plan.currency,
+        [{ tokenId: opts.plan.tokenId, price: opts.plan.price, quantity: opts.plan.quantity }],
+      ],
+      account: opts.account,
+      value: requiredAmount,
+    });
+  } else {
+    const buyerBalance = await opts.publicClient.readContract({
+      address: opts.plan.currency,
+      abi: erc20Abi,
+      functionName: 'balanceOf',
+      args: [opts.accountAddress],
+    });
+    if (buyerBalance < requiredAmount) {
+      throw new Error(
+        `ERC1155 listing buy requires ${requiredAmount.toString()} raw payment units, ` +
+          `but ${opts.accountAddress} owns ${buyerBalance.toString()}.`,
+      );
+    }
+  }
+  return requiredAmount;
 }
 
 async function prepareMarketplacePayment(opts: {

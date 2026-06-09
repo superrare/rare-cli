@@ -346,13 +346,15 @@ export function planErc1155ReleaseConfigure(
 export function planErc1155ReleaseMint(
   params: Omit<Erc1155ReleaseMintParams, 'currency' | 'price'> & { currency?: Address; price?: bigint },
 ): Erc1155ReleaseMintPlan {
+  const proof = [...(params.proof ?? [])];
+  assertBytes32Proof(proof, 'proof');
   return {
     contract: params.contract,
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     quantity: toPositiveInteger(params.quantity, 'quantity'),
     currency: params.currency,
     price: params.price,
-    proof: [...(params.proof ?? [])],
+    proof,
   };
 }
 
@@ -453,6 +455,7 @@ export function planErc1155ReleaseAllowlistConfig(params: Erc1155ReleaseSetAllow
   if (root === undefined) {
     throw new Error('Pass root or artifact.');
   }
+  assertBytes32(root, 'root');
   return {
     contract: params.contract,
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
@@ -996,8 +999,12 @@ function checkoutFailureStageName(stage: number): Erc1155CheckoutFilledItem['fai
 
 function assertBytes32Proof(proof: readonly Hex[], label: string): void {
   proof.forEach((entry, index) => {
-    if (!isHex(entry) || entry.length !== 66) {
-      throw new Error(`${label}[${index}] must be a bytes32 hex string.`);
-    }
+    assertBytes32(entry, `${label}[${index}]`);
   });
+}
+
+function assertBytes32(value: Hex, label: string): void {
+  if (!isHex(value) || value.length !== 66) {
+    throw new Error(`${label} must be a bytes32 hex string.`);
+  }
 }
