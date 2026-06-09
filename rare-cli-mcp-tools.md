@@ -51,7 +51,7 @@ amountIn: string | number
 currency?: string // currency alias or ERC20 address
 ```
 
-Tools that wrap SDK artifact helpers accept structured artifacts directly. Only `media_upload` reads a local file path.
+Tools that wrap SDK artifact helpers accept structured artifacts directly. `ipfs_pin_file` and `media_upload` read local file paths.
 
 ## Read-only tools
 
@@ -258,6 +258,13 @@ collection_set_token_royalty_receiver
 collection_update_base_uri
 collection_update_token_uri
 collection_lock_base_uri
+```
+
+IPFS:
+
+```text
+ipfs_pin_file
+ipfs_pin_json
 ```
 
 Media and import:

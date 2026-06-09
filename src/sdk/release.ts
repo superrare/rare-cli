@@ -51,6 +51,13 @@ import {
 
 export type * from './types/release.js';
 
+const APPROVAL_CONFIRMATION_ATTEMPTS = 5;
+const APPROVAL_CONFIRMATION_DELAY_MS = 1_000;
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const releaseCollectionAbi = [
   {
     inputs: [
@@ -201,22 +208,35 @@ async function approveReleaseMinterIfNeeded(opts: {
     chain: undefined,
   });
 
-  await opts.publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
+  const receipt = await opts.publicClient.waitForTransactionReceipt({ hash: approvalTxHash });
 
-  const confirmed = await readReleaseMinterApproval({
-    publicClient: opts.publicClient,
-    contract: opts.contract,
-    minter: opts.minter,
-  });
-
-  if (confirmed !== true) {
+  if (receipt.status === 'reverted') {
     throw new Error(
-      `Lazy Sovereign minter approval verification failed for ${opts.minter}. ` +
-        `The approval tx was mined but the collection still does not report RareMinter as approved.`,
+      `Lazy Sovereign minter approval for ${opts.minter} reverted (tx ${approvalTxHash}). ` +
+        `Ensure the connected wallet owns the collection and can set minter approvals.`,
     );
   }
 
-  return approvalTxHash;
+  // RPC nodes can lag behind the mined receipt, so retry the read-back a few
+  // times before treating an unconfirmed approval as a failure.
+  for (let attempt = 0; attempt < APPROVAL_CONFIRMATION_ATTEMPTS; attempt += 1) {
+    const confirmed = await readReleaseMinterApproval({
+      publicClient: opts.publicClient,
+      contract: opts.contract,
+      minter: opts.minter,
+    });
+    if (confirmed === true) {
+      return approvalTxHash;
+    }
+    if (attempt < APPROVAL_CONFIRMATION_ATTEMPTS - 1) {
+      await sleep(APPROVAL_CONFIRMATION_DELAY_MS);
+    }
+  }
+
+  throw new Error(
+    `Lazy Sovereign minter approval verification failed for ${opts.minter}. ` +
+      `The approval tx was mined but the collection still does not report RareMinter as approved.`,
+  );
 }
 
 async function optionalRead<T>(read: () => Promise<T>): Promise<T | null> {

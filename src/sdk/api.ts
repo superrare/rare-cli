@@ -5,11 +5,14 @@ import {
   buildCollectionSearchQuery,
   buildGeneratedMediaEntry,
   buildImportErc721Body,
+  buildIpfsJsonUploadPayload,
+  buildIpfsUploadPlan,
   buildMediaUploadPlan,
   buildNftSearchQuery,
   buildPinMetadataBody,
   type CollectionSearchParams,
   type ImportErc721Params,
+  type IpfsUploadPlan,
   type ImportErc721RequestParams,
   type MultipartUploadPart,
   type NftAttribute,
@@ -24,6 +27,8 @@ export type RareApiOptions = {
 };
 
 export type RareApi = {
+  pinFile: (buffer: Uint8Array, filename: string) => Promise<IpfsUploadResult>;
+  pinJson: (value: unknown, filename?: string) => Promise<IpfsUploadResult>;
   uploadMedia: (buffer: Uint8Array, filename: string) => Promise<NftMediaEntry>;
   pinMetadata: (opts: PinMetadataParams) => Promise<string>;
   importErc721: (opts: ImportErc721RequestParams) => Promise<void>;
@@ -45,6 +50,7 @@ export type Collection = components['schemas']['Collection'];
 export type NftEvent = components['schemas']['NftEvent'];
 export type UserProfile = components['schemas']['UserProfile'];
 export type Pagination = components['schemas']['Pagination'];
+export type IpfsUploadResult = components['schemas']['IpfsUploadResponse'];
 export type {
   CollectionSearchParams,
   ImportErc721Params,
@@ -105,6 +111,8 @@ export function createRareApi(options: RareApiOptions = {}): RareApi {
   const fetchImpl = options.fetch ?? globalThis.fetch;
 
   return {
+    pinFile: async (buffer, filename) => pinFileWithClient(client, fetchImpl, buffer, filename),
+    pinJson: async (value, filename) => pinJsonWithClient(client, fetchImpl, value, filename),
     uploadMedia: async (buffer, filename) => uploadMediaWithClient(client, fetchImpl, buffer, filename),
     pinMetadata: async (opts) => pinMetadataWithClient(client, opts),
     importErc721: async (opts) => importErc721WithClient(client, opts),
@@ -128,6 +136,33 @@ export async function uploadMedia(buffer: Uint8Array, filename: string): Promise
   return createDefaultRareApi().uploadMedia(buffer, filename);
 }
 
+export async function pinFile(buffer: Uint8Array, filename: string): Promise<IpfsUploadResult> {
+  return createDefaultRareApi().pinFile(buffer, filename);
+}
+
+export async function pinJson(value: unknown, filename?: string): Promise<IpfsUploadResult> {
+  return createDefaultRareApi().pinJson(value, filename);
+}
+
+async function pinFileWithClient(
+  client: ApiClient,
+  fetchImpl: typeof globalThis.fetch,
+  buffer: Uint8Array,
+  filename: string,
+): Promise<IpfsUploadResult> {
+  return completeIpfsUploadWithClient(client, fetchImpl, buffer, buildIpfsUploadPlan(buffer, filename));
+}
+
+async function pinJsonWithClient(
+  client: ApiClient,
+  fetchImpl: typeof globalThis.fetch,
+  value: unknown,
+  filename?: string,
+): Promise<IpfsUploadResult> {
+  const payload = buildIpfsJsonUploadPayload(value, filename);
+  return completeIpfsUploadWithClient(client, fetchImpl, payload.buffer, buildIpfsUploadPlan(payload.buffer, payload.filename));
+}
+
 async function uploadMediaWithClient(
   client: ApiClient,
   fetchImpl: typeof globalThis.fetch,
@@ -135,11 +170,26 @@ async function uploadMediaWithClient(
   filename: string,
 ): Promise<NftMediaEntry> {
   const upload = buildMediaUploadPlan(buffer, filename);
+  const complete = await completeIpfsUploadWithClient(client, fetchImpl, buffer, upload);
 
+  const { data: generated } = await client.POST('/v1/nfts/metadata/media/generate', {
+    body: { uri: complete.ipfsUrl, mimeType: upload.mimeType },
+  });
+  if (!generated) throw new Error('Failed to generate media metadata');
+
+  return buildGeneratedMediaEntry(generated.media, upload.fileSize);
+}
+
+async function completeIpfsUploadWithClient(
+  client: ApiClient,
+  fetchImpl: typeof globalThis.fetch,
+  buffer: Uint8Array,
+  upload: IpfsUploadPlan,
+): Promise<IpfsUploadResult> {
   const { data: init } = await client.POST('/v1/nfts/metadata/media/uploads', {
     body: { fileSize: upload.fileSize, filename: upload.filename },
   });
-  if (!init) throw new Error('Failed to initiate media upload');
+  if (!init) throw new Error('Failed to initiate IPFS upload');
 
   const parts = await uploadParts(buffer, init.partSize, init.presignedUrls, fetchImpl);
 
@@ -151,14 +201,9 @@ async function uploadMediaWithClient(
       parts,
     },
   });
-  if (!complete) throw new Error('Failed to complete media upload');
+  if (!complete) throw new Error('Failed to complete IPFS upload');
 
-  const { data: generated } = await client.POST('/v1/nfts/metadata/media/generate', {
-    body: { uri: complete.ipfsUrl, mimeType: upload.mimeType },
-  });
-  if (!generated) throw new Error('Failed to generate media metadata');
-
-  return buildGeneratedMediaEntry(generated.media, upload.fileSize);
+  return complete;
 }
 
 export async function pinMetadata(opts: PinMetadataParams): Promise<string> {

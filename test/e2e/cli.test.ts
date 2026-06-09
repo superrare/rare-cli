@@ -70,6 +70,156 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('pins arbitrary files to IPFS through the CLI', async () => {
+    await withTempHome(async (home) => {
+      await withRareApiFixture(async ({ baseUrl, requests }) => {
+        const filePath = join(home, 'metadata.json');
+        await writeFile(filePath, JSON.stringify({ name: 'Generic metadata' }));
+
+        const result = await runCli([
+          '--json',
+          'ipfs',
+          'pin-file',
+          '--file',
+          filePath,
+        ], {
+          home,
+          env: { RARE_API_BASE_URL: baseUrl },
+        });
+
+        expect(result.code).toBe(0);
+        expect(parseJsonStdout(result)).toEqual({
+          cid: 'bafymedia',
+          ipfsUrl: 'ipfs://bafymedia',
+          gatewayUrl: 'https://fixture.example/ipfs/bafymedia',
+        });
+        expect(requests.map((request) => request.pathname)).toEqual([
+          '/v1/nfts/metadata/media/uploads',
+          '/upload-part/1',
+          '/v1/nfts/metadata/media/uploads/complete',
+        ]);
+      });
+    });
+  });
+
+  it('prints only the IPFS URI when pinning a file with --uri-only', async () => {
+    await withTempHome(async (home) => {
+      await withRareApiFixture(async ({ baseUrl }) => {
+        const filePath = join(home, 'token-uri.json');
+        await writeFile(filePath, JSON.stringify({ name: 'Standalone token URI' }));
+
+        const result = await runCli([
+          'ipfs',
+          'pin-file',
+          '--file',
+          filePath,
+          '--uri-only',
+        ], {
+          home,
+          env: { RARE_API_BASE_URL: baseUrl },
+        });
+
+        expect(result.code).toBe(0);
+        expect(result.stdout.trim()).toBe('ipfs://bafymedia');
+        expect(result.stderr).toBe('');
+      });
+    });
+  });
+
+  it('pins JSON data to IPFS through the CLI', async () => {
+    await withTempHome(async (home) => {
+      await withRareApiFixture(async ({ baseUrl, requests }) => {
+        const result = await runCli([
+          '--json',
+          'ipfs',
+          'pin-json',
+          '--data',
+          '{"name":"Inline token URI"}',
+        ], {
+          home,
+          env: { RARE_API_BASE_URL: baseUrl },
+        });
+
+        expect(result.code).toBe(0);
+        expect(parseJsonStdout(result)).toEqual({
+          cid: 'bafymedia',
+          ipfsUrl: 'ipfs://bafymedia',
+          gatewayUrl: 'https://fixture.example/ipfs/bafymedia',
+        });
+        expect(requests.map((request) => request.pathname)).toEqual([
+          '/v1/nfts/metadata/media/uploads',
+          '/upload-part/1',
+          '/v1/nfts/metadata/media/uploads/complete',
+        ]);
+      });
+    });
+  });
+
+  it('prints only the IPFS URI when pinning JSON with --uri-only', async () => {
+    await withTempHome(async (home) => {
+      await withRareApiFixture(async ({ baseUrl }) => {
+        const result = await runCli([
+          'ipfs',
+          'pin-json',
+          '--data',
+          '{"name":"Inline token URI"}',
+          '--uri-only',
+        ], {
+          home,
+          env: { RARE_API_BASE_URL: baseUrl },
+        });
+
+        expect(result.code).toBe(0);
+        expect(result.stdout.trim()).toBe('ipfs://bafymedia');
+        expect(result.stderr).toBe('');
+      });
+    });
+  });
+
+  it('pins JSON from stdin through the CLI', async () => {
+    await withTempHome(async (home) => {
+      await withRareApiFixture(async ({ baseUrl }) => {
+        const result = await runCli([
+          '--json',
+          'ipfs',
+          'pin-json',
+          '--stdin',
+        ], {
+          home,
+          env: { RARE_API_BASE_URL: baseUrl },
+          input: '{"name":"Stdin token URI"}',
+        });
+
+        expect(result.code).toBe(0);
+        expect(parseJsonStdout(result)).toEqual({
+          cid: 'bafymedia',
+          ipfsUrl: 'ipfs://bafymedia',
+          gatewayUrl: 'https://fixture.example/ipfs/bafymedia',
+        });
+      });
+    });
+  });
+
+  it('rejects conflicting IPFS pin output modes', async () => {
+    await withTempHome(async (home) => {
+      const filePath = join(home, 'token-uri.json');
+      await writeFile(filePath, JSON.stringify({ name: 'Standalone token URI' }));
+
+      const result = await runCli([
+        '--json',
+        'ipfs',
+        'pin-file',
+        '--file',
+        filePath,
+        '--uri-only',
+      ], { home });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('rare ipfs pin-file --uri-only cannot be combined with --json.');
+    });
+  });
+
   it('writes and displays config without touching the real home directory', async () => {
     await withTempHome(async (home) => {
       const privateKey = '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
@@ -3518,7 +3668,7 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
-  it('rejects Lazy ERC-721 collection deployment on chains without a configured factory before wallet setup', async () => {
+  it('rejects Lazy ERC-721 collection deployment with an invalid max-tokens before wallet setup', async () => {
     await withTempHome(async (home) => {
       const result = await runCli([
         'collection',
@@ -3527,14 +3677,14 @@ describe('built CLI deterministic behavior', () => {
         'Test',
         'TST',
         '--max-tokens',
-        '10',
+        '0',
         '--chain',
         'base',
       ], { home });
 
       expect(result.code).toBe(1);
       expect(result.stdout).toBe('');
-      expect(result.stderr).toContain('RARE Protocol lazySovereignFactory contract is not configured on "base".');
+      expect(result.stderr).toContain('maxTokens must be greater than 0.');
     });
   });
 });

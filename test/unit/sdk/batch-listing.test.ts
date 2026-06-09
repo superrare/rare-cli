@@ -394,9 +394,8 @@ describe('batch listing namespace', () => {
 });
 
 describe('batch listing addresses', () => {
-  it('throws a clear error for unsupported deployment chains', () => {
-    expect(() => getBatchListingAddress('base')).toThrow(
-      /Available on: sepolia, mainnet|Available on: mainnet, sepolia/,
-    );
+  it('resolves the deployed marketplace for configured chains', () => {
+    expect(getBatchListingAddress('base')).toBe('0x36A66dF396877f6771D9f9981AD70B712ee523CF');
+    expect(getBatchListingAddress('base-sepolia')).toBe('0xAF5686eAdc6A575a0e9f455978ad712201744B3F');
   });
 });

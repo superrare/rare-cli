@@ -56,7 +56,7 @@ export function createDeployNamespace(
       const maxTokens = params.maxTokens === undefined ? undefined : toPositiveInteger(params.maxTokens, 'maxTokens');
       if (!addresses.lazyBatchMintFactory) {
         throw new Error(
-          'Lazy batch mint factory is not deployed on this chain. Supported chains: mainnet, sepolia.',
+          'Lazy batch mint factory is not deployed on this chain. Supported chains: mainnet, sepolia, base, base-sepolia.',
         );
       }
       const factoryAddress = addresses.lazyBatchMintFactory;

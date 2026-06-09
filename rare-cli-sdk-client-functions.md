@@ -311,6 +311,11 @@ User:
 
 rare.user.get(address: string): Promise<UserProfile>
 
+IPFS:
+
+rare.ipfs.pinFile(buffer: Uint8Array, filename: string): Promise<IpfsUploadResult>
+rare.ipfs.pinJson(value: unknown, filename?: string): Promise<IpfsUploadResult>
+
 Media:
 
 rare.media.upload(buffer: Uint8Array, filename: string): Promise<NftMediaEntry>
@@ -337,6 +342,7 @@ Consistency notes:
 - Liquid Edition deployment is grouped under `liquidEdition.deploy.multiCurve`, matching the CLI's `liquid-edition deploy multicurve` shape and leaving room for future deployment types.
 - Collection single-token minting now lives at `collection.mint`, alongside `collection.mintBatch` and `collection.prepareLazyMint`.
 - Batch marketplaces are nested under their sale type: `listing.batch.*`, `offer.batch.*`, and `auction.batch.*`. Offline tree helpers live under `utils.tree.*`.
+- Generic IPFS pinning lives under `ipfs.*`; `media.*` remains NFT media-specific and feeds NFT metadata assembly.
 - Marketplace currency aliases are first-class SDK inputs. `eth`, `rare`, `usdc`, and ERC20 addresses are accepted by marketplace methods that take `currency`; `rare.currency.*` exposes the same chain-aware resolver/list contract used by the CLI.
 - Swap token flows accept `route?: 'auto' | 'local' | 'uniswap'`; execution methods also accept `route: 'raw'` with `commands` and `inputs` for prebuilt liquid-router calldata. `rare.swap.buy` and `rare.swap.sell` remain lower-level raw router methods.
 

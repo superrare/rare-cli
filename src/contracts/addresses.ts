@@ -111,6 +111,15 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
     factory: getAddress('0xf776204233bfb52ba0ddff24810cbdbf3dbf94dd'),
     auction: getAddress('0x51c36ffb05e17ed80ee5c02fa83d7677c5613de2'),
     rareBridge: getAddress('0x3b41e21094611d152a08d3691a70837f1a077dae'),
+    lazySovereignFactory: getAddress('0x61E161062ba4EC0556Df23E586bE8E13B435F7F1'),
+    lazyBatchMintFactory: getAddress('0x787A1705E2c4B07A716299F8F1fAa8CaC48305cd'),
+    rareMinter: getAddress('0xFb2bd8A5543c73D38BabA504520A48ff7ed6CF57'),
+    batchListing: getAddress('0x36A66dF396877f6771D9f9981AD70B712ee523CF'),
+    batchOfferCreator: getAddress('0xe52976E85393C344F01A3dDFbFDc2F68854427Cc'),
+    batchAuctionHouse: getAddress('0xc033BBef0Af25Db7523FCe16BaB1C39df0bF2Ae3'),
+    marketplaceSettings: getAddress('0x1Ca04105730EF2bBE93040Feb20aCc668292F69D'),
+    erc20ApprovalManager: getAddress('0x325B4CF6c521b3F67559731AEB63C71211bc724d'),
+    erc721ApprovalManager: getAddress('0xDd867a8Eb1720185B3fdAD7F81Caed4E8132Be19'),
     liquidFactory: getAddress('0x54016106A92895a38E54cA286216416750e517b1'),
     swapRouter: getAddress('0x6d078A410ee2AD08cACD8d22b486365433e98b7b'),
     v4Quoter: getAddress('0x0d5e0f971ed27fbff6c2837bf31316121532048d'),
@@ -119,6 +128,15 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
     factory: getAddress('0x2b181ae0f1aea6fed75591b04991b1a3f9868d51'),
     auction: getAddress('0x1f0c946f0ee87acb268d50ede6c9b4d010af65d2'),
     rareBridge: getAddress('0xca491bb62A7730E97F500510132C47633DDD0229'),
+    lazySovereignFactory: getAddress('0xCCC08b865805AdD648F6EC1f40114ba508353a9C'),
+    lazyBatchMintFactory: getAddress('0xAF2302b45DdFF8243C62149217Eb529850A61A89'),
+    rareMinter: getAddress('0xcb8bc09dc91fe8e8f43211537a709fc6053837f8'),
+    batchListing: getAddress('0xAF5686eAdc6A575a0e9f455978ad712201744B3F'),
+    batchOfferCreator: getAddress('0x20d2fa511fb1248a535600538816ac60477d3d09'),
+    batchAuctionHouse: getAddress('0x2982275aCd95B97cCe02fdd8552E31D0a916C03c'),
+    marketplaceSettings: getAddress('0xC83551914aB8784B4D779794cD74d12Ac4dF26Bc'),
+    erc20ApprovalManager: getAddress('0x1104B5dA0fc1C08011a90557CA9b495c29D9BBaa'),
+    erc721ApprovalManager: getAddress('0xaDf5459B9B6B3021aef027EC23E68C4011303F5B'),
     liquidFactory: getAddress('0x912ecC55445d87149d09d83426D0aC41379bB643'),
     swapRouter: getAddress('0x92438008608949E2C7eCef34c474792bAFe8a971'),
     v4Quoter: getAddress('0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba'),
@@ -398,7 +416,7 @@ export function getRareMinterAddress(chain: SupportedChain): Address {
   const rareMinter = getContractAddresses(chain).rareMinter;
   if (!rareMinter) {
     throw new Error(
-      `RareMinter is not configured on "${chain}". Supported RareMinter chains: mainnet, sepolia.`
+      `RareMinter is not configured on "${chain}". Supported RareMinter chains: mainnet, sepolia, base, base-sepolia.`
     );
   }
   return rareMinter;

@@ -213,6 +213,15 @@ export function createRareClient(config: RareClientConfig): RareClient {
       erc1155Collection,
       collectionMint,
     ),
+    ipfs: {
+      async pinFile(buffer, filename): ReturnType<RareClient['ipfs']['pinFile']> {
+        return api.pinFile(buffer, filename);
+      },
+
+      async pinJson(value, filename): ReturnType<RareClient['ipfs']['pinJson']> {
+        return api.pinJson(value, filename);
+      },
+    },
     user: {
       async get(address): ReturnType<RareClient['user']['get']> {
         return api.getUser(address);

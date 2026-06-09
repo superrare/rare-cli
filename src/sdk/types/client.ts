@@ -4,6 +4,7 @@ import type {
   CollectionSearchParams,
   EventSearchParams,
   ImportErc721Params,
+  IpfsUploadResult,
   Nft,
   NftEvent,
   NftMediaEntry,
@@ -105,6 +106,11 @@ export type UserNamespace = {
   get: (address: string) => Promise<UserProfile>;
 }
 
+export type IpfsNamespace = {
+  pinFile: (buffer: Uint8Array, filename: string) => Promise<IpfsUploadResult>;
+  pinJson: (value: unknown, filename?: string) => Promise<IpfsUploadResult>;
+}
+
 export type MediaNamespace = {
   upload: (buffer: Uint8Array, filename: string) => Promise<NftMediaEntry>;
   pinMetadata: (opts: PinMetadataParams) => Promise<string>;
@@ -146,6 +152,7 @@ export type RareClient = {
   search: SearchNamespace;
   nft: NftNamespace;
   collection: CollectionNamespace;
+  ipfs: IpfsNamespace;
   user: UserNamespace;
   media: MediaNamespace;
   import: ImportNamespace;

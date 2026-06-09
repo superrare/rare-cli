@@ -177,6 +177,81 @@ describe('release namespace shell errors', () => {
     expect(configured.approvalTxHash).toBe(approvalTxHash);
   });
 
+  it('retries minter approval read-back when the RPC node lags behind the receipt', async () => {
+    let approvalReads = 0;
+    const txHash = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const approvalTxHash = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const release = createReleaseTestNamespace({
+      async readContract(params: { functionName: string }) {
+        if (params.functionName === 'owner') {
+          return accountAddress;
+        }
+        if (params.functionName === 'isApprovedMinter') {
+          approvalReads += 1;
+          // pre-check + first post-receipt read are stale (false); then true.
+          return approvalReads >= 3;
+        }
+        throw new Error(`unexpected read ${params.functionName}`);
+      },
+      async simulateContract(params: { functionName: string }) {
+        expect(params.functionName).toBe('mintTo');
+        return {};
+      },
+      async waitForTransactionReceipt() {
+        return { blockNumber: 1n, status: 'success' };
+      },
+    }, {
+      async writeContract(params) {
+        if (params.functionName === 'setMinterApproval') {
+          return approvalTxHash;
+        }
+        if (params.functionName === 'prepareMintDirectSale') {
+          return txHash;
+        }
+        throw new Error(`unexpected write ${params.functionName}`);
+      },
+    });
+
+    const configured = await release.configure({
+      contract: collection,
+      price: '1',
+      maxMints: 1,
+    });
+
+    expect(configured.txHash).toBe(txHash);
+    expect(configured.approvalTxHash).toBe(approvalTxHash);
+    expect(approvalReads).toBeGreaterThanOrEqual(3);
+  });
+
+  it('reports a reverted minter approval transaction', async () => {
+    const approvalTxHash = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+    const release = createReleaseTestNamespace({
+      async readContract(params: { functionName: string }) {
+        if (params.functionName === 'owner') {
+          return accountAddress;
+        }
+        if (params.functionName === 'isApprovedMinter') {
+          return false;
+        }
+        throw new Error(`unexpected read ${params.functionName}`);
+      },
+      async waitForTransactionReceipt() {
+        return { blockNumber: 1n, status: 'reverted' };
+      },
+    }, {
+      async writeContract(params) {
+        expect(params.functionName).toBe('setMinterApproval');
+        return approvalTxHash;
+      },
+    });
+
+    await expect(release.configure({
+      contract: collection,
+      price: '1',
+      maxMints: 1,
+    })).rejects.toThrow(`Lazy Sovereign minter approval for ${rareMinter} reverted`);
+  });
+
   it('rejects owner mismatch before writing Lazy Sovereign minter approval', async () => {
     const writeContract = vi.fn(async (): Promise<never> => {
       throw new Error('unexpected write');
