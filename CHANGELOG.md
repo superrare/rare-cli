@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.3.0
+
+### New features
+
+- Added generic IPFS pinning by @KeeganEad in https://github.com/superrare/rare-cli/pull/94.
+
+### Fixes
+
+- Made the SDK client browser-safe by @KeeganEad in https://github.com/superrare/rare-cli/pull/93.
+
+### Maintenance
+
+- Added missing Base and Base Sepolia contract addresses by @charlescrain in https://github.com/superrare/rare-cli/pull/95.
+
+**Full changelog**: https://github.com/superrare/rare-cli/compare/v1.2.2...v1.3.0
+
 ## 1.2.2
 
 ### New features
