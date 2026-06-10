@@ -18,10 +18,13 @@ export function createTokenNamespace(
 ): TokenNamespace {
   return {
     async status(params): ReturnType<TokenNamespace['status']> {
-      const contract = await readContractInfo(publicClient, chain, params.contract);
-      const token = params.tokenId === undefined
+      const tokenId = params.tokenId === undefined
         ? undefined
-        : await readTokenInfo(publicClient, params.contract, params.tokenId);
+        : toNonNegativeInteger(params.tokenId, 'tokenId');
+      const contract = await readContractInfo(publicClient, chain, params.contract);
+      const token = tokenId === undefined
+        ? undefined
+        : await readTokenInfo(publicClient, params.contract, tokenId);
 
       return token === undefined ? { contract } : { contract, token };
     },
@@ -63,9 +66,8 @@ async function readContractInfo(
 async function readTokenInfo(
   publicClient: PublicClient,
   contract: `0x${string}`,
-  tokenIdInput: NonNullable<Parameters<TokenNamespace['status']>[0]['tokenId']>,
+  tokenId: bigint,
 ): Promise<TokenInfo> {
-  const tokenId = toNonNegativeInteger(tokenIdInput, 'tokenId');
   const [owner, tokenUri] = await Promise.all([
     publicClient.readContract({
       address: contract,
