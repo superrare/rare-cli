@@ -1985,6 +1985,26 @@ describe('built CLI deterministic behavior', () => {
     });
   });
 
+  it('requires --contract when searching token events by token ID', async () => {
+    await withTempHome(async (home) => {
+      const result = await runCli([
+        'search',
+        'events',
+        '--chain',
+        'sepolia',
+        '--token-id',
+        '1',
+      ], {
+        home,
+        env: { RARE_API_BASE_URL: 'http://127.0.0.1:9' },
+      });
+
+      expect(result.code).toBe(1);
+      expect(result.stdout).toBe('');
+      expect(result.stderr).toContain('Error: rare search events --token-id requires --contract.');
+    });
+  });
+
   it('covers read/API CLI command wiring and validation', async (ctx) => {
     await withTempHome(async (home) => {
       const tokenSearch = parseJsonStdout<{
