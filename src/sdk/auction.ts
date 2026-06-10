@@ -21,6 +21,7 @@ import {
   shapeAuctionStatus,
 } from './marketplace-core.js';
 import { resolveCurrencyForSdk } from './currency.js';
+import { waitForSuccessfulTransactionReceipt } from './transaction-receipt.js';
 
 export type * from './types/auction.js';
 
@@ -84,7 +85,13 @@ export function createAuctionNamespace(
             chain: undefined,
           });
 
-          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          const targetReceipt = await waitForSuccessfulTransactionReceipt(publicClient, {
+            txHash: targetTxHash,
+            operation: 'auction create',
+            marketplace: addresses.auction,
+            contract: plan.nftAddress,
+            tokenId: plan.tokenId,
+          });
           return { txHash: targetTxHash, receipt: targetReceipt };
         },
       });
@@ -133,7 +140,13 @@ export function createAuctionNamespace(
             value: payment.value,
           });
 
-          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          const targetReceipt = await waitForSuccessfulTransactionReceipt(publicClient, {
+            txHash: targetTxHash,
+            operation: 'auction bid',
+            marketplace: addresses.auction,
+            contract: params.contract,
+            tokenId: plan.tokenId,
+          });
           return { txHash: targetTxHash, receipt: targetReceipt };
         },
       });
@@ -153,7 +166,13 @@ export function createAuctionNamespace(
         chain: undefined,
       });
 
-      const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+      const targetReceipt = await waitForSuccessfulTransactionReceipt(publicClient, {
+        txHash: targetTxHash,
+        operation: 'auction settle',
+        marketplace: addresses.auction,
+        contract: params.contract,
+        tokenId: plan.tokenId,
+      });
       return { txHash: targetTxHash, receipt: targetReceipt };
     },
 
@@ -170,7 +189,13 @@ export function createAuctionNamespace(
         chain: undefined,
       });
 
-      const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+      const targetReceipt = await waitForSuccessfulTransactionReceipt(publicClient, {
+        txHash: targetTxHash,
+        operation: 'auction cancel',
+        marketplace: addresses.auction,
+        contract: params.contract,
+        tokenId: plan.tokenId,
+      });
       return { txHash: targetTxHash, receipt: targetReceipt };
     },
 
