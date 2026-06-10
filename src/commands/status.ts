@@ -5,6 +5,7 @@ import { createRareClient } from '../sdk/client.js';
 import { parseAddress } from '../sdk/validation.js';
 import { output } from '../output.js';
 import type { RareClient } from '../sdk/client.js';
+import { toNonNegativeInteger } from '../sdk/amounts-core.js';
 
 type StatusOptions = {
   contract: string;
@@ -73,8 +74,9 @@ export async function readTokenInfo(
   contract: `0x${string}`,
   tokenId: string,
 ): Promise<TokenInfo | null> {
+  const normalizedTokenId = toNonNegativeInteger(tokenId, 'tokenId');
   try {
-    const status = await rare.token.status({ contract, tokenId });
+    const status = await rare.token.status({ contract, tokenId: normalizedTokenId });
     return status.token ?? null;
   } catch (error) {
     if (isTokenNotFoundError(error)) {
