@@ -23,6 +23,7 @@ import {
   shapeListingStatus,
 } from './marketplace-core.js';
 import { resolveCurrencyForSdk } from './currency.js';
+import { waitForSuccessfulTransactionReceipt } from './transaction-receipt.js';
 
 export type * from './types/listing.js';
 
@@ -74,7 +75,13 @@ export function createListingNamespace(
             chain: undefined,
           });
 
-          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          const targetReceipt = await waitForSuccessfulTransactionReceipt(publicClient, {
+            txHash: targetTxHash,
+            operation: 'listing create',
+            marketplace: addresses.auction,
+            contract: plan.nftAddress,
+            tokenId: plan.tokenId,
+          });
           return { txHash: targetTxHash, receipt: targetReceipt };
         },
       });
@@ -94,7 +101,13 @@ export function createListingNamespace(
         chain: undefined,
       });
 
-      const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+      const targetReceipt = await waitForSuccessfulTransactionReceipt(publicClient, {
+        txHash: targetTxHash,
+        operation: 'listing cancel',
+        marketplace: addresses.auction,
+        contract: params.contract,
+        tokenId: plan.tokenId,
+      });
       return { txHash: targetTxHash, receipt: targetReceipt };
     },
 
@@ -133,7 +146,13 @@ export function createListingNamespace(
             value: payment.value,
           });
 
-          const targetReceipt = await publicClient.waitForTransactionReceipt({ hash: targetTxHash });
+          const targetReceipt = await waitForSuccessfulTransactionReceipt(publicClient, {
+            txHash: targetTxHash,
+            operation: 'listing buy',
+            marketplace: addresses.auction,
+            contract: params.contract,
+            tokenId: plan.tokenId,
+          });
           return { txHash: targetTxHash, receipt: targetReceipt };
         },
       });
