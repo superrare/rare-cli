@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { readTokenInfo } from '../../../src/commands/status.js';
 
 const contract = '0x1000000000000000000000000000000000000000' as const;
@@ -19,12 +19,19 @@ describe('status command token reads', () => {
 
     await expect(readTokenInfo(rare, contract, '1')).rejects.toBe(error);
   });
+
+  it('rejects malformed token IDs before reading token status', async () => {
+    const rare = rareClientWithTokenError(new Error('unexpected token read'));
+
+    await expect(readTokenInfo(rare, contract, 'abc')).rejects.toThrow('tokenId must be an integer.');
+    expect(rare.token.status).not.toHaveBeenCalled();
+  });
 });
 
 function rareClientWithTokenError(error: Error): TokenReader {
   return {
     token: {
-      status: (): ReturnType<TokenReader['token']['status']> => Promise.reject(error),
+      status: vi.fn((): ReturnType<TokenReader['token']['status']> => Promise.reject(error)),
     },
   };
 }
