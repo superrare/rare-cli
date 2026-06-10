@@ -502,7 +502,7 @@ function parseCsvBatchTokens(content: string): RawBatchToken[] {
   const rows = content
     .replace(/^\uFEFF/, '')
     .split(/\r?\n/)
-    .map(parseCsvRow)
+    .map((line, index) => parseCsvRow(line, index + 1))
     .filter((row) => row.some((cell) => cell.length > 0));
   const [firstRow] = rows;
 
@@ -563,10 +563,55 @@ function extractCsvBatchToken(
   };
 }
 
-function parseCsvRow(line: string): string[] {
-  return line.split(',').map((cell) => (
-    cell.trim().replace(/^"|"$/g, '').replace(/""/g, '"')
-  ));
+type CsvParseState = {
+  fields: string[];
+  current: string;
+  inQuotes: boolean;
+  skipNext: boolean;
+};
+
+function parseCsvRow(line: string, rowNumber: number): string[] {
+  const parsed = Array.from(line).reduce<CsvParseState>((state, char, index) => {
+    if (state.skipNext) {
+      return { ...state, skipNext: false };
+    }
+
+    if (state.inQuotes) {
+      if (char === '"' && line[index + 1] === '"') {
+        return { ...state, current: `${state.current}"`, skipNext: true };
+      }
+      if (char === '"') {
+        return { ...state, inQuotes: false };
+      }
+      return { ...state, current: `${state.current}${char}` };
+    }
+
+    if (char === ',') {
+      return {
+        ...state,
+        fields: [...state.fields, state.current.trim()],
+        current: '',
+      };
+    }
+    if (char === '"') {
+      if (state.current.trim().length > 0) {
+        throw new Error(`Malformed batch token CSV row ${rowNumber}: unexpected quote.`);
+      }
+      return { ...state, inQuotes: true };
+    }
+    return { ...state, current: `${state.current}${char}` };
+  }, {
+    fields: [],
+    current: '',
+    inQuotes: false,
+    skipNext: false,
+  });
+
+  if (parsed.inQuotes) {
+    throw new Error(`Malformed batch token CSV row ${rowNumber}: unterminated quoted field.`);
+  }
+
+  return [...parsed.fields, parsed.current.trim()];
 }
 
 function extractJsonBatchToken(entry: unknown, index: number): RawBatchToken {

@@ -80,6 +80,20 @@ describe('batch marketplace token tree core', () => {
     ]);
   });
 
+  it('parses quoted CSV cells without shifting later token columns', () => {
+    expect(parseBatchTokenList({
+      content: [
+        'contract_address,token_id,note,chain_id',
+        `"${CONTRACT_B}","2","token ""two"", with comma","11155111"`,
+        `"${CONTRACT_A}","01","token one","11155111"`,
+      ].join('\n'),
+      format: 'csv',
+    })).toEqual([
+      { contractAddress: CONTRACT_A, tokenId: '1', chainId: 11_155_111 },
+      { contractAddress: CONTRACT_B, tokenId: '2', chainId: 11_155_111 },
+    ]);
+  });
+
   it('hashes token leaves with packed address and uint256 token ID', () => {
     expect(hashBatchToken(CONTRACT_A, '1')).toBe(EXPECTED_TOKEN_1_LEAF);
     expect(hashBatchToken(CONTRACT_A, '01')).toBe(EXPECTED_TOKEN_1_LEAF);
