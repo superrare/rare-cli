@@ -24,6 +24,19 @@ describe('SDK API failure handling', () => {
     })).rejects.toThrow('Failed to pin metadata');
   });
 
+  it('surfaces missing ERC-721 import response data with a specific SDK error', async () => {
+    const api = createRareApi({
+      baseUrl: 'https://rare-api.test',
+      fetch: async () => new Response(null, { status: 204 }),
+    });
+
+    await expect(api.importErc721({
+      chainId: 1,
+      contract: '0x0000000000000000000000000000000000000001',
+      owner: '0x0000000000000000000000000000000000000002',
+    })).rejects.toThrow('Failed to import ERC-721 collection');
+  });
+
   it('rejects empty IPFS uploads before API requests', async () => {
     const fetchImpl = vi.fn(async () => new Response(null, { status: 204 }));
     const api = createRareApi({
