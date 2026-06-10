@@ -224,9 +224,10 @@ export async function importErc721(opts: ImportErc721RequestParams): Promise<voi
 }
 
 async function importErc721WithClient(client: ApiClient, opts: ImportErc721RequestParams): Promise<void> {
-  await client.POST('/v1/collections/import', {
+  const { data: result } = await client.POST('/v1/collections/import', {
     body: buildImportErc721Body(opts),
   });
+  if (!result) throw new Error('Failed to import ERC-721 collection');
 }
 
 export async function searchNfts(params: NftSearchParams = {}): Promise<SearchPageResponse<Nft>> {
