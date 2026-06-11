@@ -1,5 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createPublicClient, createWalletClient, custom, http, type Hash, type PublicClient, type WalletClient } from 'viem';
+import {
+  createPublicClient,
+  createWalletClient,
+  custom,
+  http,
+  type Hash,
+  type PublicClient,
+  type TransactionReceipt,
+  type WalletClient,
+} from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { mainnet } from 'viem/chains';
 import {
@@ -229,7 +238,7 @@ describe('payment approval planning', () => {
             return 4n;
           },
           async waitForTransactionReceipt() {
-            return { status: 'success' };
+            return mockTransactionReceipt();
           },
         },
         walletClient: {
@@ -268,7 +277,7 @@ describe('payment approval planning', () => {
             return allowanceReads < 3 ? 4n : 5n;
           },
           async waitForTransactionReceipt() {
-            return { status: 'success' };
+            return mockTransactionReceipt();
           },
         },
         walletClient: {
@@ -511,4 +520,25 @@ function walletClient(account: WalletClient['account']): WalletClient {
     account,
     transport: http('http://127.0.0.1'),
   });
+}
+
+function mockTransactionReceipt(): TransactionReceipt {
+  const hash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+  const address = '0x0000000000000000000000000000000000000001';
+  return {
+    blockHash: hash,
+    blockNumber: 123n,
+    contractAddress: null,
+    cumulativeGasUsed: 0n,
+    effectiveGasPrice: 0n,
+    from: address,
+    gasUsed: 0n,
+    logs: [],
+    logsBloom: '0x',
+    status: 'success',
+    to: address,
+    transactionHash: hash,
+    transactionIndex: 0,
+    type: 'eip1559',
+  };
 }
