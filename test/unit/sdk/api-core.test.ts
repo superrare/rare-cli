@@ -75,6 +75,38 @@ describe('SDK API request planning', () => {
     });
   });
 
+  it('infers NFT market presence filters from specific market filters', () => {
+    expect(
+      buildNftSearchQuery({
+        listingType: 'SALE_PRICE',
+        auctionState: 'RUNNING',
+        offerBuyerAddress: ownerAddress,
+      }),
+    ).toEqual(expect.objectContaining({
+      listingType: 'SALE_PRICE',
+      hasListing: true,
+      auctionState: 'RUNNING',
+      hasAuction: true,
+      offerBuyerAddress: ownerAddress,
+      hasOffer: true,
+    }));
+
+    expect(
+      buildNftSearchQuery({
+        listingType: 'SALE_PRICE',
+        hasListing: false,
+        auctionState: 'RUNNING',
+        hasAuction: false,
+        offerBuyerAddress: ownerAddress,
+        hasOffer: false,
+      }),
+    ).toEqual(expect.objectContaining({
+      hasListing: false,
+      hasAuction: false,
+      hasOffer: false,
+    }));
+  });
+
   it('builds collection search query defaults', () => {
     expect(buildCollectionSearchQuery({ query: 'rare', page: 2, perPage: 10, ownerAddress, chainId: 1 })).toEqual({
       q: 'rare',
