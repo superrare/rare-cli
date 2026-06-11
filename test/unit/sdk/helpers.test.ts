@@ -83,6 +83,7 @@ describe('SDK helper normalization', () => {
   it('normalizes unix timestamp and ISO date inputs', () => {
     expect(toUnixTimestamp('1778500000', 'startTime')).toBe(1_778_500_000n);
     expect(toUnixTimestamp('2026-05-18T12:30:45Z', 'startTime')).toBe(1_779_107_445n);
+    expect(toUnixTimestamp('2026-05-18T12:30:45', 'startTime')).toBe(1_779_107_445n);
     expect(toUnixTimestamp('2026-05-18T08:30:45-04:00', 'startTime')).toBe(1_779_107_445n);
   });
 
