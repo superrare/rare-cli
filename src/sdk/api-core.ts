@@ -231,18 +231,13 @@ export function buildNftSearchQuery(params: NftSearchParams = {}): {
   tags?: string[];
   mediaType?: NftSearchParams['mediaType'];
 } {
-  const hasAuction = params.hasAuction !== undefined
-    ? params.hasAuction
-    : params.auctionState !== undefined ||
+  const hasAuction = params.hasAuction ??
+    (params.auctionState !== undefined ||
       params.auctionCreatorAddress !== undefined ||
       params.auctionBidderAddress !== undefined ||
-      undefined;
-  const hasListing = params.hasListing !== undefined
-    ? params.hasListing
-    : params.listingType !== undefined || undefined;
-  const hasOffer = params.hasOffer !== undefined
-    ? params.hasOffer
-    : params.offerBuyerAddress !== undefined || undefined;
+      undefined);
+  const hasListing = params.hasListing ?? (params.listingType !== undefined || undefined);
+  const hasOffer = params.hasOffer ?? (params.offerBuyerAddress !== undefined || undefined);
 
   return {
     q: params.query,
