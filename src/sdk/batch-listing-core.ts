@@ -200,6 +200,40 @@ export function shouldResolveBatchListingAllowListProof(params: {
   return params.nowTimestamp === undefined || params.allowList.endTimestamp > params.nowTimestamp;
 }
 
+export type BatchListingBuyProofPolicyValidation =
+  | { isValid: true }
+  | { isValid: false; error: 'empty-token-proof' | 'empty-active-allowlist-proof'; errorMessage: string };
+
+export function validateBatchListingBuyProofPolicy(params: {
+  allowList: BatchListingAllowListConfig | undefined;
+  tokenProof: Pick<BatchListingProofArtifact, 'proof' | 'allowListProof'>;
+  nowTimestamp: bigint | undefined;
+}): BatchListingBuyProofPolicyValidation {
+  if (params.tokenProof.proof.length === 0) {
+    return {
+      isValid: false,
+      error: 'empty-token-proof',
+      errorMessage: 'Proof artifact proof must not be empty; the batch listing contract rejects empty token proofs',
+    };
+  }
+
+  if (
+    params.allowList !== undefined &&
+    params.tokenProof.allowListProof?.length === 0 &&
+    (params.nowTimestamp === undefined || params.allowList.endTimestamp > params.nowTimestamp)
+  ) {
+    return {
+      isValid: false,
+      error: 'empty-active-allowlist-proof',
+      errorMessage:
+        'Proof artifact allowListProof must not be empty while the batch listing allowlist is active; ' +
+        'the batch listing contract rejects empty allowlist proofs',
+    };
+  }
+
+  return { isValid: true };
+}
+
 export function shapeBatchListingStatus(params: {
   root: `0x${string}`;
   creator: Address;
