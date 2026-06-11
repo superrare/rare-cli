@@ -4,6 +4,7 @@ import type { TimestampInput } from './types/common.js';
 import { toPositiveInteger } from './amounts-core.js';
 
 const ISO_DATE_STRING_PATTERN = /^\d{4}-\d{2}-\d{2}(?:[Tt]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:[Zz]|[+-]\d{2}:?\d{2})?)?$/;
+const ISO_DATE_TIME_WITHOUT_TIMEZONE_PATTERN = /^\d{4}-\d{2}-\d{2}[Tt]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
 
 export function requireInput<T>(value: T | undefined, field: string): T {
   if (value === undefined) {
@@ -22,7 +23,7 @@ export function toUnixTimestamp(value: TimestampInput, field: string): bigint {
   }
 
   if (typeof value === 'string' && ISO_DATE_STRING_PATTERN.test(value)) {
-    const millis = Date.parse(value);
+    const millis = Date.parse(normalizeIsoDateString(value));
     if (Number.isNaN(millis)) {
       throw new Error(`${field} must be a unix timestamp or ISO date.`);
     }
@@ -58,4 +59,8 @@ export function validateRouterPayload(commands: `0x${string}`, inputs: readonly 
 
 function isEvenLengthHex(value: `0x${string}`): boolean {
   return isHex(value) && value.length % 2 === 0;
+}
+
+function normalizeIsoDateString(value: string): string {
+  return ISO_DATE_TIME_WITHOUT_TIMEZONE_PATTERN.test(value) ? `${value}Z` : value;
 }

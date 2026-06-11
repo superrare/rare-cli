@@ -24,6 +24,8 @@ describe('SDK validation core', () => {
   it('normalizes timestamp inputs from dates, ISO strings, and integer strings', () => {
     expect(toUnixTimestamp(new Date('2026-05-21T12:34:56.789Z'), 'startTime')).toBe(1_779_366_896n);
     expect(toUnixTimestamp('2026-05-21T12:34:56Z', 'startTime')).toBe(1_779_366_896n);
+    expect(toUnixTimestamp('2026-05-21T12:34:56', 'startTime')).toBe(1_779_366_896n);
+    expect(toUnixTimestamp('2026-05-21T12:34', 'startTime')).toBe(1_779_366_840n);
     expect(toUnixTimestamp('1779366896', 'startTime')).toBe(1_779_366_896n);
   });
 
