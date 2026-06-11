@@ -139,6 +139,15 @@ describe('merkle artifact core utilities', () => {
     ).toThrow(/proof entry must be a 0x-prefixed bytes32 hex string/);
 
     expect(() =>
+      validateProofArtifact({
+        root: `0x${'11'.repeat(32)}`,
+        contract: '0x1111111111111111111111111111111111111111',
+        tokenId: '1',
+        proof: [],
+      }),
+    ).not.toThrow();
+
+    expect(() =>
       validateRootArtifact({
         ...allowListedRootArtifact,
         allowList: {
