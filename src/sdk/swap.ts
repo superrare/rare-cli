@@ -15,6 +15,7 @@ import type { ResolvedRoute } from '../swap/route-types.js';
 import {
   ensureTokenAllowance,
   getTokenDecimals,
+  PaymentApprovalRequiredError,
   toTokenAmount,
 } from './payments-shell.js';
 import { runWithApprovalSideEffectAlert } from './approvals-shell.js';
@@ -409,6 +410,7 @@ async function executeRawRouterSell(params: {
   inputs: readonly `0x${string}`[];
   recipient?: Address;
   deadline?: IntegerInput;
+  autoApprove?: boolean;
 }): Promise<TransactionResult & { minAmountOut: bigint; tokenAmount: bigint; approvalTxHash?: `0x${string}` }> {
   const { walletClient, account, accountAddress } = requireWallet(params.config);
   const router = requireConfiguredAddress(params.addresses.swapRouter, 'Liquid router', params.chain);
@@ -419,7 +421,16 @@ async function executeRawRouterSell(params: {
   const tokenAmount = await toTokenAmount(params.publicClient, params.token, amountIn, 'amountIn');
   const minEthOut = toWei(minAmountOutInput);
 
-  const approvalTxHash = await ensureTokenAllowance(params.publicClient, walletClient, account, accountAddress, params.token, router, tokenAmount);
+  const approvalTxHash = await ensureTokenAllowance(
+    params.publicClient,
+    walletClient,
+    account,
+    accountAddress,
+    params.token,
+    router,
+    tokenAmount,
+    params.autoApprove,
+  );
 
   const { txHash, receipt } = await runWithApprovalSideEffectAlert({
     operation: 'swap sell',
@@ -454,7 +465,9 @@ async function executeRawRouterSell(params: {
   return { txHash, receipt, minAmountOut: minEthOut, tokenAmount, approvalTxHash };
 }
 
-function isRawTokenTradeParams(params: BuyTokenParams | SellTokenParams): params is TokenTradeRawRouteParams {
+function isRawTokenTradeParams(
+  params: BuyTokenParams | SellTokenParams,
+): params is TokenTradeRawRouteParams & { autoApprove?: boolean } {
   return params.route === 'raw';
 }
 
@@ -701,6 +714,7 @@ export function createSwapNamespace(
           inputs: params.inputs,
           recipient: params.recipient,
           deadline: params.deadline,
+          autoApprove: params.autoApprove,
         });
         return {
           txHash: result.txHash,
@@ -734,7 +748,16 @@ export function createSwapNamespace(
 
         const amountIn = requireInput(params.amountIn, 'amountIn');
         const tokenAmount = await toTokenAmount(publicClient, params.token, amountIn, 'amountIn');
-        const approvalTxHash = await ensureTokenAllowance(publicClient, walletClient, account, accountAddress, params.token, router, tokenAmount);
+        const approvalTxHash = await ensureTokenAllowance(
+          publicClient,
+          walletClient,
+          account,
+          accountAddress,
+          params.token,
+          router,
+          tokenAmount,
+          params.autoApprove,
+        );
 
         const { txHash, receipt } = await runWithApprovalSideEffectAlert({
           operation: 'sell token',
@@ -788,6 +811,12 @@ export function createSwapNamespace(
         amount: quoteDetails.quote.amountIn,
         tokenOut: ETH_ADDRESS,
       });
+      if (params.autoApprove === false && (approval.cancel !== null || approval.approval !== null)) {
+        throw new PaymentApprovalRequiredError({
+          requiredAmount: quoteDetails.quote.amountIn,
+          spenderAddress: approval.approval?.to ?? approval.cancel?.to ?? params.token,
+        });
+      }
       const approvalResetTxHash = approval.cancel
         ? (await sendPreparedTransaction(publicClient, walletClient, account, approval.cancel, {
             accountAddress,
