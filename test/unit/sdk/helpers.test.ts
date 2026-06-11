@@ -217,70 +217,83 @@ describe('payment approval planning', () => {
     await expect(payment).rejects.toThrow(`ERC20 approval transaction ${approvalTxHash} did not succeed.`);
   });
 
-  it('verifies ERC20 allowance after a mined approval', async () => {
+  it('times out when ERC20 allowance never propagates after a mined approval', async () => {
+    vi.useFakeTimers();
     const currency = '0x9999999999999999999999999999999999999999';
     const spender = '0x8888888888888888888888888888888888888888';
-    const payment = preparePaymentAmountForSpender({
-      // eslint-disable-next-line no-restricted-syntax
-      publicClient: {
-        async readContract(params: { functionName: string }): Promise<bigint> {
-          expect(params.functionName).toBe('allowance');
-          return 4n;
+    try {
+      const payment = preparePaymentAmountForSpender({
+        publicClient: {
+          async readContract(params: { functionName: string }): Promise<bigint> {
+            expect(params.functionName).toBe('allowance');
+            return 4n;
+          },
+          async waitForTransactionReceipt() {
+            return { status: 'success' };
+          },
         },
-        async waitForTransactionReceipt() {
-          return { status: 'success' };
+        walletClient: {
+          async writeContract(): Promise<Hash> {
+            return approvalTxHash;
+          },
         },
-      } as never,
-      walletClient: {
-        async writeContract(): Promise<Hash> {
-          return approvalTxHash;
-        },
-      },
-      account: sellerAddress,
-      accountAddress: sellerAddress,
-      spenderAddress: spender,
-      currency,
-      requiredAmount: 5n,
-    });
+        account: sellerAddress,
+        accountAddress: sellerAddress,
+        spenderAddress: spender,
+        currency,
+        requiredAmount: 5n,
+      });
 
-    await expect(payment).rejects.toThrow(
-      `ERC20 approval transaction ${approvalTxHash} was mined but allowance for spender ${spender}`,
-    );
+      const assertion = expect(payment).rejects.toThrow(
+        `ERC20 approval transaction ${approvalTxHash} was mined but allowance for spender ${spender}`,
+      );
+      await vi.advanceTimersByTimeAsync(15_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('returns ERC20 approval details after the allowance is confirmed', async () => {
+  it('polls stale ERC20 allowance reads before returning approval details', async () => {
+    vi.useFakeTimers();
     const currency = '0x9999999999999999999999999999999999999999';
     const spender = '0x8888888888888888888888888888888888888888';
     let allowanceReads = 0;
-    const payment = await preparePaymentAmountForSpender({
-      // eslint-disable-next-line no-restricted-syntax
-      publicClient: {
-        async readContract(params: { functionName: string }): Promise<bigint> {
-          expect(params.functionName).toBe('allowance');
-          allowanceReads += 1;
-          return allowanceReads === 1 ? 4n : 5n;
+    try {
+      const paymentPromise = preparePaymentAmountForSpender({
+        publicClient: {
+          async readContract(params: { functionName: string }): Promise<bigint> {
+            expect(params.functionName).toBe('allowance');
+            allowanceReads += 1;
+            return allowanceReads < 3 ? 4n : 5n;
+          },
+          async waitForTransactionReceipt() {
+            return { status: 'success' };
+          },
         },
-        async waitForTransactionReceipt() {
-          return { status: 'success' };
+        walletClient: {
+          async writeContract(): Promise<Hash> {
+            return approvalTxHash;
+          },
         },
-      } as never,
-      walletClient: {
-        async writeContract(): Promise<Hash> {
-          return approvalTxHash;
-        },
-      },
-      account: sellerAddress,
-      accountAddress: sellerAddress,
-      spenderAddress: spender,
-      currency,
-      requiredAmount: 5n,
-    });
+        account: sellerAddress,
+        accountAddress: sellerAddress,
+        spenderAddress: spender,
+        currency,
+        requiredAmount: 5n,
+      });
+      await vi.advanceTimersByTimeAsync(500);
+      const payment = await paymentPromise;
 
-    expect(payment).toMatchObject({
-      value: 0n,
-      requiredAmount: 5n,
-      approvalTxHash,
-    });
+      expect(allowanceReads).toBe(3);
+      expect(payment).toMatchObject({
+        value: 0n,
+        requiredAmount: 5n,
+        approvalTxHash,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not approve token allowance when the allowance read fails', async () => {
