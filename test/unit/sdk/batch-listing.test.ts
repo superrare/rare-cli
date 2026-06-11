@@ -173,6 +173,53 @@ describe('batch listing namespace', () => {
     expect(writeCalls[0]?.args[7]).toEqual([]);
   });
 
+  it('rejects explicit empty allowListProof while the allowlist is active', async () => {
+    const writeCalls: Array<{ functionName: string; args: unknown[] }> = [];
+    const namespace = createBatchListingNamespace(
+      {
+        async readContract(params: { functionName: string }) {
+          if (params.functionName === 'getAllowListConfig') {
+            return {
+              root: hex32('6'),
+              endTimestamp: 101n,
+            };
+          }
+          throw new Error(`Unexpected readContract: ${params.functionName}`);
+        },
+        async getBlock() {
+          return { timestamp: 100n };
+        },
+      } as never,
+      {
+        publicClient: {} as never,
+        apiFetch: rareApiRootFetch(),
+        walletClient: {
+          account: { address: accountAddress },
+          async writeContract(params: { functionName: string; args: unknown[] }) {
+            writeCalls.push(params);
+            return hex32('7');
+          },
+        } as never,
+      },
+      addresses,
+    );
+
+    await expect(namespace.buy({
+      creator: accountAddress,
+      currency: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+      price: 1n,
+      proofArtifact: {
+        root: hex32('4'),
+        contract: '0x1111111111111111111111111111111111111111',
+        tokenId: '1',
+        proof: [hex32('5')],
+        allowListProof: [],
+      },
+    })).rejects.toThrow(/allowListProof must not be empty/);
+
+    expect(writeCalls).toEqual([]);
+  });
+
   it('approves the ERC721 approval manager rather than the marketplace', async () => {
     const writeCalls: Array<{ functionName: string; args: unknown[] }> = [];
     let approvalChecks = 0;

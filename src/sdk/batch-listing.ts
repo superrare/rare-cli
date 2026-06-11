@@ -37,6 +37,7 @@ import {
   shapeBatchListingStatus,
   shouldResolveBatchListingAllowListProof,
   uniqueAddresses,
+  validateBatchListingBuyProofPolicy,
 } from './batch-listing-core.js';
 import { normalizeBytes32 } from './batch-core.js';
 import { resolveCurrencyForSdk } from './currency.js';
@@ -165,10 +166,6 @@ export function createBatchListingNamespace(
         params,
         accountAddress,
       });
-
-      if (proofArtifact.proof.length === 0) {
-        throw new Error('Proof artifact proof must not be empty; the batch listing contract rejects empty token proofs');
-      }
 
       const price = requireInput(params.price, 'price');
       const currency = resolveCurrencyForSdk(params.currency, addresses.chain).address;
@@ -405,13 +402,26 @@ async function resolveBatchListingBuyProofArtifact(opts: {
     opts.params.creator,
     tokenProof.root,
   );
-  const block = allowList === undefined || tokenProof.allowListProof !== undefined
+  const needsBlock =
+    allowList !== undefined &&
+    (tokenProof.allowListProof === undefined || tokenProof.allowListProof.length === 0);
+  const block = !needsBlock
     ? undefined
     : await opts.publicClient.getBlock();
+  const nowTimestamp = block === undefined ? undefined : BigInt(block.timestamp);
+  const proofValidation = validateBatchListingBuyProofPolicy({
+    allowList,
+    tokenProof,
+    nowTimestamp,
+  });
+  if (!proofValidation.isValid) {
+    throw new Error(proofValidation.errorMessage);
+  }
+
   const shouldResolveAllowListProof = shouldResolveBatchListingAllowListProof({
     allowList,
     tokenProof,
-    nowTimestamp: block === undefined ? undefined : BigInt(block.timestamp),
+    nowTimestamp,
   });
 
   if (!shouldResolveAllowListProof) {
@@ -427,11 +437,21 @@ async function resolveBatchListingBuyProofArtifact(opts: {
     storageTarget: 'batch-listing',
   });
 
-  return {
+  const resolvedTokenProof = {
     ...tokenProof,
     allowListProof: allowListProof.proof,
     allowListAddress: allowListProof.address,
   };
+  const resolvedProofValidation = validateBatchListingBuyProofPolicy({
+    allowList,
+    tokenProof: resolvedTokenProof,
+    nowTimestamp,
+  });
+  if (!resolvedProofValidation.isValid) {
+    throw new Error(resolvedProofValidation.errorMessage);
+  }
+
+  return resolvedTokenProof;
 }
 
 async function resolveBatchListingTokenProof(opts: {
