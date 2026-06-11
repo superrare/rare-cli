@@ -141,3 +141,27 @@ test('Uniswap quote helpers select recipient output and enforce recipient limita
   assert.equal(quote.minAmountOut, 1100n);
   assert.equal(quote.routeDescription, 'CLASSIC route');
 });
+
+test('Uniswap quote helper rejects aggregated outputs without the requested recipient', () => {
+  const quotePayload = {
+    output: { amount: '1000' },
+    aggregatedOutputs: [
+      { amount: '900', minAmount: '850', recipient: otherAddress },
+    ],
+  };
+
+  assert.throws(
+    () => getQuotedRecipientAmount(quotePayload, accountAddress),
+    /requested recipient/i,
+  );
+});
+
+test('Uniswap quote helper applies top-level slippage when aggregated outputs are omitted', () => {
+  assert.deepEqual(getQuotedRecipientAmount({
+    output: { amount: '10000' },
+    slippage: 1.25,
+  }, accountAddress), {
+    estimatedAmountOut: 10000n,
+    minAmountOut: 9875n,
+  });
+});

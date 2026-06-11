@@ -46,6 +46,7 @@ type UniswapQuoteLike = {
   output: {
     amount: string;
   };
+  slippage?: number;
   aggregatedOutputs?: Array<{
     amount: string;
     recipient: Address;
@@ -169,9 +170,18 @@ export function getQuotedRecipientAmount(quote: UniswapQuoteLike, recipient: Add
     };
   }
 
+  if (quote.aggregatedOutputs !== undefined) {
+    throw new Error('Uniswap quote did not include output for the requested recipient.');
+  }
+
+  if (quote.slippage === undefined || !Number.isFinite(quote.slippage)) {
+    throw new Error('Uniswap quote is missing recipient output slippage data.');
+  }
+
+  const estimatedAmountOut = BigInt(quote.output.amount);
   return {
-    estimatedAmountOut: BigInt(quote.output.amount),
-    minAmountOut: BigInt(quote.output.amount),
+    estimatedAmountOut,
+    minAmountOut: computeMinAmountOut(estimatedAmountOut, Math.round(quote.slippage * 100)),
   };
 }
 
