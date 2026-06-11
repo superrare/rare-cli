@@ -1,13 +1,13 @@
 import { defineConfig } from 'vitest/config';
 
-const runLiveE2E = process.argv.some(isLiveE2EArg);
+const runLiveE2E = shouldRunLiveE2E(process.argv);
 const liveE2EHookTimeoutMs = parsePositiveInt(process.env.E2E_LIVE_HOOK_TIMEOUT_MS, 3_600_000);
 
 export default defineConfig({
   test: {
     environment: 'node',
     globals: false,
-    fileParallelism: true,
+    fileParallelism: shouldUseFileParallelism(process.argv),
     include: ['test/**/*.test.ts'],
     exclude: [
       'node_modules/**',
@@ -35,6 +35,14 @@ export default defineConfig({
 
 export function isLiveE2EArg(arg: string): boolean {
   return arg.replaceAll('\\', '/').includes('test/e2e-live');
+}
+
+export function shouldRunLiveE2E(argv: readonly string[]): boolean {
+  return argv.some(isLiveE2EArg);
+}
+
+export function shouldUseFileParallelism(argv: readonly string[]): boolean {
+  return !shouldRunLiveE2E(argv);
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
