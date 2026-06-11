@@ -1,9 +1,12 @@
+/* eslint-disable no-restricted-syntax */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPublicClient, createWalletClient, custom } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
 import { resolveCurrency, viemChains } from '../../../src/contracts/addresses.js';
 import { createRareClient } from '../../../src/sdk/client.js';
+import { createSwapNamespace, type BuyTokenParams, type SellTokenParams } from '../../../src/sdk/swap.js';
+import { PaymentApprovalRequiredError } from '../../../src/sdk/helpers.js';
 
 const accountAddress = '0x1234567890123456789012345678901234567890' as const;
 const rareAddress = resolveCurrency('rare', 'sepolia');
@@ -11,6 +14,19 @@ const baseRareAddress = resolveCurrency('rare', 'base');
 const swapAccount = privateKeyToAccount(
   '0x0000000000000000000000000000000000000000000000000000000000000001',
 );
+const buyTokenAutoApproveParams = {
+  token: rareAddress,
+  amountIn: '1',
+  autoApprove: false,
+} satisfies BuyTokenParams;
+const sellTokenAutoApproveParams = {
+  token: rareAddress,
+  amountIn: '1',
+  autoApprove: false,
+} satisfies SellTokenParams;
+
+void buyTokenAutoApproveParams;
+void sellTokenAutoApproveParams;
 
 describe('Swap SDK fallback handling', () => {
   afterEach(() => {
@@ -182,5 +198,46 @@ describe('Swap SDK fallback handling', () => {
 
     expect(request).not.toHaveBeenCalled();
     expect(writeContract).not.toHaveBeenCalled();
+  });
+
+  it('honors autoApprove false for raw token sells before writing approvals', async () => {
+    const writeContract = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected approval write');
+    });
+    const waitForTransactionReceipt = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected receipt wait');
+    });
+    const namespace = createSwapNamespace(
+      {
+        publicClient: {
+          async readContract(params: { functionName: string }) {
+            if (params.functionName === 'decimals') return 18;
+            if (params.functionName === 'allowance') return 0n;
+            throw new Error(`unexpected readContract: ${params.functionName}`);
+          },
+          waitForTransactionReceipt,
+        } as never,
+        account: accountAddress,
+        walletClient: {
+          account: { address: accountAddress },
+          writeContract,
+        } as never,
+      },
+      'sepolia',
+      11_155_111,
+      { swapRouter: '0x2222222222222222222222222222222222222222' },
+    );
+
+    await expect(namespace.sellToken({
+      route: 'raw',
+      token: rareAddress,
+      amountIn: '1',
+      minAmountOut: '0.1',
+      commands: '0x00',
+      inputs: ['0x00'],
+      autoApprove: false,
+    })).rejects.toBeInstanceOf(PaymentApprovalRequiredError);
+    expect(writeContract).not.toHaveBeenCalled();
+    expect(waitForTransactionReceipt).not.toHaveBeenCalled();
   });
 });

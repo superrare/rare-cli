@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createPublicClient, createWalletClient, custom, http, type Hash, type PublicClient, type WalletClient } from 'viem';
+import { createPublicClient, createWalletClient, custom, http, type Hash, type PublicClient, type TransactionReceipt, type WalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { mainnet } from 'viem/chains';
 import {
@@ -229,7 +229,7 @@ describe('payment approval planning', () => {
             return 4n;
           },
           async waitForTransactionReceipt() {
-            return { status: 'success' };
+            return mockTransactionReceipt();
           },
         },
         walletClient: {
@@ -268,7 +268,7 @@ describe('payment approval planning', () => {
             return allowanceReads < 3 ? 4n : 5n;
           },
           async waitForTransactionReceipt() {
-            return { status: 'success' };
+            return mockTransactionReceipt();
           },
         },
         walletClient: {
@@ -330,6 +330,41 @@ describe('payment approval planning', () => {
     expect(writeContract).not.toHaveBeenCalled();
     expect(waitForTransactionReceipt).not.toHaveBeenCalled();
   });
+
+  it('returns a typed ERC20 approval-required error before writing when auto approval is disabled', async () => {
+    const token = '0x9999999999999999999999999999999999999999';
+    const spender = '0x8888888888888888888888888888888888888888';
+    const writeContract = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected approval write');
+    });
+    const waitForTransactionReceipt = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected approval receipt wait');
+    });
+
+    await expect(ensureTokenAllowance(
+      // eslint-disable-next-line no-restricted-syntax
+      {
+        async readContract(params: { functionName: string }): Promise<bigint> {
+          expect(params.functionName).toBe('allowance');
+          return 4n;
+        },
+        waitForTransactionReceipt,
+      } as never,
+      // eslint-disable-next-line no-restricted-syntax
+      {
+        writeContract,
+      } as never,
+      sellerAccount,
+      sellerAddress,
+      token,
+      spender,
+      5n,
+      false,
+    )).rejects.toBeInstanceOf(PaymentApprovalRequiredError);
+
+    expect(writeContract).not.toHaveBeenCalled();
+    expect(waitForTransactionReceipt).not.toHaveBeenCalled();
+  });
 });
 
 describe('NFT approval planning', () => {
@@ -365,6 +400,27 @@ describe('NFT approval planning', () => {
     });
   });
 });
+
+function mockTransactionReceipt(): TransactionReceipt {
+  const hash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+  const address = '0x0000000000000000000000000000000000000001';
+  return {
+    blockHash: hash,
+    blockNumber: 123n,
+    contractAddress: null,
+    cumulativeGasUsed: 0n,
+    effectiveGasPrice: 0n,
+    from: address,
+    gasUsed: 0n,
+    logs: [],
+    logsBloom: '0x',
+    status: 'success',
+    to: address,
+    transactionHash: hash,
+    transactionIndex: 0,
+    type: 'eip1559',
+  };
+}
 
 describe('currency decimal resolution', () => {
   it('uses configured decimals for known currencies without an RPC read', async () => {

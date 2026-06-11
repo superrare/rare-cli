@@ -134,6 +134,7 @@ export async function ensureTokenAllowance(
   token: Address,
   spender: Address,
   amount: bigint,
+  autoApprove = true,
 ): Promise<Hash | undefined> {
   if (isAddressEqual(token, ETH_ADDRESS) || amount === 0n) {
     return undefined;
@@ -148,6 +149,10 @@ export async function ensureTokenAllowance(
 
   if (allowance >= amount) {
     return undefined;
+  }
+
+  if (!autoApprove) {
+    throw new PaymentApprovalRequiredError({ requiredAmount: amount, spenderAddress: spender });
   }
 
   const approveTx = await walletClient.writeContract({
