@@ -22,7 +22,14 @@ describe('Rare SDK client API request shaping', () => {
     await withRareApiFixture(async ({ baseUrl, requests }) => {
       const rare = createTestClient(baseUrl);
 
-      await rare.search.nfts({ page: 2, perPage: 3, query: 'portrait' });
+      await rare.search.nfts({
+        page: 2,
+        perPage: 3,
+        query: 'portrait',
+        listingType: 'SALE_PRICE',
+        auctionState: 'RUNNING',
+        offerBuyerAddress: owner,
+      });
       await rare.search.collections({ page: 4, perPage: 5, query: 'editions' });
       await rare.search.events({
         contract,
@@ -46,6 +53,12 @@ describe('Rare SDK client API request shaping', () => {
             page: '2',
             perPage: '3',
             q: 'portrait',
+            hasAuction: 'true',
+            hasListing: 'true',
+            hasOffer: 'true',
+            listingType: 'SALE_PRICE',
+            auctionState: 'RUNNING',
+            offerBuyerAddress: owner,
           }),
         }),
         expect.objectContaining({
