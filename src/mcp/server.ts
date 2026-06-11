@@ -5,6 +5,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { isAddress, isHex, type Address } from 'viem';
 import { z } from 'zod';
+import pkg from '../../package.json' with { type: 'json' };
 import { getConfiguredAccountAddress, getConfiguredUniswapApiKey, getPublicClient, tryGetWalletClient } from '../client.js';
 import { getChainConfig, readConfig } from '../config.js';
 import { supportedChains, type SupportedChain } from '../contracts/addresses.js';
@@ -82,6 +83,11 @@ const rawRouteSchema = {
   inputs: z.array(hexSchema),
 };
 
+export const rareMcpServerMetadata = {
+  name: pkg.name,
+  version: pkg.version,
+} as const;
+
 export async function serveMcp(opts: McpServeOptions = {}): Promise<void> {
   const server = createRareMcpServer(opts);
   const transport = new StdioServerTransport();
@@ -89,10 +95,7 @@ export async function serveMcp(opts: McpServeOptions = {}): Promise<void> {
 }
 
 export function createRareMcpServer(opts: McpServeOptions = {}): McpServer {
-  const server = new McpServer({
-    name: '@rareprotocol/rare-cli',
-    version: '1.0.0',
-  });
+  const server = new McpServer(rareMcpServerMetadata);
   const enabledNames = new Set(selectMcpToolNames({ allowWrites: opts.allowWrites ?? false }));
 
   for (const spec of mcpToolSpecs) {
