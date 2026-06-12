@@ -134,6 +134,7 @@ export async function ensureTokenAllowance(
   token: Address,
   spender: Address,
   amount: bigint,
+  autoApprove = true,
 ): Promise<Hash | undefined> {
   if (isAddressEqual(token, ETH_ADDRESS) || amount === 0n) {
     return undefined;
@@ -148,6 +149,10 @@ export async function ensureTokenAllowance(
 
   if (allowance >= amount) {
     return undefined;
+  }
+
+  if (!autoApprove) {
+    throw new PaymentApprovalRequiredError({ requiredAmount: amount, spenderAddress: spender });
   }
 
   const approveTx = await walletClient.writeContract({
@@ -381,16 +386,38 @@ async function confirmErc20Approval(
     throw new Error(`ERC20 approval transaction ${params.approvalTxHash} did not succeed.`);
   }
 
-  const allowance = await readAllowance(
-    publicClient,
-    params.currency,
-    params.accountAddress,
-    params.spenderAddress,
-  );
-  if (allowance < params.requiredAmount) {
-    throw new Error(
-      `ERC20 approval transaction ${params.approvalTxHash} was mined but allowance for spender ${params.spenderAddress} ` +
-        `is ${allowance.toString()} raw units, below the required ${params.requiredAmount.toString()} raw units.`,
+  await waitForErc20Allowance(publicClient, params);
+}
+
+async function waitForErc20Allowance(
+  publicClient: PaymentAllowanceReadClient,
+  params: {
+    approvalTxHash: Hash;
+    currency: Address;
+    accountAddress: Address;
+    spenderAddress: Address;
+    requiredAmount: bigint;
+    timeoutMs?: number;
+    intervalMs?: number;
+  },
+): Promise<void> {
+  const timeoutMs = params.timeoutMs ?? 15_000;
+  const intervalMs = params.intervalMs ?? 500;
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const allowance = await readAllowance(
+      publicClient,
+      params.currency,
+      params.accountAddress,
+      params.spenderAddress,
     );
+    if (allowance >= params.requiredAmount) return;
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
+
+  throw new Error(
+    `ERC20 approval transaction ${params.approvalTxHash} was mined but allowance for spender ${params.spenderAddress} ` +
+      `did not reach ${params.requiredAmount.toString()} raw units within ${timeoutMs}ms. Retry the operation.`,
+  );
 }

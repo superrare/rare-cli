@@ -231,6 +231,14 @@ export function buildNftSearchQuery(params: NftSearchParams = {}): {
   tags?: string[];
   mediaType?: NftSearchParams['mediaType'];
 } {
+  const hasAuction = params.hasAuction ??
+    (params.auctionState !== undefined ||
+      params.auctionCreatorAddress !== undefined ||
+      params.auctionBidderAddress !== undefined ||
+      undefined);
+  const hasListing = params.hasListing ?? (params.listingType !== undefined || undefined);
+  const hasOffer = params.hasOffer ?? (params.offerBuyerAddress !== undefined || undefined);
+
   return {
     q: params.query,
     page: params.page ?? 1,
@@ -242,12 +250,12 @@ export function buildNftSearchQuery(params: NftSearchParams = {}): {
     collectionId: params.collectionId,
     chainId: params.chainId,
     listingType: params.listingType,
-    hasAuction: params.hasAuction,
+    hasAuction,
     auctionState: params.auctionState,
     auctionCreatorAddress: params.auctionCreatorAddress,
     auctionBidderAddress: params.auctionBidderAddress,
-    hasListing: params.hasListing,
-    hasOffer: params.hasOffer,
+    hasListing,
+    hasOffer,
     offerBuyerAddress: params.offerBuyerAddress,
     tags: params.tags,
     mediaType: params.mediaType,

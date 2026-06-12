@@ -214,6 +214,9 @@ export function searchCommand(): Command {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const page = parsePositiveInteger(opts.page, '--page');
       const perPage = parsePositiveInteger(opts.perPage, '--per-page');
+      if (opts.tokenId !== undefined && opts.contract === undefined) {
+        throw new Error('rare search events --token-id requires --contract.');
+      }
       const rare = createRareClient({ publicClient: getPublicClient(chain) });
       const params: RareClientEventSearchParams = {
         collectionId: opts.collectionId,

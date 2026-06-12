@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createPublicClient, createWalletClient, custom, http, type Hash, type PublicClient, type WalletClient } from 'viem';
+import { createPublicClient, createWalletClient, custom, http, type Hash, type PublicClient, type TransactionReceipt, type WalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { mainnet } from 'viem/chains';
 import {
@@ -83,6 +83,7 @@ describe('SDK helper normalization', () => {
   it('normalizes unix timestamp and ISO date inputs', () => {
     expect(toUnixTimestamp('1778500000', 'startTime')).toBe(1_778_500_000n);
     expect(toUnixTimestamp('2026-05-18T12:30:45Z', 'startTime')).toBe(1_779_107_445n);
+    expect(toUnixTimestamp('2026-05-18T12:30:45', 'startTime')).toBe(1_779_107_445n);
     expect(toUnixTimestamp('2026-05-18T08:30:45-04:00', 'startTime')).toBe(1_779_107_445n);
   });
 
@@ -216,70 +217,83 @@ describe('payment approval planning', () => {
     await expect(payment).rejects.toThrow(`ERC20 approval transaction ${approvalTxHash} did not succeed.`);
   });
 
-  it('verifies ERC20 allowance after a mined approval', async () => {
+  it('times out when ERC20 allowance never propagates after a mined approval', async () => {
+    vi.useFakeTimers();
     const currency = '0x9999999999999999999999999999999999999999';
     const spender = '0x8888888888888888888888888888888888888888';
-    const payment = preparePaymentAmountForSpender({
-      // eslint-disable-next-line no-restricted-syntax
-      publicClient: {
-        async readContract(params: { functionName: string }): Promise<bigint> {
-          expect(params.functionName).toBe('allowance');
-          return 4n;
+    try {
+      const payment = preparePaymentAmountForSpender({
+        publicClient: {
+          async readContract(params: { functionName: string }): Promise<bigint> {
+            expect(params.functionName).toBe('allowance');
+            return 4n;
+          },
+          async waitForTransactionReceipt() {
+            return mockTransactionReceipt();
+          },
         },
-        async waitForTransactionReceipt() {
-          return { status: 'success' };
+        walletClient: {
+          async writeContract(): Promise<Hash> {
+            return approvalTxHash;
+          },
         },
-      } as never,
-      walletClient: {
-        async writeContract(): Promise<Hash> {
-          return approvalTxHash;
-        },
-      },
-      account: sellerAddress,
-      accountAddress: sellerAddress,
-      spenderAddress: spender,
-      currency,
-      requiredAmount: 5n,
-    });
+        account: sellerAddress,
+        accountAddress: sellerAddress,
+        spenderAddress: spender,
+        currency,
+        requiredAmount: 5n,
+      });
 
-    await expect(payment).rejects.toThrow(
-      `ERC20 approval transaction ${approvalTxHash} was mined but allowance for spender ${spender}`,
-    );
+      const assertion = expect(payment).rejects.toThrow(
+        `ERC20 approval transaction ${approvalTxHash} was mined but allowance for spender ${spender}`,
+      );
+      await vi.advanceTimersByTimeAsync(15_000);
+      await assertion;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
-  it('returns ERC20 approval details after the allowance is confirmed', async () => {
+  it('polls stale ERC20 allowance reads before returning approval details', async () => {
+    vi.useFakeTimers();
     const currency = '0x9999999999999999999999999999999999999999';
     const spender = '0x8888888888888888888888888888888888888888';
     let allowanceReads = 0;
-    const payment = await preparePaymentAmountForSpender({
-      // eslint-disable-next-line no-restricted-syntax
-      publicClient: {
-        async readContract(params: { functionName: string }): Promise<bigint> {
-          expect(params.functionName).toBe('allowance');
-          allowanceReads += 1;
-          return allowanceReads === 1 ? 4n : 5n;
+    try {
+      const paymentPromise = preparePaymentAmountForSpender({
+        publicClient: {
+          async readContract(params: { functionName: string }): Promise<bigint> {
+            expect(params.functionName).toBe('allowance');
+            allowanceReads += 1;
+            return allowanceReads < 3 ? 4n : 5n;
+          },
+          async waitForTransactionReceipt() {
+            return mockTransactionReceipt();
+          },
         },
-        async waitForTransactionReceipt() {
-          return { status: 'success' };
+        walletClient: {
+          async writeContract(): Promise<Hash> {
+            return approvalTxHash;
+          },
         },
-      } as never,
-      walletClient: {
-        async writeContract(): Promise<Hash> {
-          return approvalTxHash;
-        },
-      },
-      account: sellerAddress,
-      accountAddress: sellerAddress,
-      spenderAddress: spender,
-      currency,
-      requiredAmount: 5n,
-    });
+        account: sellerAddress,
+        accountAddress: sellerAddress,
+        spenderAddress: spender,
+        currency,
+        requiredAmount: 5n,
+      });
+      await vi.advanceTimersByTimeAsync(500);
+      const payment = await paymentPromise;
 
-    expect(payment).toMatchObject({
-      value: 0n,
-      requiredAmount: 5n,
-      approvalTxHash,
-    });
+      expect(allowanceReads).toBe(3);
+      expect(payment).toMatchObject({
+        value: 0n,
+        requiredAmount: 5n,
+        approvalTxHash,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not approve token allowance when the allowance read fails', async () => {
@@ -312,6 +326,41 @@ describe('payment approval planning', () => {
       spender,
       5n,
     )).rejects.toBe(readError);
+
+    expect(writeContract).not.toHaveBeenCalled();
+    expect(waitForTransactionReceipt).not.toHaveBeenCalled();
+  });
+
+  it('returns a typed ERC20 approval-required error before writing when auto approval is disabled', async () => {
+    const token = '0x9999999999999999999999999999999999999999';
+    const spender = '0x8888888888888888888888888888888888888888';
+    const writeContract = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected approval write');
+    });
+    const waitForTransactionReceipt = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected approval receipt wait');
+    });
+
+    await expect(ensureTokenAllowance(
+      // eslint-disable-next-line no-restricted-syntax
+      {
+        async readContract(params: { functionName: string }): Promise<bigint> {
+          expect(params.functionName).toBe('allowance');
+          return 4n;
+        },
+        waitForTransactionReceipt,
+      } as never,
+      // eslint-disable-next-line no-restricted-syntax
+      {
+        writeContract,
+      } as never,
+      sellerAccount,
+      sellerAddress,
+      token,
+      spender,
+      5n,
+      false,
+    )).rejects.toBeInstanceOf(PaymentApprovalRequiredError);
 
     expect(writeContract).not.toHaveBeenCalled();
     expect(waitForTransactionReceipt).not.toHaveBeenCalled();
@@ -351,6 +400,27 @@ describe('NFT approval planning', () => {
     });
   });
 });
+
+function mockTransactionReceipt(): TransactionReceipt {
+  const hash = '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef';
+  const address = '0x0000000000000000000000000000000000000001';
+  return {
+    blockHash: hash,
+    blockNumber: 123n,
+    contractAddress: null,
+    cumulativeGasUsed: 0n,
+    effectiveGasPrice: 0n,
+    from: address,
+    gasUsed: 0n,
+    logs: [],
+    logsBloom: '0x',
+    status: 'success',
+    to: address,
+    transactionHash: hash,
+    transactionIndex: 0,
+    type: 'eip1559',
+  };
+}
 
 describe('currency decimal resolution', () => {
   it('uses configured decimals for known currencies without an RPC read', async () => {

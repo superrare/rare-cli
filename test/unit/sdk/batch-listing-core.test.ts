@@ -9,6 +9,7 @@ import {
   shapeBatchListingStatus,
   shouldResolveBatchListingAllowListProof,
   uniqueAddresses,
+  validateBatchListingBuyProofPolicy,
 } from '../../../src/sdk/batch-listing-core.js';
 import type { BatchListingRootArtifact } from '../../../src/sdk/batch-listing.js';
 import type { BatchListingProofArtifact } from '../../../src/sdk/types/batch-listing.js';
@@ -182,6 +183,40 @@ describe('batch listing core', () => {
       tokenProof: { ...tokenProof, allowListProof: [`0x${'55'.repeat(32)}`] },
       nowTimestamp: 99n,
     })).toBe(false);
+  });
+
+  it('validates batch listing proof policy separately from artifact shape', () => {
+    const tokenProof: BatchListingProofArtifact = {
+      root,
+      contract,
+      tokenId: '1',
+      proof: [`0x${'44'.repeat(32)}`],
+    };
+    const allowList = { root: allowListRoot, endTimestamp: 100n };
+
+    expect(validateBatchListingBuyProofPolicy({
+      allowList: undefined,
+      tokenProof: { ...tokenProof, proof: [] },
+      nowTimestamp: undefined,
+    })).toMatchObject({
+      isValid: false,
+      error: 'empty-token-proof',
+    });
+
+    expect(validateBatchListingBuyProofPolicy({
+      allowList,
+      tokenProof: { ...tokenProof, allowListProof: [] },
+      nowTimestamp: 99n,
+    })).toMatchObject({
+      isValid: false,
+      error: 'empty-active-allowlist-proof',
+    });
+
+    expect(validateBatchListingBuyProofPolicy({
+      allowList,
+      tokenProof: { ...tokenProof, allowListProof: [] },
+      nowTimestamp: 100n,
+    })).toEqual({ isValid: true });
   });
 
   it('shapes active and cancelled status from read results', () => {

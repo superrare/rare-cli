@@ -286,7 +286,6 @@ export function validateProofArtifact(value: unknown): asserts value is BatchLis
   assertAddress(value.contract, 'contract');
   if (typeof value.tokenId !== 'string') throw new Error('tokenId must be a string');
   if (!Array.isArray(value.proof)) throw new Error('proof must be an array of bytes32 hex');
-  if (value.proof.length === 0) throw new Error('proof must not be empty');
   value.proof.forEach((proof) => {
     assertHexRoot(proof, 'proof entry');
   });

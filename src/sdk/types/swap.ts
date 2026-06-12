@@ -65,8 +65,12 @@ export type TokenTradeRawRouteParams = Omit<TokenTradeBaseParams, 'minAmountOut'
   inputs: readonly Hex[];
 }
 
-export type BuyTokenParams = TokenTradeQuoteParams | TokenTradeRawRouteParams;
-export type SellTokenParams = TokenTradeQuoteParams | TokenTradeRawRouteParams;
+export type TokenTradeWriteOptions = {
+  autoApprove?: boolean;
+}
+
+export type BuyTokenParams = (TokenTradeQuoteParams | TokenTradeRawRouteParams) & TokenTradeWriteOptions;
+export type SellTokenParams = (TokenTradeQuoteParams | TokenTradeRawRouteParams) & TokenTradeWriteOptions;
 
 export type TokenTradeRouteSource = 'liquid-edition' | 'known-pool' | 'uniswap-api' | 'raw';
 export type TokenTradeExecution = 'liquid-router' | 'uniswap-api' | 'raw-router';
