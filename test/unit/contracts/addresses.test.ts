@@ -66,6 +66,9 @@ describe('chain and currency helpers', () => {
     expect(getSwapRouterAddress('base')).toBe('0x6d078A410ee2AD08cACD8d22b486365433e98b7b');
     expect(getV4QuoterAddress('base')).toBe(getAddress('0x0d5e0f971ed27fbff6c2837bf31316121532048d'));
     expect(getContractAddresses('base-sepolia')).toMatchObject({
+      erc1155Marketplace: getAddress('0x90406F0c92256055EeACBDFEaa39d348b0DB8BF5'),
+      erc1155ContractFactory: getAddress('0x293AE7701A7830B1d38A7608EdF86A106d9E2645'),
+      erc1155ApprovalManager: getAddress('0xDCEA787A109b2627a895EEb49FCe2D1dA63aA8E4'),
       liquidFactory: getAddress('0x912ecC55445d87149d09d83426D0aC41379bB643'),
       swapRouter: getAddress('0x92438008608949E2C7eCef34c474792bAFe8a971'),
       v4Quoter: getAddress('0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba'),
@@ -101,7 +104,12 @@ describe('chain and currency helpers', () => {
     expect(getErc1155MarketplaceAddress('sepolia')).toBe('0xb26DE57230913a44F37AcE78F5b7eB2Efec474eE');
     expect(getErc1155ContractFactoryAddress('sepolia')).toBe('0xF8FF48ca6022138C58e2eDD680a02d7Cd394B957');
     expect(getErc1155ApprovalManagerAddress('sepolia')).toBe('0xcD26069837682aeD8Ba20852AD17b8f64a860906');
-    expect(() => getErc1155MarketplaceAddress('mainnet')).toThrow('ERC1155 marketplace is not deployed on "mainnet". Available on: sepolia');
+    expect(getErc1155MarketplaceAddress('base-sepolia')).toBe('0x90406F0c92256055EeACBDFEaa39d348b0DB8BF5');
+    expect(getErc1155ContractFactoryAddress('base-sepolia')).toBe('0x293AE7701A7830B1d38A7608EdF86A106d9E2645');
+    expect(getErc1155ApprovalManagerAddress('base-sepolia')).toBe('0xDCEA787A109b2627a895EEb49FCe2D1dA63aA8E4');
+    expect(() => getErc1155MarketplaceAddress('mainnet')).toThrow(
+      'ERC1155 marketplace is not deployed on "mainnet". Available on: sepolia, base-sepolia',
+    );
   });
 
   it('requires optional contract addresses only where configured', () => {

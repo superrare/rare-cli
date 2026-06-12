@@ -16,7 +16,7 @@ import {
 import { rareErc1155Abi } from '../contracts/abis/rare-erc1155.js';
 import { rareErc1155ContractFactoryAbi } from '../contracts/abis/rare-erc1155-contract-factory.js';
 import { rareErc1155MarketplaceAbi } from '../contracts/abis/rare-erc1155-marketplace.js';
-import { ETH_ADDRESS, type ContractAddresses, type SupportedChain } from '../contracts/addresses.js';
+import { ETH_ADDRESS, contractAddresses, type ContractAddresses, type SupportedChain } from '../contracts/addresses.js';
 import { approveNftContractIfNeeded, MinterApprovalRequiredError, runWithApprovalSideEffectAlert } from './approvals-shell.js';
 import { toCurrencyAmount, calculateMarketplacePaymentAmountFromSettings, preparePaymentAmountForSpender } from './payments-shell.js';
 import type { RareClientConfig } from './types/client.js';
@@ -1101,7 +1101,15 @@ function createErc1155ReleaseNamespace(
 
 function requireErc1155Addresses(chain: SupportedChain, addresses: ContractAddresses): Erc1155Addresses {
   if (!addresses.erc1155Marketplace || !addresses.erc1155ContractFactory || !addresses.erc1155ApprovalManager || !addresses.marketplaceSettings) {
-    throw new Error(`ERC1155 contracts are not configured for "${chain}". Supported chains: sepolia`);
+    const deployed = Object.entries(contractAddresses)
+      .filter(([, set]) => (
+        set.erc1155Marketplace !== undefined &&
+        set.erc1155ContractFactory !== undefined &&
+        set.erc1155ApprovalManager !== undefined &&
+        set.marketplaceSettings !== undefined
+      ))
+      .map(([name]) => name);
+    throw new Error(`ERC1155 contracts are not configured for "${chain}". Supported chains: ${deployed.join(', ')}`);
   }
   return {
     erc1155Marketplace: addresses.erc1155Marketplace,

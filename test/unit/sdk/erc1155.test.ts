@@ -23,6 +23,28 @@ const addresses: ContractAddresses = {
 };
 
 describe('ERC1155 listing namespace preflight', () => {
+  it('rejects ERC1155 listing reads on chains without ERC1155 deployments', async () => {
+    const namespace = createErc1155ListingNamespace(
+      {} as never,
+      {
+        publicClient: {} as never,
+        account,
+        walletClient: { writeContract: vi.fn() } as never,
+      },
+      'mainnet',
+      {
+        factory: '0x4444444444444444444444444444444444444444',
+        auction: '0x5555555555555555555555555555555555555555',
+      },
+    );
+
+    await expect(namespace.status({
+      contract,
+      tokenId: '1',
+      seller,
+    })).rejects.toThrow('ERC1155 contracts are not configured for "mainnet". Supported chains: sepolia, base-sepolia');
+  });
+
   it('rejects insufficient seller balance before writing NFT approval', async () => {
     const writeContract = vi.fn(async () => hex32('1'));
     const namespace = createErc1155ListingNamespace(
