@@ -54,6 +54,9 @@ export type ContractAddresses = {
   marketplaceSettings?: Address;
   erc20ApprovalManager?: Address;
   erc721ApprovalManager?: Address;
+  erc1155Marketplace?: Address;
+  erc1155ContractFactory?: Address;
+  erc1155ApprovalManager?: Address;
   liquidFactory?: Address;
   swapRouter?: Address;
   v4Quoter?: Address;
@@ -79,6 +82,9 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
     marketplaceSettings: getAddress('0x972dEe8fa339ad2D9c6cbDA31b67f98Fac242d13'),
     erc20ApprovalManager: getAddress('0x4619eB29e84392CE91C27FC936A5c94d1D14b93f'),
     erc721ApprovalManager: getAddress('0x5fa0a461d3a2Ea3bFDf03e8BD37CAbB4ae84205E'),
+    erc1155Marketplace: getAddress('0xb26DE57230913a44F37AcE78F5b7eB2Efec474eE'),
+    erc1155ContractFactory: getAddress('0xF8FF48ca6022138C58e2eDD680a02d7Cd394B957'),
+    erc1155ApprovalManager: getAddress('0xcD26069837682aeD8Ba20852AD17b8f64a860906'),
     liquidFactory: getAddress('0xb1777091C953fa2aC1fD67f2b3e2f61343F5Ce5e'),
     swapRouter: getAddress('0x429c3Ee66E7f6CDA12C5BadE4104aF3277aA2305'),
     v4Quoter: getAddress('0x61B3f2011A92d183C7dbaDBdA940a7555Ccf9227'),
@@ -131,6 +137,9 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
     marketplaceSettings: getAddress('0xC83551914aB8784B4D779794cD74d12Ac4dF26Bc'),
     erc20ApprovalManager: getAddress('0x1104B5dA0fc1C08011a90557CA9b495c29D9BBaa'),
     erc721ApprovalManager: getAddress('0xaDf5459B9B6B3021aef027EC23E68C4011303F5B'),
+    erc1155Marketplace: getAddress('0x90406F0c92256055EeACBDFEaa39d348b0DB8BF5'),
+    erc1155ContractFactory: getAddress('0x293AE7701A7830B1d38A7608EdF86A106d9E2645'),
+    erc1155ApprovalManager: getAddress('0xDCEA787A109b2627a895EEb49FCe2D1dA63aA8E4'),
     liquidFactory: getAddress('0x912ecC55445d87149d09d83426D0aC41379bB643'),
     swapRouter: getAddress('0x92438008608949E2C7eCef34c474792bAFe8a971'),
     v4Quoter: getAddress('0x4a6513c898fe1b2d0e78d3b0e0a4a151589b1cba'),
@@ -355,6 +364,45 @@ export function getErc721ApprovalManagerAddress(chain: SupportedChain): Address 
     );
   }
   return addresses.erc721ApprovalManager;
+}
+
+export function getErc1155MarketplaceAddress(chain: SupportedChain): Address {
+  const addresses = getContractAddresses(chain);
+  if (!addresses.erc1155Marketplace) {
+    const deployed = Object.entries(contractAddresses)
+      .filter(([, set]) => set.erc1155Marketplace !== undefined)
+      .map(([name]) => name);
+    throw new Error(
+      `ERC1155 marketplace is not deployed on "${chain}". Available on: ${deployed.join(', ')}`
+    );
+  }
+  return addresses.erc1155Marketplace;
+}
+
+export function getErc1155ContractFactoryAddress(chain: SupportedChain): Address {
+  const addresses = getContractAddresses(chain);
+  if (!addresses.erc1155ContractFactory) {
+    const deployed = Object.entries(contractAddresses)
+      .filter(([, set]) => set.erc1155ContractFactory !== undefined)
+      .map(([name]) => name);
+    throw new Error(
+      `ERC1155 contract factory is not deployed on "${chain}". Available on: ${deployed.join(', ')}`
+    );
+  }
+  return addresses.erc1155ContractFactory;
+}
+
+export function getErc1155ApprovalManagerAddress(chain: SupportedChain): Address {
+  const addresses = getContractAddresses(chain);
+  if (!addresses.erc1155ApprovalManager) {
+    const deployed = Object.entries(contractAddresses)
+      .filter(([, set]) => set.erc1155ApprovalManager !== undefined)
+      .map(([name]) => name);
+    throw new Error(
+      `ERC1155 approval manager is not deployed on "${chain}". Available on: ${deployed.join(', ')}`
+    );
+  }
+  return addresses.erc1155ApprovalManager;
 }
 
 export function getCanonicalV4Pools(chain: SupportedChain): CanonicalV4Pools {

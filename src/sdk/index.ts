@@ -9,6 +9,7 @@ export type * from './types/batch-listing.js';
 export type * from './types/batch-offer.js';
 export type * from './types/batch-auction.js';
 export type * from './types/release.js';
+export type * from './types/erc1155.js';
 export type * from './types/token.js';
 export type * from './types/liquid.js';
 export type * from './types/bridge.js';
@@ -21,6 +22,7 @@ export type { LiquidFactoryConfig } from '../liquid/factory-config.js';
 export { ApprovalSideEffectError, NftApprovalRequiredError } from './approvals-shell.js';
 export type { ApprovalSideEffect } from './approvals-shell.js';
 export { PaymentApprovalRequiredError } from './payments-shell.js';
+export { Erc1155CheckoutAllItemsSkippedError } from './erc1155.js';
 export type {
   CollectionSearchParams,
   EventSearchParams,

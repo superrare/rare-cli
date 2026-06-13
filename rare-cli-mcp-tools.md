@@ -99,8 +99,10 @@ auction_status
 auction_batch_roots
 auction_batch_status
 offer_status
+offer_erc1155_status
 offer_batch_status
 listing_status
+listing_erc1155_status
 listing_batch_status
 ```
 
@@ -114,6 +116,13 @@ listing_release_allowlist_get_config
 listing_release_limits_get_mint
 listing_release_limits_get_tx
 listing_release_status
+listing_erc1155_release_allowlist_build
+listing_erc1155_release_allowlist_parse
+listing_erc1155_release_allowlist_proof
+listing_erc1155_release_allowlist_get_config
+listing_erc1155_release_limits_get_mint
+listing_erc1155_release_limits_get_tx
+listing_erc1155_release_status
 ```
 
 Utilities:
@@ -134,6 +143,7 @@ search_events
 nft_get
 collection_get
 collection_status
+collection_erc1155_status
 collection_get_token_creator
 collection_royalty_status
 collection_metadata_status
@@ -192,12 +202,20 @@ auction_batch_settle
 offer_create
 offer_cancel
 offer_accept
+offer_erc1155_create
+offer_erc1155_cancel
+offer_erc1155_accept
 offer_batch_create
 offer_batch_revoke
 offer_batch_accept
 listing_create
 listing_cancel
 listing_buy
+listing_erc1155_create
+listing_erc1155_create_batch
+listing_erc1155_cancel
+listing_erc1155_buy
+listing_erc1155_checkout
 listing_batch_create
 listing_batch_cancel
 listing_batch_buy
@@ -213,17 +231,35 @@ listing_release_limits_set_mint
 listing_release_limits_set_tx
 listing_release_configure
 listing_release_mint
+listing_erc1155_release_allowlist_set_config
+listing_erc1155_release_allowlist_set_config_batch
+listing_erc1155_release_allowlist_clear
+listing_erc1155_release_limits_set_mint
+listing_erc1155_release_limits_set_mint_batch
+listing_erc1155_release_limits_set_tx
+listing_erc1155_release_limits_set_tx_batch
+listing_erc1155_release_configure
+listing_erc1155_release_configure_batch
+listing_erc1155_release_cancel
+listing_erc1155_release_mint
 ```
 
 Collection:
 
 ```text
 collection_deploy_erc721
+collection_deploy_erc1155
 collection_deploy_lazy_erc721
 collection_deploy_lazy_batch_mint
 collection_mint
 collection_mint_batch
 collection_prepare_lazy_mint
+collection_erc1155_create_token
+collection_erc1155_mint
+collection_erc1155_mint_batch
+collection_erc1155_set_minter_approval
+collection_erc1155_update_token_uri
+collection_erc1155_disable
 collection_set_default_royalty_receiver
 collection_set_default_royalty_percentage
 collection_set_token_royalty_receiver

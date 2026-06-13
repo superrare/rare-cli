@@ -16,6 +16,7 @@ import { resolveCurrencyDecimals } from '../sdk/payments-shell.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 import { offerBatchCommand } from './batch.js';
+import { offerErc1155Command } from './erc1155.js';
 
 type OfferCreateOptions = {
   contract?: string;
@@ -58,6 +59,7 @@ export function offerCommand(): Command {
   const cmd = new Command('offer');
   cmd.description('Offer subcommands (list, create, cancel, accept, status)');
   cmd.addCommand(createOfferListCommand());
+  cmd.addCommand(offerErc1155Command());
   cmd.addCommand(offerBatchCommand());
 
   cmd

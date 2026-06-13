@@ -12,6 +12,7 @@ describe('published package subpath exports', () => {
 
     expect(Object.keys(client).sort()).toEqual([
       'ApprovalSideEffectError',
+      'Erc1155CheckoutAllItemsSkippedError',
       'NftApprovalRequiredError',
       'PaymentApprovalRequiredError',
       'createRareClient',

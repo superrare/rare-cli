@@ -13,6 +13,7 @@ import {
   E2E_LAZY_BASE_URI,
   E2E_LAZY_TOKEN_URI,
   E2E_LAZY_UPDATED_BASE_URI,
+  E2E_TOKEN_URI,
   expectTokenOwner,
   mintToken,
   readCollectionMetadata,
@@ -30,7 +31,7 @@ import {
 
 const cliPath = fileURLToPath(new URL('../../dist/index.js', import.meta.url));
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
-const E2E_MCP_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/mcp-token.json';
+const E2E_MCP_TOKEN_URI = E2E_TOKEN_URI;
 
 type CollectionFixture = LiveCliFixture & {
   collection: DeployResult;

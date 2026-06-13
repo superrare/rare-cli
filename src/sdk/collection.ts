@@ -10,6 +10,7 @@ import { lazySovereignFactoryAbi } from '../contracts/abis/lazy-sovereign-factor
 import { collectionMintAbi } from '../contracts/abis/collection-mint.js';
 import { collectionOwnerAbi } from '../contracts/abis/collection-owner.js';
 import { collectionStatusAbi } from '../contracts/abis/collection-status.js';
+import { rareErc1155Abi } from '../contracts/abis/rare-erc1155.js';
 import { requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
 import type { RareClientConfig } from './types/client.js';
 import type { CollectionNamespace } from './types/collection.js';
@@ -40,11 +41,13 @@ export function createCollectionNamespace(
   config: RareClientConfig,
   chain: SupportedChain,
   baseCollection: Pick<CollectionNamespace, 'get'>,
-  collectionDeploy: Pick<CollectionNamespace['deploy'], 'erc721' | 'lazyBatchMint'>,
+  collectionDeploy: Pick<CollectionNamespace['deploy'], 'erc721' | 'erc1155' | 'lazyBatchMint'>,
+  erc1155: CollectionNamespace['erc1155'],
   collectionMint: CollectionNamespace['mint'],
 ): CollectionNamespace {
   return {
     ...baseCollection,
+    erc1155,
     mint: collectionMint,
 
     async status(params): ReturnType<CollectionNamespace['status']> {
@@ -982,15 +985,33 @@ async function writeSetTokenRoyaltyReceiver(
       args: [opts.plan.receiver, opts.plan.tokenId],
       account: opts.account,
     });
+    return opts.walletClient.writeContract({
+      address: opts.plan.contract,
+      abi: collectionOwnerAbi,
+      functionName: 'setRoyaltyReceiverForToken',
+      args: [opts.plan.receiver, opts.plan.tokenId],
+      account: opts.account,
+      chain: undefined,
+    });
   } catch (error) {
-    throw contractSupportError('setRoyaltyReceiverForToken', opts.plan.contract, error);
+    try {
+      await opts.publicClient.simulateContract({
+        address: opts.plan.contract,
+        abi: rareErc1155Abi,
+        functionName: 'setRoyaltyReceiverForToken',
+        args: [opts.plan.tokenId, opts.plan.receiver],
+        account: opts.account,
+      });
+    } catch (erc1155Error) {
+      throw contractSupportError('setRoyaltyReceiverForToken', opts.plan.contract, new AggregateError([error, erc1155Error]));
+    }
   }
 
   return opts.walletClient.writeContract({
     address: opts.plan.contract,
-    abi: collectionOwnerAbi,
+    abi: rareErc1155Abi,
     functionName: 'setRoyaltyReceiverForToken',
-    args: [opts.plan.receiver, opts.plan.tokenId],
+    args: [opts.plan.tokenId, opts.plan.receiver],
     account: opts.account,
     chain: undefined,
   });

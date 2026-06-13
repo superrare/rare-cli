@@ -11,6 +11,13 @@ function acceptsLiveWriteConsent(args: string[]): boolean {
   if (command === 'liquid-edition') return subcommand === 'deploy';
   if (command === 'listing') {
     if (subcommand === 'create' || subcommand === 'buy') return true;
+    if (subcommand === 'erc1155') {
+      const erc1155Subcommand = args[2];
+      if (erc1155Subcommand === 'create' || erc1155Subcommand === 'buy') return true;
+      if (erc1155Subcommand !== 'release') return false;
+      const releaseSubcommand = args[3];
+      return releaseSubcommand === 'configure' || releaseSubcommand === 'mint';
+    }
     if (subcommand === 'batch') {
       const batchListingSubcommand = args[2];
       return batchListingSubcommand === 'create' ||
@@ -29,6 +36,10 @@ function acceptsLiveWriteConsent(args: string[]): boolean {
     return subcommand === 'create' || subcommand === 'bid';
   }
   if (command === 'offer') {
+    if (subcommand === 'erc1155') {
+      const erc1155Subcommand = args[2];
+      return erc1155Subcommand === 'create' || erc1155Subcommand === 'accept';
+    }
     if (subcommand === 'batch') {
       const batchOfferSubcommand = args[2];
       return batchOfferSubcommand === 'create' ||
@@ -58,6 +69,16 @@ export function isLiveWriteCommand(args: string[]): boolean {
   }
   if (command === 'listing') {
     if (subcommand === 'create' || subcommand === 'cancel' || subcommand === 'buy') return true;
+    if (subcommand === 'erc1155') {
+      const erc1155Subcommand = args[2];
+      if (erc1155Subcommand === 'create' || erc1155Subcommand === 'cancel' || erc1155Subcommand === 'buy') return true;
+      if (erc1155Subcommand !== 'release') return false;
+      const releaseSubcommand = args[3];
+      if (releaseSubcommand === 'configure' || releaseSubcommand === 'mint') return true;
+      if (releaseSubcommand === 'allowlist') return args[4] === 'set' || args[4] === 'clear';
+      if (releaseSubcommand === 'limits') return args[4]?.startsWith('set-') === true;
+      return false;
+    }
     if (subcommand === 'batch') {
       const batchListingSubcommand = args[2];
       return batchListingSubcommand === 'create' ||
@@ -83,6 +104,10 @@ export function isLiveWriteCommand(args: string[]): boolean {
     return subcommand === 'create' || subcommand === 'cancel' || subcommand === 'bid' || subcommand === 'settle';
   }
   if (command === 'offer') {
+    if (subcommand === 'erc1155') {
+      const erc1155Subcommand = args[2];
+      return erc1155Subcommand === 'create' || erc1155Subcommand === 'cancel' || erc1155Subcommand === 'accept';
+    }
     if (subcommand === 'batch') {
       const batchOfferSubcommand = args[2];
       return batchOfferSubcommand === 'create' ||
@@ -93,6 +118,13 @@ export function isLiveWriteCommand(args: string[]): boolean {
   }
   if (command === 'collection') {
     if (subcommand === 'deploy') return true;
+    if (subcommand === 'erc1155') {
+      const erc1155Subcommand = args[2];
+      if (erc1155Subcommand === 'create-token' || erc1155Subcommand === 'mint' || erc1155Subcommand === 'mint-batch') {
+        return true;
+      }
+      if (erc1155Subcommand === 'minter') return args[3] === 'set';
+    }
     if (subcommand === 'create' || subcommand === 'mint' || subcommand === 'mint-batch' || subcommand === 'prepare-lazy-mint') {
       return true;
     }

@@ -71,8 +71,10 @@ function createTestCollectionNamespace(mode: DefaultRoyaltyReadMode): ReturnType
     { async get(): Promise<never> { throw new Error('unexpected collection get'); } },
     {
       async erc721(): Promise<never> { throw new Error('unexpected deploy erc721'); },
+      async erc1155(): Promise<never> { throw new Error('unexpected deploy erc1155'); },
       async lazyBatchMint(): Promise<never> { throw new Error('unexpected deploy lazyBatchMint'); },
     },
+    createUnexpectedErc1155Namespace(),
     async (): Promise<never> => {
       throw new Error('unexpected collection mint');
     },
@@ -212,12 +214,26 @@ function createStatusTestCollectionNamespace(): ReturnType<typeof createCollecti
     { async get(): Promise<never> { throw new Error('unexpected collection get'); } },
     {
       async erc721(): Promise<never> { throw new Error('unexpected deploy erc721'); },
+      async erc1155(): Promise<never> { throw new Error('unexpected deploy erc1155'); },
       async lazyBatchMint(): Promise<never> { throw new Error('unexpected deploy lazyBatchMint'); },
     },
+    createUnexpectedErc1155Namespace(),
     async (): Promise<never> => {
       throw new Error('unexpected collection mint');
     },
   );
+}
+
+function createUnexpectedErc1155Namespace(): ReturnType<typeof createCollectionNamespace>['erc1155'] {
+  return {
+    async createToken(): Promise<never> { throw new Error('unexpected erc1155 createToken'); },
+    async mint(): Promise<never> { throw new Error('unexpected erc1155 mint'); },
+    async mintBatch(): Promise<never> { throw new Error('unexpected erc1155 mintBatch'); },
+    async setMinterApproval(): Promise<never> { throw new Error('unexpected erc1155 setMinterApproval'); },
+    async updateTokenUri(): Promise<never> { throw new Error('unexpected erc1155 updateTokenUri'); },
+    async disable(): Promise<never> { throw new Error('unexpected erc1155 disable'); },
+    async status(): Promise<never> { throw new Error('unexpected erc1155 status'); },
+  };
 }
 
 function getCallData(params: unknown[] | undefined): `0x${string}` {
@@ -330,4 +346,5 @@ describe('SDK collection namespace', () => {
     expect(status.token).not.toHaveProperty('tokenUri');
     expect(status.token).not.toHaveProperty('creator');
   });
+
 });

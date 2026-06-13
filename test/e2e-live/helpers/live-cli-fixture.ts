@@ -18,7 +18,7 @@ export const E2E_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhne
 export const E2E_BATCH_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/batch';
 export const E2E_LAZY_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy';
 export const E2E_LAZY_UPDATED_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy-updated';
-export const E2E_LAZY_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy-token-1.json';
+export const E2E_LAZY_TOKEN_URI = E2E_TOKEN_URI;
 
 export type DeployResult = {
   txHash: string;
