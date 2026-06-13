@@ -58,6 +58,28 @@ const erc1155MintItemSchema = z.object({
   tokenId: integerSchema,
   quantity: integerSchema,
 });
+const erc1155ListingCreateBatchItemSchema = z.object({
+  tokenId: integerSchema,
+  quantity: integerSchema,
+  price: amountSchema,
+  expirationTime: timestampSchema.optional(),
+});
+const erc1155ReleaseConfigureBatchItemSchema = z.object({
+  tokenId: integerSchema,
+  price: amountSchema,
+  startTime: timestampSchema.optional(),
+  maxMints: integerSchema,
+});
+const erc1155ReleaseAllowlistConfigBatchItemSchema = z.object({
+  tokenId: integerSchema,
+  root: hexSchema.optional(),
+  artifact: artifactSchema.optional(),
+  endTime: timestampSchema,
+});
+const erc1155ReleaseLimitBatchItemSchema = z.object({
+  tokenId: integerSchema,
+  limit: integerSchema,
+});
 const checkoutProofSchema = z.union([proofSchema, z.object({ proof: proofSchema }).passthrough()]);
 const erc1155CheckoutReleaseItemSchema = z.object({
   kind: z.literal('release'),
@@ -386,6 +408,10 @@ const toolHandlers: Record<string, ToolHandler> = {
     inputSchema: { ...optionalChain, ...contractTokenSchema, quantity: integerSchema, price: amountSchema, currency: currencySchema, expirationTime: timestampSchema.optional(), ...splitSchema, ...autoApproveSchema },
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.create(args as never))),
   },
+  listing_erc1155_create_batch: {
+    inputSchema: { ...optionalChain, contract: addressSchema, currency: currencySchema, items: z.array(erc1155ListingCreateBatchItemSchema), ...splitSchema, ...autoApproveSchema },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.createBatch(args as never))),
+  },
   listing_erc1155_cancel: {
     inputSchema: { ...optionalChain, contract: addressSchema, tokenIds: z.array(integerSchema) },
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.cancel(args as never))),
@@ -422,6 +448,10 @@ const toolHandlers: Record<string, ToolHandler> = {
     inputSchema: { ...optionalChain, ...contractTokenSchema, root: hexSchema.optional(), artifact: artifactSchema.optional(), endTime: timestampSchema },
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.release.allowlist.setConfig(args as never))),
   },
+  listing_erc1155_release_allowlist_set_config_batch: {
+    inputSchema: { ...optionalChain, contract: addressSchema, items: z.array(erc1155ReleaseAllowlistConfigBatchItemSchema) },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.release.allowlist.setConfigBatch(args as never))),
+  },
   listing_erc1155_release_allowlist_clear: {
     inputSchema: { ...optionalChain, ...contractTokenSchema },
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.release.allowlist.clear(args as never))),
@@ -434,6 +464,10 @@ const toolHandlers: Record<string, ToolHandler> = {
     inputSchema: { ...optionalChain, ...contractTokenSchema, limit: integerSchema },
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.release.limits.setMint(args as never))),
   },
+  listing_erc1155_release_limits_set_mint_batch: {
+    inputSchema: { ...optionalChain, contract: addressSchema, items: z.array(erc1155ReleaseLimitBatchItemSchema) },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.release.limits.setMintBatch(args as never))),
+  },
   listing_erc1155_release_limits_get_tx: {
     inputSchema: { ...optionalChain, ...contractTokenSchema },
     handler: ({ chain, ...args }) => callRead(chain, (rare) => rare.listing.erc1155.release.limits.getTx(args as never)),
@@ -442,9 +476,21 @@ const toolHandlers: Record<string, ToolHandler> = {
     inputSchema: { ...optionalChain, ...contractTokenSchema, limit: integerSchema },
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.release.limits.setTx(args as never))),
   },
+  listing_erc1155_release_limits_set_tx_batch: {
+    inputSchema: { ...optionalChain, contract: addressSchema, items: z.array(erc1155ReleaseLimitBatchItemSchema) },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.release.limits.setTxBatch(args as never))),
+  },
   listing_erc1155_release_configure: {
     inputSchema: { ...optionalChain, ...contractTokenSchema, currency: currencySchema, price: amountSchema, startTime: timestampSchema.optional(), maxMints: integerSchema, ...splitSchema, ...autoApproveSchema },
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.release.configure(args as never))),
+  },
+  listing_erc1155_release_configure_batch: {
+    inputSchema: { ...optionalChain, contract: addressSchema, currency: currencySchema, items: z.array(erc1155ReleaseConfigureBatchItemSchema), ...splitSchema, ...autoApproveSchema },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.release.configureBatch(args as never))),
+  },
+  listing_erc1155_release_cancel: {
+    inputSchema: { ...optionalChain, contract: addressSchema, tokenIds: z.array(integerSchema) },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.release.cancel(args as never))),
   },
   listing_erc1155_release_mint: {
     inputSchema: { ...optionalChain, ...contractTokenSchema, quantity: integerSchema, currency: currencySchema, price: amountSchema.optional(), proof: proofSchema.optional(), ...autoApproveSchema },
@@ -618,6 +664,14 @@ const toolHandlers: Record<string, ToolHandler> = {
   collection_erc1155_set_minter_approval: {
     inputSchema: { ...optionalChain, contract: addressSchema, minter: addressSchema, approved: z.boolean() },
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.collection.erc1155.setMinterApproval(args as never))),
+  },
+  collection_erc1155_update_token_uri: {
+    inputSchema: { ...optionalChain, ...contractTokenSchema, tokenUri: z.string() },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.collection.erc1155.updateTokenUri(args as never))),
+  },
+  collection_erc1155_disable: {
+    inputSchema: { ...optionalChain, contract: addressSchema },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.collection.erc1155.disable(args as never))),
   },
   collection_erc1155_status: {
     inputSchema: { ...optionalChain, contract: addressSchema, tokenId: integerSchema.optional(), account: addressSchema.optional() },

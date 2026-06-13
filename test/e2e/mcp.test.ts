@@ -129,8 +129,16 @@ describe('MCP stdio server', () => {
         });
         expect(names).toContain('collection_deploy_erc1155');
         expect(names).toContain('collection_erc1155_mint');
+        expect(names).toContain('collection_erc1155_update_token_uri');
+        expect(names).toContain('collection_erc1155_disable');
         expect(names).toContain('listing_erc1155_create');
+        expect(names).toContain('listing_erc1155_create_batch');
         expect(names).toContain('listing_erc1155_checkout');
+        expect(names).toContain('listing_erc1155_release_configure_batch');
+        expect(names).toContain('listing_erc1155_release_cancel');
+        expect(names).toContain('listing_erc1155_release_allowlist_set_config_batch');
+        expect(names).toContain('listing_erc1155_release_limits_set_mint_batch');
+        expect(names).toContain('listing_erc1155_release_limits_set_tx_batch');
         expect(names).toContain('listing_erc1155_release_mint');
         expect(names).toContain('offer_erc1155_accept');
 

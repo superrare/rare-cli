@@ -29,7 +29,15 @@ describe('mcp core helpers', () => {
     expect(mcpWriteToolNames).toContain('liquid_edition_deploy_multi_curve');
     expect(mcpWriteToolNames).toContain('collection_deploy_erc721');
     expect(mcpWriteToolNames).toContain('collection_deploy_erc1155');
+    expect(mcpWriteToolNames).toContain('collection_erc1155_update_token_uri');
+    expect(mcpWriteToolNames).toContain('collection_erc1155_disable');
     expect(mcpReadToolNames).toContain('listing_erc1155_release_status');
+    expect(mcpWriteToolNames).toContain('listing_erc1155_create_batch');
+    expect(mcpWriteToolNames).toContain('listing_erc1155_release_configure_batch');
+    expect(mcpWriteToolNames).toContain('listing_erc1155_release_cancel');
+    expect(mcpWriteToolNames).toContain('listing_erc1155_release_allowlist_set_config_batch');
+    expect(mcpWriteToolNames).toContain('listing_erc1155_release_limits_set_mint_batch');
+    expect(mcpWriteToolNames).toContain('listing_erc1155_release_limits_set_tx_batch');
     expect(mcpWriteToolNames).toContain('ipfs_pin_file');
     expect(mcpWriteToolNames).toContain('ipfs_pin_json');
   });
@@ -38,6 +46,7 @@ describe('mcp core helpers', () => {
     expect(sdkPathToMcpToolName('rare.collection.deploy.erc721')).toBe('collection_deploy_erc721');
     expect(sdkPathToMcpToolName('rare.collection.erc1155.createToken')).toBe('collection_erc1155_create_token');
     expect(sdkPathToMcpToolName('rare.listing.erc1155.release.allowlist.setConfig')).toBe('listing_erc1155_release_allowlist_set_config');
+    expect(sdkPathToMcpToolName('rare.listing.erc1155.release.allowlist.setConfigBatch')).toBe('listing_erc1155_release_allowlist_set_config_batch');
     expect(sdkPathToMcpToolName('rare.liquidEdition.deploy.multiCurve')).toBe('liquid_edition_deploy_multi_curve');
     expect(sdkPathToMcpToolName('rare.listing.release.allowlist.setConfig')).toBe('listing_release_allowlist_set_config');
     expect(sdkPathToMcpToolName('rare.ipfs.pinFile')).toBe('ipfs_pin_file');
