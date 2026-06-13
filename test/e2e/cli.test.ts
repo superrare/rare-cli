@@ -3200,6 +3200,8 @@ describe('built CLI deterministic behavior', () => {
       expect(collectionHelp.code).toBe(0);
       expect(collectionHelp.stdout).toContain('create-token');
       expect(collectionHelp.stdout).toContain('mint-batch');
+      expect(collectionHelp.stdout).toContain('metadata');
+      expect(collectionHelp.stdout).toContain('disable');
       expect(collectionHelp.stdout).toContain('minter');
       expect(collectionHelp.stdout).toContain('status');
 
@@ -3207,6 +3209,7 @@ describe('built CLI deterministic behavior', () => {
       expect(listingHelp.code).toBe(0);
       expect(listingHelp.stdout).toContain('release');
       expect(listingHelp.stdout).toContain('create');
+      expect(listingHelp.stdout).toContain('create-batch');
       expect(listingHelp.stdout).toContain('buy');
       expect(listingHelp.stdout).toContain('checkout');
       expect(listingHelp.stdout).toContain('cancel');
@@ -3215,10 +3218,21 @@ describe('built CLI deterministic behavior', () => {
       const releaseHelp = await runCli(['listing', 'erc1155', 'release', '--help'], { home });
       expect(releaseHelp.code).toBe(0);
       expect(releaseHelp.stdout).toContain('configure');
+      expect(releaseHelp.stdout).toContain('configure-batch');
+      expect(releaseHelp.stdout).toContain('cancel');
       expect(releaseHelp.stdout).toContain('mint');
       expect(releaseHelp.stdout).toContain('allowlist');
       expect(releaseHelp.stdout).toContain('limits');
       expect(releaseHelp.stdout).not.toContain('--recipient');
+
+      const allowlistHelp = await runCli(['listing', 'erc1155', 'release', 'allowlist', '--help'], { home });
+      expect(allowlistHelp.code).toBe(0);
+      expect(allowlistHelp.stdout).toContain('set-batch');
+
+      const limitsHelp = await runCli(['listing', 'erc1155', 'release', 'limits', '--help'], { home });
+      expect(limitsHelp.code).toBe(0);
+      expect(limitsHelp.stdout).toContain('set-mint-batch');
+      expect(limitsHelp.stdout).toContain('set-tx-batch');
 
       const offerHelp = await runCli(['offer', 'erc1155', '--help'], { home });
       expect(offerHelp.code).toBe(0);
@@ -3310,18 +3324,62 @@ describe('built CLI deterministic behavior', () => {
       expect(badLimit.code).toBe(1);
       expect(badLimit.stdout).toBe('');
       expect(badLimit.stderr).toContain('limit must be greater than or equal to 0.');
+
+      const missingCancelToken = await runCli([
+        'listing',
+        'erc1155',
+        'release',
+        'cancel',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+      ], { home });
+      expect(missingCancelToken.code).toBe(1);
+      expect(missingCancelToken.stdout).toBe('');
+      expect(missingCancelToken.stderr).toContain('--token-id must be provided at least once.');
+
+      const badMetadataTokenId = await runCli([
+        'collection',
+        'erc1155',
+        'metadata',
+        'update-token-uri',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '-1',
+        '--token-uri',
+        'ipfs://metadata',
+      ], { home });
+      expect(badMetadataTokenId.code).toBe(1);
+      expect(badMetadataTokenId.stdout).toBe('');
+      expect(badMetadataTokenId.stderr).toContain('tokenId must be greater than or equal to 0.');
     });
   });
 
   it('validates ERC1155 files and JSON error output before wallet setup', async () => {
     await withTempHome(async (home) => {
       const batchInput = join(home, 'bad-mint-batch.json');
+      const listingBatchInput = join(home, 'bad-listing-batch.json');
+      const releaseBatchInput = join(home, 'bad-release-batch.json');
+      const allowlistBatchInput = join(home, 'bad-allowlist-batch.json');
+      const limitBatchInput = join(home, 'bad-limit-batch.json');
       const proofInput = join(home, 'bad-proof.json');
       const checkoutInput = join(home, 'bad-checkout.json');
       await writeFile(batchInput, JSON.stringify([
         { tokenId: '2', quantity: '1' },
         { tokenId: '1', quantity: '1' },
       ]), 'utf8');
+      await writeFile(listingBatchInput, JSON.stringify({
+        items: [{ tokenId: '1', quantity: '1' }],
+      }), 'utf8');
+      await writeFile(releaseBatchInput, JSON.stringify({
+        items: [{ tokenId: '1', price: '1', maxMints: '0' }],
+      }), 'utf8');
+      await writeFile(allowlistBatchInput, JSON.stringify({
+        items: [{ tokenId: '1', endTime: '2000000000' }],
+      }), 'utf8');
+      await writeFile(limitBatchInput, JSON.stringify({
+        items: [{ tokenId: '1', limit: '-1' }],
+      }), 'utf8');
       await writeFile(proofInput, JSON.stringify({ proof: ['0x1234'] }), 'utf8');
       await writeFile(checkoutInput, JSON.stringify({
         items: [{
@@ -3346,6 +3404,63 @@ describe('built CLI deterministic behavior', () => {
       expect(badBatch.code).toBe(1);
       expect(badBatch.stdout).toBe('');
       expect(badBatch.stderr).toContain('tokenIds must be strictly ascending.');
+
+      const badListingBatch = await runCli([
+        'listing',
+        'erc1155',
+        'create-batch',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--input',
+        listingBatchInput,
+      ], { home });
+      expect(badListingBatch.code).toBe(1);
+      expect(badListingBatch.stdout).toBe('');
+      expect(badListingBatch.stderr).toContain('items[0].price is required.');
+
+      const badReleaseBatch = await runCli([
+        'listing',
+        'erc1155',
+        'release',
+        'configure-batch',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--input',
+        releaseBatchInput,
+      ], { home });
+      expect(badReleaseBatch.code).toBe(1);
+      expect(badReleaseBatch.stdout).toBe('');
+      expect(badReleaseBatch.stderr).toContain('items[0].maxMints must be greater than 0.');
+
+      const badAllowlistBatch = await runCli([
+        'listing',
+        'erc1155',
+        'release',
+        'allowlist',
+        'set-batch',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--input',
+        allowlistBatchInput,
+      ], { home });
+      expect(badAllowlistBatch.code).toBe(1);
+      expect(badAllowlistBatch.stdout).toBe('');
+      expect(badAllowlistBatch.stderr).toContain('items[0].root or items[0].artifact is required.');
+
+      const badLimitBatch = await runCli([
+        'listing',
+        'erc1155',
+        'release',
+        'limits',
+        'set-mint-batch',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--input',
+        limitBatchInput,
+      ], { home });
+      expect(badLimitBatch.code).toBe(1);
+      expect(badLimitBatch.stdout).toBe('');
+      expect(badLimitBatch.stderr).toContain('items[0].limit must be greater than or equal to 0.');
 
       const badProof = await runCli([
         'listing',

@@ -230,6 +230,8 @@ function createUnexpectedErc1155Namespace(): ReturnType<typeof createCollectionN
     async mint(): Promise<never> { throw new Error('unexpected erc1155 mint'); },
     async mintBatch(): Promise<never> { throw new Error('unexpected erc1155 mintBatch'); },
     async setMinterApproval(): Promise<never> { throw new Error('unexpected erc1155 setMinterApproval'); },
+    async updateTokenUri(): Promise<never> { throw new Error('unexpected erc1155 updateTokenUri'); },
+    async disable(): Promise<never> { throw new Error('unexpected erc1155 disable'); },
     async status(): Promise<never> { throw new Error('unexpected erc1155 status'); },
   };
 }
@@ -344,4 +346,5 @@ describe('SDK collection namespace', () => {
     expect(status.token).not.toHaveProperty('tokenUri');
     expect(status.token).not.toHaveProperty('creator');
   });
+
 });

@@ -7,6 +7,7 @@ import type {
   Erc1155CollectionCreateTokenParams,
   Erc1155CollectionMintBatchParams,
   Erc1155CollectionMintParams,
+  Erc1155CollectionUpdateTokenUriParams,
   Erc1155CollectionSetMinterApprovalParams,
   Erc1155CollectionStatus,
   Erc1155CollectionStatusParams,
@@ -19,6 +20,8 @@ import type {
   Erc1155CheckoutResult,
   Erc1155CheckoutSkippedItem,
   Erc1155ListingBuyParams,
+  Erc1155ListingCreateBatchItem,
+  Erc1155ListingCreateBatchParams,
   Erc1155ListingCreateParams,
   Erc1155ListingStatus,
   Erc1155ListingStatusParams,
@@ -26,11 +29,16 @@ import type {
   Erc1155OfferAcceptParams,
   Erc1155OfferCreateParams,
   Erc1155OfferStatus,
+  Erc1155ReleaseConfigureBatchItem,
+  Erc1155ReleaseConfigureBatchParams,
+  Erc1155ReleaseCancelParams,
   Erc1155ReleaseAllowlistConfig,
   Erc1155ReleaseConfigureParams,
   Erc1155ReleaseLimitConfig,
   Erc1155ReleaseMintParams,
   Erc1155ReleaseSetAllowlistConfigParams,
+  Erc1155ReleaseSetAllowlistConfigBatchParams,
+  Erc1155ReleaseSetLimitBatchParams,
   Erc1155ReleaseSetLimitParams,
   Erc1155ReleaseStatus,
   Erc1155ReleaseStatusParams,
@@ -71,6 +79,12 @@ export type Erc1155CollectionMintBatchPlan = {
   items: Erc1155MintBatchItem[];
 }
 
+export type Erc1155CollectionUpdateTokenUriPlan = {
+  contract: Address;
+  tokenId: bigint;
+  tokenUri: string;
+}
+
 export type Erc1155ListingCreatePlan = {
   contract: Address;
   tokenId: bigint;
@@ -78,6 +92,14 @@ export type Erc1155ListingCreatePlan = {
   currency: Address;
   price: bigint;
   expirationTime: bigint;
+  splitAddresses: Address[];
+  splitRatios: number[];
+}
+
+export type Erc1155ListingCreateBatchPlan = {
+  contract: Address;
+  currency: Address;
+  items: Erc1155ListingCreateBatchItem[];
   splitAddresses: Address[];
   splitRatios: number[];
 }
@@ -122,6 +144,19 @@ export type Erc1155ReleaseConfigurePlan = {
   maxMints: bigint;
   splitAddresses: Address[];
   splitRatios: number[];
+}
+
+export type Erc1155ReleaseConfigureBatchPlan = {
+  contract: Address;
+  currency: Address;
+  items: Erc1155ReleaseConfigureBatchItem[];
+  splitAddresses: Address[];
+  splitRatios: number[];
+}
+
+export type Erc1155ReleaseCancelPlan = {
+  contract: Address;
+  tokenIds: bigint[];
 }
 
 export type Erc1155ReleaseMintPlan = {
@@ -218,6 +253,16 @@ export function planErc1155CollectionSetMinterApproval(
   return params;
 }
 
+export function planErc1155CollectionUpdateTokenUri(
+  params: Erc1155CollectionUpdateTokenUriParams,
+): Erc1155CollectionUpdateTokenUriPlan {
+  return {
+    contract: params.contract,
+    tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
+    tokenUri: params.tokenUri,
+  };
+}
+
 export function planErc1155CollectionStatus(params: Erc1155CollectionStatusParams): {
   contract: Address;
   tokenId?: bigint;
@@ -242,6 +287,35 @@ export function planErc1155ListingCreate(
     currency: params.currency,
     price: params.price,
     expirationTime: params.expirationTime === undefined ? 0n : toUnixTimestamp(params.expirationTime, 'expirationTime'),
+    splitAddresses: splits.addresses,
+    splitRatios: splits.ratios,
+  };
+}
+
+export function planErc1155ListingCreateBatch(
+  params: Omit<Erc1155ListingCreateBatchParams, 'currency' | 'items'> & {
+    currency: Address;
+    items: Array<Omit<Erc1155ListingCreateBatchParams['items'][number], 'price'> & { price: bigint }>;
+  },
+  accountAddress: Address,
+): Erc1155ListingCreateBatchPlan {
+  if (params.items.length === 0) {
+    throw new Error('items must include at least one listing.');
+  }
+  const splits = planPayoutSplits(params.splitAddresses, params.splitRatios, accountAddress);
+  const items = params.items.map((item, index) => ({
+    tokenId: toNonNegativeInteger(item.tokenId, `items[${index}].tokenId`),
+    quantity: toPositiveInteger(item.quantity, `items[${index}].quantity`),
+    price: item.price,
+    expirationTime: item.expirationTime === undefined
+      ? 0n
+      : toUnixTimestamp(item.expirationTime, `items[${index}].expirationTime`),
+  }));
+  assertStrictlyAscendingTokenIds(items);
+  return {
+    contract: params.contract,
+    currency: params.currency,
+    items,
     splitAddresses: splits.addresses,
     splitRatios: splits.ratios,
   };
@@ -340,6 +414,46 @@ export function planErc1155ReleaseConfigure(
     maxMints: toPositiveInteger(params.maxMints, 'maxMints'),
     splitAddresses: splits.addresses,
     splitRatios: splits.ratios,
+  };
+}
+
+export function planErc1155ReleaseConfigureBatch(
+  params: Omit<Erc1155ReleaseConfigureBatchParams, 'currency' | 'items'> & {
+    currency: Address;
+    items: Array<Omit<Erc1155ReleaseConfigureBatchParams['items'][number], 'price'> & { price: bigint }>;
+  },
+  accountAddress: Address,
+  nowSeconds: bigint,
+): Erc1155ReleaseConfigureBatchPlan {
+  if (params.items.length === 0) {
+    throw new Error('items must include at least one release config.');
+  }
+  const splits = planPayoutSplits(params.splitAddresses, params.splitRatios, accountAddress);
+  const items = params.items.map((item, index) => ({
+    tokenId: toNonNegativeInteger(item.tokenId, `items[${index}].tokenId`),
+    price: item.price,
+    startTime: item.startTime === undefined ? nowSeconds : toUnixTimestamp(item.startTime, `items[${index}].startTime`),
+    maxMints: toPositiveInteger(item.maxMints, `items[${index}].maxMints`),
+  }));
+  assertStrictlyAscendingTokenIds(items.map((item) => ({ tokenId: item.tokenId, quantity: 1n })));
+  return {
+    contract: params.contract,
+    currency: params.currency,
+    items,
+    splitAddresses: splits.addresses,
+    splitRatios: splits.ratios,
+  };
+}
+
+export function planErc1155ReleaseCancel(params: Erc1155ReleaseCancelParams): Erc1155ReleaseCancelPlan {
+  if (params.tokenIds.length === 0) {
+    throw new Error('tokenIds must include at least one token.');
+  }
+  const tokenIds = params.tokenIds.map((tokenId) => toNonNegativeInteger(tokenId, 'tokenId'));
+  assertStrictlyAscendingTokenIds(tokenIds.map((tokenId) => ({ tokenId, quantity: 1n })));
+  return {
+    contract: params.contract,
+    tokenIds,
   };
 }
 
@@ -464,6 +578,32 @@ export function planErc1155ReleaseAllowlistConfig(params: Erc1155ReleaseSetAllow
   };
 }
 
+export function planErc1155ReleaseAllowlistConfigBatch(params: Erc1155ReleaseSetAllowlistConfigBatchParams): Array<{
+  contract: Address;
+  tokenId: bigint;
+  root: Hex;
+  endTimestamp: bigint;
+}> {
+  if (params.items.length === 0) {
+    throw new Error('items must include at least one allowlist config.');
+  }
+  const items = params.items.map((item, index) => {
+    const root = item.root ?? item.artifact?.root;
+    if (root === undefined) {
+      throw new Error(`items[${index}].root or items[${index}].artifact is required.`);
+    }
+    assertBytes32(root, `items[${index}].root`);
+    return {
+      contract: params.contract,
+      tokenId: toNonNegativeInteger(item.tokenId, `items[${index}].tokenId`),
+      root,
+      endTimestamp: toUnixTimestamp(item.endTime, `items[${index}].endTime`),
+    };
+  });
+  assertStrictlyAscendingTokenIds(items.map((item) => ({ tokenId: item.tokenId, quantity: 1n })));
+  return items;
+}
+
 export function planErc1155ReleaseClearAllowlistConfig(params: { contract: Address; tokenId: Erc1155ReleaseStatusParams['tokenId'] }): {
   contract: Address;
   tokenId: bigint;
@@ -488,6 +628,23 @@ export function planErc1155ReleaseLimitConfig(params: Erc1155ReleaseSetLimitPara
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     limit: toNonNegativeInteger(params.limit, 'limit'),
   };
+}
+
+export function planErc1155ReleaseLimitConfigBatch(params: Erc1155ReleaseSetLimitBatchParams): Array<{
+  contract: Address;
+  tokenId: bigint;
+  limit: bigint;
+}> {
+  if (params.items.length === 0) {
+    throw new Error('items must include at least one limit config.');
+  }
+  const items = params.items.map((item, index) => ({
+    contract: params.contract,
+    tokenId: toNonNegativeInteger(item.tokenId, `items[${index}].tokenId`),
+    limit: toNonNegativeInteger(item.limit, `items[${index}].limit`),
+  }));
+  assertStrictlyAscendingTokenIds(items.map((item) => ({ tokenId: item.tokenId, quantity: 1n })));
+  return items;
 }
 
 export function shapeErc1155CollectionStatus(params: {

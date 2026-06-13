@@ -75,6 +75,26 @@ export type Erc1155CollectionSetMinterApprovalResult = {
   approved: boolean;
 } & TransactionResult
 
+export type Erc1155CollectionUpdateTokenUriParams = {
+  contract: Address;
+  tokenId: IntegerInput;
+  tokenUri: string;
+}
+
+export type Erc1155CollectionUpdateTokenUriResult = {
+  contract: Address;
+  tokenId: bigint;
+  tokenUri: string;
+} & TransactionResult
+
+export type Erc1155CollectionDisableParams = {
+  contract: Address;
+}
+
+export type Erc1155CollectionDisableResult = {
+  contract: Address;
+} & TransactionResult
+
 export type Erc1155CollectionStatusParams = {
   contract: Address;
   tokenId?: IntegerInput;
@@ -122,6 +142,38 @@ export type Erc1155ListingCreateParams = {
 }
 
 export type Erc1155ListingCreateResult = {
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type Erc1155ListingCreateBatchItemInput = {
+  tokenId: IntegerInput;
+  quantity: IntegerInput;
+  price: AmountInput;
+  expirationTime?: TimestampInput;
+}
+
+export type Erc1155ListingCreateBatchParams = {
+  contract: Address;
+  currency?: CurrencyInput;
+  items: Erc1155ListingCreateBatchItemInput[];
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+  autoApprove?: boolean;
+}
+
+export type Erc1155ListingCreateBatchItem = {
+  tokenId: bigint;
+  quantity: bigint;
+  price: bigint;
+  expirationTime: bigint;
+}
+
+export type Erc1155ListingCreateBatchResult = {
+  contract: Address;
+  currencyAddress: Address;
+  items: Erc1155ListingCreateBatchItem[];
+  splitAddresses: Address[];
+  splitRatios: number[];
   approvalTxHash?: Hash;
 } & TransactionResult
 
@@ -355,6 +407,50 @@ export type Erc1155ReleaseConfigureResult = {
   approvalTxHash?: Hash;
 } & TransactionResult
 
+export type Erc1155ReleaseConfigureBatchItemInput = {
+  tokenId: IntegerInput;
+  price: AmountInput;
+  startTime?: TimestampInput;
+  maxMints: IntegerInput;
+}
+
+export type Erc1155ReleaseConfigureBatchParams = {
+  contract: Address;
+  currency?: CurrencyInput;
+  items: Erc1155ReleaseConfigureBatchItemInput[];
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+  autoApprove?: boolean;
+}
+
+export type Erc1155ReleaseConfigureBatchItem = {
+  tokenId: bigint;
+  price: bigint;
+  startTime: bigint;
+  maxMints: bigint;
+}
+
+export type Erc1155ReleaseConfigureBatchResult = {
+  marketplace: Address;
+  contract: Address;
+  currencyAddress: Address;
+  items: Erc1155ReleaseConfigureBatchItem[];
+  splitRecipients: Address[];
+  splitRatios: number[];
+  approvalTxHash?: Hash;
+} & TransactionResult
+
+export type Erc1155ReleaseCancelParams = {
+  contract: Address;
+  tokenIds: IntegerInput[];
+}
+
+export type Erc1155ReleaseCancelResult = {
+  marketplace: Address;
+  contract: Address;
+  tokenIds: bigint[];
+} & TransactionResult
+
 export type Erc1155ReleaseMintParams = {
   contract: Address;
   tokenId: IntegerInput;
@@ -402,6 +498,22 @@ export type Erc1155ReleaseSetAllowlistConfigResult = {
   config: Erc1155ReleaseAllowlistConfig;
 } & TransactionResult
 
+export type Erc1155ReleaseSetAllowlistConfigBatchItemInput = {
+  tokenId: IntegerInput;
+  root?: Hex;
+  artifact?: ReleaseAllowlistArtifact;
+  endTime: TimestampInput;
+}
+
+export type Erc1155ReleaseSetAllowlistConfigBatchParams = {
+  contract: Address;
+  items: Erc1155ReleaseSetAllowlistConfigBatchItemInput[];
+}
+
+export type Erc1155ReleaseSetAllowlistConfigBatchResult = {
+  configs: Erc1155ReleaseAllowlistConfig[];
+} & TransactionResult
+
 export type Erc1155ReleaseSetLimitParams = {
   contract: Address;
   tokenId: IntegerInput;
@@ -418,6 +530,20 @@ export type Erc1155ReleaseLimitConfig = {
 
 export type Erc1155ReleaseSetLimitResult = {
   config: Erc1155ReleaseLimitConfig;
+} & TransactionResult
+
+export type Erc1155ReleaseSetLimitBatchItemInput = {
+  tokenId: IntegerInput;
+  limit: IntegerInput;
+}
+
+export type Erc1155ReleaseSetLimitBatchParams = {
+  contract: Address;
+  items: Erc1155ReleaseSetLimitBatchItemInput[];
+}
+
+export type Erc1155ReleaseSetLimitBatchResult = {
+  configs: Erc1155ReleaseLimitConfig[];
 } & TransactionResult
 
 export type Erc1155ReleaseStatusParams = {
@@ -461,6 +587,7 @@ export type Erc1155ReleaseNamespace = {
   allowlist: {
     getConfig: (params: { contract: Address; tokenId: IntegerInput }) => Promise<Erc1155ReleaseAllowlistConfig>;
     setConfig: (params: Erc1155ReleaseSetAllowlistConfigParams) => Promise<Erc1155ReleaseSetAllowlistConfigResult>;
+    setConfigBatch: (params: Erc1155ReleaseSetAllowlistConfigBatchParams) => Promise<Erc1155ReleaseSetAllowlistConfigBatchResult>;
     clear: (params: { contract: Address; tokenId: IntegerInput }) => Promise<Erc1155ReleaseSetAllowlistConfigResult>;
     build: (params: { input: string; format: 'csv' | 'json' }) => ReleaseAllowlistArtifact;
     parse: (params: { input: string }) => ReleaseAllowlistArtifact;
@@ -469,10 +596,14 @@ export type Erc1155ReleaseNamespace = {
   limits: {
     getMint: (params: { contract: Address; tokenId: IntegerInput }) => Promise<Erc1155ReleaseLimitConfig>;
     setMint: (params: Erc1155ReleaseSetLimitParams) => Promise<Erc1155ReleaseSetLimitResult>;
+    setMintBatch: (params: Erc1155ReleaseSetLimitBatchParams) => Promise<Erc1155ReleaseSetLimitBatchResult>;
     getTx: (params: { contract: Address; tokenId: IntegerInput }) => Promise<Erc1155ReleaseLimitConfig>;
     setTx: (params: Erc1155ReleaseSetLimitParams) => Promise<Erc1155ReleaseSetLimitResult>;
+    setTxBatch: (params: Erc1155ReleaseSetLimitBatchParams) => Promise<Erc1155ReleaseSetLimitBatchResult>;
   };
   configure: (params: Erc1155ReleaseConfigureParams) => Promise<Erc1155ReleaseConfigureResult>;
+  configureBatch: (params: Erc1155ReleaseConfigureBatchParams) => Promise<Erc1155ReleaseConfigureBatchResult>;
+  cancel: (params: Erc1155ReleaseCancelParams) => Promise<Erc1155ReleaseCancelResult>;
   mint: (params: Erc1155ReleaseMintParams) => Promise<Erc1155ReleaseMintResult>;
   status: (params: Erc1155ReleaseStatusParams) => Promise<Erc1155ReleaseStatus>;
 }
@@ -480,6 +611,7 @@ export type Erc1155ReleaseNamespace = {
 export type Erc1155ListingNamespace = {
   release: Erc1155ReleaseNamespace;
   create: (params: Erc1155ListingCreateParams) => Promise<Erc1155ListingCreateResult>;
+  createBatch: (params: Erc1155ListingCreateBatchParams) => Promise<Erc1155ListingCreateBatchResult>;
   cancel: (params: Erc1155ListingCancelParams) => Promise<TransactionResult>;
   buy: (params: Erc1155ListingBuyParams) => Promise<Erc1155ListingBuyResult>;
   checkout: (params: Erc1155CheckoutParams) => Promise<Erc1155CheckoutResult>;
@@ -498,5 +630,7 @@ export type Erc1155CollectionNamespace = {
   mint: (params: Erc1155CollectionMintParams) => Promise<Erc1155CollectionMintResult>;
   mintBatch: (params: Erc1155CollectionMintBatchParams) => Promise<Erc1155CollectionMintBatchResult>;
   setMinterApproval: (params: Erc1155CollectionSetMinterApprovalParams) => Promise<Erc1155CollectionSetMinterApprovalResult>;
+  updateTokenUri: (params: Erc1155CollectionUpdateTokenUriParams) => Promise<Erc1155CollectionUpdateTokenUriResult>;
+  disable: (params: Erc1155CollectionDisableParams) => Promise<Erc1155CollectionDisableResult>;
   status: (params: Erc1155CollectionStatusParams) => Promise<Erc1155CollectionStatus>;
 }

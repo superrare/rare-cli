@@ -40,6 +40,16 @@ type CollectionMintBatchOptions = ChainOptions & {
   to?: string;
 };
 
+type CollectionUpdateTokenUriOptions = ChainOptions & {
+  contract: string;
+  tokenId: string;
+  tokenUri: string;
+};
+
+type CollectionDisableOptions = ChainOptions & {
+  contract: string;
+};
+
 type CollectionMinterSetOptions = ChainOptions & {
   contract: string;
   minter: string;
@@ -63,6 +73,14 @@ type ListingCreateOptions = ChainOptions & {
   yes?: boolean;
 };
 
+type ListingCreateBatchOptions = ChainOptions & {
+  contract: string;
+  input: string;
+  currency?: string;
+  split?: SplitAccumulator;
+  yes?: boolean;
+};
+
 type ListingBuyOptions = ChainOptions & {
   contract: string;
   seller: string;
@@ -75,7 +93,7 @@ type ListingBuyOptions = ChainOptions & {
 
 type ListingCancelOptions = ChainOptions & {
   contract: string;
-  tokenId: string;
+  tokenId?: string[];
 };
 
 type ListingCheckoutOptions = ChainOptions & {
@@ -134,6 +152,19 @@ type ReleaseConfigureOptions = ChainOptions & {
   yes?: boolean;
 };
 
+type ReleaseConfigureBatchOptions = ChainOptions & {
+  contract: string;
+  input: string;
+  currency?: string;
+  split?: SplitAccumulator;
+  yes?: boolean;
+};
+
+type ReleaseCancelOptions = ChainOptions & {
+  contract: string;
+  tokenId?: string[];
+};
+
 type ReleaseMintOptions = ChainOptions & {
   contract: string;
   tokenId: string;
@@ -170,10 +201,20 @@ type AllowlistSetOptions = ChainOptions & {
   root?: string;
 };
 
+type AllowlistSetBatchOptions = ChainOptions & {
+  contract: string;
+  input: string;
+};
+
 type LimitSetOptions = ChainOptions & {
   contract: string;
   tokenId: string;
   limit: string;
+};
+
+type LimitSetBatchOptions = ChainOptions & {
+  contract: string;
+  input: string;
 };
 
 type LimitGetOptions = ChainOptions & {
@@ -308,6 +349,51 @@ export function collectionErc1155Command(): Command {
       });
     });
 
+  const metadata = new Command('metadata');
+  metadata.description('ERC-1155 metadata admin subcommands');
+  metadata.command('update-token-uri')
+    .description('Update an ERC-1155 token URI')
+    .requiredOption('--contract <address>', 'ERC1155 collection contract')
+    .requiredOption('--token-id <id>', 'token ID')
+    .requiredOption('--token-uri <uri>', 'new token URI')
+    .option('--chain <chain>', 'chain to use (sepolia)')
+    .option('--chain-id <id>', 'chain ID (11155111)')
+    .action(async (opts: CollectionUpdateTokenUriOptions) => {
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const params = {
+        contract: parseAddressOption(opts.contract, '--contract'),
+        tokenId: toNonNegativeInteger(opts.tokenId, 'tokenId'),
+        tokenUri: opts.tokenUri,
+      };
+      const result = await writeRare(chain).collection.erc1155.updateTokenUri(params);
+      output(txOutput(result, {
+        contract: result.contract,
+        tokenId: result.tokenId,
+        tokenUri: result.tokenUri,
+      }), () => {
+        console.log(`Transaction sent: ${result.txHash}`);
+        console.log(`Token URI updated: ${result.tokenId.toString()}`);
+      });
+    });
+  cmd.addCommand(metadata);
+
+  cmd.command('disable')
+    .description('Disable an ERC-1155 collection contract')
+    .requiredOption('--contract <address>', 'ERC1155 collection contract')
+    .option('--chain <chain>', 'chain to use (sepolia)')
+    .option('--chain-id <id>', 'chain ID (11155111)')
+    .action(async (opts: CollectionDisableOptions) => {
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const params = {
+        contract: parseAddressOption(opts.contract, '--contract'),
+      };
+      const result = await writeRare(chain).collection.erc1155.disable(params);
+      output(txOutput(result, { contract: result.contract }), () => {
+        console.log(`Transaction sent: ${result.txHash}`);
+        console.log('ERC-1155 collection disabled');
+      });
+    });
+
   const minter = new Command('minter');
   minter.description('ERC-1155 minter approval subcommands');
   minter.command('set')
@@ -421,6 +507,45 @@ export function listingErc1155Command(): Command {
       });
     });
 
+  cmd.command('create-batch')
+    .description('Create multiple ERC-1155 fixed-price listings from a JSON file')
+    .requiredOption('--contract <address>', 'ERC1155 collection contract')
+    .requiredOption('--input <file>', 'JSON array or object with items: { "tokenId": "...", "quantity": "...", "price": "...", "expirationTime": "..." }')
+    .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address')
+    .option('--split <addr=ratio>', 'payout split recipient', collectSplit)
+    .option('--yes', 'yes to approval prompts')
+    .option('--chain <chain>', 'chain to use (sepolia)')
+    .option('--chain-id <id>', 'chain ID (11155111)')
+    .action(async (opts: ListingCreateBatchOptions) => {
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const currency = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain);
+      const splits = finalizeSplits(opts.split);
+      const params = {
+        contract: parseAddressOption(opts.contract, '--contract'),
+        currency,
+        items: readListingCreateBatchItems(opts.input),
+        splitAddresses: splits?.addresses,
+        splitRatios: splits?.ratios,
+      };
+      const rare = writeRare(chain);
+      log(`Creating ERC-1155 listing batch on ${chain}...`);
+      const result = await runWithNftApprovalConsent({
+        commandName: 'rare listing erc1155 create-batch',
+        approvalMessage: 'ERC1155 approval is required before creating these listings.',
+        runWithoutApproval: async () => rare.listing.erc1155.createBatch({ ...params, autoApprove: opts.yes === true }),
+        runWithApproval: async () => rare.listing.erc1155.createBatch({ ...params, autoApprove: true }),
+      });
+      if (result === undefined) return;
+      output(txOutput(result, {
+        contract: result.contract,
+        currencyAddress: result.currencyAddress,
+        items: result.items,
+        approvalTxHash: result.approvalTxHash ?? null,
+      }), () => {
+        printTxWithApproval(result, `ERC-1155 listing batch created (${result.items.length.toString()} items)`);
+      });
+    });
+
   cmd.command('buy')
     .description('Buy from an ERC-1155 fixed-price listing')
     .requiredOption('--contract <address>', 'ERC1155 collection contract')
@@ -493,16 +618,16 @@ export function listingErc1155Command(): Command {
   cmd.command('cancel')
     .description('Cancel an ERC-1155 listing')
     .requiredOption('--contract <address>', 'ERC1155 collection contract')
-    .requiredOption('--token-id <id>', 'token ID')
+    .option('--token-id <id>', 'token ID; repeat for multiple', collectOption)
     .option('--chain <chain>', 'chain to use (sepolia)')
     .option('--chain-id <id>', 'chain ID (11155111)')
     .action(async (opts: ListingCancelOptions) => {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const contract = parseAddressOption(opts.contract, '--contract');
-      const tokenId = toNonNegativeInteger(opts.tokenId, 'tokenId');
+      const tokenIds = parseTokenIdList(opts.tokenId, '--token-id');
       const result = await writeRare(chain).listing.erc1155.cancel({
         contract,
-        tokenIds: [tokenId],
+        tokenIds,
       });
       output(txOutput(result), () => {
         console.log(`Transaction sent: ${result.txHash}`);
@@ -725,6 +850,67 @@ function releaseErc1155Command(): Command {
       });
     });
 
+  cmd.command('configure-batch')
+    .description('Configure multiple ERC-1155 direct sale releases from a JSON file')
+    .requiredOption('--contract <address>', 'ERC1155 collection contract')
+    .requiredOption('--input <file>', 'JSON array or object with items: { "tokenId": "...", "price": "...", "maxMints": "...", "startTime": "..." }')
+    .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address')
+    .option('--split <addr=ratio>', 'payout split recipient', collectSplit)
+    .option('--yes', 'yes to approval prompts')
+    .option('--chain <chain>', 'chain to use (sepolia)')
+    .option('--chain-id <id>', 'chain ID (11155111)')
+    .action(async (opts: ReleaseConfigureBatchOptions) => {
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const currency = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain);
+      const splits = finalizeSplits(opts.split);
+      const params = {
+        contract: parseAddressOption(opts.contract, '--contract'),
+        currency,
+        items: readReleaseConfigureBatchItems(opts.input),
+        splitAddresses: splits?.addresses,
+        splitRatios: splits?.ratios,
+      };
+      const rare = writeRare(chain);
+      const result = await runWithMinterApprovalConsent({
+        commandName: 'rare listing erc1155 release configure-batch',
+        approvalMessage: 'ERC1155 marketplace minter approval is required before configuring these releases.',
+        runWithoutApproval: async () => rare.listing.erc1155.release.configureBatch({ ...params, autoApprove: opts.yes === true }),
+        runWithApproval: async () => rare.listing.erc1155.release.configureBatch({ ...params, autoApprove: true }),
+      });
+      if (result === undefined) return;
+      output(txOutput(result, {
+        contract: result.contract,
+        currencyAddress: result.currencyAddress,
+        items: result.items,
+        approvalTxHash: result.approvalTxHash ?? null,
+      }), () => {
+        printTxWithApproval(result, `ERC-1155 release batch configured (${result.items.length.toString()} items)`);
+      });
+    });
+
+  cmd.command('cancel')
+    .description('Cancel ERC-1155 direct sale release configs')
+    .requiredOption('--contract <address>', 'ERC1155 collection contract')
+    .option('--token-id <id>', 'token ID; repeat for multiple', collectOption)
+    .option('--chain <chain>', 'chain to use (sepolia)')
+    .option('--chain-id <id>', 'chain ID (11155111)')
+    .action(async (opts: ReleaseCancelOptions) => {
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const params = {
+        contract: parseAddressOption(opts.contract, '--contract'),
+        tokenIds: parseTokenIdList(opts.tokenId, '--token-id'),
+      };
+      const result = await writeRare(chain).listing.erc1155.release.cancel(params);
+      output(txOutput(result, {
+        contract: result.contract,
+        marketplace: result.marketplace,
+        tokenIds: result.tokenIds,
+      }), () => {
+        console.log(`Transaction sent: ${result.txHash}`);
+        console.log(`ERC-1155 release cancelled for ${result.tokenIds.length.toString()} token(s)`);
+      });
+    });
+
   cmd.command('mint')
     .description('Mint from an ERC-1155 direct sale release')
     .requiredOption('--contract <address>', 'ERC1155 collection contract')
@@ -854,6 +1040,23 @@ function releaseAllowlistCommand(): Command {
         console.log(`Allowlist set: ${result.config.root}`);
       });
     });
+  cmd.command('set-batch')
+    .requiredOption('--contract <address>', 'ERC1155 collection contract')
+    .requiredOption('--input <file>', 'JSON array or object with items: { "tokenId": "...", "endTime": "...", "root": "0x..." }')
+    .option('--chain <chain>', 'chain to use (sepolia)')
+    .option('--chain-id <id>', 'chain ID (11155111)')
+    .action(async (opts: AllowlistSetBatchOptions) => {
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const params = {
+        contract: parseAddressOption(opts.contract, '--contract'),
+        items: readAllowlistSetBatchItems(opts.input),
+      };
+      const result = await writeRare(chain).listing.erc1155.release.allowlist.setConfigBatch(params);
+      output(txOutput(result, { configs: result.configs }), () => {
+        console.log(`Transaction sent: ${result.txHash}`);
+        console.log(`Allowlist batch set for ${result.configs.length.toString()} token(s)`);
+      });
+    });
   cmd.command('clear')
     .requiredOption('--contract <address>', 'ERC1155 collection contract')
     .requiredOption('--token-id <id>', 'token ID')
@@ -885,6 +1088,12 @@ function releaseLimitsCommand(): Command {
     .option('--chain <chain>', 'chain to use (sepolia)')
     .option('--chain-id <id>', 'chain ID (11155111)')
     .action(async (opts: LimitSetOptions) => setLimit(opts, 'mint'));
+  cmd.command('set-mint-batch')
+    .requiredOption('--contract <address>', 'ERC1155 collection contract')
+    .requiredOption('--input <file>', 'JSON array or object with items: { "tokenId": "...", "limit": "..." }')
+    .option('--chain <chain>', 'chain to use (sepolia)')
+    .option('--chain-id <id>', 'chain ID (11155111)')
+    .action(async (opts: LimitSetBatchOptions) => setLimitBatch(opts, 'mint'));
   cmd.command('set-tx')
     .requiredOption('--contract <address>', 'ERC1155 collection contract')
     .requiredOption('--token-id <id>', 'token ID')
@@ -892,6 +1101,12 @@ function releaseLimitsCommand(): Command {
     .option('--chain <chain>', 'chain to use (sepolia)')
     .option('--chain-id <id>', 'chain ID (11155111)')
     .action(async (opts: LimitSetOptions) => setLimit(opts, 'tx'));
+  cmd.command('set-tx-batch')
+    .requiredOption('--contract <address>', 'ERC1155 collection contract')
+    .requiredOption('--input <file>', 'JSON array or object with items: { "tokenId": "...", "limit": "..." }')
+    .option('--chain <chain>', 'chain to use (sepolia)')
+    .option('--chain-id <id>', 'chain ID (11155111)')
+    .action(async (opts: LimitSetBatchOptions) => setLimitBatch(opts, 'tx'));
   cmd.command('get-mint')
     .requiredOption('--contract <address>', 'ERC1155 collection contract')
     .requiredOption('--token-id <id>', 'token ID')
@@ -921,6 +1136,22 @@ async function setLimit(opts: LimitSetOptions, kind: 'mint' | 'tx'): Promise<voi
   output(txOutput(result, { config: result.config }), () => {
     console.log(`Transaction sent: ${result.txHash}`);
     console.log(`${kind === 'mint' ? 'Mint' : 'Transaction'} limit set: ${result.config.limit.toString()}`);
+  });
+}
+
+async function setLimitBatch(opts: LimitSetBatchOptions, kind: 'mint' | 'tx'): Promise<void> {
+  const chain = getActiveChain(opts.chain, opts.chainId);
+  const params = {
+    contract: parseAddressOption(opts.contract, '--contract'),
+    items: readLimitSetBatchItems(opts.input),
+  };
+  const rare = writeRare(chain);
+  const result = kind === 'mint'
+    ? await rare.listing.erc1155.release.limits.setMintBatch(params)
+    : await rare.listing.erc1155.release.limits.setTxBatch(params);
+  output(txOutput(result, { configs: result.configs }), () => {
+    console.log(`Transaction sent: ${result.txHash}`);
+    console.log(`${kind === 'mint' ? 'Mint' : 'Transaction'} limit batch set for ${result.configs.length.toString()} token(s)`);
   });
 }
 
@@ -965,6 +1196,17 @@ function parseBooleanOption(value: string, label: string): boolean {
   throw new Error(`${label} must be true or false.`);
 }
 
+function collectOption(value: string, previous?: string[]): string[] {
+  return [...(previous ?? []), value];
+}
+
+function parseTokenIdList(values: string[] | undefined, label: string): bigint[] {
+  if (values === undefined || values.length === 0) {
+    throw new Error(`${label} must be provided at least once.`);
+  }
+  return values.map((tokenId) => toNonNegativeInteger(tokenId, 'tokenId'));
+}
+
 function readMintBatchItems(filePath: string): Array<{ tokenId: bigint; quantity: bigint }> {
   const parsed = parseJson(readTextFile(filePath, 'mint batch input'), 'mint batch input');
   if (!Array.isArray(parsed)) {
@@ -990,6 +1232,94 @@ function readMintBatchItems(filePath: string): Array<{ tokenId: bigint; quantity
     }
   }
   return items;
+}
+
+function readListingCreateBatchItems(filePath: string): Array<{
+  tokenId: bigint;
+  quantity: bigint;
+  price: string;
+  expirationTime?: string;
+}> {
+  return readInputItems(filePath, 'listing batch input').map((item, index) => ({
+    tokenId: toNonNegativeInteger(String(item.tokenId), `items[${index}].tokenId`),
+    quantity: toPositiveInteger(String(item.quantity), `items[${index}].quantity`),
+    price: parseRequiredStringValue(item.price, `items[${index}].price`),
+    expirationTime: item.expirationTime === undefined
+      ? undefined
+      : parseStringValue(item.expirationTime, `items[${index}].expirationTime`),
+  }));
+}
+
+function readReleaseConfigureBatchItems(filePath: string): Array<{
+  tokenId: bigint;
+  price: string;
+  startTime?: string;
+  maxMints: bigint;
+}> {
+  return readInputItems(filePath, 'release configure batch input').map((item, index) => ({
+    tokenId: toNonNegativeInteger(String(item.tokenId), `items[${index}].tokenId`),
+    price: parseRequiredStringValue(item.price, `items[${index}].price`),
+    startTime: item.startTime === undefined
+      ? undefined
+      : parseStringValue(item.startTime, `items[${index}].startTime`),
+    maxMints: toPositiveInteger(String(item.maxMints), `items[${index}].maxMints`),
+  }));
+}
+
+function readAllowlistSetBatchItems(filePath: string): Array<{
+  tokenId: bigint;
+  root?: Hex;
+  artifact?: ReleaseAllowlistArtifact;
+  endTime: string;
+}> {
+  return readInputItems(filePath, 'allowlist batch input').map((item, index) => {
+    if (item.root === undefined && item.artifact === undefined) {
+      throw new Error(`items[${index}].root or items[${index}].artifact is required.`);
+    }
+    return {
+      tokenId: toNonNegativeInteger(String(item.tokenId), `items[${index}].tokenId`),
+      root: item.root === undefined ? undefined : parseBytes32Option(String(item.root), `items[${index}].root`),
+      artifact: item.artifact === undefined ? undefined : parseAllowlistArtifactValue(item.artifact, `items[${index}].artifact`),
+      endTime: parseRequiredStringValue(item.endTime, `items[${index}].endTime`),
+    };
+  });
+}
+
+function readLimitSetBatchItems(filePath: string): Array<{ tokenId: bigint; limit: bigint }> {
+  return readInputItems(filePath, 'limit batch input').map((item, index) => ({
+    tokenId: toNonNegativeInteger(String(item.tokenId), `items[${index}].tokenId`),
+    limit: toNonNegativeInteger(String(item.limit), `items[${index}].limit`),
+  }));
+}
+
+function readInputItems(filePath: string, label: string): Record<string, unknown>[] {
+  const parsed = parseJson(readTextFile(filePath, label), label);
+  const items = Array.isArray(parsed) ? parsed : isRecord(parsed) && Array.isArray(parsed.items) ? parsed.items : undefined;
+  if (items === undefined) {
+    throw new Error('--input must be a JSON array or an object with an items array.');
+  }
+  if (items.length === 0) {
+    throw new Error('items must include at least one entry.');
+  }
+  const records = items.map((item, index) => {
+    if (!isRecord(item)) {
+      throw new Error(`items[${index}] must be an object.`);
+    }
+    return item;
+  });
+  for (let index = 1; index < records.length; index += 1) {
+    const previous = records[index - 1];
+    const current = records[index];
+    if (
+      previous !== undefined &&
+      current !== undefined &&
+      toNonNegativeInteger(String(current.tokenId), `items[${index}].tokenId`) <=
+        toNonNegativeInteger(String(previous.tokenId), `items[${index - 1}].tokenId`)
+    ) {
+      throw new Error('tokenIds must be strictly ascending.');
+    }
+  }
+  return records;
 }
 
 function readCheckoutItems(filePath: string, chain: ReturnType<typeof getActiveChain>): Erc1155CheckoutItemInput[] {
@@ -1054,11 +1384,16 @@ function parseProofValue(value: unknown, label: string): Hex[] {
 
 function readAllowlistArtifact(filePath: string): ReleaseAllowlistArtifact {
   const parsed = parseJson(readTextFile(filePath, 'allowlist artifact'), 'allowlist artifact');
+  return parseAllowlistArtifactValue(parsed, 'allowlist artifact');
+}
+
+function parseAllowlistArtifactValue(value: unknown, label: string): ReleaseAllowlistArtifact {
+  const parsed = value;
   if (!isRecord(parsed) || parsed.kind !== 'rare-release-allowlist-v1') {
-    throw new Error('Allowlist artifact must be a rare-release-allowlist-v1 artifact.');
+    throw new Error(`${label} must be a rare-release-allowlist-v1 artifact.`);
   }
   if (!isReleaseAllowlistArtifact(parsed)) {
-    throw new Error('Allowlist artifact is malformed.');
+    throw new Error(`${label} is malformed.`);
   }
   return parsed;
 }
@@ -1106,6 +1441,13 @@ function parseStringValue(value: unknown, label: string): string {
     return String(value);
   }
   throw new Error(`${label} must be a string or number.`);
+}
+
+function parseRequiredStringValue(value: unknown, label: string): string {
+  if (value === undefined) {
+    throw new Error(`${label} is required.`);
+  }
+  return parseStringValue(value, label);
 }
 
 function txOutput(result: { txHash: Hex; receipt: { blockNumber: bigint } }, extra: Record<string, unknown> = {}): Record<string, unknown> {

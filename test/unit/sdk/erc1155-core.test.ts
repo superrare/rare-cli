@@ -5,6 +5,7 @@ import {
   planErc1155CollectionCreateToken,
   planErc1155CollectionMint,
   planErc1155CollectionMintBatch,
+  planErc1155CollectionUpdateTokenUri,
   erc1155CheckoutItemKinds,
   groupErc1155CheckoutPayments,
   planErc1155CheckoutInput,
@@ -12,14 +13,19 @@ import {
   planErc1155ListingCancel,
   planErc1155ListingBuy,
   planErc1155ListingCreate,
+  planErc1155ListingCreateBatch,
   planErc1155ListingStatus,
   planErc1155OfferAccept,
   planErc1155OfferCancel,
   planErc1155OfferCreate,
   planErc1155ReleaseAllowlistConfig,
+  planErc1155ReleaseAllowlistConfigBatch,
   planErc1155ReleaseClearAllowlistConfig,
   planErc1155ReleaseConfigure,
+  planErc1155ReleaseConfigureBatch,
+  planErc1155ReleaseCancel,
   planErc1155ReleaseLimitConfig,
+  planErc1155ReleaseLimitConfigBatch,
   planErc1155ReleaseMint,
   providedSplits,
   shapeErc1155CollectionStatus,
@@ -76,6 +82,16 @@ describe('ERC1155 core planning', () => {
         { tokenId: '1', quantity: '1' },
       ],
     })).toThrow('tokenIds must be strictly ascending.');
+
+    expect(planErc1155CollectionUpdateTokenUri({
+      contract,
+      tokenId: '3',
+      tokenUri: 'ipfs://updated',
+    })).toEqual({
+      contract,
+      tokenId: 3n,
+      tokenUri: 'ipfs://updated',
+    });
   });
 
   it('rejects invalid collection token and mint inputs', () => {
@@ -177,6 +193,91 @@ describe('ERC1155 core planning', () => {
       splitAddresses: [seller],
       splitRatios: [100],
     });
+  });
+
+  it('plans ERC1155 batch listing and release writes', () => {
+    expect(planErc1155ListingCreateBatch({
+      contract,
+      currency: erc20,
+      items: [
+        { tokenId: '1', quantity: '2', price: 100n },
+        { tokenId: '2', quantity: '3', price: 200n, expirationTime: '1800000100' },
+      ],
+    }, account)).toEqual({
+      contract,
+      currency: erc20,
+      items: [
+        { tokenId: 1n, quantity: 2n, price: 100n, expirationTime: 0n },
+        { tokenId: 2n, quantity: 3n, price: 200n, expirationTime: 1_800_000_100n },
+      ],
+      splitAddresses: [account],
+      splitRatios: [100],
+    });
+
+    expect(planErc1155ReleaseConfigureBatch({
+      contract,
+      currency: ETH_ADDRESS,
+      items: [
+        { tokenId: '1', price: 100n, maxMints: '2' },
+        { tokenId: '2', price: 200n, maxMints: '3', startTime: '1800000100' },
+      ],
+    }, account, NOW)).toEqual({
+      contract,
+      currency: ETH_ADDRESS,
+      items: [
+        { tokenId: 1n, price: 100n, startTime: NOW, maxMints: 2n },
+        { tokenId: 2n, price: 200n, startTime: 1_800_000_100n, maxMints: 3n },
+      ],
+      splitAddresses: [account],
+      splitRatios: [100],
+    });
+
+    expect(planErc1155ReleaseCancel({ contract, tokenIds: ['1', 2] })).toEqual({
+      contract,
+      tokenIds: [1n, 2n],
+    });
+
+    expect(() => planErc1155ListingCreateBatch({ contract, currency: erc20, items: [] }, account))
+      .toThrow('items must include at least one listing.');
+    expect(() => planErc1155ReleaseConfigureBatch({ contract, currency: erc20, items: [] }, account, NOW))
+      .toThrow('items must include at least one release config.');
+    expect(() => planErc1155ReleaseCancel({ contract, tokenIds: ['2', '1'] }))
+      .toThrow('tokenIds must be strictly ascending.');
+  });
+
+  it('plans ERC1155 release allowlist and limit batches', () => {
+    const root = `0x${'11'.repeat(32)}` as const;
+    expect(planErc1155ReleaseAllowlistConfigBatch({
+      contract,
+      items: [
+        { tokenId: '1', root, endTime: '1800000100' },
+      ],
+    })).toEqual([{
+      contract,
+      tokenId: 1n,
+      root,
+      endTimestamp: 1_800_000_100n,
+    }]);
+
+    expect(planErc1155ReleaseLimitConfigBatch({
+      contract,
+      items: [
+        { tokenId: '1', limit: '0' },
+        { tokenId: '2', limit: '5' },
+      ],
+    })).toEqual([
+      { contract, tokenId: 1n, limit: 0n },
+      { contract, tokenId: 2n, limit: 5n },
+    ]);
+
+    expect(() => planErc1155ReleaseAllowlistConfigBatch({
+      contract,
+      items: [{ tokenId: '1', endTime: '1800000100' }],
+    })).toThrow('items[0].root or items[0].artifact is required.');
+    expect(() => planErc1155ReleaseLimitConfigBatch({
+      contract,
+      items: [{ tokenId: '2', limit: '1' }, { tokenId: '1', limit: '1' }],
+    })).toThrow('tokenIds must be strictly ascending.');
   });
 
   it('validates quantities, prices, and splits for marketplace planners', () => {
