@@ -101,21 +101,32 @@ async function requireSetup(
 }
 
 async function findReadableSepoliaNft(rareClient: RareClient): Promise<ReadableNftFixture> {
-  const search = await rareClient.search.nfts({ page: 1, perPage: 10 });
+  const tested = new Set<string>();
 
-  for (const nft of search.data) {
-    if (!isAddress(nft.contractAddress)) continue;
+  for (let page = 1; page <= 5; page += 1) {
+    const search = await rareClient.search.nfts({ page, perPage: 24 });
 
-    const candidate = {
-      contract: nft.contractAddress,
-      tokenId: nft.tokenId,
-    };
+    for (const nft of search.data) {
+      if (!isAddress(nft.contractAddress)) continue;
 
-    try {
-      await rareClient.token.status(candidate);
-      return candidate;
-    } catch {
-      // Keep scanning until we find an indexed Sepolia NFT with standard ERC-721 reads.
+      const candidate = {
+        contract: nft.contractAddress,
+        tokenId: nft.tokenId,
+      };
+      const key = `${candidate.contract.toLowerCase()}:${candidate.tokenId}`;
+      if (tested.has(key)) continue;
+      tested.add(key);
+
+      try {
+        await rareClient.token.status(candidate);
+        return candidate;
+      } catch {
+        // Keep scanning until we find an indexed Sepolia NFT with standard ERC-721 reads.
+      }
+    }
+
+    if (page >= search.pagination.totalPages) {
+      break;
     }
   }
 
