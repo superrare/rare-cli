@@ -151,16 +151,7 @@ describeLive('live auction CLI writes', () => {
     );
     expectTx(auctionSettleCreate);
     expectOptionalTxHash(auctionSettleCreate.approvalTxHash);
-
-    await step('wait for maker auction list entry', () =>
-      expectAuctionListContains(fixture, fixture.sellerHome, {
-        account: fixture.sellerAddress,
-        side: 'maker',
-        contract: fixture.collection.contract,
-        tokenId: fixture.auctionSettleToken.tokenId,
-        type: 'RESERVE_AUCTION',
-      }),
-    );
+    await expectAuctionStatus(fixture, fixture.sellerHome, fixture.collection.contract, fixture.auctionSettleToken.tokenId, 'PENDING');
 
     expectTx(await step('bid on auction', () =>
       jsonCommand<TxResult>(fixture.buyerHome, [
@@ -177,6 +168,15 @@ describeLive('live auction CLI writes', () => {
       ]),
     ));
     try {
+      await step('wait for maker auction list entry', () =>
+        expectAuctionListContains(fixture, fixture.sellerHome, {
+          account: fixture.sellerAddress,
+          side: 'maker',
+          contract: fixture.collection.contract,
+          tokenId: fixture.auctionSettleToken.tokenId,
+          type: 'RESERVE_AUCTION',
+        }),
+      );
       await step('wait for taker auction list entry', () =>
         expectAuctionListContains(fixture, fixture.buyerHome, {
           account: fixture.buyerAddress,
