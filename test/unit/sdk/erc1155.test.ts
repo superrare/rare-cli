@@ -42,7 +42,7 @@ describe('ERC1155 listing namespace preflight', () => {
       contract,
       tokenId: '1',
       seller,
-    })).rejects.toThrow('ERC1155 contracts are not configured for "mainnet". Supported chains: sepolia, base-sepolia');
+    })).rejects.toThrow('ERC1155 contracts are not configured for "mainnet". Supported chains: sepolia, base, base-sepolia');
   });
 
   it('rejects insufficient seller balance before writing NFT approval', async () => {
