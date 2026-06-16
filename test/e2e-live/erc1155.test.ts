@@ -31,6 +31,7 @@ const missingEnv = [
 ];
 const describeLive = missingEnv.length === 0 ? describe.sequential : describe.skip;
 const ONE_WEI_ETH = '0.000000000000000001';
+const alternateRecipient = '0x000000000000000000000000000000000000dead' as Address;
 const rareApiIndexTimeoutMs = Number.parseInt(process.env.E2E_RARE_API_INDEX_TIMEOUT_MS ?? '180000', 10);
 const rareApiIndexPollMs = Number.parseInt(process.env.E2E_RARE_API_INDEX_POLL_MS ?? '5000', 10);
 
@@ -92,10 +93,15 @@ type ListingCreateResult = TxResult & {
   approvalTxHash?: string | null;
 };
 
-type ListingBuyResult = TxResult;
+type ListingBuyResult = TxResult & {
+  buyer: Address;
+  recipient: Address;
+};
 
 type CheckoutResult = TxResult & {
   summary: {
+    payer: Address;
+    recipient: Address;
     filledCount: string;
     skippedCount: string;
     ethSpent: string;
@@ -487,11 +493,15 @@ describeLive('live ERC1155 CLI writes', () => {
         'checkout',
         '--input',
         checkoutInput,
+        '--recipient',
+        alternateRecipient,
         '--chain',
         live.chain,
       ], 240_000),
     );
     expectTx(checkout);
+    expect(checkout.summary.payer.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
+    expect(checkout.summary.recipient.toLowerCase()).toBe(alternateRecipient.toLowerCase());
     expect(checkout.summary.filledCount).toBe('2');
     expect(checkout.summary.skippedCount).toBe('0');
     expect(checkout.items.map((item) => item.status)).toEqual(['filled', 'filled']);
@@ -499,8 +509,12 @@ describeLive('live ERC1155 CLI writes', () => {
 
     const tokenAStatus = await readCollectionStatus(live.buyerHome, live.tokenA, live.buyerAddress);
     const tokenBStatus = await readCollectionStatus(live.buyerHome, live.tokenB, live.buyerAddress);
-    expect(tokenAStatus.token?.accountBalance).toBe('3');
-    expect(tokenBStatus.token?.accountBalance).toBe('3');
+    const recipientTokenAStatus = await readCollectionStatus(live.buyerHome, live.tokenA, alternateRecipient);
+    const recipientTokenBStatus = await readCollectionStatus(live.buyerHome, live.tokenB, alternateRecipient);
+    expect(tokenAStatus.token?.accountBalance).toBe('2');
+    expect(tokenBStatus.token?.accountBalance).toBe('2');
+    expect(recipientTokenAStatus.token?.accountBalance).toBe('1');
+    expect(recipientTokenBStatus.token?.accountBalance).toBe('1');
     expect((await readListingStatus()).quantity).toBe('1');
 
     const cancelled = await step('cancel remaining checkout ERC1155 listing', () =>
@@ -557,15 +571,21 @@ describeLive('live ERC1155 CLI writes', () => {
         '1',
         '--price',
         ONE_WEI_ETH,
+        '--recipient',
+        live.buyerAddress,
         '--chain',
         live.chain,
       ], 240_000),
     );
     expectTx(purchased);
+    expect(purchased.buyer.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
+    expect(purchased.recipient.toLowerCase()).toBe(live.buyerAddress.toLowerCase());
 
     const listingStatus = await readListingStatus();
     expect(listingStatus.hasListing).toBe(true);
     expect(listingStatus.quantity).toBe('2');
+    const buyerTokenAStatus = await readCollectionStatus(live.buyerHome, live.tokenA, live.buyerAddress);
+    expect(buyerTokenAStatus.token?.accountBalance).toBe('3');
 
     const cancelled = await step('cancel ERC1155 listing', () =>
       jsonCommand<TxResult>(live.sellerHome, [

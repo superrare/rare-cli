@@ -107,6 +107,7 @@ export type Erc1155ListingCreateBatchPlan = {
 export type Erc1155ListingBuyPlan = {
   contract: Address;
   seller: Address;
+  recipient: Address;
   tokenId: bigint;
   quantity: bigint;
   currency: Address;
@@ -163,6 +164,7 @@ export type Erc1155ReleaseMintPlan = {
   contract: Address;
   tokenId: bigint;
   quantity: bigint;
+  recipient: Address;
   currency?: Address;
   price?: bigint;
   proof: Hex[];
@@ -203,6 +205,7 @@ export type Erc1155CheckoutResolvedItem = {
 }
 
 export type Erc1155CheckoutPlan = {
+  recipient: Address;
   items: Erc1155CheckoutResolvedItem[];
 }
 
@@ -332,11 +335,14 @@ export function planErc1155ListingCancel(params: { tokenIds: Erc1155ListingBuyPa
 
 export function planErc1155ListingBuy(
   params: Omit<Erc1155ListingBuyParams, 'currency' | 'price'> & { currency: Address; price: bigint },
+  accountAddress: Address,
 ): Erc1155ListingBuyPlan {
   const quantity = toPositiveInteger(params.quantity, 'quantity');
+  const recipient = normalizeRecipient(params.recipient, accountAddress);
   return {
     contract: params.contract,
     seller: params.seller,
+    recipient,
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     quantity,
     currency: params.currency,
@@ -459,6 +465,7 @@ export function planErc1155ReleaseCancel(params: Erc1155ReleaseCancelParams): Er
 
 export function planErc1155ReleaseMint(
   params: Omit<Erc1155ReleaseMintParams, 'currency' | 'price'> & { currency?: Address; price?: bigint },
+  accountAddress: Address,
 ): Erc1155ReleaseMintPlan {
   const proof = [...(params.proof ?? [])];
   assertBytes32Proof(proof, 'proof');
@@ -466,6 +473,7 @@ export function planErc1155ReleaseMint(
     contract: params.contract,
     tokenId: toNonNegativeInteger(params.tokenId, 'tokenId'),
     quantity: toPositiveInteger(params.quantity, 'quantity'),
+    recipient: normalizeRecipient(params.recipient, accountAddress),
     currency: params.currency,
     price: params.price,
     proof,
@@ -509,6 +517,7 @@ export function planErc1155CheckoutInput(params: {
 }
 
 export function planErc1155CheckoutResolved(params: {
+  recipient: Address;
   items: Array<{
     kind: 'release' | 'listing';
     contract: Address;
@@ -525,6 +534,7 @@ export function planErc1155CheckoutResolved(params: {
   }
 
   return {
+    recipient: normalizeRecipient(params.recipient, params.recipient),
     items: params.items.map((item, index) => {
       if (item.kind === 'listing' && item.seller === undefined) {
         throw new Error(`items[${index}].seller is required for listing checkout items.`);
@@ -841,7 +851,8 @@ export function shapeErc1155CheckoutResult(params: {
   txHash: Hex;
   receipt: Erc1155CheckoutResult['receipt'];
   completed?: {
-    buyer: Address;
+    payer: Address;
+    recipient: Address;
     filledCount: bigint;
     skippedCount: bigint;
     ethSpent: bigint;
@@ -897,7 +908,8 @@ export type Erc1155CheckoutExpectedLogItem = {
 }
 
 export type Erc1155CheckoutCompletedLogInput = {
-  buyer: Address;
+  payer: Address;
+  recipient: Address;
   filledCount: bigint;
   skippedCount: bigint;
   ethSpent: bigint;
@@ -907,7 +919,8 @@ export type Erc1155CheckoutCompletedLogInput = {
 export function shapeErc1155CheckoutExecution(params: {
   marketplace: Address;
   completed?: {
-    buyer?: Address | null;
+    payer?: Address | null;
+    recipient?: Address | null;
     filledCount: bigint;
     skippedCount: bigint;
     ethSpent: bigint;
@@ -951,7 +964,8 @@ export function shapeErc1155CheckoutExecution(params: {
   return {
     marketplace: params.marketplace,
     summary: {
-      buyer: params.completed?.buyer ?? null,
+      payer: params.completed?.payer ?? null,
+      recipient: params.completed?.recipient ?? null,
       filledCount,
       skippedCount,
       ethSpent: params.completed?.ethSpent ?? 0n,
@@ -1164,4 +1178,12 @@ function assertBytes32(value: Hex, label: string): void {
   if (!isHex(value) || value.length !== 66) {
     throw new Error(`${label} must be a bytes32 hex string.`);
   }
+}
+
+function normalizeRecipient(recipient: Address | undefined, accountAddress: Address): Address {
+  const normalized = recipient ?? accountAddress;
+  if (isAddressEqual(normalized, zeroAddress)) {
+    throw new Error('recipient cannot be the zero address.');
+  }
+  return normalized;
 }

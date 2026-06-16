@@ -189,10 +189,13 @@ export type Erc1155ListingBuyParams = {
   quantity: IntegerInput;
   price: AmountInput;
   currency?: CurrencyInput;
+  recipient?: Address;
   autoApprove?: boolean;
 }
 
 export type Erc1155ListingBuyResult = {
+  buyer: Address;
+  recipient: Address;
   approvalTxHash?: Hash;
 } & TransactionResult
 
@@ -220,6 +223,7 @@ export type Erc1155CheckoutItemInput = Erc1155CheckoutReleaseItemInput | Erc1155
 
 export type Erc1155CheckoutParams = {
   items: Erc1155CheckoutItemInput[];
+  recipient?: Address;
   autoApprove?: boolean;
 }
 
@@ -245,7 +249,8 @@ export type Erc1155CheckoutDecodedFailure = {
 }
 
 export type Erc1155CheckoutSummary = {
-  buyer: Address | null;
+  payer: Address | null;
+  recipient: Address | null;
   filledCount: bigint;
   skippedCount: bigint;
   ethSpent: bigint;
@@ -458,6 +463,7 @@ export type Erc1155ReleaseMintParams = {
   price?: AmountInput;
   currency?: CurrencyInput;
   proof?: readonly Hex[];
+  recipient?: Address;
   autoApprove?: boolean;
 }
 
@@ -472,6 +478,7 @@ export type Erc1155ReleaseMintResult = {
   price: bigint;
   totalPrice: bigint;
   requiredPayment: bigint;
+  recipient: Address;
   approvalTxHash?: Hash;
   allowlistRequired: boolean;
 } & TransactionResult

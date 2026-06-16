@@ -19,8 +19,9 @@ export const rareErc1155MarketplaceAbi = [
     anonymous: false,
     inputs: [
       { indexed: true, internalType: 'address', name: 'contractAddress', type: 'address' },
-      { indexed: true, internalType: 'uint256', name: 'tokenId', type: 'uint256' },
-      { indexed: true, internalType: 'address', name: 'buyer', type: 'address' },
+      { indexed: false, internalType: 'uint256', name: 'tokenId', type: 'uint256' },
+      { indexed: true, internalType: 'address', name: 'payer', type: 'address' },
+      { indexed: true, internalType: 'address', name: 'recipient', type: 'address' },
       { indexed: false, internalType: 'address', name: 'seller', type: 'address' },
       { indexed: false, internalType: 'uint256', name: 'quantity', type: 'uint256' },
       { indexed: false, internalType: 'address', name: 'currency', type: 'address' },
@@ -41,9 +42,11 @@ export const rareErc1155MarketplaceAbi = [
   {
     anonymous: false,
     inputs: [
-      { indexed: true, internalType: 'uint256', name: 'itemIndex', type: 'uint256' },
-      { indexed: true, internalType: 'uint8', name: 'itemKind', type: 'uint8' },
+      { indexed: false, internalType: 'uint256', name: 'itemIndex', type: 'uint256' },
+      { indexed: false, internalType: 'uint8', name: 'itemKind', type: 'uint8' },
       { indexed: true, internalType: 'address', name: 'contractAddress', type: 'address' },
+      { indexed: true, internalType: 'address', name: 'payer', type: 'address' },
+      { indexed: true, internalType: 'address', name: 'recipient', type: 'address' },
       { indexed: false, internalType: 'uint256', name: 'tokenId', type: 'uint256' },
       { indexed: false, internalType: 'address', name: 'seller', type: 'address' },
       { indexed: false, internalType: 'address', name: 'currencyAddress', type: 'address' },
@@ -61,7 +64,8 @@ export const rareErc1155MarketplaceAbi = [
   {
     anonymous: false,
     inputs: [
-      { indexed: true, internalType: 'address', name: 'buyer', type: 'address' },
+      { indexed: true, internalType: 'address', name: 'payer', type: 'address' },
+      { indexed: true, internalType: 'address', name: 'recipient', type: 'address' },
       { indexed: false, internalType: 'uint256', name: 'filledCount', type: 'uint256' },
       { indexed: false, internalType: 'uint256', name: 'skippedCount', type: 'uint256' },
       { indexed: false, internalType: 'uint256', name: 'ethSpent', type: 'uint256' },
@@ -206,7 +210,23 @@ export const rareErc1155MarketplaceAbi = [
     type: 'function',
   },
   {
+    anonymous: false,
     inputs: [
+      { indexed: false, internalType: 'address', name: 'seller', type: 'address' },
+      { indexed: true, internalType: 'address', name: 'payer', type: 'address' },
+      { indexed: true, internalType: 'address', name: 'contractAddress', type: 'address' },
+      { indexed: true, internalType: 'address', name: 'recipient', type: 'address' },
+      { indexed: false, internalType: 'uint256', name: 'tokenId', type: 'uint256' },
+      { indexed: false, internalType: 'address', name: 'currency', type: 'address' },
+      { indexed: false, internalType: 'uint256', name: 'price', type: 'uint256' },
+      { indexed: false, internalType: 'uint256', name: 'quantity', type: 'uint256' },
+    ],
+    name: 'Sold',
+    type: 'event',
+  },
+  {
+    inputs: [
+      { internalType: 'address', name: '_recipient', type: 'address' },
       {
         components: [
           { internalType: 'uint8', name: 'itemKind', type: 'uint8' },
@@ -260,7 +280,7 @@ export const rareErc1155MarketplaceAbi = [
           },
         ],
         internalType: 'struct IRareERC1155MarketplaceTypes.CheckoutExecution',
-        name: 'execution',
+        name: '',
         type: 'tuple',
       },
     ],
@@ -282,6 +302,7 @@ export const rareErc1155MarketplaceAbi = [
     inputs: [
       { internalType: 'address', name: '_contractAddress', type: 'address' },
       { internalType: 'address', name: '_currencyAddress', type: 'address' },
+      { internalType: 'address', name: '_recipient', type: 'address' },
       {
         components: [
           { internalType: 'uint256', name: 'tokenId', type: 'uint256' },
@@ -304,6 +325,7 @@ export const rareErc1155MarketplaceAbi = [
       { internalType: 'address', name: '_contractAddress', type: 'address' },
       { internalType: 'address', name: '_seller', type: 'address' },
       { internalType: 'address', name: '_currencyAddress', type: 'address' },
+      { internalType: 'address', name: '_recipient', type: 'address' },
       {
         components: [
           { internalType: 'uint256', name: 'tokenId', type: 'uint256' },
@@ -516,6 +538,11 @@ export const rareErc1155MarketplaceAbi = [
   {
     inputs: [{ internalType: 'uint8', name: 'itemKind', type: 'uint8' }],
     name: 'UnsupportedCheckoutItemKind',
+    type: 'error',
+  },
+  {
+    inputs: [],
+    name: 'RecipientCannotBeZero',
     type: 'error',
   },
 ] as const;

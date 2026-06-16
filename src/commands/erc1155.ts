@@ -88,6 +88,7 @@ type ListingBuyOptions = ChainOptions & {
   quantity: string;
   price: string;
   currency?: string;
+  recipient?: string;
   yes?: boolean;
 };
 
@@ -98,6 +99,7 @@ type ListingCancelOptions = ChainOptions & {
 
 type ListingCheckoutOptions = ChainOptions & {
   input: string;
+  recipient?: string;
   yes?: boolean;
 };
 
@@ -172,6 +174,7 @@ type ReleaseMintOptions = ChainOptions & {
   currency?: string;
   price?: string;
   proof?: string;
+  recipient?: string;
   yes?: boolean;
 };
 
@@ -554,6 +557,7 @@ export function listingErc1155Command(): Command {
     .requiredOption('--quantity <number>', 'quantity to buy')
     .requiredOption('--price <amount>', 'expected per-unit price')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address')
+    .option('--recipient <address>', 'token recipient address (defaults to connected wallet)')
     .option('--yes', 'yes to approval prompts')
     .option('--chain <chain>', 'chain to use (sepolia)')
     .option('--chain-id <id>', 'chain ID (11155111)')
@@ -567,6 +571,7 @@ export function listingErc1155Command(): Command {
         quantity: toPositiveInteger(opts.quantity, 'quantity'),
         price: opts.price,
         currency,
+        recipient: opts.recipient === undefined ? undefined : parseAddressOption(opts.recipient, '--recipient'),
       };
       const rare = writeRare(chain);
       const result = await runWithPaymentApprovalConsent({
@@ -576,7 +581,11 @@ export function listingErc1155Command(): Command {
         runWithApproval: async () => rare.listing.erc1155.buy({ ...params, autoApprove: true }),
       });
       if (result === undefined) return;
-      output(txOutput(result, { approvalTxHash: result.approvalTxHash ?? null }), () => {
+      output(txOutput(result, {
+        buyer: result.buyer,
+        recipient: result.recipient,
+        approvalTxHash: result.approvalTxHash ?? null,
+      }), () => {
         printTxWithApproval(result, 'ERC-1155 listing purchased');
       });
     });
@@ -584,19 +593,21 @@ export function listingErc1155Command(): Command {
   cmd.command('checkout')
     .description('Checkout ERC-1155 release and listing items from a JSON cart')
     .requiredOption('--input <file>', 'checkout cart JSON file')
+    .option('--recipient <address>', 'token recipient address (defaults to connected wallet)')
     .option('--yes', 'yes to approval prompts')
     .option('--chain <chain>', 'chain to use (sepolia)')
     .option('--chain-id <id>', 'chain ID (11155111)')
     .action(async (opts: ListingCheckoutOptions) => {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const items = readCheckoutItems(opts.input, chain);
+      const recipient = opts.recipient === undefined ? undefined : parseAddressOption(opts.recipient, '--recipient');
       const rare = writeRare(chain);
       const result = await runCheckoutWithApprovalConsent({
         run: async () => await runWithPaymentApprovalConsent({
           commandName: 'rare listing erc1155 checkout',
           approvalMessage: 'ERC20 approval is required before checking out this cart.',
-          runWithoutApproval: async () => rare.listing.erc1155.checkout({ items, autoApprove: opts.yes === true }),
-          runWithApproval: async () => rare.listing.erc1155.checkout({ items, autoApprove: true }),
+          runWithoutApproval: async () => rare.listing.erc1155.checkout({ items, recipient, autoApprove: opts.yes === true }),
+          runWithApproval: async () => rare.listing.erc1155.checkout({ items, recipient, autoApprove: true }),
         }),
       });
       if (result === undefined) return;
@@ -919,6 +930,7 @@ function releaseErc1155Command(): Command {
     .option('--currency <currency>', 'expected currency')
     .option('--price <amount>', 'expected per-unit price')
     .option('--proof <file>', 'allowlist proof JSON')
+    .option('--recipient <address>', 'token recipient address (defaults to connected wallet)')
     .option('--yes', 'yes to approval prompts')
     .option('--chain <chain>', 'chain to use (sepolia)')
     .option('--chain-id <id>', 'chain ID (11155111)')
@@ -931,6 +943,7 @@ function releaseErc1155Command(): Command {
         currency: opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain),
         price: opts.price,
         proof: opts.proof === undefined ? undefined : readProofFile(opts.proof),
+        recipient: opts.recipient === undefined ? undefined : parseAddressOption(opts.recipient, '--recipient'),
       };
       const rare = writeRare(chain);
       const result = await runWithPaymentApprovalConsent({
@@ -945,6 +958,7 @@ function releaseErc1155Command(): Command {
         tokenId: result.tokenId,
         quantity: result.quantity,
         requiredPayment: result.requiredPayment,
+        recipient: result.recipient,
       }), () => {
         printTxWithApproval(result, 'ERC-1155 release mint complete');
       });
