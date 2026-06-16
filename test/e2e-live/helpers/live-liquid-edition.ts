@@ -12,6 +12,7 @@ export type DeployLiquidEditionResult = TxResult & {
   chainId: number;
   liquidEditionUrl: string;
   tokenUri: string;
+  totalSupply: string | null;
   source: string;
   curves: Array<{
     tickLower: number;
@@ -71,8 +72,10 @@ export async function deployLiquidEdition(
   name: string,
   symbol: string,
   initialRareLiquidity?: string,
+  totalSupply?: string,
 ): Promise<DeployLiquidEditionResult> {
   const liquidityArgs = initialRareLiquidity ? ['--initial-rare-liquidity', initialRareLiquidity] : [];
+  const totalSupplyArgs = totalSupply ? ['--total-supply', totalSupply] : [];
   const deploy = (): Promise<DeployLiquidEditionResult> =>
     jsonCommand<DeployLiquidEditionResult>(live.sellerHome, [
       'liquid-edition',
@@ -86,6 +89,7 @@ export async function deployLiquidEdition(
       E2E_TOKEN_URI,
       '--yes',
       ...liquidityArgs,
+      ...totalSupplyArgs,
       '--chain',
       live.chain,
     ], 300_000);

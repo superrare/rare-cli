@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { isAddress } from 'viem';
+import { isAddress, parseUnits } from 'viem';
 import {
   cleanupLiveFixture,
   createLiveFixture,
@@ -96,5 +96,29 @@ describeLive('live deploy liquid-edition CLI write command', () => {
 
     const updatedStatus = await readLiquidEditionStatus(fixture, deployed.contract);
     expect(updatedStatus.renderContract.toLowerCase()).toBe(renderContract.toLowerCase());
+  });
+
+  it('deploys a Liquid Edition with a custom total supply', async () => {
+    const fixture = live.value;
+    const totalSupply = '250000';
+    const deployed = await deployLiquidEdition(
+      fixture,
+      uniqueTokenName('Rare CLI Liquid Supply E2E'),
+      uniqueSymbol('LQS'),
+      undefined,
+      totalSupply,
+    );
+
+    expectTx(deployed);
+    expect(isAddress(deployed.contract)).toBe(true);
+    expect(deployed.totalSupply).toBe(totalSupply);
+
+    const status = await readLiquidEditionStatus(fixture, deployed.contract);
+    expect(status.contract).toBe(deployed.contract);
+    expect(status.name).toContain('Rare CLI Liquid Supply E2E');
+    expect(status.symbol).toContain('LQS');
+    const maxTotalSupply = parseUnits(totalSupply, 18);
+    expect(status.maxTotalSupply).toBe(maxTotalSupply.toString());
+    expect(status.poolLaunchSupply).toBe((maxTotalSupply - BigInt(status.creatorLaunchReward)).toString());
   });
 });
