@@ -537,7 +537,7 @@ export function createErc1155ListingNamespace(
       const { walletClient, account, accountAddress } = requireWallet(config);
       const currency = params.currency === undefined ? ETH_ADDRESS : resolveCurrencyForSdk(params.currency, chain).address;
       const price = await toCurrencyAmount(publicClient, chain, currency, params.price, 'price');
-      const plan = planErc1155ListingBuy({ ...params, currency, price });
+      const plan = planErc1155ListingBuy({ ...params, currency, price }, accountAddress);
       const requiredAmount = await preflightErc1155ListingBuy({
         publicClient,
         marketplace: erc1155.erc1155Marketplace,
@@ -576,7 +576,7 @@ export function createErc1155ListingNamespace(
             address: erc1155.erc1155Marketplace,
             abi: rareErc1155MarketplaceAbi,
             functionName: 'buyBatch',
-            args: [plan.contract, plan.seller, plan.currency, [{ tokenId: plan.tokenId, price: plan.price, quantity: plan.quantity }]],
+            args: [plan.contract, plan.seller, plan.currency, plan.recipient, [{ tokenId: plan.tokenId, price: plan.price, quantity: plan.quantity }]],
             account,
             chain: undefined,
             value: payment.value,
@@ -585,7 +585,7 @@ export function createErc1155ListingNamespace(
           return { txHash: targetTxHash, receipt: targetReceipt };
         },
       });
-      return { txHash, receipt, approvalTxHash: payment.approvalTxHash };
+      return { txHash, receipt, buyer: accountAddress, recipient: plan.recipient, approvalTxHash: payment.approvalTxHash };
     },
 
     async checkout(params): ReturnType<Erc1155ListingNamespace['checkout']> {
@@ -630,7 +630,7 @@ export function createErc1155ListingNamespace(
           proof: item.proof,
         };
       }));
-      const checkout = planErc1155CheckoutResolved({ items: resolvedItems });
+      const checkout = planErc1155CheckoutResolved({ recipient: params.recipient ?? accountAddress, items: resolvedItems });
       const checkoutContractItems: Erc1155CheckoutContractItem[] = checkout.items.map((item) => ({
         itemKind: item.itemKind,
         contractAddress: item.contract,
@@ -657,6 +657,7 @@ export function createErc1155ListingNamespace(
         publicClient,
         marketplace: erc1155.erc1155Marketplace,
         account,
+        recipient: checkout.recipient,
         items: checkoutContractItems,
         value,
       });
@@ -691,6 +692,7 @@ export function createErc1155ListingNamespace(
             publicClient,
             marketplace: erc1155.erc1155Marketplace,
             account,
+            recipient: checkout.recipient,
             items: checkoutContractItems,
             value,
           });
@@ -699,7 +701,7 @@ export function createErc1155ListingNamespace(
             address: erc1155.erc1155Marketplace,
             abi: rareErc1155MarketplaceAbi,
             functionName: 'checkout',
-            args: [checkoutContractItems],
+            args: [checkout.recipient, checkoutContractItems],
             account,
             chain: undefined,
             value,
@@ -733,7 +735,8 @@ export function createErc1155ListingNamespace(
         logs: receipt.logs,
         eventName: 'CheckoutCompleted',
       }).map((log) => ({
-        buyer: log.args.buyer,
+        payer: log.args.payer,
+        recipient: log.args.recipient,
         filledCount: log.args.filledCount,
         skippedCount: log.args.skippedCount,
         ethSpent: log.args.ethSpent,
@@ -1294,7 +1297,7 @@ function createErc1155ReleaseNamespace(
             params.price,
             'price',
           ),
-      });
+      }, accountAddress);
       const configRead = await publicClient.readContract({
         address: addresses.erc1155Marketplace,
         abi: rareErc1155MarketplaceAbi,
@@ -1323,7 +1326,7 @@ function createErc1155ReleaseNamespace(
             address: addresses.erc1155Marketplace,
             abi: rareErc1155MarketplaceAbi,
             functionName: 'mintDirectSaleBatch',
-            args: [plan.contract, currency, [{ tokenId: plan.tokenId, price, quantity: plan.quantity, proof: plan.proof }]],
+            args: [plan.contract, currency, plan.recipient, [{ tokenId: plan.tokenId, price, quantity: plan.quantity, proof: plan.proof }]],
             account,
             chain: undefined,
             value: payment.value,
@@ -1339,6 +1342,7 @@ function createErc1155ReleaseNamespace(
         contract: plan.contract,
         tokenId: plan.tokenId,
         buyer: accountAddress,
+        recipient: plan.recipient,
         seller: directSale[0],
         quantity: plan.quantity,
         currencyAddress: currency,
@@ -1668,6 +1672,7 @@ async function preflightErc1155ListingBuy(opts: {
         opts.plan.contract,
         opts.plan.seller,
         opts.plan.currency,
+        opts.plan.recipient,
         [{ tokenId: opts.plan.tokenId, price: opts.plan.price, quantity: opts.plan.quantity }],
       ],
       account: opts.account,
@@ -1825,6 +1830,7 @@ async function simulateErc1155Checkout(opts: {
   publicClient: PublicClient;
   marketplace: Address;
   account: Address | WalletAccount;
+  recipient: Address;
   items: Erc1155CheckoutContractItem[];
   value: bigint;
 }): Promise<Erc1155CheckoutExecution> {
@@ -1832,7 +1838,7 @@ async function simulateErc1155Checkout(opts: {
     address: opts.marketplace,
     abi: rareErc1155MarketplaceAbi,
     functionName: 'checkout',
-    args: [opts.items],
+    args: [opts.recipient, opts.items],
     account: opts.account,
     value: opts.value,
   });

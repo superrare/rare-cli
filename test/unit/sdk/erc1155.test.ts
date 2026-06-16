@@ -7,6 +7,7 @@ import { createErc1155ListingNamespace } from '../../../src/sdk/erc1155.js';
 const account = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as Address;
 const contract = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as Address;
 const seller = '0xcccccccccccccccccccccccccccccccccccccccc' as Address;
+const recipient = '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' as Address;
 const erc20 = '0xdddddddddddddddddddddddddddddddddddddddd' as Address;
 const marketplace = '0x1111111111111111111111111111111111111111' as Address;
 const approvalManager = '0x2222222222222222222222222222222222222222' as Address;
@@ -138,5 +139,57 @@ describe('ERC1155 listing namespace preflight', () => {
       currency: erc20,
     })).rejects.toThrow(`but ${account} owns 0.`);
     expect(writeContract).not.toHaveBeenCalled();
+  });
+
+  it('passes recipient to ERC1155 listing buy writes', async () => {
+    const txHash = hex32('1');
+    const writeContract = vi.fn(async () => txHash);
+    const simulateContract = vi.fn(async () => ({}));
+    const namespace = createErc1155ListingNamespace(
+      {
+        async readContract(params: { functionName: string; args?: unknown[] }) {
+          if (params.functionName === 'getSalePrice') {
+            return [ETH_ADDRESS, 1n, 10n, 0n, [seller], [100]];
+          }
+          if (params.functionName === 'calculateMarketplaceFee') return 0n;
+          if (params.functionName === 'isApprovedForAll') return true;
+          if (params.functionName === 'balanceOf') return 10n;
+          throw new Error(`Unexpected readContract: ${params.functionName}`);
+        },
+        simulateContract,
+        async waitForTransactionReceipt() {
+          return { status: 'success', blockNumber: 1n, logs: [] };
+        },
+      } as never,
+      {
+        publicClient: {} as never,
+        account,
+        walletClient: { writeContract } as never,
+      },
+      'sepolia',
+      addresses,
+    );
+
+    const result = await namespace.buy({
+      contract,
+      seller,
+      tokenId: '1',
+      quantity: '2',
+      price: 1n,
+      currency: ETH_ADDRESS,
+      recipient,
+    });
+
+    expect(result).toMatchObject({ buyer: account, recipient });
+    expect(simulateContract).toHaveBeenCalledWith(expect.objectContaining({
+      functionName: 'buyBatch',
+      args: [contract, seller, ETH_ADDRESS, recipient, [{ tokenId: 1n, price: 1n, quantity: 2n }]],
+      value: 2n,
+    }));
+    expect(writeContract).toHaveBeenCalledWith(expect.objectContaining({
+      functionName: 'buyBatch',
+      args: [contract, seller, ETH_ADDRESS, recipient, [{ tokenId: 1n, price: 1n, quantity: 2n }]],
+      value: 2n,
+    }));
   });
 });

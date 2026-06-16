@@ -3215,6 +3215,14 @@ describe('built CLI deterministic behavior', () => {
       expect(listingHelp.stdout).toContain('cancel');
       expect(listingHelp.stdout).toContain('status');
 
+      const listingBuyHelp = await runCli(['listing', 'erc1155', 'buy', '--help'], { home });
+      expect(listingBuyHelp.code).toBe(0);
+      expect(listingBuyHelp.stdout).toContain('--recipient <address>');
+
+      const checkoutHelp = await runCli(['listing', 'erc1155', 'checkout', '--help'], { home });
+      expect(checkoutHelp.code).toBe(0);
+      expect(checkoutHelp.stdout).toContain('--recipient <address>');
+
       const releaseHelp = await runCli(['listing', 'erc1155', 'release', '--help'], { home });
       expect(releaseHelp.code).toBe(0);
       expect(releaseHelp.stdout).toContain('configure');
@@ -3224,6 +3232,10 @@ describe('built CLI deterministic behavior', () => {
       expect(releaseHelp.stdout).toContain('allowlist');
       expect(releaseHelp.stdout).toContain('limits');
       expect(releaseHelp.stdout).not.toContain('--recipient');
+
+      const releaseMintHelp = await runCli(['listing', 'erc1155', 'release', 'mint', '--help'], { home });
+      expect(releaseMintHelp.code).toBe(0);
+      expect(releaseMintHelp.stdout).toContain('--recipient <address>');
 
       const allowlistHelp = await runCli(['listing', 'erc1155', 'release', 'allowlist', '--help'], { home });
       expect(allowlistHelp.code).toBe(0);

@@ -417,11 +417,11 @@ const toolHandlers: Record<string, ToolHandler> = {
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.cancel(args as never))),
   },
   listing_erc1155_buy: {
-    inputSchema: { ...optionalChain, ...contractTokenSchema, seller: addressSchema, quantity: integerSchema, price: amountSchema, currency: currencySchema, ...autoApproveSchema },
+    inputSchema: { ...optionalChain, ...contractTokenSchema, seller: addressSchema, quantity: integerSchema, price: amountSchema, currency: currencySchema, recipient: addressSchema.optional(), ...autoApproveSchema },
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.buy(args as never))),
   },
   listing_erc1155_checkout: {
-    inputSchema: { ...optionalChain, items: z.array(erc1155CheckoutItemSchema), ...autoApproveSchema },
+    inputSchema: { ...optionalChain, items: z.array(erc1155CheckoutItemSchema), recipient: addressSchema.optional(), ...autoApproveSchema },
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.checkout(normalizeMcpCheckoutArgs(args) as never))),
   },
   listing_erc1155_status: {
@@ -493,7 +493,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.release.cancel(args as never))),
   },
   listing_erc1155_release_mint: {
-    inputSchema: { ...optionalChain, ...contractTokenSchema, quantity: integerSchema, currency: currencySchema, price: amountSchema.optional(), proof: proofSchema.optional(), ...autoApproveSchema },
+    inputSchema: { ...optionalChain, ...contractTokenSchema, quantity: integerSchema, currency: currencySchema, price: amountSchema.optional(), proof: proofSchema.optional(), recipient: addressSchema.optional(), ...autoApproveSchema },
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.erc1155.release.mint(args as never))),
   },
   listing_erc1155_release_status: {

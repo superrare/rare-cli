@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { TransactionReceipt } from 'viem';
+import { zeroAddress, type TransactionReceipt } from 'viem';
 import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
 import {
   planErc1155CollectionCreateToken,
@@ -136,7 +136,11 @@ describe('ERC1155 core planning', () => {
       quantity: '5',
       price: 100n,
       currency: erc20,
-    }).totalPrice).toBe(500n);
+      recipient: buyer,
+    }, account)).toMatchObject({
+      recipient: buyer,
+      totalPrice: 500n,
+    });
 
     expect(planErc1155OfferCreate({
       contract,
@@ -282,11 +286,11 @@ describe('ERC1155 core planning', () => {
 
   it('validates quantities, prices, and splits for marketplace planners', () => {
     expect(totalPrice(7n, 6n)).toBe(42n);
-    expect(() => planErc1155ListingBuy({ contract, seller, tokenId: '1', quantity: '0', price: 10n, currency: erc20 }))
+    expect(() => planErc1155ListingBuy({ contract, seller, tokenId: '1', quantity: '0', price: 10n, currency: erc20 }, account))
       .toThrow('quantity must be greater than 0.');
     expect(() => planErc1155OfferCreate({ contract, tokenId: '1', quantity: '-1', price: 10n, currency: erc20 }))
       .toThrow('quantity must be greater than 0.');
-    expect(() => planErc1155ReleaseMint({ contract, tokenId: '1', quantity: '0' }))
+    expect(() => planErc1155ReleaseMint({ contract, tokenId: '1', quantity: '0' }, account))
       .toThrow('quantity must be greater than 0.');
     expect(() => providedSplits([account], [50])).toThrow('splitRatios must sum to 100 (got 50).');
     expect(() => providedSplits([account], [100, 0])).toThrow('splitAddresses and splitRatios must have the same length.');
@@ -331,11 +335,14 @@ describe('ERC1155 core planning', () => {
     });
 
     expect(planErc1155CheckoutResolved({
+      recipient: buyer,
       items: [
         { kind: 'release', contract, seller, currency: ETH_ADDRESS, tokenId: 1n, price: 10n, quantity: 2n, proof: [] },
         { kind: 'listing', contract, seller, currency: erc20, tokenId: 2n, price: 20n, quantity: 3n },
       ],
-    }).items).toEqual([
+    })).toMatchObject({
+      recipient: buyer,
+      items: [
       {
         kind: 'release',
         itemKind: erc1155CheckoutItemKinds.release,
@@ -360,7 +367,8 @@ describe('ERC1155 core planning', () => {
         proof: [],
         totalPrice: 60n,
       },
-    ]);
+      ],
+    });
   });
 
   it('rejects invalid checkout inputs and groups checkout payment requirements', () => {
@@ -375,8 +383,13 @@ describe('ERC1155 core planning', () => {
       items: [{ kind: 'release', contract, tokenId: '1', quantity: '1', proof: ['0x1234'] }],
     })).toThrow('items[0].proof[0] must be a bytes32 hex string.');
     expect(() => planErc1155CheckoutResolved({
+      recipient: buyer,
       items: [{ kind: 'listing', contract, currency: ETH_ADDRESS, tokenId: 1n, price: 1n, quantity: 1n }],
     })).toThrow('items[0].seller is required for listing checkout items.');
+    expect(() => planErc1155CheckoutResolved({
+      recipient: zeroAddress,
+      items: [{ kind: 'release', contract, seller, currency: ETH_ADDRESS, tokenId: 1n, price: 1n, quantity: 1n }],
+    })).toThrow('recipient cannot be the zero address.');
 
     expect(groupErc1155CheckoutPayments([
       { currencyAddress: ETH_ADDRESS, requiredAmount: 10n },
@@ -436,11 +449,13 @@ describe('ERC1155 core planning', () => {
       quantity: '3',
       currency: erc20,
       price: 8n,
+      recipient: buyer,
       proof: [`0x${'22'.repeat(32)}`],
-    })).toEqual({
+    }, account)).toEqual({
       contract,
       tokenId: 2n,
       quantity: 3n,
+      recipient: buyer,
       currency: erc20,
       price: 8n,
       proof: [`0x${'22'.repeat(32)}`],
@@ -450,7 +465,7 @@ describe('ERC1155 core planning', () => {
       tokenId: '2',
       quantity: '3',
       proof: ['0x1234'],
-    })).toThrow('proof[0] must be a bytes32 hex string.');
+    }, account)).toThrow('proof[0] must be a bytes32 hex string.');
     expect(planErc1155ReleaseClearAllowlistConfig({ contract, tokenId: '2' })).toEqual({
       contract,
       tokenId: 2n,
@@ -564,7 +579,8 @@ describe('ERC1155 status shaping', () => {
       txHash,
       receipt: checkoutReceipt(),
       completed: {
-        buyer,
+        payer: buyer,
+        recipient: account,
         filledCount: 1n,
         skippedCount: 1n,
         ethSpent: 110n,
@@ -604,7 +620,8 @@ describe('ERC1155 status shaping', () => {
     })).toMatchObject({
       marketplace,
       summary: {
-        buyer,
+        payer: buyer,
+        recipient: account,
         filledCount: 1n,
         skippedCount: 1n,
         ethSpent: 110n,
@@ -665,7 +682,8 @@ describe('ERC1155 status shaping', () => {
         },
       ],
       completedLogs: [{
-        buyer,
+        payer: buyer,
+        recipient: account,
         filledCount: 1n,
         skippedCount: 1n,
         ethSpent: 15n,
@@ -720,7 +738,8 @@ describe('ERC1155 status shaping', () => {
       quantity: 1n,
     }];
     const completedLogs = [{
-      buyer,
+      payer: buyer,
+      recipient: account,
       filledCount: 1n,
       skippedCount: 0n,
       ethSpent: 110n,
