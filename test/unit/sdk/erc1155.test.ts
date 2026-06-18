@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Address } from 'viem';
 import { ETH_ADDRESS, type ContractAddresses } from '../../../src/contracts/addresses.js';
 import { createErc1155ListingNamespace } from '../../../src/sdk/erc1155.js';
+import { buildReleaseAllowlistArtifact } from '../../../src/sdk/release-core.js';
 
 const account = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as Address;
 const contract = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as Address;
@@ -22,6 +23,18 @@ const addresses: ContractAddresses = {
   erc1155ApprovalManager: approvalManager,
   marketplaceSettings,
 };
+
+function receipt() {
+  return { status: 'success', blockNumber: 1n, logs: [] } as never;
+}
+
+async function parseJsonBody(input: RequestInfo | URL, init: RequestInit | undefined): Promise<unknown> {
+  const body = input instanceof Request ? await input.clone().text() : init?.body;
+  if (typeof body !== 'string') {
+    throw new Error('Expected request body to be a JSON string.');
+  }
+  return JSON.parse(body);
+}
 
 describe('ERC1155 listing namespace preflight', () => {
   it('rejects ERC1155 listing reads on chains without ERC1155 deployments', async () => {
@@ -191,5 +204,123 @@ describe('ERC1155 listing namespace preflight', () => {
       args: [contract, seller, ETH_ADDRESS, recipient, [{ tokenId: 1n, price: 1n, quantity: 2n }]],
       value: 2n,
     }));
+  });
+
+  it('uploads ERC1155 release allowlist artifact addresses before writing config', async () => {
+    const artifact = buildReleaseAllowlistArtifact([account, recipient]);
+    const txHash = hex32('1');
+    const writeContract = vi.fn(async () => txHash);
+    const apiFetch = vi.fn<typeof fetch>(async (input, init) => {
+      await expect(parseJsonBody(input, init)).resolves.toEqual({
+        addresses: artifact.wallets.map((wallet) => wallet.address),
+        storageTarget: 'collection-allowlist',
+      });
+      return new Response(JSON.stringify({ merkleRoot: artifact.root }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+    const namespace = createErc1155ListingNamespace(
+      {
+        async waitForTransactionReceipt() {
+          return receipt();
+        },
+      } as never,
+      {
+        publicClient: {} as never,
+        apiFetch,
+        walletClient: {
+          account: { address: account },
+          writeContract,
+        } as never,
+      },
+      'sepolia',
+      addresses,
+    );
+
+    const result = await namespace.release.allowlist.setConfig({
+      contract,
+      tokenId: '1',
+      artifact,
+      endTime: 2_000,
+    });
+
+    expect(result.config.root).toBe(artifact.root);
+    expect(apiFetch).toHaveBeenCalledOnce();
+    expect(writeContract).toHaveBeenCalledWith(expect.objectContaining({
+      address: marketplace,
+      functionName: 'setTokenAllowListConfigs',
+      args: [contract, [{ tokenId: 1n, root: artifact.root, endTimestamp: 2_000n }]],
+    }));
+  });
+
+  it('rejects mismatched rare-api ERC1155 release allowlist roots before writing config', async () => {
+    const artifact = buildReleaseAllowlistArtifact([account, recipient]);
+    const apiRoot = hex32('1');
+    const writeContract = vi.fn(async (): Promise<never> => {
+      throw new Error('unexpected allowlist write');
+    });
+    const namespace = createErc1155ListingNamespace(
+      {
+        async waitForTransactionReceipt() {
+          return receipt();
+        },
+      } as never,
+      {
+        publicClient: {} as never,
+        apiFetch: async () => new Response(JSON.stringify({ merkleRoot: apiRoot }), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+        walletClient: {
+          account: { address: account },
+          writeContract,
+        } as never,
+      },
+      'sepolia',
+      addresses,
+    );
+
+    await expect(namespace.release.allowlist.setConfig({
+      contract,
+      tokenId: '1',
+      artifact,
+      endTime: 2_000,
+    })).rejects.toThrow(`rare-api allowlist root ${apiRoot} does not match artifact root ${artifact.root}.`);
+    expect(writeContract).not.toHaveBeenCalled();
+  });
+
+  it('skips rare-api upload for explicit ERC1155 release allowlist roots', async () => {
+    const root = hex32('1');
+    const writeContract = vi.fn(async () => hex32('2'));
+    const apiFetch = vi.fn<typeof fetch>(async (): Promise<never> => {
+      throw new Error('unexpected rare-api upload');
+    });
+    const namespace = createErc1155ListingNamespace(
+      {
+        async waitForTransactionReceipt() {
+          return receipt();
+        },
+      } as never,
+      {
+        publicClient: {} as never,
+        apiFetch,
+        walletClient: {
+          account: { address: account },
+          writeContract,
+        } as never,
+      },
+      'sepolia',
+      addresses,
+    );
+
+    const result = await namespace.release.allowlist.setConfig({
+      contract,
+      tokenId: '1',
+      root,
+      endTime: 2_000,
+    });
+
+    expect(result.config.root).toBe(root);
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(writeContract).toHaveBeenCalledOnce();
   });
 });

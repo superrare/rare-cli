@@ -1,6 +1,7 @@
 import {
   decodeErrorResult,
   getAddress,
+  hexToBigInt,
   isAddressEqual,
   isHex,
   parseEventLogs,
@@ -82,6 +83,7 @@ import {
   getReleaseAllowlistProof,
   parseReleaseAllowlistArtifactJson,
 } from './release-core.js';
+import { generateApiAddressMerkleRoot } from './merkle-api.js';
 
 export type * from './types/erc1155.js';
 
@@ -940,6 +942,7 @@ function createErc1155ReleaseNamespace(
       },
       async setConfig(params) {
         const plan = planErc1155ReleaseAllowlistConfig(params);
+        await uploadErc1155ReleaseAllowlistArtifact(config, params, plan.root);
         const { walletClient, account } = requireWallet(config);
         const txHash = await walletClient.writeContract({
           address: addresses.erc1155Marketplace,
@@ -1428,6 +1431,25 @@ function createErc1155ReleaseNamespace(
     },
   };
   return release;
+}
+
+async function uploadErc1155ReleaseAllowlistArtifact(
+  config: RareClientConfig,
+  params: Parameters<Erc1155ReleaseNamespace['allowlist']['setConfig']>[0],
+  expectedRoot: Hex,
+): Promise<void> {
+  if (params.root !== undefined || params.artifact === undefined) {
+    return;
+  }
+
+  const root = await generateApiAddressMerkleRoot(config, {
+    addresses: params.artifact.wallets.map((wallet) => wallet.address),
+    storageTarget: 'collection-allowlist',
+  });
+
+  if (hexToBigInt(root) !== hexToBigInt(expectedRoot)) {
+    throw new Error(`rare-api allowlist root ${root} does not match artifact root ${expectedRoot}.`);
+  }
 }
 
 function requireErc1155Addresses(chain: SupportedChain, addresses: ContractAddresses): Erc1155Addresses {
