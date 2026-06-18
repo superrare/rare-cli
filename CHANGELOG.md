@@ -1,5 +1,39 @@
 # Changelog
 
+## 1.4.0
+
+### New features
+
+- Exposed auto-approve opt-out for token trades by @KeeganEad in https://github.com/superrare/rare-cli/pull/110.
+- Added TESTNET ERC1155 support across CLI, SDK, and MCP surfaces by @KeeganEad in https://github.com/superrare/rare-cli/pull/114.
+- Added ERC1155 purchase recipients by @KeeganEad in https://github.com/superrare/rare-cli/pull/119.
+- Uploaded ERC1155 release allowlists to rare-api by @KeeganEad in https://github.com/superrare/rare-cli/pull/120.
+
+### Fixes
+
+- Rejected reverted marketplace receipts by @KeeganEad in https://github.com/superrare/rare-cli/pull/97.
+- Validated token event search contract by @KeeganEad in https://github.com/superrare/rare-cli/pull/98.
+- Parsed quoted batch token CSV fields by @KeeganEad in https://github.com/superrare/rare-cli/pull/99.
+- Validated token IDs before token status reads by @KeeganEad in https://github.com/superrare/rare-cli/pull/100.
+- Validated status token IDs before SDK reads by @KeeganEad in https://github.com/superrare/rare-cli/pull/102.
+- Rejected empty ERC-721 import responses by @KeeganEad in https://github.com/superrare/rare-cli/pull/103.
+- Inferred NFT search market flags by @KeeganEad in https://github.com/superrare/rare-cli/pull/104.
+- Normalized timezone-less ISO timestamps as UTC by @KeeganEad in https://github.com/superrare/rare-cli/pull/105.
+- Waited for ERC20 allowance propagation by @KeeganEad in https://github.com/superrare/rare-cli/pull/108.
+- Fixed Uniswap fallback quote slippage handling by @KeeganEad in https://github.com/superrare/rare-cli/pull/113.
+- Allowed empty Merkle proof artifacts by @KeeganEad in https://github.com/superrare/rare-cli/pull/111.
+- Updated ERC1155 contract addresses by @KeeganEad in https://github.com/superrare/rare-cli/pull/116.
+
+### Maintenance
+
+- Avoided shell-sourcing env for type generation by @KeeganEad in https://github.com/superrare/rare-cli/pull/101.
+- Derived MCP server version from package metadata by @KeeganEad in https://github.com/superrare/rare-cli/pull/109.
+- Fixed contract read fixture scan by @KeeganEad in https://github.com/superrare/rare-cli/pull/115.
+- Fixed live auction list flake by @KeeganEad in https://github.com/superrare/rare-cli/pull/117.
+- Added liquid edition supply e2e coverage by @KeeganEad in https://github.com/superrare/rare-cli/pull/118.
+
+**Full changelog**: https://github.com/superrare/rare-cli/compare/v1.3.0...v1.4.0
+
 ## 1.3.0
 
 ### New features
