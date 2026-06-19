@@ -1,4 +1,11 @@
-import { createRareClient, type BridgeNamespace, type RareClient } from '@rareprotocol/rare-cli/client';
+import {
+  createRareClient,
+  type BridgeNamespace,
+  type Erc20Namespace,
+  type RareClient,
+  type SovereignErc20Kind,
+  type SovereignErc20RewardTokenName,
+} from '@rareprotocol/rare-cli/client';
 import { getContractAddresses, getRareBridgeAddress, getCcipChainSelector, type SupportedChain } from '@rareprotocol/rare-cli/contracts';
 import {
   buildUtilsTree,
@@ -21,8 +28,11 @@ const merkleProof: UtilsMerkleProofArtifact = {
   proof: [],
 };
 const clientFactory: typeof createRareClient = createRareClient;
+const erc20Kind: SovereignErc20Kind = 'sovereign';
+const rewardTokenName: SovereignErc20RewardTokenName = 'self';
 declare const maybeClient: RareClient | undefined;
 declare const maybeBridge: BridgeNamespace | undefined;
+declare const maybeErc20: Erc20Namespace | undefined;
 
 void addresses;
 void rareBridgeAddress;
@@ -30,5 +40,9 @@ void ccipChainSelector;
 void tree;
 void merkleProof;
 void clientFactory;
+void erc20Kind;
+void rewardTokenName;
 void maybeClient;
 void maybeBridge;
+void maybeErc20;
+void maybeClient?.erc20;

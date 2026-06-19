@@ -168,6 +168,28 @@ rare.liquidEdition.getMarketState(params: { contract: Address }): Promise<Liquid
 rare.liquidEdition.getCurrentPrice(params: { contract: Address }): Promise<LiquidEditionCurrentPrice>
 rare.liquidEdition.status(params: { contract: Address }): Promise<LiquidEditionTelemetry>
 
+Sovereign ERC20:
+
+rare.erc20.deploy.sovereign(params: DeploySovereignErc20Params): Promise<SovereignErc20DeployResult>
+rare.erc20.deploy.sovereignMarket(params: DeploySovereignErc20MarketParams): Promise<SovereignErc20MarketDeployResult>
+rare.erc20.deploy.sovereignMarketRewards(params: DeploySovereignErc20MarketRewardsParams): Promise<SovereignErc20MarketRewardsDeployResult>
+rare.erc20.factoryStatus(): Promise<SovereignErc20FactoryStatus>
+rare.erc20.status(params: { contract: Address; account?: Address }): Promise<SovereignErc20Status>
+rare.erc20.getTokenUri(params: { contract: Address }): Promise<string>
+rare.erc20.delegation.delegate(params: SovereignErc20DelegateParams): Promise<SovereignErc20DelegateResult>
+rare.erc20.delegation.revoke(params: SovereignErc20RevokeDelegateParams): Promise<SovereignErc20DelegateResult>
+rare.erc20.delegation.isDelegate(params: SovereignErc20IsDelegateParams): Promise<boolean>
+rare.erc20.mint(params: SovereignErc20MintParams): Promise<SovereignErc20MintResult>
+rare.erc20.burn(params: SovereignErc20BurnParams): Promise<SovereignErc20BurnResult>
+rare.erc20.burnFrom(params: SovereignErc20BurnFromParams): Promise<SovereignErc20BurnFromResult>
+rare.erc20.updateTokenUri(params: SovereignErc20UpdateTokenUriParams): Promise<SovereignErc20UpdateTokenUriResult>
+rare.erc20.rewards.status(params: SovereignErc20RewardsStatusParams): Promise<SovereignErc20RewardsStatus>
+rare.erc20.rewards.notify(params: SovereignErc20RewardsNotifyParams): Promise<SovereignErc20RewardsNotifyResult>
+rare.erc20.rewards.sync(params: SovereignErc20RewardsSyncParams): Promise<SovereignErc20RewardsSyncResult>
+rare.erc20.rewards.claim(params: SovereignErc20RewardsClaimParams): Promise<SovereignErc20RewardsClaimResult>
+rare.erc20.rewards.exclude(params: SovereignErc20RewardsAccountParams): Promise<SovereignErc20RewardsExcludeResult>
+rare.erc20.rewards.include(params: SovereignErc20RewardsAccountParams): Promise<SovereignErc20RewardsExcludeResult>
+
 Bridge:
 
 rare.bridge.quote(params: BridgeParams): Promise<BridgeQuote>
@@ -350,6 +372,7 @@ Consistency notes:
 - ERC1155 support is explicit under `.erc1155` namespaces. Existing shorthand collection, listing, and offer methods remain ERC721 compatibility behavior for v1.
 - Token-specific royalty receiver updates stay under `rare.collection.setTokenRoyaltyReceiver`; the SDK probes ERC721 and ERC1155 argument order before writing.
 - Liquid Edition deployment is grouped under `liquidEdition.deploy.multiCurve`, matching the CLI's `liquid-edition deploy multicurve` shape and leaving room for future deployment types.
+- Sovereign ERC20 deployment is grouped under `erc20.deploy.*`; delegate and rewards operations stay explicit because they are durable permission and accounting writes.
 - Collection single-token minting now lives at `collection.mint`, alongside `collection.mintBatch` and `collection.prepareLazyMint`.
 - Batch marketplaces are nested under their sale type: `listing.batch.*`, `offer.batch.*`, and `auction.batch.*`. Offline tree helpers live under `utils.tree.*`.
 - Generic IPFS pinning lives under `ipfs.*`; `media.*` remains NFT media-specific and feeds NFT metadata assembly.
@@ -363,6 +386,10 @@ Consistency notes:
 ```text
 rare.collection.deploy.erc721 -> collection_deploy_erc721
 rare.liquidEdition.deploy.multiCurve -> liquid_edition_deploy_multi_curve
+rare.erc20.deploy.sovereign -> erc20_deploy_sovereign
+rare.erc20.factoryStatus -> erc20_factory_status
+rare.erc20.delegation.isDelegate -> erc20_delegation_is_delegate
+rare.erc20.rewards.notify -> erc20_rewards_notify
 rare.listing.release.allowlist.setConfig -> listing_release_allowlist_set_config
 rare.swap.quoteBuyToken -> swap_quote_buy_token
 ```

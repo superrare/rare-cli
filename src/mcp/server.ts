@@ -131,6 +131,51 @@ const rawRouteSchema = {
   commands: hexSchema,
   inputs: z.array(hexSchema),
 };
+const erc20RewardTokenSchema = z.enum(['self', 'rare', 'usdc']);
+const erc20DeployBaseSchema = {
+  ...optionalChain,
+  name: z.string(),
+  symbol: z.string(),
+  tokenUri: z.string().optional(),
+  owner: addressSchema.optional(),
+};
+const erc20DeploySovereignSchema = {
+  ...erc20DeployBaseSchema,
+  maxSupply: amountSchema.optional(),
+  initialSupply: amountSchema.optional(),
+};
+const erc20CurveSegmentSchema = z.object({
+  tickLower: z.number(),
+  tickUpper: z.number(),
+  numPositions: z.number(),
+  shares: z.string(),
+});
+const erc20DeployMarketSchema = {
+  ...erc20DeployBaseSchema,
+  initialSupply: amountSchema,
+  curves: z.array(erc20CurveSegmentSchema),
+};
+const erc20ContractSchema = {
+  contract: addressSchema,
+};
+const erc20DelegateSchema = {
+  creator: addressSchema.optional(),
+  owner: addressSchema.optional(),
+  delegate: addressSchema.optional(),
+  operator: addressSchema.optional(),
+};
+const erc20DelegateCheckSchema = {
+  creator: addressSchema.optional(),
+  owner: addressSchema.optional(),
+  delegate: addressSchema.optional(),
+  operator: addressSchema.optional(),
+};
+const erc20AccountSchema = {
+  account: addressSchema,
+};
+const erc20AmountSchema = {
+  amount: amountSchema,
+};
 
 export const rareMcpServerMetadata = {
   name: pkg.name,
@@ -251,6 +296,132 @@ const toolHandlers: Record<string, ToolHandler> = {
   liquid_edition_status: {
     inputSchema: { ...optionalChain, contract: addressSchema },
     handler: ({ chain, contract }) => callRead(chain, (rare) => rare.liquidEdition.status({ contract: contract as Address })),
+  },
+  erc20_deploy_sovereign: {
+    inputSchema: erc20DeploySovereignSchema,
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) =>
+      txResult(await callSdkMethod(rare, ['erc20', 'deploy', 'sovereign'], args))),
+  },
+  erc20_deploy_sovereign_market: {
+    inputSchema: erc20DeployMarketSchema,
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) =>
+      txResult(await callSdkMethod(rare, ['erc20', 'deploy', 'sovereignMarket'], args))),
+  },
+  erc20_deploy_sovereign_market_rewards: {
+    inputSchema: {
+      ...erc20DeployMarketSchema,
+      rewardToken: erc20RewardTokenSchema,
+    },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) =>
+      txResult(await callSdkMethod(rare, ['erc20', 'deploy', 'sovereignMarketRewards'], args))),
+  },
+  erc20_factory_status: {
+    inputSchema: optionalChain,
+    handler: ({ chain }) => callRead(chain, (rare) =>
+      callFirstSdkMethod(rare, [
+        ['erc20', 'factoryStatus'],
+        ['erc20', 'getFactoryConfig'],
+      ], {})),
+  },
+  erc20_status: {
+    inputSchema: { ...optionalChain, ...erc20ContractSchema, account: addressSchema.optional() },
+    handler: ({ chain, ...args }) => callRead(chain, (rare) =>
+      callSdkMethod(rare, ['erc20', 'status'], args)),
+  },
+  erc20_get_token_uri: {
+    inputSchema: { ...optionalChain, ...erc20ContractSchema },
+    handler: ({ chain, ...args }) => callRead(chain, (rare) =>
+      callFirstSdkMethod(rare, [
+        ['erc20', 'getTokenUri'],
+        ['erc20', 'metadata', 'getTokenUri'],
+      ], args)),
+  },
+  erc20_delegation_delegate: {
+    inputSchema: { ...optionalChain, ...erc20DelegateSchema },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) =>
+      txResult(await callFirstSdkMethod(rare, [
+        ['erc20', 'delegation', 'delegate'],
+        ['erc20', 'delegate'],
+        ['erc20', 'delegation', 'approve'],
+      ], normalizeErc20DelegateArgs(args)))),
+  },
+  erc20_delegation_revoke: {
+    inputSchema: { ...optionalChain, ...erc20DelegateSchema },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) =>
+      txResult(await callFirstSdkMethod(rare, [
+        ['erc20', 'delegation', 'revoke'],
+        ['erc20', 'revoke'],
+      ], normalizeErc20DelegateArgs(args)))),
+  },
+  erc20_delegation_is_delegate: {
+    inputSchema: { ...optionalChain, ...erc20DelegateCheckSchema },
+    handler: ({ chain, ...args }) => callRead(chain, (rare) =>
+      callFirstSdkMethod(rare, [
+        ['erc20', 'delegation', 'isDelegate'],
+        ['erc20', 'delegation', 'status'],
+        ['erc20', 'isDelegate'],
+      ], normalizeErc20DelegateArgs(args))),
+  },
+  erc20_mint: {
+    inputSchema: { ...optionalChain, ...erc20ContractSchema, to: addressSchema.optional(), ...erc20AmountSchema },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) =>
+      txResult(await callSdkMethod(rare, ['erc20', 'mint'], args))),
+  },
+  erc20_burn: {
+    inputSchema: { ...optionalChain, ...erc20ContractSchema, ...erc20AmountSchema },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) =>
+      txResult(await callSdkMethod(rare, ['erc20', 'burn'], args))),
+  },
+  erc20_burn_from: {
+    inputSchema: { ...optionalChain, ...erc20ContractSchema, account: addressSchema.optional(), from: addressSchema.optional(), ...erc20AmountSchema },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) =>
+      txResult(await callSdkMethod(rare, ['erc20', 'burnFrom'], normalizeErc20BurnFromArgs(args)))),
+  },
+  erc20_update_token_uri: {
+    inputSchema: { ...optionalChain, ...erc20ContractSchema, tokenUri: z.string() },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) =>
+      txResult(await callFirstSdkMethod(rare, [
+        ['erc20', 'updateTokenUri'],
+        ['erc20', 'metadata', 'updateTokenUri'],
+      ], args))),
+  },
+  erc20_rewards_status: {
+    inputSchema: { ...optionalChain, ...erc20ContractSchema, account: addressSchema.optional() },
+    handler: ({ chain, ...args }) => callRead(chain, (rare) =>
+      callSdkMethod(rare, ['erc20', 'rewards', 'status'], args)),
+  },
+  erc20_rewards_notify: {
+    inputSchema: {
+      ...optionalChain,
+      ...erc20ContractSchema,
+      ...erc20AmountSchema,
+      ...autoApproveSchema,
+    },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) =>
+      txResult(await callFirstSdkMethod(rare, [
+        ['erc20', 'rewards', 'notify'],
+        ['erc20', 'rewards', 'deposit'],
+      ], args))),
+  },
+  erc20_rewards_sync: {
+    inputSchema: { ...optionalChain, ...erc20ContractSchema, account: addressSchema.optional() },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) =>
+      txResult(await callSdkMethod(rare, ['erc20', 'rewards', 'sync'], args))),
+  },
+  erc20_rewards_claim: {
+    inputSchema: { ...optionalChain, ...erc20ContractSchema, account: addressSchema.optional(), recipient: addressSchema.optional() },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) =>
+      txResult(await callSdkMethod(rare, ['erc20', 'rewards', 'claim'], args))),
+  },
+  erc20_rewards_exclude: {
+    inputSchema: { ...optionalChain, ...erc20ContractSchema, ...erc20AccountSchema },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) =>
+      txResult(await callSdkMethod(rare, ['erc20', 'rewards', 'exclude'], args))),
+  },
+  erc20_rewards_include: {
+    inputSchema: { ...optionalChain, ...erc20ContractSchema, ...erc20AccountSchema },
+    handler: ({ chain, ...args }) => callWrite(chain, async (rare) =>
+      txResult(await callSdkMethod(rare, ['erc20', 'rewards', 'include'], args))),
   },
   swap_buy: {
     inputSchema: { ...optionalChain, token: addressSchema, amountIn: amountSchema, ...rawRouteSchema, recipient: addressSchema.optional(), deadline: integerSchema.optional() },
@@ -862,6 +1033,95 @@ function normalizeMcpCheckoutArgs(args: Record<string, unknown>): Record<string,
       return { ...item, proof: item.proof.proof };
     });
   return { ...args, items };
+}
+
+function normalizeErc20DelegateArgs(args: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...args,
+    owner: args.owner ?? args.creator,
+    operator: args.operator ?? args.delegate,
+  };
+}
+
+function normalizeErc20BurnFromArgs(args: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...args,
+    account: args.account ?? args.from,
+  };
+}
+
+function callSdkMethod(
+  rare: ReturnType<typeof createRareClient>,
+  path: readonly string[],
+  args: Record<string, unknown>,
+): unknown {
+  const { owner, method } = resolveSdkMethod(rare, path) ?? missingSdkMethod(path);
+  return method.call(owner, args);
+}
+
+function callFirstSdkMethod(
+  rare: ReturnType<typeof createRareClient>,
+  paths: readonly (readonly string[])[],
+  args: Record<string, unknown>,
+): unknown {
+  const [path, ...remainingPaths] = paths;
+  if (path === undefined) {
+    throw new McpToolError('missing_sdk_method', 'SDK method path is empty.');
+  }
+
+  const resolved = resolveSdkMethod(rare, path);
+  if (resolved !== undefined) {
+    return resolved.method.call(resolved.owner, args);
+  }
+
+  return remainingPaths.length === 0
+    ? missingSdkMethod(path)
+    : callFirstSdkMethod(rare, remainingPaths, args);
+}
+
+function resolveSdkMethod(
+  rare: ReturnType<typeof createRareClient>,
+  path: readonly string[],
+): { owner: unknown; method: (args: Record<string, unknown>) => unknown } | undefined {
+  const [segment, ...remainingPath] = path;
+  if (segment === undefined) {
+    return undefined;
+  }
+
+  return resolveSdkMethodSegment(rare, segment, remainingPath, path);
+}
+
+function resolveSdkMethodSegment(
+  owner: unknown,
+  segment: string,
+  remainingPath: readonly string[],
+  fullPath: readonly string[],
+): { owner: unknown; method: (args: Record<string, unknown>) => unknown } | undefined {
+  if (!isPlainRecord(owner) || !(segment in owner)) {
+    return undefined;
+  }
+
+  const current = owner[segment];
+  const [nextSegment, ...nextRemainingPath] = remainingPath;
+  if (nextSegment !== undefined) {
+    return resolveSdkMethodSegment(current, nextSegment, nextRemainingPath, fullPath);
+  }
+
+  if (typeof current !== 'function') {
+    return undefined;
+  }
+
+  return {
+    owner,
+    method: current as (args: Record<string, unknown>) => unknown,
+  };
+}
+
+function missingSdkMethod(path: readonly string[]): never {
+  throw new McpToolError(
+    'missing_sdk_method',
+    `SDK method rare.${path.join('.')} is not available in this build.`,
+  );
 }
 
 function toolResult(value: unknown): ToolResult {

@@ -14,6 +14,7 @@ import { createBatchOfferNamespace } from './batch-offer.js';
 import { createTokenNamespace } from './token.js';
 import { createCurrencyNamespace } from './currency.js';
 import { createLiquidNamespace } from './liquid.js';
+import { createErc20Namespace } from './erc20.js';
 import { createBridgeNamespace } from './bridge.js';
 import { createSwapNamespace } from './swap.js';
 import { createReleaseNamespace } from './release.js';
@@ -166,6 +167,7 @@ export function createRareClient(config: RareClientConfig): RareClient {
       v4Quoter: addresses.v4Quoter,
     },
     liquidEdition: createLiquidNamespace(config, chain, addresses),
+    erc20: createErc20Namespace(config, chain, chainId, addresses),
     bridge: createBridgeNamespace(publicClient, config, chain),
     swap: createSwapNamespace(config, chain, chainId, addresses),
     auction,

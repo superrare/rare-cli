@@ -7,6 +7,7 @@ Global behavior:
 - Liquid Edition deploy defaults to preview output; pass `--yes` to submit the transaction. `--preview` remains an explicit read-only mode.
 - Quoted swap commands print the quote and prompt `[y/N]` before submitting unless `--yes` is passed. `--quote-only` exits after printing the quote.
 - Commands that can perform extra or surprising state changes, such as approvals or raw swap execution, use an interactive `[y/N]` confirmation when supported; `--yes` skips that confirmation.
+- Sovereign ERC20 market deployments require explicit `--curves-file`; the CLI does not generate ERC20 curves.
 - `--split <addr=ratio>` is repeatable up to 5 times. Ratios must sum to 100.
 - This map reflects Commander-level required options. Command action handlers may still require conditionally dependent inputs before execution.
 
@@ -62,6 +63,22 @@ rare liquid-edition deploy multicurve <name> <symbol> [--curves-file <path>] [--
 rare liquid-edition status --contract <address> [--chain <chain>] [--chain-id <id>]
 rare liquid-edition token-uri --contract <address> [--chain <chain>] [--chain-id <id>]
 rare liquid-edition set-render-contract --contract <address> --render-contract <address> [--chain <chain>] [--chain-id <id>]
+
+rare erc20 deploy <name> <symbol> [--kind <kind>] [--owner <address>] [--curves-file <path>] [--initial-supply <amount>] [--max-supply <amount>] [--reward-token <token>] [--token-uri <uri>] [--description <description>] [--image <path>] [--video <path>] [--tag <tag>] [--attribute <attr>] [--chain <chain>] [--chain-id <id>]
+rare erc20 status --contract <address> [--account <address>] [--chain <chain>] [--chain-id <id>]
+rare erc20 mint --contract <address> --amount <amount> [--to <address>] [--chain <chain>] [--chain-id <id>]
+rare erc20 burn --contract <address> --amount <amount> [--chain <chain>] [--chain-id <id>]
+rare erc20 burn-from --contract <address> --from <address> --amount <amount> [--chain <chain>] [--chain-id <id>]
+rare erc20 metadata update-token-uri --contract <address> --token-uri <uri> [--chain <chain>] [--chain-id <id>]
+rare erc20 delegation approve --delegate <address> [--chain <chain>] [--chain-id <id>]
+rare erc20 delegation revoke --delegate <address> [--chain <chain>] [--chain-id <id>]
+rare erc20 delegation status --creator <address> --delegate <address> [--chain <chain>] [--chain-id <id>]
+rare erc20 rewards status --contract <address> [--account <address>] [--chain <chain>] [--chain-id <id>]
+rare erc20 rewards notify --contract <address> --amount <amount> [--yes] [--chain <chain>] [--chain-id <id>] (alias: deposit)
+rare erc20 rewards sync --contract <address> [--chain <chain>] [--chain-id <id>]
+rare erc20 rewards claim --contract <address> [--recipient <address>] [--chain <chain>] [--chain-id <id>]
+rare erc20 rewards exclude --contract <address> --account <address> [--chain <chain>] [--chain-id <id>]
+rare erc20 rewards include --contract <address> --account <address> [--chain <chain>] [--chain-id <id>]
 
 rare bridge quote --amount <amount> --destination-chain <chain> [--recipient <address>] [--chain <chain>] [--chain-id <id>]
 rare bridge send --amount <amount> --destination-chain <chain> [--recipient <address>] [--chain <chain>] [--chain-id <id>] [--yes]

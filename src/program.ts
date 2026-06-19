@@ -18,6 +18,7 @@ import { userCommand } from './commands/user.js';
 import { utilsCommand } from './commands/utils.js';
 import { ipfsCommand } from './commands/ipfs.js';
 import { mcpCommand } from './commands/mcp.js';
+import { erc20Command } from './commands/erc20.js';
 import { getConfirmationDecision, type ConfirmationOptions } from './confirmation.js';
 import pkg from '../package.json' with { type: 'json' };
 
@@ -57,6 +58,7 @@ export function createRareProgram(): Command {
   program.addCommand(listingCommand());
   program.addCommand(nftCommand());
   program.addCommand(collectionCommand());
+  program.addCommand(erc20Command());
   program.addCommand(currenciesCommand());
   program.addCommand(liquidEditionCommand());
   program.addCommand(bridgeCommand());

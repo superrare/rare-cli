@@ -56,6 +56,7 @@ describe('built CLI deterministic behavior', () => {
       expect(help.code).toBe(0);
       expect(help.stdout).toContain('Usage: rare [options]');
       expect(help.stdout).toContain('CLI tool for interacting with the RARE protocol smart contracts');
+      expect(help.stdout).toContain('erc20');
       expect(help.stdout).not.toContain('\n  deploy');
       expect(help.stderr).toBe('');
 
@@ -67,6 +68,109 @@ describe('built CLI deterministic behavior', () => {
       const removedDeploy = await runCli(['deploy'], { home });
       expect(removedDeploy.code).toBe(1);
       expect(removedDeploy.stderr).toContain("error: unknown command 'deploy'");
+    });
+  });
+
+  it('prints ERC20 command help without requiring wallet or RPC configuration', async () => {
+    await withTempHome(async (home) => {
+      const help = await runCli(['erc20', '--help'], { home });
+      expect(help.code).toBe(0);
+      expect(help.stdout).toContain('Deploy and manage Sovereign ERC20 tokens');
+      expect(help.stdout).toContain('deploy');
+      expect(help.stdout).toContain('status');
+      expect(help.stderr).toBe('');
+
+      const deployHelp = await runCli(['erc20', 'deploy', '--help'], { home });
+      expect(deployHelp.code).toBe(0);
+      expect(deployHelp.stdout).toContain('Deploy a Sovereign ERC20 token');
+      expect(deployHelp.stdout).toContain('--kind <kind>');
+      expect(deployHelp.stdout).toContain('--curves-file <path>');
+      expect(deployHelp.stdout).toContain('--reward-token <token>');
+      expect(deployHelp.stderr).toBe('');
+    });
+  });
+
+  it('rejects invalid ERC20 deploy option combinations before wallet or RPC setup', async () => {
+    await withTempHome(async (home) => {
+      const invalidKind = await runCli([
+        'erc20',
+        'deploy',
+        'Bad Token',
+        'BAD',
+        '--kind',
+        'liquid-edition',
+        '--token-uri',
+        '',
+      ], { home });
+      expect(invalidKind.code).toBe(1);
+      expect(invalidKind.stdout).toBe('');
+      expect(invalidKind.stderr).toContain('--kind must be sovereign, sovereign-market, or sovereign-market-rewards.');
+
+      const marketMaxSupply = await runCli([
+        'erc20',
+        'deploy',
+        'Bad Market Token',
+        'BMT',
+        '--kind',
+        'sovereign-market',
+        '--max-supply',
+        '100',
+        '--token-uri',
+        '',
+      ], { home });
+      expect(marketMaxSupply.code).toBe(1);
+      expect(marketMaxSupply.stdout).toBe('');
+      expect(marketMaxSupply.stderr).toContain('--max-supply is only valid with --kind sovereign.');
+
+      const coreCurves = await runCli([
+        'erc20',
+        'deploy',
+        'Bad Core Token',
+        'BCT',
+        '--kind',
+        'sovereign',
+        '--curves-file',
+        'curves.json',
+        '--token-uri',
+        '',
+      ], { home });
+      expect(coreCurves.code).toBe(1);
+      expect(coreCurves.stdout).toBe('');
+      expect(coreCurves.stderr).toContain('--curves-file is only valid with ERC20 market deploy kinds.');
+
+      const missingRewardToken = await runCli([
+        'erc20',
+        'deploy',
+        'Bad Rewards Token',
+        'BRT',
+        '--kind',
+        'sovereign-market-rewards',
+        '--curves-file',
+        'curves.json',
+        '--token-uri',
+        '',
+      ], { home });
+      expect(missingRewardToken.code).toBe(1);
+      expect(missingRewardToken.stdout).toBe('');
+      expect(missingRewardToken.stderr).toContain('--reward-token is required with --kind sovereign-market-rewards.');
+
+      const invalidRewardToken = await runCli([
+        'erc20',
+        'deploy',
+        'Bad Rewards Token',
+        'BRT',
+        '--kind',
+        'sovereign-market-rewards',
+        '--reward-token',
+        'eth',
+        '--curves-file',
+        'curves.json',
+        '--token-uri',
+        '',
+      ], { home });
+      expect(invalidRewardToken.code).toBe(1);
+      expect(invalidRewardToken.stdout).toBe('');
+      expect(invalidRewardToken.stderr).toContain('--reward-token must be self, rare, or usdc.');
     });
   });
 

@@ -85,7 +85,7 @@ export const contractAddresses: Partial<Record<SupportedChain, ContractAddresses
     erc1155Marketplace: getAddress('0xb26DE57230913a44F37AcE78F5b7eB2Efec474eE'),
     erc1155ContractFactory: getAddress('0xF8FF48ca6022138C58e2eDD680a02d7Cd394B957'),
     erc1155ApprovalManager: getAddress('0xcD26069837682aeD8Ba20852AD17b8f64a860906'),
-    liquidFactory: getAddress('0xb1777091C953fa2aC1fD67f2b3e2f61343F5Ce5e'),
+    liquidFactory: getAddress('0x5571b73aB8151E12B6F6E21BBa124442f1ed3f60'),
     swapRouter: getAddress('0x429c3Ee66E7f6CDA12C5BadE4104aF3277aA2305'),
     v4Quoter: getAddress('0x61B3f2011A92d183C7dbaDBdA940a7555Ccf9227'),
   },
