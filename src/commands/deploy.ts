@@ -1,5 +1,4 @@
 import { readFile, writeFile } from 'node:fs/promises';
-import { basename } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
@@ -19,10 +18,14 @@ import {
   formatCurvePreview,
   getLiquidEditionDeployConfirmationDecision,
   isCurvePresetKey,
-  parseAttribute,
   resolveCurveSourceMode,
   validateLiquidEditionDeployMetadataOptions,
 } from './deploy-core.js';
+import {
+  collectRepeatedString,
+  preflightTokenMetadataFiles,
+  resolveStandardTokenUri,
+} from './token-metadata.js';
 
 export {
   formatCurvePreview,
@@ -31,83 +34,6 @@ export {
   resolveCurveSourceMode,
   validateLiquidEditionDeployMetadataOptions,
 } from './deploy-core.js';
-
-async function resolveTokenUri(
-  rare: ReturnType<typeof createRareClient>,
-  tokenName: string,
-  opts: {
-    tokenUri?: string;
-    description?: string;
-    image?: string;
-    video?: string;
-    tag: string[];
-    attribute: string[];
-  },
-): Promise<string> {
-  if (opts.tokenUri) {
-    return opts.tokenUri;
-  }
-  if (!opts.description) {
-    throw new Error('--description is required when not using --token-uri');
-  }
-  if (!opts.image) {
-    throw new Error('--image is required when not using --token-uri');
-  }
-
-  const imageBuffer = await readMetadataFile(opts.image, 'image');
-  log(`Uploading image: ${basename(opts.image)} (${imageBuffer.byteLength} bytes)`);
-  const imageMedia = await rare.media.upload(new Uint8Array(imageBuffer), basename(opts.image));
-  log(`  Image uploaded: ${imageMedia.url}`);
-
-  const videoMedia = opts.video ? await uploadVideoMedia(rare, opts.video) : undefined;
-
-  const attributes = opts.attribute.length > 0 ? opts.attribute.map(parseAttribute) : undefined;
-  const tags = opts.tag.length > 0 ? opts.tag : undefined;
-
-  return rare.media.pinMetadata({
-    name: tokenName,
-    description: opts.description,
-    image: imageMedia,
-    video: videoMedia,
-    tags,
-    attributes,
-  });
-}
-
-async function uploadVideoMedia(
-  rare: ReturnType<typeof createRareClient>,
-  videoPath: string,
-): Promise<Awaited<ReturnType<ReturnType<typeof createRareClient>['media']['upload']>>> {
-  const videoBuffer = await readMetadataFile(videoPath, 'video');
-  log(`Uploading video: ${basename(videoPath)} (${videoBuffer.byteLength} bytes)`);
-  const videoMedia = await rare.media.upload(new Uint8Array(videoBuffer), basename(videoPath));
-  log(`  Video uploaded: ${videoMedia.url}`);
-  return videoMedia;
-}
-
-async function preflightTokenUriFiles(opts: {
-  tokenUri?: string;
-  image?: string;
-  video?: string;
-}): Promise<void> {
-  if (opts.tokenUri !== undefined) {
-    return;
-  }
-  if (opts.image !== undefined) {
-    await readMetadataFile(opts.image, 'image');
-  }
-  if (opts.video !== undefined) {
-    await readMetadataFile(opts.video, 'video');
-  }
-}
-
-async function readMetadataFile(path: string, role: 'image' | 'video'): Promise<Buffer> {
-  try {
-    return await readFile(path);
-  } catch (error) {
-    throw new Error(`Could not read ${role} file: ${path}`, { cause: error });
-  }
-}
 
 async function writeGeneratedCurves(path: string | undefined, curves: LiquidCurveSegment[]): Promise<void> {
   if (!path) return;
@@ -119,10 +45,6 @@ function printCurvePreview(preview: LiquidCurvePreview, source: string, targetCh
   for (const line of formatCurvePreview(preview, source, targetChain)) {
     console.log(line);
   }
-}
-
-function collectRepeatedString(value: string, previous: string[]): string[] {
-  return [...previous, value];
 }
 
 async function confirmLiquidEditionDeploy(chain: string, yes?: boolean): Promise<void> {
@@ -336,7 +258,7 @@ export function deployLiquidEditionCommand(): Command {
         if (!metadataValidation.isValid) {
           throw new Error(metadataValidation.errorMessage);
         }
-        await preflightTokenUriFiles(opts);
+        await preflightTokenMetadataFiles(opts);
 
         const chain = getActiveChain(opts.chain, opts.chainId);
         const publicClient = getPublicClient(chain);
@@ -362,7 +284,7 @@ export function deployLiquidEditionCommand(): Command {
         await confirmLiquidEditionDeploy(chain, opts.yes);
         const { client } = getWalletClient(chain);
         const rare = createRareClient({ publicClient, walletClient: client });
-        const tokenUri = await resolveTokenUri(rare, name, opts);
+        const tokenUri = await resolveStandardTokenUri(rare, name, opts);
         log(`Deploying liquid edition on ${chain}...`);
         log(`  Factory: ${rare.contracts.liquidFactory}`);
         log(`  Name: ${name}`);

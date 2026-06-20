@@ -78,6 +78,16 @@ liquid_edition_get_current_price
 liquid_edition_status
 ```
 
+Sovereign ERC20:
+
+```text
+erc20_factory_status
+erc20_status
+erc20_get_token_uri
+erc20_delegation_is_delegate
+erc20_rewards_status
+```
+
 Bridge:
 
 ```text
@@ -169,6 +179,25 @@ Liquid Edition:
 ```text
 liquid_edition_deploy_multi_curve
 liquid_edition_set_render_contract
+```
+
+Sovereign ERC20:
+
+```text
+erc20_deploy_sovereign
+erc20_deploy_sovereign_market
+erc20_deploy_sovereign_market_rewards
+erc20_delegation_delegate
+erc20_delegation_revoke
+erc20_mint
+erc20_burn
+erc20_burn_from
+erc20_update_token_uri
+erc20_rewards_notify
+erc20_rewards_sync
+erc20_rewards_claim
+erc20_rewards_exclude
+erc20_rewards_include
 ```
 
 Bridge:
@@ -295,6 +324,10 @@ Camel-case SDK segments are converted to snake_case:
 
 ```text
 rare.liquidEdition.deploy.multiCurve -> liquid_edition_deploy_multi_curve
+rare.erc20.deploy.sovereign -> erc20_deploy_sovereign
+rare.erc20.factoryStatus -> erc20_factory_status
+rare.erc20.delegation.isDelegate -> erc20_delegation_is_delegate
+rare.erc20.rewards.notify -> erc20_rewards_notify
 rare.listing.release.allowlist.setConfig -> listing_release_allowlist_set_config
 rare.swap.quoteBuyToken -> swap_quote_buy_token
 rare.bridge.send -> bridge_send

@@ -15,6 +15,7 @@ describe('published package subpath exports', () => {
       'Erc1155CheckoutAllItemsSkippedError',
       'NftApprovalRequiredError',
       'PaymentApprovalRequiredError',
+      'SovereignErc20UnavailableError',
       'createRareClient',
     ]);
     expect(contracts).toHaveProperty('getContractAddresses');
@@ -22,6 +23,9 @@ describe('published package subpath exports', () => {
     expect(contracts).toHaveProperty('getCcipChainSelector');
     expect(contracts).toHaveProperty('liquidRouterAbi');
     expect(contracts).toHaveProperty('rareBridgeAbi');
+    expect(contracts).toHaveProperty('sovereignErc20Abi');
+    expect(contracts).toHaveProperty('sovereignErc20MarketAbi');
+    expect(contracts).toHaveProperty('erc20HolderRewardsAbi');
     expect(Object.keys(utils).sort()).toEqual([
       'buildUtilsMerkleProof',
       'buildUtilsTree',

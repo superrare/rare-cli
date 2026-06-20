@@ -19,6 +19,7 @@ import type { AuctionNamespace } from './auction.js';
 import type { BridgeNamespace } from './bridge.js';
 import type { CollectionNamespace } from './collection.js';
 import type { CurrencyInfo, CurrencyInput, ResolvedCurrency, ResolvedCurrencyWithDecimals, IntegerInput } from './common.js';
+import type { Erc20Namespace } from './erc20.js';
 import type { LiquidEditionNamespace } from './liquid.js';
 import type { ListingNamespace } from './listing.js';
 import type { OfferNamespace } from './offer.js';
@@ -143,6 +144,7 @@ export type RareClient = {
    */
   contracts: RareClientContracts;
   liquidEdition: LiquidEditionNamespace;
+  erc20: Erc20Namespace;
   bridge: BridgeNamespace;
   swap: SwapNamespace;
   auction: AuctionNamespace;

@@ -1,0 +1,110 @@
+export const sovereignErc20MarketAbi = [
+  {
+    type: 'error',
+    name: 'SovereignMarketZeroSupply',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'SovereignMarketZeroCurves',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'SovereignMarketAlreadyInitialized',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'SovereignMarketOnlyPoolManager',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'SovereignMarketUnexpectedUnlock',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'SovereignMarketTooManyPositions',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'SovereignMarketNoLiquidity',
+    inputs: [],
+  },
+  {
+    type: 'error',
+    name: 'SovereignMarketLiquidityTooLarge',
+    inputs: [{ name: 'liquidity', type: 'uint256' }],
+  },
+  {
+    type: 'error',
+    name: 'SovereignMarketPositiveValue',
+    inputs: [{ name: 'value', type: 'int128' }],
+  },
+  {
+    type: 'error',
+    name: 'SovereignMarketAmountExceedsUint128',
+    inputs: [{ name: 'value', type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'factory',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'baseToken',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'poolManager',
+    inputs: [],
+    outputs: [{ name: '', type: 'address' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'marketSupply',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'poolKey',
+    inputs: [],
+    outputs: [
+      { name: 'currency0', type: 'address' },
+      { name: 'currency1', type: 'address' },
+      { name: 'fee', type: 'uint24' },
+      { name: 'tickSpacing', type: 'int24' },
+      { name: 'hooks', type: 'address' },
+    ],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'poolId',
+    inputs: [],
+    outputs: [{ name: '', type: 'bytes32' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'event',
+    name: 'SovereignMarketInitialized',
+    inputs: [
+      { name: 'token', type: 'address', indexed: true },
+      { name: 'poolManager', type: 'address', indexed: true },
+      { name: 'tokenLiquidity', type: 'uint256', indexed: false },
+    ],
+    anonymous: false,
+  },
+] as const;
