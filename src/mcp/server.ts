@@ -31,19 +31,65 @@ type ToolResult = {
 };
 
 type ToolHandler = {
-  inputSchema: z.ZodRawShape;
+  inputSchema: z.ZodRawShape | z.ZodObject;
   handler: (args: Record<string, unknown>) => Promise<ToolResult> | ToolResult;
 };
 
-const chainSchema = z.enum(supportedChains);
+const nftSearchSortByValues = [
+  'newest',
+  'oldest',
+  'priceAsc',
+  'priceDesc',
+  'recentlySold',
+  'auctionEndingSoon',
+  'recentActivity',
+  'bidAsc',
+  'bidDesc',
+] as const;
+const listingTypeValues = ['SALE_PRICE', 'BATCH_SALE_PRICE'] as const;
+const auctionStateValues = ['PENDING', 'RUNNING', 'UNSETTLED'] as const;
+const mediaTypeValues = ['AUDIO', 'HTML', 'IMAGE', 'THREE_D', 'VIDEO'] as const;
+const collectionSearchSortByValues = ['newest', 'oldest'] as const;
+const eventTypeValues = [
+  'CANCEL_AUCTION',
+  'CANCEL_OFFER',
+  'CLOSE_AUCTION',
+  'CREATE_NFT',
+  'CREATE_NFT_SUPPLY',
+  'CREATE_RESERVE_AUCTION',
+  'CREATE_SCHEDULED_AUCTION',
+  'END_AUCTION',
+  'MAKE_AUCTION_BID',
+  'MAKE_LISTING',
+  'MAKE_OFFER',
+  'SETTLE_AUCTION',
+  'START_AUCTION',
+  'TAKE_LISTING',
+  'TAKE_OFFER',
+  'TRANSFER_NFT',
+  'TRANSFER_NFT_SUPPLY',
+] as const;
+
+const chainSchema = z.enum(supportedChains)
+  .describe(`Supported chain name. Valid values: ${supportedChains.join(', ')}.`);
 const optionalChain = { chain: chainSchema.optional() };
-const addressSchema = z.string().refine(isAddress, 'must be a valid 0x address');
-const hexSchema = z.string().refine(isHex, 'must be a hex string');
-const integerSchema = z.union([z.string(), z.number()]);
-const amountSchema = z.union([z.string(), z.number()]);
-const timestampSchema = z.union([z.string(), z.number()]);
-const currencySchema = z.union([z.string(), addressSchema]).optional();
-const artifactSchema = z.record(z.string(), z.unknown());
+const addressSchema = z.string()
+  .refine(isAddress, 'must be a valid 0x address')
+  .describe('Checksummed or lowercase EVM 0x address.');
+const hexSchema = z.string()
+  .refine(isHex, 'must be a hex string')
+  .describe('0x-prefixed hex string.');
+const integerSchema = z.union([z.string(), z.number()])
+  .describe('Integer as a number or decimal string. Use strings for large token IDs.');
+const amountSchema = z.union([z.string(), z.number()])
+  .describe('Human-readable token amount as a number or decimal string.');
+const timestampSchema = z.union([z.string(), z.number()])
+  .describe('Unix timestamp in seconds as a number or decimal string.');
+const currencySchema = z.union([z.string(), addressSchema])
+  .describe('Currency alias such as eth/rare or ERC20 token address.')
+  .optional();
+const artifactSchema = z.record(z.string(), z.unknown())
+  .describe('Structured artifact returned by a RARE SDK build/parse tool.');
 const proofSchema = z.array(hexSchema);
 const splitSchema = {
   splitAddresses: z.array(addressSchema).optional(),
@@ -131,6 +177,120 @@ const rawRouteSchema = {
   commands: hexSchema,
   inputs: z.array(hexSchema),
 };
+const pageSchema = z.number().int().positive()
+  .describe('1-based result page. Start with 1.');
+const perPageSchema = z.number().int().positive()
+  .describe('Number of results per page. Use a small value such as 5 or 10 for exploration.');
+const nftSearchSchema = z.strictObject({
+  ...optionalChain,
+  query: z.string()
+    .describe('Full-text search term. Can be a user/artist/collector display name, collection name, artwork title, tag, or general keyword. Preferred fallback when no exact filter exists.')
+    .optional(),
+  page: pageSchema.optional(),
+  perPage: perPageSchema.optional(),
+  sortBy: z.enum(nftSearchSortByValues)
+    .describe(`NFT search sort. Valid values: ${nftSearchSortByValues.join(', ')}.`)
+    .optional(),
+  ownerAddress: addressSchema
+    .describe('Filter NFTs owned by this wallet address.')
+    .optional(),
+  creatorAddress: addressSchema
+    .describe('Filter NFTs created by this wallet address.')
+    .optional(),
+  contractAddress: addressSchema
+    .describe('Filter NFTs from this token contract address.')
+    .optional(),
+  collectionId: z.string()
+    .describe('Filter NFTs by RARE API collection ID. Use search_collections first when only a collection name is known.')
+    .optional(),
+  listingType: z.enum(listingTypeValues)
+    .describe(`Listing filter. Valid values: ${listingTypeValues.join(', ')}. Implies hasListing: true.`)
+    .optional(),
+  hasAuction: z.boolean()
+    .describe('Filter to NFTs with or without an auction.')
+    .optional(),
+  auctionState: z.enum(auctionStateValues)
+    .describe(`Auction state filter. Valid values: ${auctionStateValues.join(', ')}. Implies hasAuction: true.`)
+    .optional(),
+  auctionCreatorAddress: addressSchema
+    .describe('Filter auctions created by this wallet address. Implies hasAuction: true.')
+    .optional(),
+  auctionBidderAddress: addressSchema
+    .describe('Filter auctions with bids from this wallet address. Implies hasAuction: true.')
+    .optional(),
+  hasListing: z.boolean()
+    .describe('Filter to NFTs with or without a listing.')
+    .optional(),
+  hasOffer: z.boolean()
+    .describe('Filter to NFTs with or without an offer.')
+    .optional(),
+  offerBuyerAddress: addressSchema
+    .describe('Filter offers from this buyer address. Implies hasOffer: true.')
+    .optional(),
+  tags: z.array(z.string())
+    .describe('Filter by RARE API NFT tags. Use query first when unsure which tags exist.')
+    .optional(),
+  mediaType: z.enum(mediaTypeValues)
+    .describe(`NFT media type filter. Valid values: ${mediaTypeValues.join(', ')}.`)
+    .optional(),
+}).meta({
+  examples: [
+    { query: 'portrait', page: 1, perPage: 5 },
+    { hasListing: true, listingType: 'SALE_PRICE', sortBy: 'recentActivity', page: 1, perPage: 5 },
+    { hasAuction: true, auctionState: 'RUNNING', sortBy: 'auctionEndingSoon', page: 1, perPage: 5 },
+  ],
+});
+const collectionSearchSchema = z.strictObject({
+  ...optionalChain,
+  query: z.string()
+    .describe('Full-text collection search term. Preferred fallback when no exact filter exists.')
+    .optional(),
+  page: pageSchema.optional(),
+  perPage: perPageSchema.optional(),
+  sortBy: z.enum(collectionSearchSortByValues)
+    .describe(`Collection search sort. Valid values: ${collectionSearchSortByValues.join(', ')}.`)
+    .optional(),
+  ownerAddress: addressSchema
+    .describe('Filter collections owned by this wallet address.')
+    .optional(),
+}).meta({
+  examples: [
+    { query: 'SuperRare', sortBy: 'newest', page: 1, perPage: 5 },
+    { ownerAddress: '0x0000000000000000000000000000000000000001', sortBy: 'oldest', page: 1, perPage: 5 },
+  ],
+});
+const eventTypeSchema = z.enum(eventTypeValues)
+  .describe(`NFT event type. Valid values: ${eventTypeValues.join(', ')}.`);
+const eventSearchSchema = z.strictObject({
+  ...optionalChain,
+  contract: addressSchema
+    .describe('NFT contract address. Use with tokenId for one NFT event stream.')
+    .optional(),
+  tokenId: integerSchema
+    .describe('NFT token ID. Use with contract for one NFT event stream.')
+    .optional(),
+  collectionId: z.string()
+    .describe('RARE API collection ID for collection-wide event search.')
+    .optional(),
+  eventType: z.union([eventTypeSchema, z.array(eventTypeSchema)])
+    .describe('One event type or an array of event types. Omit this when unsure and filter results client-side.')
+    .optional(),
+  sortBy: z.enum(collectionSearchSortByValues)
+    .describe('Event sort. Valid values: newest, oldest.')
+    .optional(),
+  page: pageSchema.optional(),
+  perPage: perPageSchema.optional(),
+}).meta({
+  examples: [
+    { collectionId: 'collection-id', sortBy: 'newest', page: 1, perPage: 10 },
+    {
+      contract: '0x0000000000000000000000000000000000000001',
+      tokenId: '1',
+      eventType: ['MAKE_LISTING', 'TAKE_LISTING'],
+      sortBy: 'newest',
+    },
+  ],
+});
 
 export const rareMcpServerMetadata = {
   name: pkg.name,
@@ -162,10 +322,14 @@ function registerTool(server: McpServer, spec: McpToolSpec): void {
   }
 
   server.registerTool(spec.name, {
-    description: spec.description,
+    description: buildToolDescription(spec),
     inputSchema: tool.inputSchema,
     annotations: shapeMcpToolAnnotations(spec.access),
-  }, async (args) => withToolErrors(async () => tool.handler(args)));
+  }, async (args: Record<string, unknown>) => withToolErrors(async () => tool.handler(args)));
+}
+
+function buildToolDescription(spec: McpToolSpec): string {
+  return `${spec.description}\n\nArgument guidance: use only fields listed in this tool's input schema. Enum values are case-sensitive. If an exact filter or operation argument is not listed, use the broadest available read/search/status tool first and narrow from returned structuredContent instead of inventing a tool argument.`;
 }
 
 const toolHandlers: Record<string, ToolHandler> = {
@@ -589,31 +753,15 @@ const toolHandlers: Record<string, ToolHandler> = {
     handler: ({ chain, ...args }) => callRead(chain, (rare) => rare.utils.merkle.proof(args as never)),
   },
   search_nfts: {
-    inputSchema: {
-      ...optionalChain,
-      query: z.string().optional(),
-      page: z.number().int().positive().optional(),
-      perPage: z.number().int().positive().optional(),
-      sortBy: z.string().optional(),
-      ownerAddress: z.string().optional(),
-      creatorAddress: z.string().optional(),
-      contractAddress: z.string().optional(),
-      collectionId: z.string().optional(),
-      hasAuction: z.boolean().optional(),
-      auctionState: z.string().optional(),
-      hasListing: z.boolean().optional(),
-      hasOffer: z.boolean().optional(),
-      tags: z.array(z.string()).optional(),
-      mediaType: z.string().optional(),
-    },
+    inputSchema: nftSearchSchema,
     handler: ({ chain, ...args }) => callRead(chain, (rare) => rare.search.nfts(args)),
   },
   search_collections: {
-    inputSchema: { ...optionalChain, query: z.string().optional(), page: z.number().int().positive().optional(), perPage: z.number().int().positive().optional(), sortBy: z.string().optional() },
+    inputSchema: collectionSearchSchema,
     handler: ({ chain, ...args }) => callRead(chain, (rare) => rare.search.collections(args)),
   },
   search_events: {
-    inputSchema: { ...optionalChain, contract: addressSchema.optional(), tokenId: integerSchema.optional(), collectionId: z.string().optional(), eventType: z.union([z.string(), z.array(z.string())]).optional(), sortBy: z.enum(['newest', 'oldest']).optional(), page: z.number().int().positive().optional(), perPage: z.number().int().positive().optional() },
+    inputSchema: eventSearchSchema,
     handler: ({ chain, ...args }) => callRead(chain, (rare) => rare.search.events(args as never)),
   },
   nft_get: {
@@ -733,7 +881,9 @@ const toolHandlers: Record<string, ToolHandler> = {
     handler: ({ value, filename }) => callRead(undefined, (rare) => rare.ipfs.pinJson(value, filename as string | undefined)),
   },
   user_get: {
-    inputSchema: { address: z.string() },
+    inputSchema: {
+      address: addressSchema.describe('SuperRare user wallet address. Use search_nfts query first when you only know a username or display name.'),
+    },
     handler: ({ address }) => callRead(undefined, (rare) => rare.user.get(address as string)),
   },
   media_upload: {

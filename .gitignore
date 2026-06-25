@@ -5,6 +5,7 @@ coverage/
 .docs-build/
 .docusaurus/
 docs-site/.docusaurus/
+.DS_Store
 .env
 .context/
 .clawpatch

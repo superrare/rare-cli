@@ -53,6 +53,64 @@ currency?: string // currency alias or ERC20 address
 
 Tools that wrap SDK artifact helpers accept structured artifacts directly. `ipfs_pin_file` and `media_upload` read local file paths.
 
+Tool schemas intentionally list the supported argument names. Do not invent narrower filters from adjacent API concepts; if a field is not listed, call the broadest matching read/search/status tool and narrow the returned `structuredContent` client-side.
+
+Search tools expose strict schemas and reject unknown filter keys:
+
+```ts
+search_nfts({
+  query?: string // full-text; can be a user/artist/collector display name, collection name, artwork title, tag, or keyword
+  page?: number
+  perPage?: number
+  sortBy?: 'newest' | 'oldest' | 'priceAsc' | 'priceDesc' | 'recentlySold' | 'auctionEndingSoon' | 'recentActivity' | 'bidAsc' | 'bidDesc'
+  ownerAddress?: string
+  creatorAddress?: string
+  contractAddress?: string
+  collectionId?: string
+  listingType?: 'SALE_PRICE' | 'BATCH_SALE_PRICE'
+  hasAuction?: boolean
+  auctionState?: 'PENDING' | 'RUNNING' | 'UNSETTLED'
+  auctionCreatorAddress?: string
+  auctionBidderAddress?: string
+  hasListing?: boolean
+  hasOffer?: boolean
+  offerBuyerAddress?: string
+  tags?: string[]
+  mediaType?: 'AUDIO' | 'HTML' | 'IMAGE' | 'THREE_D' | 'VIDEO'
+})
+
+search_collections({
+  query?: string
+  page?: number
+  perPage?: number
+  sortBy?: 'newest' | 'oldest'
+  ownerAddress?: string
+})
+
+search_events({
+  contract?: string
+  tokenId?: string | number
+  collectionId?: string
+  eventType?: EventType | EventType[]
+  sortBy?: 'newest' | 'oldest'
+  page?: number
+  perPage?: number
+})
+```
+
+`EventType` is one of `CANCEL_AUCTION`, `CANCEL_OFFER`, `CLOSE_AUCTION`, `CREATE_NFT`, `CREATE_NFT_SUPPLY`, `CREATE_RESERVE_AUCTION`, `CREATE_SCHEDULED_AUCTION`, `END_AUCTION`, `MAKE_AUCTION_BID`, `MAKE_LISTING`, `MAKE_OFFER`, `SETTLE_AUCTION`, `START_AUCTION`, `TAKE_LISTING`, `TAKE_OFFER`, `TRANSFER_NFT`, or `TRANSFER_NFT_SUPPLY`.
+
+Recommended fallback patterns:
+
+```json
+{ "query": "artist display name", "page": 1, "perPage": 5 }
+{ "query": "portrait", "page": 1, "perPage": 5 }
+{ "hasListing": true, "listingType": "SALE_PRICE", "sortBy": "recentActivity", "page": 1, "perPage": 5 }
+{ "hasAuction": true, "auctionState": "RUNNING", "sortBy": "auctionEndingSoon", "page": 1, "perPage": 5 }
+```
+
+Use `user_get({ "address": "0x..." })` only when you have a wallet address. If you only have a user, artist, collector, or display name, use `search_nfts` with that name in `query`, inspect creator/owner addresses in `structuredContent`, then call `user_get` with the selected address.
+
 ## Read-only tools
 
 MCP operational helpers:
