@@ -291,14 +291,23 @@ export function listingCommand(): Command {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const webBaseUrl = getWebBaseUrl(chain, opts.webUrl);
       const contract = parseAddress(opts.contract, '--contract');
-      const { client, account } = getWalletClient(chain);
+      const tokenId = parseTokenId(opts.tokenId);
+      // Require an explicitly configured wallet — never silently generate a
+      // throwaway buyer for a card purchase.
+      const wallet = tryGetWalletClient(chain);
+      if (wallet === null) {
+        throw new Error(
+          `No wallet configured for "${chain}". Run: rare configure --chain ${chain} --private-key <key>.`,
+        );
+      }
+      const { client, account } = wallet;
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
 
       // Card checkout only works for public USDC listings; read it on-chain first.
       const status = await rare.listing.status({
         contract,
-        tokenId: opts.tokenId,
+        tokenId,
         target: PUBLIC_LISTING_TARGET,
       });
       if (!status.hasListing) {
@@ -311,11 +320,11 @@ export function listingCommand(): Command {
         );
       }
 
-      const universalTokenId = `${rare.chainId}-${contract.toLowerCase()}-${opts.tokenId}`;
+      const universalTokenId = `${rare.chainId}-${contract.toLowerCase()}-${tokenId}`;
 
       log(`Preparing card checkout on ${chain}...`);
       log(`  NFT contract: ${contract}`);
-      log(`  Token ID: ${opts.tokenId}`);
+      log(`  Token ID: ${tokenId}`);
       log(`  Buyer: ${account.address}`);
       log(`  Price: ${status.amount.toString()} USDC base units`);
 
@@ -331,7 +340,7 @@ export function listingCommand(): Command {
         cookieHeader,
         body: {
           tokenContractAddress: contract,
-          tokenId: opts.tokenId,
+          tokenId,
           weiPrice: status.amount.toString(),
           marketplaceAddress: rare.contracts.auction,
           currencyAddress: status.currencyAddress,
@@ -418,5 +427,14 @@ function requireTokenScopeOptions<T extends { contract?: string; tokenId?: strin
 ): asserts opts is T & { contract: string; tokenId: string } {
   if (!hasOption(opts.contract) || !hasOption(opts.tokenId)) {
     throw new Error(`rare listing ${command} requires --contract and --token-id.`);
+  }
+}
+
+/** Normalizes a token-id string to canonical decimal (e.g. "0x1"/"01" -> "1"). */
+function parseTokenId(value: string): string {
+  try {
+    return BigInt(value).toString();
+  } catch {
+    throw new Error(`Invalid --token-id "${value}".`);
   }
 }
