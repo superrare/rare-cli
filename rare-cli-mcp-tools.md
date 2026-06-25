@@ -59,7 +59,7 @@ Search tools expose strict schemas and reject unknown filter keys:
 
 ```ts
 search_nfts({
-  query?: string
+  query?: string // full-text; can be a user/artist/collector display name, collection name, artwork title, tag, or keyword
   page?: number
   perPage?: number
   sortBy?: 'newest' | 'oldest' | 'priceAsc' | 'priceDesc' | 'recentlySold' | 'auctionEndingSoon' | 'recentActivity' | 'bidAsc' | 'bidDesc'
@@ -103,10 +103,13 @@ search_events({
 Recommended fallback patterns:
 
 ```json
+{ "query": "artist display name", "page": 1, "perPage": 5 }
 { "query": "portrait", "page": 1, "perPage": 5 }
 { "hasListing": true, "listingType": "SALE_PRICE", "sortBy": "recentActivity", "page": 1, "perPage": 5 }
 { "hasAuction": true, "auctionState": "RUNNING", "sortBy": "auctionEndingSoon", "page": 1, "perPage": 5 }
 ```
+
+Use `user_get({ "address": "0x..." })` only when you have a wallet address. If you only have a user, artist, collector, or display name, use `search_nfts` with that name in `query`, inspect creator/owner addresses in `structuredContent`, then call `user_get` with the selected address.
 
 ## Read-only tools
 

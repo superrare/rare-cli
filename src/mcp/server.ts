@@ -184,7 +184,7 @@ const perPageSchema = z.number().int().positive()
 const nftSearchSchema = z.strictObject({
   ...optionalChain,
   query: z.string()
-    .describe('Full-text search term. Preferred fallback when no exact filter exists.')
+    .describe('Full-text search term. Can be a user/artist/collector display name, collection name, artwork title, tag, or general keyword. Preferred fallback when no exact filter exists.')
     .optional(),
   page: pageSchema.optional(),
   perPage: perPageSchema.optional(),
@@ -881,7 +881,9 @@ const toolHandlers: Record<string, ToolHandler> = {
     handler: ({ value, filename }) => callRead(undefined, (rare) => rare.ipfs.pinJson(value, filename as string | undefined)),
   },
   user_get: {
-    inputSchema: { address: z.string() },
+    inputSchema: {
+      address: addressSchema.describe('SuperRare user wallet address. Use search_nfts query first when you only know a username or display name.'),
+    },
     handler: ({ address }) => callRead(undefined, (rare) => rare.user.get(address as string)),
   },
   media_upload: {

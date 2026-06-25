@@ -42,6 +42,7 @@ describe('MCP stdio server', () => {
         expect(searchNfts?.description).toContain('listingType');
         expect(searchNfts?.description).toContain('If a desired filter is not available');
         expect(nftSearchSchema.additionalProperties).toBe(false);
+        expect(nftSearchSchema.properties?.query?.description).toContain('user/artist/collector display name');
         expect(nftSearchSchema.examples).toContainEqual({
           hasListing: true,
           listingType: 'SALE_PRICE',
@@ -69,6 +70,11 @@ describe('MCP stdio server', () => {
         expect(eventSearchSchema.properties?.eventType?.description).toContain('Omit this when unsure');
         expect(JSON.stringify(eventSearchSchema.properties?.eventType)).toContain('MAKE_LISTING');
         expect(JSON.stringify(eventSearchSchema.properties?.eventType)).toContain('TRANSFER_NFT_SUPPLY');
+
+        const userGet = tools.tools.find((tool) => tool.name === 'user_get');
+        const userGetSchema = getObjectInputSchema(userGet);
+        expect(userGet?.description).toContain('first call search_nfts');
+        expect(userGetSchema.properties?.address?.description).toContain('SuperRare user wallet address');
 
         const config = await client.callTool({ name: 'config_summary', arguments: {} });
         expect(config.structuredContent).toEqual({
@@ -275,6 +281,16 @@ describe('MCP stdio server', () => {
         expect(unsupportedSearchSort.isError).toBe(true);
         expect(readTextContent(unsupportedSearchSort)).toContain('Input validation error');
         expect(readTextContent(unsupportedSearchSort)).toContain('Invalid option');
+
+        const invalidUserAddress = await client.callTool({
+          name: 'user_get',
+          arguments: {
+            address: 'not-an-address',
+          },
+        });
+        expect(invalidUserAddress.isError).toBe(true);
+        expect(readTextContent(invalidUserAddress)).toContain('Input validation error');
+        expect(readTextContent(invalidUserAddress)).toContain('must be a valid 0x address');
       });
     });
   });
