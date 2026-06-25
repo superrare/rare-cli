@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import type { Account, WalletClient } from 'viem';
 
 /**
@@ -108,8 +109,39 @@ export async function prepareCardCheckout(params: {
   return { checkoutUrl: `${webBaseUrl}${json.checkoutPath}` };
 }
 
-/** Opens a URL in the user's default browser (best-effort, cross-platform). */
+/** Chromium-family browsers (macOS) that support a chromeless `--app` window. */
+const MACOS_CHROMIUM_BINARIES = [
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+  '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+];
+
+/**
+ * Opens the checkout. Prefers a small, chromeless Chromium "app" window (its own
+ * window, no tabs/address bar, sized to the component) so only the checkout
+ * shows; falls back to the default browser when no Chromium browser is found.
+ */
 export function openBrowser(url: string): void {
+  if (process.platform === 'darwin') {
+    const browser = MACOS_CHROMIUM_BINARIES.find((path) => existsSync(path));
+    if (browser !== undefined) {
+      const child = spawn(
+        browser,
+        [`--app=${url}`, '--window-size=440,680'],
+        { stdio: 'ignore', detached: true },
+      );
+      // If the app window can't launch, fall back to a normal browser open.
+      child.on('error', () => fallbackOpenBrowser(url));
+      child.unref();
+      return;
+    }
+  }
+  fallbackOpenBrowser(url);
+}
+
+/** Opens a URL in the user's default browser (best-effort, cross-platform). */
+function fallbackOpenBrowser(url: string): void {
   const command =
     process.platform === 'darwin'
       ? 'open'
