@@ -15,7 +15,14 @@ export type ChainConfig = {
   rpcUrl?: string;
   uniswapApiKey?: string;
   uniswapApiKeyRef?: PrivateKeyReference;
+  /** SuperRare web app base URL (for wallet login + Coinflow card checkout). */
+  webBaseUrl?: string;
 }
+
+/** Default SuperRare web app URLs per chain (override via config or --web-url). */
+const defaultWebBaseUrls: Partial<Record<SupportedChain, string>> = {
+  mainnet: 'https://superrare.com',
+};
 
 export type Config = {
   defaultChain?: SupportedChain;
@@ -124,6 +131,20 @@ export function getChainConfig(chain: SupportedChain): ChainConfig {
   return config.chains[chain] ?? {};
 }
 
+/**
+ * Resolves the SuperRare web app base URL for a chain (override > config >
+ * built-in default), with no trailing slash. Throws when none is available.
+ */
+export function getWebBaseUrl(chain: SupportedChain, override?: string): string {
+  const url = override ?? getChainConfig(chain).webBaseUrl ?? defaultWebBaseUrls[chain];
+  if (url === undefined) {
+    throw new Error(
+      `No SuperRare web URL configured for "${chain}". Pass --web-url <url> or set chains.${chain}.webBaseUrl in your rare config.`,
+    );
+  }
+  return url.replace(/\/$/, '');
+}
+
 function parseChainName(value: string): SupportedChain {
   if (!isSupportedChain(value)) {
     throw new Error(`unsupported chain "${value}". Supported chains: ${supportedChains.join(', ')}`);
@@ -191,6 +212,9 @@ function parseChainConfig(value: unknown, chain: SupportedChain): ChainConfig | 
   const uniswapApiKeyRef = typeof value.uniswapApiKeyRef === 'string' && isPrivateKeyReference(value.uniswapApiKeyRef)
     ? value.uniswapApiKeyRef
     : undefined;
+  const webBaseUrl = typeof value.webBaseUrl === 'string' && value.webBaseUrl.trim().length > 0
+    ? value.webBaseUrl.trim()
+    : undefined;
 
   if (
     privateKey === undefined &&
@@ -198,7 +222,8 @@ function parseChainConfig(value: unknown, chain: SupportedChain): ChainConfig | 
     accountAddress === undefined &&
     rpcUrl === undefined &&
     uniswapApiKey === undefined &&
-    uniswapApiKeyRef === undefined
+    uniswapApiKeyRef === undefined &&
+    webBaseUrl === undefined
   ) {
     return undefined;
   }
@@ -210,6 +235,7 @@ function parseChainConfig(value: unknown, chain: SupportedChain): ChainConfig | 
     ...(rpcUrl === undefined ? {} : { rpcUrl }),
     ...(uniswapApiKey === undefined ? {} : { uniswapApiKey }),
     ...(uniswapApiKeyRef === undefined ? {} : { uniswapApiKeyRef }),
+    ...(webBaseUrl === undefined ? {} : { webBaseUrl }),
   };
 }
 
