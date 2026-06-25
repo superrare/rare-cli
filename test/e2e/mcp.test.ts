@@ -37,6 +37,39 @@ describe('MCP stdio server', () => {
           openWorldHint: true,
         });
 
+        const searchNfts = tools.tools.find((tool) => tool.name === 'search_nfts');
+        const nftSearchSchema = getObjectInputSchema(searchNfts);
+        expect(searchNfts?.description).toContain('listingType');
+        expect(searchNfts?.description).toContain('If a desired filter is not available');
+        expect(nftSearchSchema.additionalProperties).toBe(false);
+        expect(nftSearchSchema.examples).toContainEqual({
+          hasListing: true,
+          listingType: 'SALE_PRICE',
+          sortBy: 'recentActivity',
+          page: 1,
+          perPage: 5,
+        });
+        expect(nftSearchSchema.properties?.listingType?.enum).toEqual(['SALE_PRICE', 'BATCH_SALE_PRICE']);
+        expect(nftSearchSchema.properties?.auctionState?.enum).toEqual(['PENDING', 'RUNNING', 'UNSETTLED']);
+        expect(nftSearchSchema.properties?.mediaType?.enum).toEqual(['AUDIO', 'HTML', 'IMAGE', 'THREE_D', 'VIDEO']);
+        expect(nftSearchSchema.properties?.auctionBidderAddress?.description).toContain('Implies hasAuction');
+        expect(nftSearchSchema.properties?.offerBuyerAddress?.description).toContain('Implies hasOffer');
+
+        const searchCollections = tools.tools.find((tool) => tool.name === 'search_collections');
+        const collectionSearchSchema = getObjectInputSchema(searchCollections);
+        expect(searchCollections?.description).toContain('Use only query, ownerAddress, sortBy, page, and perPage');
+        expect(collectionSearchSchema.additionalProperties).toBe(false);
+        expect(collectionSearchSchema.properties?.sortBy?.enum).toEqual(['newest', 'oldest']);
+        expect(collectionSearchSchema.properties?.ownerAddress?.description).toContain('owned by this wallet');
+
+        const searchEvents = tools.tools.find((tool) => tool.name === 'search_events');
+        const eventSearchSchema = getObjectInputSchema(searchEvents);
+        expect(searchEvents?.description).toContain('Use contract plus tokenId');
+        expect(eventSearchSchema.additionalProperties).toBe(false);
+        expect(eventSearchSchema.properties?.eventType?.description).toContain('Omit this when unsure');
+        expect(JSON.stringify(eventSearchSchema.properties?.eventType)).toContain('MAKE_LISTING');
+        expect(JSON.stringify(eventSearchSchema.properties?.eventType)).toContain('TRANSFER_NFT_SUPPLY');
+
         const config = await client.callTool({ name: 'config_summary', arguments: {} });
         expect(config.structuredContent).toEqual({
           defaultChain: 'sepolia',
@@ -222,6 +255,26 @@ describe('MCP stdio server', () => {
         expect(erc1155Result.isError).toBe(true);
         expect(readTextContent(erc1155Result)).toContain('Input validation error');
         expect(readTextContent(erc1155Result)).toContain('must be a valid 0x address');
+
+        const unknownSearchFilter = await client.callTool({
+          name: 'search_nfts',
+          arguments: {
+            artistAddress: '0x1111111111111111111111111111111111111111',
+          },
+        });
+        expect(unknownSearchFilter.isError).toBe(true);
+        expect(readTextContent(unknownSearchFilter)).toContain('Input validation error');
+        expect(readTextContent(unknownSearchFilter)).toContain('Unrecognized key');
+
+        const unsupportedSearchSort = await client.callTool({
+          name: 'search_nfts',
+          arguments: {
+            sortBy: 'artistName',
+          },
+        });
+        expect(unsupportedSearchSort.isError).toBe(true);
+        expect(readTextContent(unsupportedSearchSort)).toContain('Input validation error');
+        expect(readTextContent(unsupportedSearchSort)).toContain('Invalid option');
       });
     });
   });
@@ -294,4 +347,27 @@ function isTextContent(value: unknown): value is { type: 'text'; text: string } 
     'text' in value &&
     typeof value.text === 'string'
   );
+}
+
+type JsonSchemaProperty = {
+  description?: string;
+  enum?: unknown[];
+};
+
+type JsonObjectSchema = {
+  additionalProperties?: unknown;
+  examples?: unknown[];
+  properties?: Record<string, JsonSchemaProperty>;
+};
+
+function getObjectInputSchema(tool: { inputSchema?: unknown } | undefined): JsonObjectSchema {
+  const schema = tool?.inputSchema;
+  if (!isJsonObjectSchema(schema)) {
+    throw new Error('Expected MCP tool with object input schema.');
+  }
+  return schema;
+}
+
+function isJsonObjectSchema(value: unknown): value is JsonObjectSchema {
+  return typeof value === 'object' && value !== null;
 }
