@@ -24,7 +24,7 @@ const addresses: ContractAddresses = {
   marketplaceSettings,
 };
 
-function receipt() {
+function receipt(): never {
   return { status: 'success', blockNumber: 1n, logs: [] } as never;
 }
 
@@ -37,7 +37,7 @@ async function parseJsonBody(input: RequestInfo | URL, init: RequestInit | undef
 }
 
 describe('ERC1155 listing namespace preflight', () => {
-  it('rejects ERC1155 listing reads on chains without ERC1155 deployments', async () => {
+  it('rejects ERC1155 listing reads when the address set is incomplete', async () => {
     const namespace = createErc1155ListingNamespace(
       {} as never,
       {
@@ -56,7 +56,7 @@ describe('ERC1155 listing namespace preflight', () => {
       contract,
       tokenId: '1',
       seller,
-    })).rejects.toThrow('ERC1155 contracts are not configured for "mainnet". Supported chains: sepolia, base, base-sepolia');
+    })).rejects.toThrow('ERC1155 contracts are not configured for "mainnet". Supported chains: sepolia, mainnet, base, base-sepolia');
   });
 
   it('rejects insufficient seller balance before writing NFT approval', async () => {
