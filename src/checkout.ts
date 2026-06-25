@@ -11,13 +11,10 @@ const SIGN_IN_MESSAGE =
 
 /** Collapses Set-Cookie response headers into a single `Cookie` request header. */
 function extractCookieHeader(response: Response): string {
-  const headers = response.headers as Headers & { getSetCookie?: () => string[] };
-  const setCookies =
-    headers.getSetCookie?.() ??
-    (response.headers.get('set-cookie') ?? '').split(/,(?=[^;]+=)/);
-  return setCookies
+  return response.headers
+    .getSetCookie()
     .map((cookie) => cookie.split(';')[0]?.trim())
-    .filter((pair): pair is string => Boolean(pair))
+    .filter((pair): pair is string => pair !== undefined && pair !== '')
     .join('; ');
 }
 
@@ -46,18 +43,18 @@ export async function loginWithWallet(params: {
   if (!response.ok) {
     const text = await response.text().catch(() => '');
     throw new Error(
-      `SuperRare login failed (${response.status})${text ? `: ${text}` : ''}`
+      `SuperRare login failed (${response.status})${text !== '' ? `: ${text}` : ''}`
     );
   }
 
   const cookieHeader = extractCookieHeader(response);
-  if (!cookieHeader) {
+  if (cookieHeader === '') {
     throw new Error('SuperRare login did not return a session cookie.');
   }
   return cookieHeader;
 }
 
-export interface PrepareCardCheckoutBody {
+export type PrepareCardCheckoutBody = {
   tokenContractAddress: string;
   tokenId: string;
   weiPrice: string;
@@ -66,7 +63,7 @@ export interface PrepareCardCheckoutBody {
   buyerAddress: string;
   email: string;
   universalTokenId: string;
-}
+};
 
 /**
  * Asks the SuperRare backend to prepare a Coinflow card checkout (bound to the
@@ -91,22 +88,49 @@ export async function prepareCardCheckout(params: {
 
   const text = await response.text();
   if (!response.ok) {
-    let message = text;
-    try {
-      message = (JSON.parse(text) as { error?: string }).error ?? text;
-    } catch {
-      // response body wasn't JSON — keep the raw text
-    }
+    const message = extractErrorMessage(text);
     throw new Error(
-      `Failed to prepare card checkout (${response.status})${message ? `: ${message}` : ''}`
+      `Failed to prepare card checkout (${response.status})${message !== '' ? `: ${message}` : ''}`
     );
   }
 
-  const json = JSON.parse(text) as { checkoutPath?: string };
-  if (!json.checkoutPath) {
+  const checkoutPath = extractCheckoutPath(text);
+  if (checkoutPath === undefined) {
     throw new Error('Prepare response did not include a checkout path.');
   }
-  return { checkoutUrl: `${webBaseUrl}${json.checkoutPath}` };
+  return { checkoutUrl: `${webBaseUrl}${checkoutPath}` };
+}
+
+/** Best-effort extraction of an `{ error }` message from a JSON response body. */
+function extractErrorMessage(text: string): string {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (
+      typeof parsed === 'object' &&
+      parsed !== null &&
+      'error' in parsed &&
+      typeof parsed.error === 'string'
+    ) {
+      return parsed.error;
+    }
+  } catch {
+    // response body wasn't JSON — fall through to the raw text
+  }
+  return text;
+}
+
+/** Extracts `checkoutPath` from the prepare response, or undefined when absent. */
+function extractCheckoutPath(text: string): string | undefined {
+  const parsed: unknown = JSON.parse(text);
+  if (
+    typeof parsed === 'object' &&
+    parsed !== null &&
+    'checkoutPath' in parsed &&
+    typeof parsed.checkoutPath === 'string'
+  ) {
+    return parsed.checkoutPath;
+  }
+  return undefined;
 }
 
 /** Chromium-family browsers (macOS) that support a chromeless `--app` window. */
@@ -132,7 +156,9 @@ export function openBrowser(url: string): void {
         { stdio: 'ignore', detached: true },
       );
       // If the app window can't launch, fall back to a normal browser open.
-      child.on('error', () => fallbackOpenBrowser(url));
+      child.on('error', () => {
+        fallbackOpenBrowser(url);
+      });
       child.unref();
       return;
     }
