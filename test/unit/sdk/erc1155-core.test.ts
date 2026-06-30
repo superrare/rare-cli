@@ -160,11 +160,11 @@ describe('ERC1155 core planning', () => {
       tokenId: '4',
       price: 100n,
       currency: ETH_ADDRESS,
-      maxMints: '2',
+      maxMints: '0',
     }, account, NOW)).toMatchObject({
       tokenId: 4n,
       price: 100n,
-      maxMints: 2n,
+      maxMints: 0n,
       startTime: NOW,
     });
   });
@@ -222,14 +222,14 @@ describe('ERC1155 core planning', () => {
       contract,
       currency: ETH_ADDRESS,
       items: [
-        { tokenId: '1', price: 100n, maxMints: '2' },
+        { tokenId: '1', price: 100n, maxMints: '0' },
         { tokenId: '2', price: 200n, maxMints: '3', startTime: '1800000100' },
       ],
     }, account, NOW)).toEqual({
       contract,
       currency: ETH_ADDRESS,
       items: [
-        { tokenId: 1n, price: 100n, startTime: NOW, maxMints: 2n },
+        { tokenId: 1n, price: 100n, startTime: NOW, maxMints: 0n },
         { tokenId: 2n, price: 200n, startTime: 1_800_000_100n, maxMints: 3n },
       ],
       splitAddresses: [account],
@@ -554,7 +554,7 @@ describe('ERC1155 status shaping', () => {
       marketplace,
       contract,
       tokenId: 1n,
-      config: [seller, ETH_ADDRESS, 100n, NOW - 10n, 5n, [seller], [100]],
+      config: [seller, ETH_ADDRESS, 0n, NOW - 10n, 0n, [seller], [100]],
       allowlist: [zeroBytes32, 0n],
       mintLimit: 2n,
       txLimit: 0n,
@@ -568,6 +568,8 @@ describe('ERC1155 status shaping', () => {
       configured: true,
       started: true,
       currentlyMintable: true,
+      price: 0n,
+      maxMints: 0n,
       remainingSupply: 6n,
       isEth: true,
     });

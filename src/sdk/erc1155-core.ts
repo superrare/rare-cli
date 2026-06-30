@@ -417,7 +417,7 @@ export function planErc1155ReleaseConfigure(
     currency: params.currency,
     price: params.price,
     startTime: params.startTime === undefined ? nowSeconds : toUnixTimestamp(params.startTime, 'startTime'),
-    maxMints: toPositiveInteger(params.maxMints, 'maxMints'),
+    maxMints: toNonNegativeInteger(params.maxMints, 'maxMints'),
     splitAddresses: splits.addresses,
     splitRatios: splits.ratios,
   };
@@ -439,7 +439,7 @@ export function planErc1155ReleaseConfigureBatch(
     tokenId: toNonNegativeInteger(item.tokenId, `items[${index}].tokenId`),
     price: item.price,
     startTime: item.startTime === undefined ? nowSeconds : toUnixTimestamp(item.startTime, `items[${index}].startTime`),
-    maxMints: toPositiveInteger(item.maxMints, `items[${index}].maxMints`),
+    maxMints: toNonNegativeInteger(item.maxMints, `items[${index}].maxMints`),
   }));
   assertStrictlyAscendingTokenIds(items.map((item) => ({ tokenId: item.tokenId, quantity: 1n })));
   return {
@@ -801,7 +801,7 @@ export function shapeErc1155ReleaseStatus(params: {
 }): Erc1155ReleaseStatus {
   const [seller, currencyAddress, price, startTime, maxMints, splitRecipients, splitRatios] = params.config;
   const [allowlistRoot, allowlistEndTimestamp] = params.allowlist;
-  const configured = !isAddressEqual(seller, zeroAddress) && price > 0n && maxMints > 0n;
+  const configured = !isAddressEqual(seller, zeroAddress);
   const allowlistActive = allowlistRoot !== zeroBytes32 && allowlistEndTimestamp >= params.nowSeconds;
   const started = configured && startTime > 0n && params.nowSeconds >= startTime;
   const remainingSupply =
