@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.2
+
+### Fixes
+
+- Aligned ERC1155 release mint validation with on-chain contract checks by @KeeganEad in https://github.com/superrare/rare-cli/pull/125.
+
+**Full changelog**: https://github.com/superrare/rare-cli/compare/v1.4.1...v1.4.2
+
 ## 1.4.1
 
 ### Fixes
