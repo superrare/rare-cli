@@ -3237,6 +3237,10 @@ describe('built CLI deterministic behavior', () => {
       expect(releaseMintHelp.code).toBe(0);
       expect(releaseMintHelp.stdout).toContain('--recipient <address>');
 
+      const releaseConfigureHelp = await runCli(['listing', 'erc1155', 'release', 'configure', '--help'], { home });
+      expect(releaseConfigureHelp.code).toBe(0);
+      expect(releaseConfigureHelp.stdout).toContain('0 disables the');
+
       const allowlistHelp = await runCli(['listing', 'erc1155', 'release', 'allowlist', '--help'], { home });
       expect(allowlistHelp.code).toBe(0);
       expect(allowlistHelp.stdout).toContain('set-batch');
@@ -3337,6 +3341,27 @@ describe('built CLI deterministic behavior', () => {
       expect(badLimit.stdout).toBe('');
       expect(badLimit.stderr).toContain('limit must be greater than or equal to 0.');
 
+      const unlimitedRelease = await runCli([
+        '--json',
+        'listing',
+        'erc1155',
+        'release',
+        'configure',
+        '--contract',
+        '0x1111111111111111111111111111111111111111',
+        '--token-id',
+        '1',
+        '--price',
+        '1',
+        '--max-mints',
+        '0',
+        '--chain',
+        'sepolia',
+      ], { home });
+      expect(unlimitedRelease.code).toBe(1);
+      expect(unlimitedRelease.stdout).toBe('');
+      expect(unlimitedRelease.stderr).toContain('no wallet configured');
+
       const missingCancelToken = await runCli([
         'listing',
         'erc1155',
@@ -3384,7 +3409,7 @@ describe('built CLI deterministic behavior', () => {
         items: [{ tokenId: '1', quantity: '1' }],
       }), 'utf8');
       await writeFile(releaseBatchInput, JSON.stringify({
-        items: [{ tokenId: '1', price: '1', maxMints: '0' }],
+        items: [{ tokenId: '1', price: '1', maxMints: '-1' }],
       }), 'utf8');
       await writeFile(allowlistBatchInput, JSON.stringify({
         items: [{ tokenId: '1', endTime: '2000000000' }],
@@ -3442,7 +3467,7 @@ describe('built CLI deterministic behavior', () => {
       ], { home });
       expect(badReleaseBatch.code).toBe(1);
       expect(badReleaseBatch.stdout).toBe('');
-      expect(badReleaseBatch.stderr).toContain('items[0].maxMints must be greater than 0.');
+      expect(badReleaseBatch.stderr).toContain('items[0].maxMints must be greater than or equal to 0.');
 
       const badAllowlistBatch = await runCli([
         'listing',

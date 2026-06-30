@@ -822,7 +822,7 @@ function releaseErc1155Command(): Command {
     .requiredOption('--contract <address>', 'ERC1155 collection contract')
     .requiredOption('--token-id <id>', 'token ID')
     .requiredOption('--price <amount>', 'per-unit mint price')
-    .requiredOption('--max-mints <number>', 'max quantity per mint transaction')
+    .requiredOption('--max-mints <number>', 'max quantity per mint transaction (0 disables the per-tx cap)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address')
     .option('--start-time <time>', 'sale start time as unix seconds or ISO date')
     .option('--split <addr=ratio>', 'payout split recipient', collectSplit)
@@ -837,7 +837,7 @@ function releaseErc1155Command(): Command {
         contract: parseAddressOption(opts.contract, '--contract'),
         tokenId: toNonNegativeInteger(opts.tokenId, 'tokenId'),
         price: opts.price,
-        maxMints: toPositiveInteger(opts.maxMints, 'maxMints'),
+        maxMints: toNonNegativeInteger(opts.maxMints, 'maxMints'),
         currency,
         startTime: opts.startTime,
         splitAddresses: splits?.addresses,
@@ -1276,7 +1276,7 @@ function readReleaseConfigureBatchItems(filePath: string): Array<{
     startTime: item.startTime === undefined
       ? undefined
       : parseStringValue(item.startTime, `items[${index}].startTime`),
-    maxMints: toPositiveInteger(String(item.maxMints), `items[${index}].maxMints`),
+    maxMints: toNonNegativeInteger(String(item.maxMints), `items[${index}].maxMints`),
   }));
 }
 
