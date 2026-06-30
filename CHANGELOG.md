@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.4.1
+
+### Fixes
+
+- Updated mainnet ERC1155 addresses by @KeeganEad in https://github.com/superrare/rare-cli/pull/122.
+
+### Maintenance
+
+- Tightened MCP search tool schemas and guidance by @KeeganEad in https://github.com/superrare/rare-cli/pull/124.
+
+**Full changelog**: https://github.com/superrare/rare-cli/compare/v1.4.0...v1.4.1
+
 ## 1.4.0
 
 ### New features
