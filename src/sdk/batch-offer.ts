@@ -36,7 +36,7 @@ import { resolveCurrencyForSdk } from './currency.js';
 
 export type * from './types/batch-offer.js';
 
-const BATCH_OFFER_EVENT_LOOKBACK_BLOCKS = 10_000n;
+const BATCH_OFFER_EVENT_SCAN_CHUNK_BLOCKS = 10_000n;
 
 export function createBatchOfferNamespace(
   publicClient: PublicClient,
@@ -379,7 +379,7 @@ async function resolveBatchOfferApiProof(opts: {
     }
   }
 
-  const roots = await readRecentActiveBatchOfferRoots(opts.publicClient, opts.batchOfferCreator, opts.creator);
+  const roots = await readActiveBatchOfferRoots(opts.publicClient, opts.batchOfferCreator, opts.creator);
   return resolveApiNftMerkleProofFromRoots(opts.config, {
     chainId: opts.chainId,
     contractAddress: opts.contractAddress,
@@ -390,29 +390,47 @@ async function resolveBatchOfferApiProof(opts: {
   });
 }
 
-async function readRecentActiveBatchOfferRoots(
+async function readActiveBatchOfferRoots(
   publicClient: PublicClient,
   batchOfferCreator: Address,
   creator: Address,
 ): Promise<Hex[]> {
-  const latestBlock = await publicClient.getBlockNumber();
-  const fromBlock = latestBlock > BATCH_OFFER_EVENT_LOOKBACK_BLOCKS
-    ? latestBlock - BATCH_OFFER_EVENT_LOOKBACK_BLOCKS
-    : 0n;
-  const [events, block] = await Promise.all([
-    publicClient.getContractEvents({
-      address: batchOfferCreator,
-      abi: batchOfferAbi,
-      eventName: 'BatchOfferCreated',
-      args: { creator },
-      fromBlock,
-      toBlock: 'latest',
-      strict: true,
-    }),
+  const [latestBlock, block] = await Promise.all([
+    publicClient.getBlockNumber(),
     publicClient.getBlock(),
   ]);
-  const roots = [...new Set(events.map((event) => event.args.rootHash))].reverse();
+  const roots = await readBatchOfferCreatedRoots(publicClient, batchOfferCreator, creator, latestBlock);
   return filterFillableBatchOfferRoots(publicClient, batchOfferCreator, creator, block.timestamp, roots);
+}
+
+async function readBatchOfferCreatedRoots(
+  publicClient: PublicClient,
+  batchOfferCreator: Address,
+  creator: Address,
+  toBlock: bigint,
+  roots: readonly Hex[] = [],
+): Promise<Hex[]> {
+  const fromBlock = toBlock >= BATCH_OFFER_EVENT_SCAN_CHUNK_BLOCKS
+    ? toBlock - BATCH_OFFER_EVENT_SCAN_CHUNK_BLOCKS + 1n
+    : 0n;
+  const events = await publicClient.getContractEvents({
+    address: batchOfferCreator,
+    abi: batchOfferAbi,
+    eventName: 'BatchOfferCreated',
+    args: { creator },
+    fromBlock,
+    toBlock,
+    strict: true,
+  });
+  const nextRoots = events.toReversed().reduce<Hex[]>((acc, event) => {
+    const root = event.args.rootHash;
+    return acc.includes(root) ? acc : [...acc, root];
+  }, [...roots]);
+
+  if (fromBlock === 0n) {
+    return nextRoots;
+  }
+  return readBatchOfferCreatedRoots(publicClient, batchOfferCreator, creator, fromBlock - 1n, nextRoots);
 }
 
 async function filterFillableBatchOfferRoots(
