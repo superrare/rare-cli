@@ -1,8 +1,9 @@
 import { Command } from 'commander';
 import { formatUnits, isAddressEqual } from 'viem';
-import { getActiveChain } from '../config.js';
+import { getActiveChain, getWebBaseUrl } from '../config.js';
 import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
 import { createRareClient } from '../sdk/client.js';
+import { loginWithWallet, openBrowser, prepareCardCheckout } from '../checkout.js';
 import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '../contracts/addresses.js';
 import {
   planListingBuyLocalInputs,
@@ -57,9 +58,18 @@ type ListingStatusOptions = {
   chainId?: string;
 };
 
+type ListingBuyCardOptions = {
+  contract?: string;
+  tokenId?: string;
+  email?: string;
+  webUrl?: string;
+  chain?: string;
+  chainId?: string;
+};
+
 export function listingCommand(): Command {
   const cmd = new Command('listing');
-  cmd.description('Listing subcommands (list, create, cancel, buy, status, batch, release)');
+  cmd.description('Listing subcommands (list, create, cancel, buy, buy-card, status, batch, release)');
   cmd.addCommand(createListingListCommand());
   cmd.addCommand(listingErc1155Command());
   cmd.addCommand(listingBatchCommand());
@@ -263,6 +273,95 @@ export function listingCommand(): Command {
     });
 
   cmd
+    .command('buy-card')
+    .description(
+      'Buy a USDC-listed token with a credit/debit card (Coinflow). Opens a browser to complete payment.',
+    )
+    .requiredOption('--contract <address>', 'NFT contract address')
+    .requiredOption('--token-id <id>', 'token ID to buy')
+    .requiredOption('--email <email>', 'email for the payment receipt and chargeback protection')
+    .option('--web-url <url>', 'SuperRare web app base URL (defaults per chain)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .action(async (opts: ListingBuyCardOptions): Promise<void> => {
+      requireTokenScopeOptions(opts, 'buy-card');
+      if (!hasOption(opts.email)) {
+        throw new Error('rare listing buy-card requires --email.');
+      }
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const webBaseUrl = getWebBaseUrl(chain, opts.webUrl);
+      const contract = parseAddress(opts.contract, '--contract');
+      const tokenId = parseTokenId(opts.tokenId);
+      // Require an explicitly configured wallet — never silently generate a
+      // throwaway buyer for a card purchase.
+      const wallet = tryGetWalletClient(chain);
+      if (wallet === null) {
+        throw new Error(
+          `No wallet configured for "${chain}". Run: rare configure --chain ${chain} --private-key <key>.`,
+        );
+      }
+      const { client, account } = wallet;
+      const publicClient = getPublicClient(chain);
+      const rare = createRareClient({ publicClient, walletClient: client });
+
+      // Card checkout only works for public USDC listings; read it on-chain first.
+      const status = await rare.listing.status({
+        contract,
+        tokenId,
+        target: PUBLIC_LISTING_TARGET,
+      });
+      if (!status.hasListing) {
+        throw new Error('No active public listing found for this token.');
+      }
+      const usdcAddress = resolveCurrency('usdc', chain);
+      if (!isAddressEqual(status.currencyAddress, usdcAddress)) {
+        throw new Error(
+          `Card checkout requires a USDC listing; this one is priced in ${status.currencyAddress}.`,
+        );
+      }
+
+      const universalTokenId = `${rare.chainId}-${contract.toLowerCase()}-${tokenId}`;
+
+      log(`Preparing card checkout on ${chain}...`);
+      log(`  NFT contract: ${contract}`);
+      log(`  Token ID: ${tokenId}`);
+      log(`  Buyer: ${account.address}`);
+      log(`  Price: ${status.amount.toString()} USDC base units`);
+
+      // Authenticate with a wallet signature (no on-chain tx), prepare the
+      // Coinflow checkout server-side, then hand off to the browser.
+      const cookieHeader = await loginWithWallet({
+        webBaseUrl,
+        walletClient: client,
+        account,
+      });
+      const { checkoutUrl } = await prepareCardCheckout({
+        webBaseUrl,
+        cookieHeader,
+        body: {
+          tokenContractAddress: contract,
+          tokenId,
+          weiPrice: status.amount.toString(),
+          marketplaceAddress: rare.contracts.auction,
+          currencyAddress: status.currencyAddress,
+          buyerAddress: account.address,
+          email: opts.email,
+          universalTokenId,
+        },
+      });
+
+      openBrowser(checkoutUrl);
+      output({ checkoutUrl, buyer: account.address }, () => {
+        console.log('\nOpening your browser to complete the card payment...');
+        console.log(`  ${checkoutUrl}`);
+        console.log('\nIf it did not open, paste the URL above into your browser.');
+        console.log(
+          'The NFT is delivered to your wallet after payment — you sign nothing on-chain.',
+        );
+      });
+    });
+
+  cmd
     .command('status')
     .description('Get token-specific listing details')
     .requiredOption('--contract <address>', 'NFT contract address')
@@ -328,5 +427,14 @@ function requireTokenScopeOptions<T extends { contract?: string; tokenId?: strin
 ): asserts opts is T & { contract: string; tokenId: string } {
   if (!hasOption(opts.contract) || !hasOption(opts.tokenId)) {
     throw new Error(`rare listing ${command} requires --contract and --token-id.`);
+  }
+}
+
+/** Normalizes a token-id string to canonical decimal (e.g. "0x1"/"01" -> "1"). */
+function parseTokenId(value: string): string {
+  try {
+    return BigInt(value).toString();
+  } catch {
+    throw new Error(`Invalid --token-id "${value}".`);
   }
 }
