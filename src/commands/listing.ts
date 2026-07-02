@@ -60,6 +60,7 @@ type ListingBuyCardOptions = {
   contract?: string;
   tokenId?: string;
   apiUrl?: string;
+  email?: string;
   chain?: string;
   chainId?: string;
 };
@@ -285,16 +286,20 @@ export function listingCommand(): Command {
     .requiredOption('--contract <address>', 'NFT contract address')
     .requiredOption('--token-id <id>', 'token ID to buy')
     .option('--api-url <url>', 'SuperRare API base URL (defaults to the production API)')
+    .option('--email <email>', 'email for the card receipt (otherwise collected in the checkout)')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111)')
     .action(async (opts: ListingBuyCardOptions): Promise<void> => {
       requireTokenScopeOptions(opts, 'buy-card');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
-      // No wallet or signature needed: the buyer connects the receiving wallet
-      // in the hosted checkout, and the card settlement happens server-side.
+      // No signature needed: the card settlement happens server-side. When a
+      // wallet is configured we pre-select card payment delivering to it, so
+      // the hosted checkout opens straight into the card step; otherwise the
+      // buyer connects the receiving wallet in the browser.
       const rare = createRareClient({ publicClient });
       const contract = parseAddress(opts.contract, '--contract');
+      const recipient = tryGetWalletClient(chain)?.account.address;
 
       // Card checkout only works for public USDC listings within the Coinflow
       // limits; read the listing on-chain first so the user gets a fast,
@@ -322,6 +327,9 @@ export function listingCommand(): Command {
       log(`  NFT contract: ${contract}`);
       log(`  Token ID: ${opts.tokenId}`);
       log(`  Price: ${formatUnits(status.amount, 6)} USDC`);
+      if (recipient !== undefined) {
+        log(`  Delivering to: ${recipient} (configured wallet)`);
+      }
 
       const api = createApiClient(opts.apiUrl);
       const checkout = await createConnectBuyIntent({
@@ -330,13 +338,17 @@ export function listingCommand(): Command {
         contract,
         tokenId: opts.tokenId,
         priceUsdcBaseUnits: status.amount,
+        recipient,
+        email: opts.email,
       });
 
       openBrowser(checkout.url);
       log('\nOpening your browser to complete the card payment...');
       log(`  ${checkout.url}`);
       log('\nIf it did not open, paste the URL above into your browser.');
-      log('Connect the wallet that should receive the NFT, then pay with card.');
+      if (recipient === undefined) {
+        log('Connect the wallet that should receive the NFT, then pay with card.');
+      }
       log('\nWaiting for the payment (Ctrl+C to stop waiting)...');
 
       const settlement = await waitForConnectSettlement({

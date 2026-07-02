@@ -84,8 +84,15 @@ export async function createConnectBuyIntent(params: {
   contract: string;
   tokenId: string;
   priceUsdcBaseUnits: bigint;
+  /**
+   * Card-direct hints: when the CLI already knows the receiving wallet, the
+   * hosted flow offers card payment without a connect-wallet step and the
+   * checkout stays bound to this recipient server-side.
+   */
+  recipient?: string;
+  email?: string;
 }): Promise<PreparedConnectCheckout> {
-  const { client, chainId, contract, tokenId, priceUsdcBaseUnits } = params;
+  const { client, chainId, contract, tokenId, priceUsdcBaseUnits, recipient, email } = params;
 
   const { data } = await client.POST('/v1/connect/intents', {
     headers: { Origin: CLI_INITIATING_ORIGIN },
@@ -98,6 +105,15 @@ export async function createConnectBuyIntent(params: {
         expected: { currency: 'USDC', price: priceUsdcBaseUnits.toString() },
       },
       state: randomUUID(),
+      ...(recipient === undefined
+        ? {}
+        : {
+            payment: {
+              method: 'card' as const,
+              recipient,
+              ...(email === undefined ? {} : { email }),
+            },
+          }),
     },
   });
 

@@ -1588,6 +1588,210 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connect/intents/{intentId}/checkout/coinflow/buy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prepare Coinflow Card Checkout (Buy)
+         * @description Create a Coinflow card-checkout session for a USDC Bazaar buy bound to the hosted-login wallet.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Intent-scoped execution token from the hosted Connect URL. */
+                    "x-connect-execution-token"?: string;
+                };
+                path: {
+                    intentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PrepareCoinflowCardRequest"];
+                };
+            };
+            responses: {
+                /** @description Coinflow card checkout prepared */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PrepareCoinflowCheckoutResponse"];
+                    };
+                };
+                /** @description Card checkout request is invalid or ineligible */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Hosted login session is not authenticated */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent expired */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Card checkout is not configured for this network */
+                412: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Coinflow checkout failed */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connect/intents/{intentId}/checkout/coinflow/mint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prepare Coinflow Card Checkout (Mint)
+         * @description Create a Coinflow card-checkout session for a USDC release mint bound to the hosted-login wallet.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Intent-scoped execution token from the hosted Connect URL. */
+                    "x-connect-execution-token"?: string;
+                };
+                path: {
+                    intentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PrepareCoinflowCardRequest"];
+                };
+            };
+            responses: {
+                /** @description Coinflow card checkout prepared */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PrepareCoinflowCheckoutResponse"];
+                    };
+                };
+                /** @description Card checkout request is invalid or ineligible */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Hosted login session is not authenticated */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent expired */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Card checkout is not configured for this network */
+                412: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Coinflow checkout failed */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2212,6 +2416,7 @@ export interface components {
             returnPath?: string;
             /** @example state_123 */
             state: string;
+            payment?: components["schemas"]["ConnectIntentPayment"];
         };
         ConnectActionInput: {
             /** @enum {string} */
@@ -2382,6 +2587,13 @@ export interface components {
             quantity: string;
             expected: components["schemas"]["ConnectExpectedUnitPriceTerms"];
         };
+        ConnectIntentPayment: {
+            /** @enum {string} */
+            method?: "card";
+            recipient?: components["schemas"]["EthereumAddress"];
+            /** @example collector@example.com */
+            email?: string;
+        };
         GetConnectIntentResponse: {
             data: components["schemas"]["ConnectIntent"];
         };
@@ -2399,6 +2611,7 @@ export interface components {
             resolvedActionSnapshot?: components["schemas"]["ConnectResolvedActionSnapshot"];
             result?: components["schemas"]["ConnectIntentResult"];
             error?: components["schemas"]["ConnectFlowError"];
+            payment?: components["schemas"]["ConnectIntentPayment"];
         };
         /**
          * @example checkout
@@ -2576,6 +2789,20 @@ export interface components {
          * @enum {string}
          */
         ConnectCheckoutStatus: "pending" | "processing" | "completed" | "failed" | "cancelled" | "expired";
+        PrepareCoinflowCheckoutResponse: {
+            data: {
+                checkoutJwtToken: string;
+                sessionKey: string;
+                merchantId: string;
+                /** @enum {string} */
+                env: "prod" | "sandbox";
+            };
+        };
+        PrepareCoinflowCardRequest: {
+            buyerAddress: components["schemas"]["EthereumAddress"];
+            /** @example collector@example.com */
+            email?: string;
+        };
     };
     responses: never;
     parameters: never;
