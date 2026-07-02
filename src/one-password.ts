@@ -10,7 +10,7 @@ import {
   type LocalAccount,
 } from 'viem/accounts';
 import type { PrivateKeyReference } from './config.js';
-import { parsePrivateKey } from './sdk/validation.js';
+import { parsePrivateKey } from '@rareprotocol/rare-sdk/validation.js';
 
 const execFileAsync = promisify(execFile);
 

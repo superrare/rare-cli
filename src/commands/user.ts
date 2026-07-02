@@ -1,6 +1,6 @@
 import { Command } from 'commander';
-import { getUser } from '../sdk/api.js';
-import { parseAddress } from '../sdk/validation.js';
+import { getUser } from '@rareprotocol/rare-sdk/api.js';
+import { parseAddress } from '@rareprotocol/rare-sdk/validation.js';
 import { log, output, printUser } from '../output.js';
 
 export function userCommand(): Command {

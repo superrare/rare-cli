@@ -1,9 +1,9 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient } from '../client.js';
-import { createRareClient } from '../sdk/client.js';
-import type { RareClientNftGetParams } from '../sdk/client.js';
-import { parseAddress } from '../sdk/validation.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client.js';
+import type { RareClientNftGetParams } from '@rareprotocol/rare-sdk/client.js';
+import { parseAddress } from '@rareprotocol/rare-sdk/validation.js';
 import { log, output, printNft } from '../output.js';
 
 type NftReadOptions = {

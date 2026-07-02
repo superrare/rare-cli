@@ -1,5 +1,5 @@
-import type { NftAttribute } from '../sdk/api.js';
-import type { CurvePresetKey, LiquidCurvePreview } from '../liquid/curve-config.js';
+import type { NftAttribute } from '@rareprotocol/rare-sdk/api.js';
+import type { CurvePresetKey, LiquidCurvePreview } from '@rareprotocol/rare-sdk/liquid/curve-config.js';
 
 const DISPLAY_TYPES: readonly NonNullable<NftAttribute['display_type']>[] = [
   'number',

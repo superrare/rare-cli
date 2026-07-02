@@ -2,15 +2,15 @@ import { Command } from 'commander';
 import { formatUnits, isAddressEqual } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
-import { createRareClient } from '../sdk/client.js';
-import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '../contracts/addresses.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client.js';
+import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses.js';
 import {
   planListingBuyLocalInputs,
   planListingCancel,
   planListingCreateLocalInputs,
-} from '../sdk/marketplace-core.js';
-import { parseAddress } from '../sdk/validation.js';
-import { resolveCurrencyDecimals } from '../sdk/payments-shell.js';
+} from '@rareprotocol/rare-sdk/marketplace-core.js';
+import { parseAddress } from '@rareprotocol/rare-sdk/validation.js';
+import { resolveCurrencyDecimals } from '@rareprotocol/rare-sdk/payments-shell.js';
 import { output, log } from '../output.js';
 import { createListingListCommand } from './account-market-list.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';

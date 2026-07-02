@@ -2,10 +2,10 @@ import { Command } from 'commander';
 import { formatEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getConfiguredAccountAddress, getPublicClient, getWalletClient } from '../client.js';
-import { isSupportedChain, supportedChains, type SupportedChain } from '../contracts/addresses.js';
+import { isSupportedChain, supportedChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses.js';
 import { output, log } from '../output.js';
-import { createRareClient } from '../sdk/client.js';
-import { parseOptionalAddress } from '../sdk/validation.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client.js';
+import { parseOptionalAddress } from '@rareprotocol/rare-sdk/validation.js';
 import { runWithPaymentApprovalConsent } from './approval-consent.js';
 import { addChainOptions, type ChainOptions } from './options.js';
 
