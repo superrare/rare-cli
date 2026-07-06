@@ -1,4 +1,4 @@
-import type { NftEventOptions } from '@rareprotocol/rare-sdk/api.js';
+import type { NftEventOptions } from '@rareprotocol/rare-sdk/api';
 
 const eventTypes = [
   'CANCEL_AUCTION',

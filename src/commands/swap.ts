@@ -4,8 +4,8 @@ import { Command } from 'commander';
 import { formatEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getConfiguredAccountAddress, getConfiguredUniswapApiKey, getPublicClient, getWalletClient } from '../client.js';
-import { createRareClient } from '@rareprotocol/rare-sdk/client.js';
-import { planTokenTradeLocalInputs } from '@rareprotocol/rare-sdk/swap/trade-core.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import { planTokenTradeLocalInputs } from '@rareprotocol/rare-sdk/swap/trade-core';
 import { output, log, isJsonMode } from '../output.js';
 import {
   ensureHex,

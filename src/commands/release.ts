@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import { formatUnits, isAddress, zeroAddress, type Address, type Hex } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { createRareClient, type RareClient } from '@rareprotocol/rare-sdk/client.js';
+import { createRareClient, type RareClient } from '@rareprotocol/rare-sdk/client';
 import {
   buildReleaseAllowlistArtifactFromInput,
   getReleaseAllowlistProof,
@@ -13,14 +13,14 @@ import {
   normalizeReleaseStartTime,
   planReleaseAllowlistConfig,
   parseReleaseAllowlistArtifactJson,
-} from '@rareprotocol/rare-sdk/release-core.js';
+} from '@rareprotocol/rare-sdk/release-core';
 import type {
   ReleaseAllowlistArtifact,
   ReleaseAllowlistInputFormat,
-} from '@rareprotocol/rare-sdk/types/release.js';
-import { toInteger, toNonNegativeInteger, toPositiveInteger } from '@rareprotocol/rare-sdk/amounts-core.js';
-import { resolveCurrencyDecimals } from '@rareprotocol/rare-sdk/payments-shell.js';
-import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses.js';
+} from '@rareprotocol/rare-sdk/types/release';
+import { toInteger, toNonNegativeInteger, toPositiveInteger } from '@rareprotocol/rare-sdk/amounts-core';
+import { resolveCurrencyDecimals } from '@rareprotocol/rare-sdk/payments-shell';
+import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses';
 import { output, log } from '../output.js';
 import { runWithMinterApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, type SplitAccumulator } from './splits-core.js';

@@ -2,17 +2,17 @@ import { Command } from 'commander';
 import { formatUnits } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { createRareClient } from '@rareprotocol/rare-sdk/client.js';
-import { ETH_ADDRESS, resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import { ETH_ADDRESS, resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses';
 import {
   planAuctionBidLocalInputs,
   planAuctionCreateLocalInputs,
   planAuctionTokenAction,
-} from '@rareprotocol/rare-sdk/marketplace-core.js';
-import { parseAddress } from '@rareprotocol/rare-sdk/validation.js';
+} from '@rareprotocol/rare-sdk/marketplace-core';
+import { parseAddress } from '@rareprotocol/rare-sdk/validation';
 import { output, log } from '../output.js';
 import { createAuctionListCommand } from './account-market-list.js';
-import { resolveCurrencyDecimals } from '@rareprotocol/rare-sdk/payments-shell.js';
+import { resolveCurrencyDecimals } from '@rareprotocol/rare-sdk/payments-shell';
 import { parseAuctionTypeOption } from './auction-core.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';

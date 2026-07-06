@@ -1,5 +1,5 @@
 import { isJsonMode } from './output.js';
-import { RareApiError } from '@rareprotocol/rare-sdk/data-access/errors.js';
+import { RareApiError } from '@rareprotocol/rare-sdk/data-access/errors';
 
 type ErrorDetails = {
   message: string;

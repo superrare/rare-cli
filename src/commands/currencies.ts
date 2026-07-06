@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
-import { listCurrencies } from '@rareprotocol/rare-sdk/contracts/addresses.js';
+import { listCurrencies } from '@rareprotocol/rare-sdk/contracts/addresses';
 import { output } from '../output.js';
 
 type CurrenciesOptions = {

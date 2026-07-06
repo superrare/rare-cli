@@ -1,11 +1,11 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient } from '../client.js';
-import { createRareClient } from '@rareprotocol/rare-sdk/client.js';
-import { parseAddress } from '@rareprotocol/rare-sdk/validation.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import { parseAddress } from '@rareprotocol/rare-sdk/validation';
 import { output } from '../output.js';
-import type { RareClient } from '@rareprotocol/rare-sdk/client.js';
-import { toNonNegativeInteger } from '@rareprotocol/rare-sdk/amounts-core.js';
+import type { RareClient } from '@rareprotocol/rare-sdk/client';
+import { toNonNegativeInteger } from '@rareprotocol/rare-sdk/amounts-core';
 
 type StatusOptions = {
   contract: string;

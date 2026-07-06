@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline/promises';
-import { MinterApprovalRequiredError, NftApprovalRequiredError } from '@rareprotocol/rare-sdk/approvals-shell.js';
-import { PaymentApprovalRequiredError } from '@rareprotocol/rare-sdk/payments-shell.js';
+import { MinterApprovalRequiredError, NftApprovalRequiredError } from '@rareprotocol/rare-sdk/approvals-shell';
+import { PaymentApprovalRequiredError } from '@rareprotocol/rare-sdk/payments-shell';
 import { isJsonMode, log } from '../output.js';
 
 export async function runWithPaymentApprovalConsent<Result>(params: {

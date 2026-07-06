@@ -1,5 +1,5 @@
 import { formatEther, formatUnits, getAddress, isHex, type Address } from 'viem';
-import type { BuyRareQuote, TokenTradeExecutionRoute, TokenTradeQuote } from '@rareprotocol/rare-sdk/swap.js';
+import type { BuyRareQuote, TokenTradeExecutionRoute, TokenTradeQuote } from '@rareprotocol/rare-sdk/swap';
 
 export function parseInputsJson(raw: string, label: string): readonly `0x${string}`[] {
   const parsed = parseJson(raw, label);

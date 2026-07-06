@@ -4,15 +4,15 @@ import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { createRareClient } from '@rareprotocol/rare-sdk/client.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import {
   parseCurveConfig,
   type LiquidCurvePreview,
   type LiquidCurveSegment,
-} from '@rareprotocol/rare-sdk/liquid/curve-config.js';
-import { toPositiveInteger } from '@rareprotocol/rare-sdk/amounts-core.js';
-import { resolveLiquidFactoryConfigForSupply } from '@rareprotocol/rare-sdk/liquid/factory-config-core.js';
-import { runLiquidCurveWizard } from '@rareprotocol/rare-sdk/liquid/wizard.js';
+} from '@rareprotocol/rare-sdk/liquid/curve-config';
+import { toPositiveInteger } from '@rareprotocol/rare-sdk/amounts-core';
+import { resolveLiquidFactoryConfigForSupply } from '@rareprotocol/rare-sdk/liquid/factory-config-core';
+import { runLiquidCurveWizard } from '@rareprotocol/rare-sdk/liquid/wizard';
 import { output, log, isJsonMode } from '../output.js';
 import {
   formatLiquidEditionUrl,

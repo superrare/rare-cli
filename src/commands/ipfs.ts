@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { Command } from 'commander';
-import { createRareApi, type IpfsUploadResult } from '@rareprotocol/rare-sdk/api.js';
+import { createRareApi, type IpfsUploadResult } from '@rareprotocol/rare-sdk/api';
 import { output, log, isJsonMode } from '../output.js';
 
 type IpfsPinFileOptions = {

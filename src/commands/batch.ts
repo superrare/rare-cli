@@ -5,10 +5,10 @@ import { Command } from 'commander';
 import { getAddress, isAddress, isAddressEqual, isHex, type Address, type Hex, type PublicClient } from 'viem';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
-import { ETH_ADDRESS, chainIds, resolveCurrency, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses.js';
+import { ETH_ADDRESS, chainIds, resolveCurrency, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
 import { output, log, isJsonMode } from '../output.js';
-import { createRareClient } from '@rareprotocol/rare-sdk/client.js';
-import type { RareClient } from '@rareprotocol/rare-sdk/client.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import type { RareClient } from '@rareprotocol/rare-sdk/client';
 import {
   getBatchTokenProof,
   normalizeBytes32,
@@ -20,26 +20,26 @@ import {
   type BatchTokenListArtifact,
   type BatchTokenListInputFormat,
   type BatchTokenProofInput,
-} from '@rareprotocol/rare-sdk/batch-core.js';
+} from '@rareprotocol/rare-sdk/batch-core';
 import {
   parseBatchListingCreateRootArtifactInput,
   planBatchListingCreateArtifact,
-} from '@rareprotocol/rare-sdk/batch-listing-core.js';
+} from '@rareprotocol/rare-sdk/batch-listing-core';
 import {
   planBatchAuctionBidLocalInputs,
   planBatchAuctionCreateLocalInputs,
   planBatchAuctionToken,
-} from '@rareprotocol/rare-sdk/batch-auction-core.js';
-import { planBatchOfferAcceptLocalInputs, planBatchOfferCreateLocalInputs } from '@rareprotocol/rare-sdk/batch-offer-core.js';
-import { buildMerkleProofArtifact } from '@rareprotocol/rare-sdk/merkle-core.js';
-import { requireInput, toUnixTimestamp } from '@rareprotocol/rare-sdk/validation-core.js';
+} from '@rareprotocol/rare-sdk/batch-auction-core';
+import { planBatchOfferAcceptLocalInputs, planBatchOfferCreateLocalInputs } from '@rareprotocol/rare-sdk/batch-offer-core';
+import { buildMerkleProofArtifact } from '@rareprotocol/rare-sdk/merkle-core';
+import { requireInput, toUnixTimestamp } from '@rareprotocol/rare-sdk/validation-core';
 import {
   loadMerkleProofArtifact,
   loadMerkleRootArtifact,
   writeMerkleArtifact,
-} from '@rareprotocol/rare-sdk/merkle-file.js';
-import type { BatchListingRootArtifact } from '@rareprotocol/rare-sdk/types/batch-listing.js';
-import { parseAddress } from '@rareprotocol/rare-sdk/validation.js';
+} from '@rareprotocol/rare-sdk/merkle-file';
+import type { BatchListingRootArtifact } from '@rareprotocol/rare-sdk/types/batch-listing';
+import { parseAddress } from '@rareprotocol/rare-sdk/validation';
 import { createBatchListingListCommand } from './account-market-list.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { formatBatchAmount, parseBatchAmount } from './batch-amounts.js';
