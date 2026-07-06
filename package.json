@@ -1,6 +1,6 @@
 {
   "name": "@rareprotocol/rare-cli",
-  "version": "1.4.2",
+  "version": "2.0.0",
   "description": "CLI tool for interacting with the RARE protocol smart contracts",
   "type": "module",
   "license": "MIT",
@@ -79,7 +79,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@rareprotocol/rare-sdk": "file:../rare-sdk",
+    "@rareprotocol/rare-sdk": "0.1.0",
     "commander": "12.1.0",
     "viem": "2.54.6",
     "zod": "^4.4.3"
