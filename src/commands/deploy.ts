@@ -12,7 +12,7 @@ import {
 } from '@rareprotocol/rare-sdk/liquid/curve-config';
 import { toPositiveInteger } from '@rareprotocol/rare-sdk/amounts-core';
 import { resolveLiquidFactoryConfigForSupply } from '@rareprotocol/rare-sdk/liquid/factory-config-core';
-import { runLiquidCurveWizard } from '@rareprotocol/rare-sdk/liquid/wizard';
+import { runLiquidCurveWizard } from '../liquid-wizard.js';
 import { output, log, isJsonMode } from '../output.js';
 import {
   formatLiquidEditionUrl,
