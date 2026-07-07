@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { RareApiError } from './data-access/errors.js';
 import type { ApiClient } from './data-access/index.js';
 import type { components } from './data-access/schema.js';
 
@@ -123,10 +124,14 @@ export async function createConnectBuyIntent(params: {
   return data.data;
 }
 
+const TIMEOUT_MESSAGE =
+  'Timed out waiting for the checkout (the intent expired). If you completed the payment, the NFT will still arrive in the connected wallet.';
+
 /**
  * Polls the Connect intent until the payment settles (returns the settlement
  * transaction hash when Coinflow reported one), the checkout fails, or the
- * intent expires. Transient poll errors are tolerated until the deadline.
+ * intent expires. A 404/410 from the API ends the wait immediately (the intent
+ * is gone); other poll errors are treated as transient until the deadline.
  */
 export async function waitForConnectSettlement(params: {
   client: ApiClient;
@@ -136,46 +141,88 @@ export async function waitForConnectSettlement(params: {
   pollIntervalMs?: number;
 }): Promise<{ transactionHash?: string }> {
   const { client, intentId, expiresAt, onStatusChange } = params;
-  const pollIntervalMs = params.pollIntervalMs ?? 4000;
   // Small grace period past the intent TTL so a payment made near expiry can
-  // still surface its final status before we give up.
-  const deadline = Date.parse(expiresAt) + 60_000;
-  let lastStatus = '';
+  // still surface its final status before we give up. Guard against an
+  // unparseable expiresAt: NaN comparisons would otherwise never time out.
+  const expiresAtMs = Date.parse(expiresAt);
+  const deadline = Number.isFinite(expiresAtMs)
+    ? expiresAtMs + 60_000
+    : Date.now() + 16 * 60_000;
 
-  for (;;) {
-    let intent: ConnectIntent | undefined;
-    try {
-      const { data } = await client.GET('/v1/connect/intents/{intentId}', {
-        params: { path: { intentId } },
-      });
-      intent = data?.data;
-    } catch {
-      // Transient network/API error — keep polling until the deadline.
-    }
+  return await pollForSettlement({
+    client,
+    intentId,
+    deadline,
+    onStatusChange,
+    pollIntervalMs: params.pollIntervalMs ?? 4000,
+    lastStatus: '',
+  });
+}
 
-    if (intent !== undefined) {
-      if (intent.status !== lastStatus) {
-        lastStatus = intent.status;
-        onStatusChange?.(intent.status);
-      }
-      const progress = resolveConnectIntentProgress(intent);
-      if (progress.kind === 'settled') {
-        return { transactionHash: progress.transactionHash };
-      }
-      if (progress.kind === 'failed') {
-        throw new Error(progress.message);
-      }
-    }
+/**
+ * One poll step, recursing after the interval. Async recursion does not grow
+ * the call stack (each await unwinds before the next step starts).
+ */
+async function pollForSettlement(input: {
+  client: ApiClient;
+  intentId: string;
+  deadline: number;
+  onStatusChange?: (status: string) => void;
+  pollIntervalMs: number;
+  lastStatus: string;
+}): Promise<{ transactionHash?: string }> {
+  const intent = await fetchIntentForPoll(input.client, input.intentId);
 
-    if (Date.now() > deadline) {
-      throw new Error('Timed out waiting for the checkout (the intent expired). If you completed the payment, the NFT will still arrive in the connected wallet.');
+  if (intent !== undefined) {
+    if (intent.status !== input.lastStatus) {
+      input.onStatusChange?.(intent.status);
     }
-    await sleep(pollIntervalMs);
+    const progress = resolveConnectIntentProgress(intent);
+    if (progress.kind === 'settled') {
+      return { transactionHash: progress.transactionHash };
+    }
+    if (progress.kind === 'failed') {
+      throw new Error(progress.message);
+    }
+  }
+
+  if (Date.now() > input.deadline) {
+    throw new Error(TIMEOUT_MESSAGE);
+  }
+  await sleep(input.pollIntervalMs);
+  return await pollForSettlement({
+    ...input,
+    lastStatus: intent?.status ?? input.lastStatus,
+  });
+}
+
+/**
+ * Reads the intent for one poll step. A 404/410 means the intent is gone —
+ * that ends the wait immediately; any other error (network blip, 5xx) is
+ * transient and returns undefined so polling continues until the deadline.
+ */
+async function fetchIntentForPoll(
+  client: ApiClient,
+  intentId: string,
+): Promise<ConnectIntent | undefined> {
+  try {
+    const { data } = await client.GET('/v1/connect/intents/{intentId}', {
+      params: { path: { intentId } },
+    });
+    return data?.data;
+  } catch (error) {
+    if (
+      error instanceof RareApiError &&
+      (error.status === 404 || error.status === 410)
+    ) {
+      throw new Error(TIMEOUT_MESSAGE);
+    }
+    return undefined;
   }
 }
 
-function sleep(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+async function sleep(milliseconds: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
 /** Chromium-family browsers (macOS) that support a chromeless `--app` window. */

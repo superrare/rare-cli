@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { formatUnits, isAddressEqual, isHex } from 'viem';
 import { getActiveChain } from '../config.js';
-import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
+import { getConfiguredAccountAddress, getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
 import {
   createConnectBuyIntent,
   getCardListingGateError,
@@ -293,13 +293,14 @@ export function listingCommand(): Command {
       requireTokenScopeOptions(opts, 'buy-card');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
-      // No signature needed: the card settlement happens server-side. When a
-      // wallet is configured we pre-select card payment delivering to it, so
-      // the hosted checkout opens straight into the card step; otherwise the
-      // buyer connects the receiving wallet in the browser.
+      // No signature needed: the card settlement happens server-side. When an
+      // account is configured (a receiving address is enough — no signer is
+      // used for card payment) we pre-select card payment delivering to it,
+      // so the hosted checkout opens straight into the card step; otherwise
+      // the buyer connects the receiving wallet in the browser.
       const rare = createRareClient({ publicClient });
       const contract = parseAddress(opts.contract, '--contract');
-      const recipient = tryGetWalletClient(chain)?.account.address;
+      const recipient = getConfiguredAccountAddress(chain);
 
       // Card checkout only works for public USDC listings within the Coinflow
       // limits; read the listing on-chain first so the user gets a fast,
