@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Address } from 'viem';
-import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
-import { buildBatchTokenTreeArtifact } from '../../../src/sdk/batch-core.js';
+import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { buildBatchTokenTreeArtifact } from '@rareprotocol/rare-sdk/batch-core';
 import {
   parseBatchListingCreateRootArtifactInput,
   planBatchListingCreateArtifact,
@@ -10,9 +10,9 @@ import {
   shouldResolveBatchListingAllowListProof,
   uniqueAddresses,
   validateBatchListingBuyProofPolicy,
-} from '../../../src/sdk/batch-listing-core.js';
-import type { BatchListingRootArtifact } from '../../../src/sdk/batch-listing.js';
-import type { BatchListingProofArtifact } from '../../../src/sdk/types/batch-listing.js';
+} from '@rareprotocol/rare-sdk/batch-listing-core';
+import type { BatchListingRootArtifact } from '@rareprotocol/rare-sdk/batch-listing';
+import type { BatchListingProofArtifact } from '@rareprotocol/rare-sdk/types/batch-listing';
 
 const seller: Address = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const collaborator: Address = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';

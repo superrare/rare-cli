@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { tokenAbi } from '../../../src/contracts/abis/token.js';
+import { tokenAbi } from '@rareprotocol/rare-sdk/contracts/abis/token';
 
 type TokenAbiEntry = (typeof tokenAbi)[number];
 type TokenAbiFunction = Extract<TokenAbiEntry, { type: 'function' }>;

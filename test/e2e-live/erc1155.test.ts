@@ -2,10 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Address } from 'viem';
-import { chainIds, getContractAddresses, type SupportedChain } from '../../src/contracts/addresses.js';
+import { chainIds, getContractAddresses, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
 import { getPublicClient } from '../../src/client.js';
-import { createRareClient } from '../../src/sdk/client.js';
-import type { Nft } from '../../src/sdk/api.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import type { Nft } from '@rareprotocol/rare-sdk/api';
 import {
   cleanupTempHome,
   configureLiveHome,

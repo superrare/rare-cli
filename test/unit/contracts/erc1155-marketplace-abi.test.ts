@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { toEventSelector, toFunctionSelector, type AbiEvent, type AbiFunction } from 'viem';
-import { rareErc1155MarketplaceAbi } from '../../../src/contracts/abis/rare-erc1155-marketplace.js';
+import { rareErc1155MarketplaceAbi } from '@rareprotocol/rare-sdk/contracts/abis/rare-erc1155-marketplace';
 
 describe('ERC1155 marketplace ABI', () => {
   it('includes the cancel mint direct sales function and cancelled event', () => {

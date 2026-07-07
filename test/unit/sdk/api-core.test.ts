@@ -8,7 +8,7 @@ import {
   buildMediaUploadPlan,
   buildNftSearchQuery,
   buildPinMetadataBody,
-} from '../../../src/sdk/api-core.js';
+} from '@rareprotocol/rare-sdk/api-core';
 
 const ownerAddress = '0x70997970C51812dc3A010C7d01b50e0d17dc79C8' as const;
 const contractAddress = '0xabc0000000000000000000000000000000000000' as const;

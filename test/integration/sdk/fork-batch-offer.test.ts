@@ -17,10 +17,10 @@ import {
   supportedChains,
   viemChains,
   type SupportedChain,
-} from '../../../src/contracts/addresses.js';
-import { createRareClient } from '../../../src/sdk/client.js';
-import type { RareClient } from '../../../src/sdk/client.js';
-import type { BatchAuctionStatus } from '../../../src/sdk/batch-auction.js';
+} from '@rareprotocol/rare-sdk/contracts/addresses';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import type { RareClient } from '@rareprotocol/rare-sdk/client';
+import type { BatchAuctionStatus } from '@rareprotocol/rare-sdk/batch-auction';
 import { loadDotEnv } from '../../helpers/env.js';
 
 loadDotEnv();

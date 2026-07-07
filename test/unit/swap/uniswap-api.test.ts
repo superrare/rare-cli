@@ -1,14 +1,14 @@
 /* eslint-disable no-restricted-syntax */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Address } from 'viem';
-import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
+import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts/addresses';
 import {
   requestUniswapApproval,
   requestUniswapQuote,
   requestUniswapSwap,
   type UniswapQuotePayload,
   type UniswapTransactionRequest,
-} from '../../../src/swap/uniswap-api.js';
+} from '@rareprotocol/rare-sdk/swap/uniswap-api';
 
 const tokenIn = ETH_ADDRESS;
 const tokenOut = '0x197FaeF3f59eC80113e773Bb6206a17d183F97CB' satisfies Address;

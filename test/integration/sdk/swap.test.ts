@@ -1,7 +1,7 @@
 import { describe, expect, it, type TestContext } from 'vitest';
 import { isHex, parseEther, parseUnits } from 'viem';
-import { ETH_ADDRESS, resolveCurrency } from '../../../src/contracts/addresses.js';
-import { createRareClient } from '../../../src/sdk/client.js';
+import { ETH_ADDRESS, resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import { createTestSepoliaPublicClient, hasTestRpcUrl } from '../../helpers/liveViem.js';
 
 const describeLive = hasTestRpcUrl() ? describe : describe.skip;

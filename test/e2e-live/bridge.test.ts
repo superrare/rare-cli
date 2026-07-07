@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { getBridgeInfo } from '../../src/sdk/bridge-core.js';
+import { getBridgeInfo } from '@rareprotocol/rare-sdk/bridge-core';
 import {
   approveToken,
   cleanupLiveFixture,

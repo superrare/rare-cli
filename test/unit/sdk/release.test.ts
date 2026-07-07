@@ -1,10 +1,10 @@
 /* eslint-disable no-restricted-syntax, @typescript-eslint/explicit-function-return-type */
 import { describe, expect, it, vi } from 'vitest';
 import type { Address } from 'viem';
-import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
-import { ApprovalSideEffectError } from '../../../src/sdk/approvals-shell.js';
-import { createReleaseNamespace } from '../../../src/sdk/release.js';
-import { buildReleaseAllowlistArtifact } from '../../../src/sdk/release-core.js';
+import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { ApprovalSideEffectError } from '@rareprotocol/rare-sdk/approvals-shell';
+import { createReleaseNamespace } from '@rareprotocol/rare-sdk/release';
+import { buildReleaseAllowlistArtifact } from '@rareprotocol/rare-sdk/release-core';
 
 const accountAddress = '0x0000000000000000000000000000000000000001' as Address;
 const collection = '0x1000000000000000000000000000000000000000' as Address;

@@ -10,11 +10,11 @@ import {
   shapeBatchAuctionDetailsRead,
   shapeBatchAuctionMerkleConfigRead,
   shapeBatchAuctionStatus,
-} from '../../../src/sdk/batch-auction-core.js';
+} from '@rareprotocol/rare-sdk/batch-auction-core';
 import {
   buildBatchTokenTreeArtifact,
   getBatchTokenProof,
-} from '../../../src/sdk/batch-core.js';
+} from '@rareprotocol/rare-sdk/batch-core';
 
 const ACCOUNT: Address = '0x1111111111111111111111111111111111111111';
 const CREATOR: Address = '0x2222222222222222222222222222222222222222';

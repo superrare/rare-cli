@@ -7,9 +7,9 @@ import {
   type Address,
 } from 'viem';
 import { mainnet } from 'viem/chains';
-import { collectionOwnerAbi } from '../../../src/contracts/abis/collection-owner.js';
-import { rareErc1155Abi } from '../../../src/contracts/abis/rare-erc1155.js';
-import { createCollectionNamespace } from '../../../src/sdk/collection.js';
+import { collectionOwnerAbi } from '@rareprotocol/rare-sdk/contracts/abis/collection-owner';
+import { rareErc1155Abi } from '@rareprotocol/rare-sdk/contracts/abis/rare-erc1155';
+import { createCollectionNamespace } from '@rareprotocol/rare-sdk/collection';
 
 const contract = '0x1111111111111111111111111111111111111111';
 const receiver = '0x2222222222222222222222222222222222222222';

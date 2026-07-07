@@ -23,7 +23,7 @@ import {
   planCreateLazySovereignCollection,
   planCreateSovereignCollection,
   shapeCollectionPrepareMintEvent,
-} from '../../../src/sdk/collection-core.js';
+} from '@rareprotocol/rare-sdk/collection-core';
 
 const COLLECTION_ADDRESS = '0x1111111111111111111111111111111111111111';
 const MINTER_ADDRESS = '0x2222222222222222222222222222222222222222';

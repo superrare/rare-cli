@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   planPayoutSplits,
   planProvidedPayoutSplits,
-} from '../../../src/sdk/splits-core.js';
+} from '@rareprotocol/rare-sdk/splits-core';
 
 const seller = '0x0000000000000000000000000000000000000001' as const;
 const collaborator = '0x0000000000000000000000000000000000000002' as const;

@@ -1,13 +1,13 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { decodeAbiParameters, parseAbiParameters } from 'viem';
-import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
+import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts/addresses';
 import {
   buildCanonicalTokenBuyRoute,
   buildCanonicalTokenSellRoute,
   buildExactInputSingleRoute,
-} from '../../../src/swap/build-route.js';
-import { encodeBuyRareRoute, encodeRoute } from '../../../src/swap/route-encoding.js';
+} from '@rareprotocol/rare-sdk/swap/build-route';
+import { encodeBuyRareRoute, encodeRoute } from '@rareprotocol/rare-sdk/swap/route-encoding';
 
 const rareAddress = '0xba5BDe662c17e2aDFF1075610382B9B691296350' as const;
 const wethAddress = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' as const;

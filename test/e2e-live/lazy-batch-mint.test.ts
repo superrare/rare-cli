@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { isAddress, type Address } from 'viem';
-import { getContractAddresses } from '../../src/contracts/addresses.js';
+import { getContractAddresses } from '@rareprotocol/rare-sdk/contracts/addresses';
 import {
   cleanupLiveFixture,
   createLiveFixture,

@@ -1,9 +1,9 @@
 import { describe, expect, it, type TestContext } from 'vitest';
 import { createPublicClient, getAddress, http } from 'viem';
 import { baseSepolia, mainnet } from 'viem/chains';
-import { getContractAddresses } from '../../../src/contracts/addresses.js';
-import { RareApiError } from '../../../src/data-access/errors.js';
-import { createRareClient } from '../../../src/sdk/client.js';
+import { getContractAddresses } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { RareApiError } from '@rareprotocol/rare-sdk/data-access/errors';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import { createTestSepoliaPublicClient, hasTestRpcUrl } from '../../helpers/liveViem.js';
 
 const describeLive = hasTestRpcUrl() ? describe : describe.skip;

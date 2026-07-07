@@ -4,7 +4,7 @@ import {
   deriveLiquidFactoryConfig,
   parseLiquidTokenSupplyAmount,
   resolveLiquidFactoryConfigForSupply,
-} from '../../../src/liquid/factory-config-core.js';
+} from '@rareprotocol/rare-sdk/liquid/factory-config-core';
 
 test('deriveLiquidFactoryConfig uses maxTotalSupply minus creatorLaunchReward for curve supply', () => {
   const config = deriveLiquidFactoryConfig(

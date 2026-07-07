@@ -10,7 +10,7 @@ import {
   searchCollections,
   searchEvents,
   searchNfts,
-} from '../../../src/sdk/api.js';
+} from '@rareprotocol/rare-sdk/api';
 
 describe('SDK API live integration', () => {
   it('searches and fetches NFTs from the SuperRare API', async () => {

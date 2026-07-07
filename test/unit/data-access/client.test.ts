@@ -1,8 +1,8 @@
 /* eslint-disable functional/immutable-data */
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_RARE_API_BASE_URL, resolveRareApiBaseUrl } from '../../../src/data-access/base-url.js';
-import { createApiClient } from '../../../src/data-access/client.js';
-import { RareApiError } from '../../../src/data-access/errors.js';
+import { DEFAULT_RARE_API_BASE_URL, resolveRareApiBaseUrl } from '@rareprotocol/rare-sdk/data-access/base-url';
+import { createApiClient } from '@rareprotocol/rare-sdk/data-access/client';
+import { RareApiError } from '@rareprotocol/rare-sdk/data-access/errors';
 
 const originalRareApiBaseUrl = process.env.RARE_API_BASE_URL;
 

@@ -1,9 +1,9 @@
 import { describe, expect, it, type TestContext } from 'vitest';
 import { isAddress, type Address } from 'viem';
-import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '../../../src/contracts/addresses.js';
-import { RareApiError } from '../../../src/data-access/errors.js';
-import { createRareClient } from '../../../src/sdk/client.js';
-import type { RareClient } from '../../../src/sdk/client.js';
+import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { RareApiError } from '@rareprotocol/rare-sdk/data-access/errors';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import type { RareClient } from '@rareprotocol/rare-sdk/client';
 import { createTestSepoliaPublicClient, hasTestRpcUrl } from '../../helpers/liveViem.js';
 
 type ReadableNftFixture = {

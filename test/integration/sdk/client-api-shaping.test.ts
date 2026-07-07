@@ -4,7 +4,7 @@ import { text } from 'node:stream/consumers';
 import { describe, expect, it } from 'vitest';
 import { createPublicClient, http } from 'viem';
 import { mainnet } from 'viem/chains';
-import { createRareClient } from '../../../src/sdk/client.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
 
 type ApiRequest = {
   method: string;

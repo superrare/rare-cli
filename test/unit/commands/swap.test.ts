@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, test, vi } from 'vitest';
 import type { TransactionReceipt } from 'viem';
-import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
+import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts/addresses';
 import { swapCommand } from '../../../src/commands/swap.js';
-import type { TokenTradeQuote, TokenTradeResult } from '../../../src/sdk/swap.js';
+import type { TokenTradeQuote, TokenTradeResult } from '@rareprotocol/rare-sdk/swap';
 
 const getPublicClient = vi.hoisted(() => vi.fn());
 const getWalletClient = vi.hoisted(() => vi.fn());
@@ -21,7 +21,7 @@ vi.mock('../../../src/client.js', () => ({
   getConfiguredUniswapApiKey,
 }));
 
-vi.mock('../../../src/sdk/client.js', () => ({
+vi.mock('@rareprotocol/rare-sdk/client', () => ({
   createRareClient,
 }));
 

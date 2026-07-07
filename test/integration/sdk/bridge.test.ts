@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { createRareClient } from '../../../src/sdk/client.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import { createTestSepoliaPublicClient, hasTestRpcUrl } from '../../helpers/liveViem.js';
-import { getBridgeInfo } from '../../../src/sdk/bridge-core.js';
+import { getBridgeInfo } from '@rareprotocol/rare-sdk/bridge-core';
 
 const describeLive = hasTestRpcUrl() ? describe : describe.skip;
 

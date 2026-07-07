@@ -1,13 +1,13 @@
 /* eslint-disable no-restricted-syntax */
 import { describe, expect, it, vi } from 'vitest';
-import { RareApiError } from '../../../src/data-access/errors.js';
+import { RareApiError } from '@rareprotocol/rare-sdk/data-access/errors';
 import {
   generateApiAddressMerkleRoot,
   generateApiNftMerkleRoot,
   isApiNftMerkleProofResolutionError,
   resolveApiNftMerkleProof,
   resolveApiNftMerkleProofFromRoots,
-} from '../../../src/sdk/merkle-api.js';
+} from '@rareprotocol/rare-sdk/merkle-api';
 
 const hex32 = (byte: string): `0x${string}` => `0x${byte.repeat(64)}`;
 

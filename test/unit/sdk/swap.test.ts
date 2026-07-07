@@ -3,10 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPublicClient, createWalletClient, custom } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { resolveCurrency, viemChains } from '../../../src/contracts/addresses.js';
-import { createRareClient } from '../../../src/sdk/client.js';
-import { createSwapNamespace, type BuyTokenParams, type SellTokenParams } from '../../../src/sdk/swap.js';
-import { PaymentApprovalRequiredError } from '../../../src/sdk/helpers.js';
+import { resolveCurrency, viemChains } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import { createSwapNamespace, type BuyTokenParams, type SellTokenParams } from '@rareprotocol/rare-sdk/swap';
+import { PaymentApprovalRequiredError } from '@rareprotocol/rare-sdk/helpers';
 
 const accountAddress = '0x1234567890123456789012345678901234567890' as const;
 const rareAddress = resolveCurrency('rare', 'sepolia');

@@ -1,7 +1,7 @@
 import { expect } from 'vitest';
 import type { Address, PublicClient } from 'viem';
-import { auctionAbi } from '../../../src/contracts/abis/auction.js';
-import { getContractAddresses, type SupportedChain } from '../../../src/contracts/addresses.js';
+import { auctionAbi } from '@rareprotocol/rare-sdk/contracts/abis/auction';
+import { getContractAddresses, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
 import {
   cleanupTempHome,
   configureLiveHome,

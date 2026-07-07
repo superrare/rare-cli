@@ -8,9 +8,9 @@ import {
   type Hex,
   type TransactionReceipt,
 } from 'viem';
-import { liquidFactoryAbi } from '../../../src/contracts/abis/liquid-factory.js';
-import { createLiquidNamespace } from '../../../src/sdk/liquid.js';
-import type { LiquidCurveSegment } from '../../../src/liquid/curve-config.js';
+import { liquidFactoryAbi } from '@rareprotocol/rare-sdk/contracts/abis/liquid-factory';
+import { createLiquidNamespace } from '@rareprotocol/rare-sdk/liquid';
+import type { LiquidCurveSegment } from '@rareprotocol/rare-sdk/liquid/curve-config';
 
 const accountAddress = '0x1000000000000000000000000000000000000000' as Address;
 const liquidFactory = '0x2000000000000000000000000000000000000000' as Address;

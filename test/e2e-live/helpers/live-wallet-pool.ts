@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { Address } from 'viem';
-import { parseHexString } from '../../../src/sdk/validation.js';
-import { chainIds, type SupportedChain } from '../../../src/contracts/addresses.js';
+import { parseHexString } from '@rareprotocol/rare-sdk/validation';
+import { chainIds, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
 
 export type LiveWalletRole = 'seller' | 'buyer';
 
