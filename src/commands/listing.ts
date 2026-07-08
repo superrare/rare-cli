@@ -1,7 +1,14 @@
 import { Command } from 'commander';
-import { formatUnits, isAddressEqual } from 'viem';
+import { formatUnits, isAddressEqual, isHex } from 'viem';
 import { getActiveChain } from '../config.js';
-import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
+import { getConfiguredAccountAddress, getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
+import {
+  createConnectBuyIntent,
+  getCardListingGateError,
+  openBrowser,
+  waitForConnectSettlement,
+} from '../checkout.js';
+import { createApiClient } from '../data-access/index.js';
 import { createRareClient } from '../sdk/client.js';
 import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '../contracts/addresses.js';
 import {
@@ -49,6 +56,15 @@ type ListingBuyOptions = {
   chainId?: string;
 };
 
+type ListingBuyCardOptions = {
+  contract?: string;
+  tokenId?: string;
+  apiUrl?: string;
+  email?: string;
+  chain?: string;
+  chainId?: string;
+};
+
 type ListingStatusOptions = {
   contract?: string;
   tokenId?: string;
@@ -59,7 +75,7 @@ type ListingStatusOptions = {
 
 export function listingCommand(): Command {
   const cmd = new Command('listing');
-  cmd.description('Listing subcommands (list, create, cancel, buy, status, batch, release)');
+  cmd.description('Listing subcommands (list, create, cancel, buy, buy-card, status, batch, release)');
   cmd.addCommand(createListingListCommand());
   cmd.addCommand(listingErc1155Command());
   cmd.addCommand(listingBatchCommand());
@@ -260,6 +276,110 @@ export function listingCommand(): Command {
         },
       );
 
+    });
+
+  cmd
+    .command('buy-card')
+    .description(
+      'Buy a USDC-listed token with a credit/debit card (Coinflow). Opens the hosted SuperRare checkout in a browser.',
+    )
+    .requiredOption('--contract <address>', 'NFT contract address')
+    .requiredOption('--token-id <id>', 'token ID to buy')
+    .option('--api-url <url>', 'SuperRare API base URL (defaults to the production API)')
+    .option('--email <email>', 'email for the card receipt (otherwise collected in the checkout)')
+    .option('--chain <chain>', 'chain to use (mainnet, sepolia)')
+    .option('--chain-id <id>', 'chain ID (1, 11155111)')
+    .action(async (opts: ListingBuyCardOptions): Promise<void> => {
+      requireTokenScopeOptions(opts, 'buy-card');
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const publicClient = getPublicClient(chain);
+      // No signature needed: the card settlement happens server-side. When an
+      // account is configured (a receiving address is enough — no signer is
+      // used for card payment) we pre-select card payment delivering to it,
+      // so the hosted checkout opens straight into the card step; otherwise
+      // the buyer connects the receiving wallet in the browser.
+      const rare = createRareClient({ publicClient });
+      const contract = parseAddress(opts.contract, '--contract');
+      const recipient = getConfiguredAccountAddress(chain);
+
+      // Card checkout only works for public USDC listings within the Coinflow
+      // limits; read the listing on-chain first so the user gets a fast,
+      // specific error instead of a hosted page without a card option.
+      const status = await rare.listing.status({
+        contract,
+        tokenId: opts.tokenId,
+        target: PUBLIC_LISTING_TARGET,
+      });
+      if (!status.hasListing) {
+        throw new Error('No active public listing found for this token.');
+      }
+      const usdcAddress = resolveCurrency('usdc', chain);
+      if (!isAddressEqual(status.currencyAddress, usdcAddress)) {
+        throw new Error(
+          `Card checkout requires a USDC listing; this one is priced in ${status.currencyAddress}.`,
+        );
+      }
+      const gateError = getCardListingGateError(status.amount);
+      if (gateError !== null) {
+        throw new Error(gateError);
+      }
+
+      log(`Preparing card checkout on ${chain}...`);
+      log(`  NFT contract: ${contract}`);
+      log(`  Token ID: ${opts.tokenId}`);
+      log(`  Price: ${formatUnits(status.amount, 6)} USDC`);
+      if (recipient !== undefined) {
+        log(`  Delivering to: ${recipient} (configured wallet)`);
+      }
+
+      const api = createApiClient(opts.apiUrl);
+      const checkout = await createConnectBuyIntent({
+        client: api,
+        chainId: rare.chainId,
+        contract,
+        tokenId: opts.tokenId,
+        priceUsdcBaseUnits: status.amount,
+        recipient,
+        email: opts.email,
+      });
+
+      openBrowser(checkout.url);
+      log('\nOpening your browser to complete the card payment...');
+      log(`  ${checkout.url}`);
+      log('\nIf it did not open, paste the URL above into your browser.');
+      if (recipient === undefined) {
+        log('Connect the wallet that should receive the NFT, then pay with card.');
+      }
+      log('\nWaiting for the payment (Ctrl+C to stop waiting)...');
+
+      const settlement = await waitForConnectSettlement({
+        client: api,
+        intentId: checkout.intentId,
+        expiresAt: checkout.expiresAt,
+        onStatusChange: (intentStatus) => {
+          log(`  Checkout status: ${intentStatus}`);
+        },
+      });
+
+      if (settlement.transactionHash !== undefined && isHex(settlement.transactionHash)) {
+        log(`  Settlement transaction: ${settlement.transactionHash}`);
+        log('  Waiting for on-chain confirmation...');
+        await publicClient.waitForTransactionReceipt({ hash: settlement.transactionHash });
+      }
+
+      output(
+        {
+          intentId: checkout.intentId,
+          checkoutUrl: checkout.url,
+          transactionHash: settlement.transactionHash ?? null,
+        },
+        () => {
+          console.log('\nPayment sent. The NFT is delivered to the wallet you connected in the browser.');
+          if (settlement.transactionHash !== undefined) {
+            console.log(`  Settlement transaction: ${settlement.transactionHash}`);
+          }
+        },
+      );
     });
 
   cmd

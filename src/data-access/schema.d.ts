@@ -817,7 +817,7 @@ export interface paths {
                 path?: never;
                 cookie?: never;
             };
-            requestBody: {
+            requestBody?: {
                 content: {
                     "application/json": components["schemas"]["GenerateAddressMerkleRootJsonRequest"];
                     "multipart/form-data": components["schemas"]["GenerateAddressMerkleRootFormRequest"];
@@ -983,6 +983,805 @@ export interface paths {
                         "application/json": {
                             error: string;
                         };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connect/intents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Connect Intent
+         * @description Create a hosted SuperRare Connect intent for auth, checkout, or supported actions.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CreateConnectIntentRequest"];
+                };
+            };
+            responses: {
+                /** @description Connect intent created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CreateConnectIntentResponse"];
+                    };
+                };
+                /** @description Invalid connect intent request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent cannot be created */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connect/intents/{intentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Connect Intent
+         * @description Get status for a SuperRare Connect intent.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    intentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Connect intent status */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GetConnectIntentResponse"];
+                    };
+                };
+                /** @description Connect intent not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent expired */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connect/intents/{intentId}/execution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Update Hosted Connect Execution
+         * @description Persist hosted execution status for a server-resolved SuperRare Connect action.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Intent-scoped execution token from the hosted Connect URL. */
+                    "x-connect-execution-token"?: string;
+                };
+                path: {
+                    intentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["UpdateConnectIntentExecutionRequest"];
+                };
+            };
+            responses: {
+                /** @description Connect execution status updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["UpdateConnectIntentExecutionResponse"];
+                    };
+                };
+                /** @description Connect execution token is missing or invalid */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent execution cannot be updated */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent expired */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connect/intents/{intentId}/execution-session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange Hosted Connect Execution Session
+         * @description Exchange a short-lived hosted execution session for an intent-scoped execution token.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    intentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExchangeConnectIntentExecutionSessionRequest"];
+                };
+            };
+            responses: {
+                /** @description Hosted execution token exchanged */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExchangeConnectIntentExecutionSessionResponse"];
+                    };
+                };
+                /** @description Hosted execution session is missing, expired, or invalid */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent expired */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connect/auth/hosted-login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete Hosted Connect Auth
+         * @description Issue a one-time Connect auth code after hosted SuperRare login succeeds.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CompleteHostedConnectAuthRequest"];
+                };
+            };
+            responses: {
+                /** @description Hosted Connect auth completed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CompleteHostedConnectAuthResponse"];
+                    };
+                };
+                /** @description Invalid hosted Connect auth completion request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Hosted login session is not authenticated */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent expired */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Hosted login auth service unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connect/auth/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange Connect Auth
+         * @description Exchange a one-time hosted auth code for a SuperRare Connect session.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ExchangeConnectAuthRequest"];
+                };
+            };
+            responses: {
+                /** @description Connect auth exchanged */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExchangeConnectAuthResponse"];
+                    };
+                };
+                /** @description Invalid connect auth exchange request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect auth result is invalid */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent expired */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect auth exchange unavailable */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connect/session": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Connect Session
+         * @description Get SDK-visible SuperRare Connect session state.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Bearer Connect session ID returned by /v1/connect/auth/exchange. */
+                    authorization?: string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Connect session state */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GetConnectSessionResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connect/users/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Connect Current User
+         * @description Get limited user profile data visible to SuperRare Connect SDK consumers.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Bearer Connect session ID returned by /v1/connect/auth/exchange. */
+                    authorization?: string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Current Connect user */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GetConnectCurrentUserResponse"];
+                    };
+                };
+                /** @description No valid Connect session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connect/checkout/{sessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Connect Checkout Status
+         * @description Get status for a SuperRare Connect checkout.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    sessionId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Connect checkout status */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GetConnectCheckoutStatusResponse"];
+                    };
+                };
+                /** @description Connect checkout session not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connect/intents/{intentId}/checkout/coinflow/buy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prepare Coinflow Card Checkout (Buy)
+         * @description Create a Coinflow card-checkout session for a USDC Bazaar buy bound to the hosted-login wallet.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Intent-scoped execution token from the hosted Connect URL. */
+                    "x-connect-execution-token"?: string;
+                };
+                path: {
+                    intentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PrepareCoinflowCardRequest"];
+                };
+            };
+            responses: {
+                /** @description Coinflow card checkout prepared */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PrepareCoinflowCheckoutResponse"];
+                    };
+                };
+                /** @description Card checkout request is invalid or ineligible */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Hosted login session is not authenticated */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent expired */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Card checkout is not configured for this network */
+                412: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Coinflow checkout failed */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/connect/intents/{intentId}/checkout/coinflow/mint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prepare Coinflow Card Checkout (Mint)
+         * @description Create a Coinflow card-checkout session for a USDC release mint bound to the hosted-login wallet.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    /** @description Intent-scoped execution token from the hosted Connect URL. */
+                    "x-connect-execution-token"?: string;
+                };
+                path: {
+                    intentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["PrepareCoinflowCardRequest"];
+                };
+            };
+            responses: {
+                /** @description Coinflow card checkout prepared */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PrepareCoinflowCheckoutResponse"];
+                    };
+                };
+                /** @description Card checkout request is invalid or ineligible */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Hosted login session is not authenticated */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Connect intent expired */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Card checkout is not configured for this network */
+                412: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
+                    };
+                };
+                /** @description Coinflow checkout failed */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectErrorResponse"];
                     };
                 };
             };
@@ -1433,6 +2232,18 @@ export interface components {
              *     ]
              */
             chainIds: number[];
+            /**
+             * @description High-level collection category. Null if unknown.
+             * @example CONTRACT
+             * @enum {string|null}
+             */
+            collectionType: "CONTRACT" | "LAZY_MINT" | "ASYNC_BLUEPRINT" | "GENERAL" | "MULTI_CONTRACT" | null;
+            /**
+             * @description On-chain contract standard/protocol backing the collection. Use this to determine which minting API/path applies. Null if not a single-contract collection or unknown.
+             * @example RARE_PROTOCOL_LAZY_SOVEREIGN_NFT
+             * @enum {string|null}
+             */
+            nftContractType: "GENERIC_ERC_721_NFT_CONTRACT" | "GENERIC_ERC_1155_NFT_CONTRACT" | "OLD_ASYNC_BLUEPRINT" | "ASYNC_BLUEPRINT" | "RARE_PROTOCOL_SOVEREIGN_NFT" | "RARE_PROTOCOL_LAZY_SOVEREIGN_NFT" | "RARE_PROTOCOL_SOVEREIGN_BATCH_MINT" | "SUPERRARE_V_1" | "SUPERRARE_V_2" | "RARE_SPACE_NFT_CONTRACT" | "LIQUID_LENS_ERC_721_CONTRACT" | null;
             /** @example 1704067200 */
             createdAt: number;
         };
@@ -1525,7 +2336,7 @@ export interface components {
              * Format: binary
              * @description CSV file with an address column
              */
-            file?: string;
+            file: string;
             storageTarget?: components["schemas"]["MerkleRootStorageTarget"];
         };
         GenerateNftMerkleProofResponse: {
@@ -1578,6 +2389,420 @@ export interface components {
          * @enum {string}
          */
         MerkleRootProofStorageTarget: "batch-listing" | "collection-allowlist";
+        CreateConnectIntentResponse: {
+            data: {
+                /** @example connect_intent_placeholder */
+                intentId: string;
+                /** @example https://connect.superrare.com/action/connect_intent_placeholder */
+                url: string;
+                /** @example 2026-06-19T20:00:00.000Z */
+                expiresAt: string;
+            };
+        };
+        ConnectErrorResponse: {
+            error: string;
+        };
+        CreateConnectIntentRequest: {
+            action: components["schemas"]["ConnectActionInput"];
+            /**
+             * @description Optional SDK-reported window.location.origin. Must match the Origin header when provided.
+             * @example https://artist.example
+             */
+            initiatingOrigin?: string;
+            /**
+             * @description Relative path on the initiating origin.
+             * @example /checkout/complete
+             */
+            returnPath?: string;
+            /** @example state_123 */
+            state: string;
+            payment?: components["schemas"]["ConnectIntentPayment"];
+        };
+        ConnectActionInput: {
+            /** @enum {string} */
+            type: "login";
+        } | {
+            /** @enum {string} */
+            type: "buy";
+            target: components["schemas"]["ConnectErc721DirectListingTarget"] | components["schemas"]["ConnectErc721BatchListingTarget"];
+            expected: components["schemas"]["ConnectExpectedPriceTerms"];
+        } | {
+            /** @enum {string} */
+            type: "buy";
+            target: components["schemas"]["ConnectErc1155ListingTarget"];
+            expected: components["schemas"]["ConnectExpectedUnitPriceTerms"];
+        } | {
+            /** @enum {string} */
+            type: "bid";
+            target: components["schemas"]["ConnectErc721ReserveAuctionTarget"] | components["schemas"]["ConnectErc721BatchReserveAuctionTarget"];
+            bid: components["schemas"]["ConnectBidTerms"];
+        } | {
+            /** @enum {string} */
+            type: "mint";
+            target: components["schemas"]["ConnectErc721ReleaseTarget"] | components["schemas"]["ConnectErc1155ReleaseTarget"];
+            purchase: components["schemas"]["ConnectPurchaseTerms"];
+        } | {
+            /** @enum {string} */
+            type: "checkout";
+            target: components["schemas"]["ConnectErc1155CheckoutTarget"];
+        };
+        ConnectErc721DirectListingTarget: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "erc721-direct-listing";
+            chainId: components["schemas"]["ChainId"];
+            contract: components["schemas"]["EthereumAddress"];
+            /** @example 123 */
+            tokenId: string;
+            target?: components["schemas"]["EthereumAddress"];
+        };
+        ConnectErc721BatchListingTarget: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "erc721-batch-listing";
+            chainId: components["schemas"]["ChainId"];
+            creator: components["schemas"]["EthereumAddress"];
+            /** @example 0xcf6398559ea0e93d7d7233ca93b09912da8ff57b45ebe7a3ede9c74d17a76f13 */
+            root: string;
+            contract: components["schemas"]["EthereumAddress"];
+            /** @example 123 */
+            tokenId: string;
+        };
+        ConnectExpectedPriceTerms: {
+            /** @example ETH */
+            currency: string;
+            /** @example 1.2 */
+            price: string;
+        };
+        ConnectErc1155ListingTarget: {
+            /** @enum {string} */
+            kind: "erc1155-listing";
+            chainId: components["schemas"]["ChainId"];
+            contract: components["schemas"]["EthereumAddress"];
+            seller: components["schemas"]["EthereumAddress"];
+            /** @example 123 */
+            tokenId: string;
+            /** @example 2 */
+            quantity: string;
+        };
+        ConnectExpectedUnitPriceTerms: {
+            /** @example ETH */
+            currency: string;
+            /** @example 1.2 */
+            unitPrice: string;
+        };
+        ConnectErc721ReserveAuctionTarget: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "erc721-reserve-auction";
+            chainId: components["schemas"]["ChainId"];
+            contract: components["schemas"]["EthereumAddress"];
+            /** @example 123 */
+            tokenId: string;
+        };
+        ConnectErc721BatchReserveAuctionTarget: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "erc721-batch-reserve-auction";
+            chainId: components["schemas"]["ChainId"];
+            creator: components["schemas"]["EthereumAddress"];
+            /** @example 0xcf6398559ea0e93d7d7233ca93b09912da8ff57b45ebe7a3ede9c74d17a76f13 */
+            root: string;
+            contract: components["schemas"]["EthereumAddress"];
+            /** @example 123 */
+            tokenId: string;
+        };
+        ConnectBidTerms: {
+            /** @example ETH */
+            currency: string;
+            /** @example 1.2 */
+            amount: string;
+        };
+        ConnectErc721ReleaseTarget: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "erc721-release";
+            chainId: components["schemas"]["ChainId"];
+            contract: components["schemas"]["EthereumAddress"];
+        };
+        ConnectErc1155ReleaseTarget: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "erc1155-release";
+            chainId: components["schemas"]["ChainId"];
+            contract: components["schemas"]["EthereumAddress"];
+            /** @example 123 */
+            tokenId: string;
+        };
+        ConnectPurchaseTerms: {
+            /** @example 2 */
+            quantity: string;
+            /** @example ETH */
+            currency?: string;
+            /** @example 1.2 */
+            unitPrice?: string;
+        };
+        ConnectErc1155CheckoutTarget: {
+            /** @enum {string} */
+            kind: "erc1155-checkout";
+            chainId: components["schemas"]["ChainId"];
+            items: (components["schemas"]["ConnectErc1155CheckoutReleaseItem"] | components["schemas"]["ConnectErc1155CheckoutListingItem"])[];
+        };
+        ConnectErc1155CheckoutReleaseItem: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "release";
+            contract: components["schemas"]["EthereumAddress"];
+            /** @example 123 */
+            tokenId: string;
+            /** @example 2 */
+            quantity: string;
+            expected?: components["schemas"]["ConnectExpectedUnitPriceTerms"];
+        };
+        ConnectErc1155CheckoutListingItem: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "listing";
+            contract: components["schemas"]["EthereumAddress"];
+            seller: components["schemas"]["EthereumAddress"];
+            /** @example 123 */
+            tokenId: string;
+            /** @example 2 */
+            quantity: string;
+            expected: components["schemas"]["ConnectExpectedUnitPriceTerms"];
+        };
+        ConnectIntentPayment: {
+            /** @enum {string} */
+            method?: "card";
+            recipient?: components["schemas"]["EthereumAddress"];
+            /** @example collector@example.com */
+            email?: string;
+        };
+        GetConnectIntentResponse: {
+            data: components["schemas"]["ConnectIntent"];
+        };
+        ConnectIntent: {
+            /** @example connect_intent_placeholder */
+            intentId: string;
+            type: components["schemas"]["ConnectActionType"];
+            status: components["schemas"]["ConnectIntentStatus"];
+            /** @example https://artist.example */
+            initiatingOrigin?: string;
+            /** @example /checkout/complete */
+            returnPath: string;
+            /** @example 2026-06-19T20:00:00.000Z */
+            expiresAt: string;
+            resolvedActionSnapshot?: components["schemas"]["ConnectResolvedActionSnapshot"];
+            result?: components["schemas"]["ConnectIntentResult"];
+            error?: components["schemas"]["ConnectFlowError"];
+            payment?: components["schemas"]["ConnectIntentPayment"];
+        };
+        /**
+         * @example checkout
+         * @enum {string}
+         */
+        ConnectActionType: "login" | "checkout" | "bid" | "buy" | "mint";
+        /**
+         * @example pending
+         * @enum {string}
+         */
+        ConnectIntentStatus: "pending" | "requires_user" | "processing" | "completed" | "failed" | "cancelled" | "expired";
+        ConnectResolvedActionSnapshot: {
+            actionKey: string;
+            /** @enum {string} */
+            actionType: "checkout" | "bid" | "buy" | "mint";
+            resolvedAt: string;
+            targetKind: components["schemas"]["ConnectActionTargetKind"];
+            terms: {
+                amount?: string;
+                available: boolean;
+                currency?: string;
+                marketplace?: string;
+                /** @example 0xcf6398559ea0e93d7d7233ca93b09912da8ff57b45ebe7a3ede9c74d17a76f13 */
+                merkleRoot?: string;
+                merkleProof?: string[];
+                price?: string;
+                quantity?: string;
+                quantityAvailable?: string;
+                seller?: string;
+                unitPrice?: string;
+            };
+        };
+        /** @enum {string} */
+        ConnectActionTargetKind: "erc721-direct-listing" | "erc721-batch-listing" | "erc1155-listing" | "erc721-reserve-auction" | "erc721-batch-reserve-auction" | "erc721-release" | "erc1155-release" | "erc1155-checkout";
+        ConnectIntentResult: {
+            /** @example 0x0000000000000000000000000000000000000000000000000000000000000000 */
+            approvalTxHash?: string;
+            /** @example connect_session_placeholder */
+            sessionId?: string;
+            /** @example 0x0000000000000000000000000000000000000000000000000000000000000000 */
+            transactionHash?: string;
+        };
+        ConnectFlowError: {
+            /** @example transaction_rejected */
+            code: string;
+            /** @example The wallet transaction was rejected. */
+            message: string;
+        };
+        UpdateConnectIntentExecutionResponse: {
+            data: components["schemas"]["ConnectIntent"];
+        };
+        UpdateConnectIntentExecutionRequest: {
+            /** @enum {string} */
+            status: "processing";
+            /** @example 0x0000000000000000000000000000000000000000000000000000000000000000 */
+            approvalTxHash?: string;
+            /** @example 0x0000000000000000000000000000000000000000000000000000000000000000 */
+            transactionHash?: string;
+        } | {
+            /** @enum {string} */
+            status: "completed";
+            /** @example 0x0000000000000000000000000000000000000000000000000000000000000000 */
+            approvalTxHash?: string;
+            /** @example 0x0000000000000000000000000000000000000000000000000000000000000000 */
+            transactionHash: string;
+        } | {
+            /** @enum {string} */
+            status: "failed";
+            /** @example 0x0000000000000000000000000000000000000000000000000000000000000000 */
+            approvalTxHash?: string;
+            error: components["schemas"]["ConnectFlowError"];
+            /** @example 0x0000000000000000000000000000000000000000000000000000000000000000 */
+            transactionHash?: string;
+        } | {
+            /** @enum {string} */
+            status: "cancelled";
+            error?: components["schemas"]["ConnectFlowError"];
+        };
+        ExchangeConnectIntentExecutionSessionResponse: {
+            data: {
+                /** @example connect_execution_placeholder */
+                executionToken: string;
+            };
+        };
+        ExchangeConnectIntentExecutionSessionRequest: {
+            /** @example connect_execution_session_placeholder */
+            executionSessionId: string;
+        };
+        CompleteHostedConnectAuthResponse: {
+            data: {
+                /** @example connect_auth_code_placeholder */
+                code: string;
+                /** @example connect_intent_placeholder */
+                intentId: string;
+                /** @example state_123 */
+                state: string;
+                /**
+                 * Format: uri
+                 * @example https://artist.example/account?intentId=connect_intent_placeholder&state=state_123&code=connect_auth_code_placeholder
+                 */
+                returnTarget: string;
+                /** @example 2026-06-19T20:00:00.000Z */
+                expiresAt: string;
+            };
+        };
+        CompleteHostedConnectAuthRequest: {
+            /** @example connect_intent_placeholder */
+            intentId: string;
+        };
+        ExchangeConnectAuthResponse: {
+            data: {
+                session: components["schemas"]["ConnectSession"];
+            };
+        };
+        ConnectSession: {
+            /** @example connect_session_placeholder */
+            sessionId: string;
+            /** @example user_placeholder */
+            userId: string;
+            /** @example 0x0000000000000000000000000000000000000000 */
+            address: string;
+            /** @example 2026-06-19T20:00:00.000Z */
+            expiresAt: string;
+        };
+        ExchangeConnectAuthRequest: {
+            /** @example connect_auth_code_placeholder */
+            code: string;
+            /** @example connect_intent_placeholder */
+            intentId: string;
+            /** @example state_123 */
+            state: string;
+        };
+        GetConnectSessionResponse: {
+            data: {
+                /** @example true */
+                authenticated: boolean;
+                session?: components["schemas"]["ConnectSession"];
+            };
+        };
+        GetConnectCurrentUserResponse: {
+            data: {
+                /** @example 0x0000000000000000000000000000000000000000 */
+                address: string;
+                /** @example superrare-user */
+                username: string | null;
+                /** @example SuperRare User */
+                fullName: string | null;
+                /** @example https://example.com/avatar.png */
+                avatarUri: string | null;
+            };
+        };
+        GetConnectCheckoutStatusResponse: {
+            data: {
+                /** @example connect_session_placeholder */
+                sessionId: string;
+                status: components["schemas"]["ConnectCheckoutStatus"];
+                /** @example https://artist.example */
+                initiatingOrigin?: string;
+                /** @example /checkout/complete */
+                returnPath?: string;
+                /** @example connect_intent_placeholder */
+                intentId?: string;
+                /** @example 2026-06-19T20:00:00.000Z */
+                expiresAt?: string;
+                resolvedActionSnapshot?: components["schemas"]["ConnectResolvedActionSnapshot"];
+                /** @example 0x0000000000000000000000000000000000000000000000000000000000000000 */
+                approvalTxHash?: string;
+                /** @example 0x0000000000000000000000000000000000000000000000000000000000000000 */
+                transactionHash?: string;
+                error?: components["schemas"]["ConnectFlowError"];
+            };
+        };
+        /**
+         * @example pending
+         * @enum {string}
+         */
+        ConnectCheckoutStatus: "pending" | "processing" | "completed" | "failed" | "cancelled" | "expired";
+        PrepareCoinflowCheckoutResponse: {
+            data: {
+                checkoutJwtToken: string;
+                sessionKey: string;
+                merchantId: string;
+                /** @enum {string} */
+                env: "prod" | "sandbox";
+            };
+        };
+        PrepareCoinflowCardRequest: {
+            buyerAddress: components["schemas"]["EthereumAddress"];
+            /** @example collector@example.com */
+            email?: string;
+        };
     };
     responses: never;
     parameters: never;
