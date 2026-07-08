@@ -3,14 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Address } from 'viem';
-import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
+import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts/addresses';
 import {
   loadMerkleRootArtifact,
-} from '../../../src/sdk/merkle-file.js';
+} from '@rareprotocol/rare-sdk/merkle-file';
 import {
   validateRootArtifact,
-} from '../../../src/sdk/merkle-core.js';
-import type { BatchListingRootArtifact } from '../../../src/sdk/batch-listing.js';
+} from '@rareprotocol/rare-sdk/merkle-core';
+import type { BatchListingRootArtifact } from '@rareprotocol/rare-sdk/batch-listing';
 
 const contract = '0x1111111111111111111111111111111111111111' satisfies Address;
 const buyer = '0x1000000000000000000000000000000000000000' satisfies Address;

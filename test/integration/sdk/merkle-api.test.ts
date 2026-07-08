@@ -4,10 +4,10 @@ import {
   generateApiNftMerkleRoot,
   resolveApiAddressMerkleProof,
   resolveApiNftMerkleProof,
-} from '../../../src/sdk/merkle-api.js';
-import { verifyBatchTokenProof } from '../../../src/sdk/batch-core.js';
-import { verifyReleaseAllowlistProof } from '../../../src/sdk/release-core.js';
-import { RareApiError } from '../../../src/data-access/errors.js';
+} from '@rareprotocol/rare-sdk/merkle-api';
+import { verifyBatchTokenProof } from '@rareprotocol/rare-sdk/batch-core';
+import { verifyReleaseAllowlistProof } from '@rareprotocol/rare-sdk/release-core';
+import { RareApiError } from '@rareprotocol/rare-sdk/data-access/errors';
 import { loadDotEnv } from '../../helpers/env.js';
 
 loadDotEnv();

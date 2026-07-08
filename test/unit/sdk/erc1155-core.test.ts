@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { zeroAddress, type TransactionReceipt } from 'viem';
-import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
+import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts/addresses';
 import {
   planErc1155CollectionCreateToken,
   planErc1155CollectionMint,
@@ -40,7 +40,7 @@ import {
   erc1155CheckoutFailureStages,
   zeroBytes4,
   zeroBytes32,
-} from '../../../src/sdk/erc1155-core.js';
+} from '@rareprotocol/rare-sdk/erc1155-core';
 
 const account = '0x0000000000000000000000000000000000000001' as const;
 const buyer = '0x0000000000000000000000000000000000000002' as const;

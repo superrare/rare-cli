@@ -21,7 +21,7 @@ import {
   requireContractAddress,
   resolveCurrency,
   resolveCurrencyInfo,
-} from '../../../src/contracts/addresses.js';
+} from '@rareprotocol/rare-sdk/contracts/addresses';
 
 describe('chain and currency helpers', () => {
   it('recognizes supported chains and exposes chain IDs', () => {

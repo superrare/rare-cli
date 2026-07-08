@@ -3,15 +3,15 @@ import { basename } from 'node:path';
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { pinMetadata, uploadMedia, type NftMediaEntry } from '../sdk/api.js';
-import { createRareClient } from '../sdk/client.js';
+import { pinMetadata, uploadMedia, type NftMediaEntry } from '@rareprotocol/rare-sdk/api';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import {
   buildMintPinMetadataParams,
   planMintTokenUri,
   type MintGeneratedMetadataPlan,
   type MintMetadataUploadRole,
-} from '../sdk/mint-core.js';
-import { parseAddress, parseOptionalAddress } from '../sdk/validation.js';
+} from '@rareprotocol/rare-sdk/mint-core';
+import { parseAddress, parseOptionalAddress } from '@rareprotocol/rare-sdk/validation';
 import { output, log } from '../output.js';
 
 type MintOptions = {

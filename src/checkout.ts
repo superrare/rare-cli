@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { RareApiError } from './data-access/errors.js';
-import type { ApiClient } from './data-access/index.js';
-import type { components } from './data-access/schema.js';
+import { RareApiError } from '@rareprotocol/rare-sdk/data-access/errors';
+import type { ApiClient } from '@rareprotocol/rare-sdk/data-access';
+import type { components } from '@rareprotocol/rare-sdk/data-access/schema';
 
 type ConnectIntent = components['schemas']['ConnectIntent'];
 

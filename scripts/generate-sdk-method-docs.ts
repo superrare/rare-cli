@@ -3,7 +3,9 @@ import { dirname, resolve } from 'node:path';
 import ts from 'typescript';
 
 const OUTPUT_PATH = resolve('docs/sdk/client-methods.md');
-const TYPE_SOURCE_PATH = resolve('src/sdk/types/client.ts');
+const TYPE_SOURCE_PATH = resolve(
+  'node_modules/@rareprotocol/rare-sdk/dist/sdk/types/client.d.ts',
+);
 const TYPE_NAME = 'RareClient';
 const CLIENT_NAME = 'rare';
 const MAX_DEPTH = 8;

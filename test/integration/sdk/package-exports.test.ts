@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Address } from 'viem';
-import { ETH_ADDRESS } from '../../../src/contracts/addresses.js';
+import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts/addresses';
 
 const contractAddress = '0x1111111111111111111111111111111111111111' satisfies Address;
 

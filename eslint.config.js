@@ -9,12 +9,7 @@ const tsFiles = ['**/*.ts'];
 const jsFiles = ['**/*.js', '**/*.mjs'];
 
 /** Matches functional core / reusable modules per AGENTS.md (no direct CLI shell I/O or process.exit). */
-const coreTsGlobs = [
-  'src/sdk/**/*.ts',
-  'src/swap/**/*.ts',
-  'src/**/*-core.ts',
-  'src/contracts/**/*.ts',
-];
+const coreTsGlobs = ['src/**/*-core.ts'];
 
 export default defineConfig([
   {
@@ -25,7 +20,6 @@ export default defineConfig([
       '.docusaurus/**',
       'docs-site/.docusaurus/**',
       'node_modules/**',
-      'src/data-access/schema.d.ts',
       'eslint-local-rules/**/*.d.ts',
     ],
   },

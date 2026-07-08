@@ -1,5 +1,5 @@
 import { isJsonMode } from './output.js';
-import { RareApiError } from './data-access/errors.js';
+import { RareApiError } from '@rareprotocol/rare-sdk/data-access/errors';
 
 type ErrorDetails = {
   message: string;
@@ -19,11 +19,22 @@ function buildErrorDetails(error: unknown): ErrorDetails {
     return { message: sanitize(String(error)), details: [], causes: [] };
   }
 
+  const message = sanitize(getErrorMessage(error));
   return {
-    message: sanitize(getErrorMessage(error)),
-    details: getDetailLines(error),
+    message,
+    details: [...getDetailLines(error), ...getCliHintLines(message)],
     causes: collectCauses(getCause(error)),
   };
+}
+
+/** CLI guidance for known SDK errors that (correctly) speak in API terms. */
+function getCliHintLines(message: string): string[] {
+  if (message.includes('A Uniswap API key is required')) {
+    return [
+      'Configure one with: rare configure --chain <chain> --uniswap-api-key <key> (or --uniswap-api-key-ref <op://...>).',
+    ];
+  }
+  return [];
 }
 
 function getDetailLines(error: Error): string[] {

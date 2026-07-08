@@ -8,16 +8,16 @@ import {
   openBrowser,
   waitForConnectSettlement,
 } from '../checkout.js';
-import { createApiClient } from '../data-access/index.js';
-import { createRareClient } from '../sdk/client.js';
-import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '../contracts/addresses.js';
+import { createApiClient } from '@rareprotocol/rare-sdk/data-access';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses';
 import {
   planListingBuyLocalInputs,
   planListingCancel,
   planListingCreateLocalInputs,
-} from '../sdk/marketplace-core.js';
-import { parseAddress } from '../sdk/validation.js';
-import { resolveCurrencyDecimals } from '../sdk/payments-shell.js';
+} from '@rareprotocol/rare-sdk/marketplace-core';
+import { parseAddress } from '@rareprotocol/rare-sdk/validation';
+import { resolveCurrencyDecimals } from '@rareprotocol/rare-sdk/payments-shell';
 import { output, log } from '../output.js';
 import { createListingListCommand } from './account-market-list.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';

@@ -1,9 +1,9 @@
 /* eslint-disable no-restricted-syntax */
 import { describe, expect, it, vi } from 'vitest';
 import type { Address } from 'viem';
-import { ETH_ADDRESS, type ContractAddresses } from '../../../src/contracts/addresses.js';
-import { createErc1155ListingNamespace } from '../../../src/sdk/erc1155.js';
-import { buildReleaseAllowlistArtifact } from '../../../src/sdk/release-core.js';
+import { ETH_ADDRESS, type ContractAddresses } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { createErc1155ListingNamespace } from '@rareprotocol/rare-sdk/erc1155';
+import { buildReleaseAllowlistArtifact } from '@rareprotocol/rare-sdk/release-core';
 
 const account = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as Address;
 const contract = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as Address;

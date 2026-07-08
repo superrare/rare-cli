@@ -112,7 +112,7 @@ UtilsMerkleProofArtifact
 
 ## Client function map
 
-This map reflects the top-level `RareClient` returned by `createRareClient(config)` in `src/sdk/client.ts` and typed in `src/sdk/types/client.ts`.
+This map reflects the top-level `RareClient` returned by `createRareClient(config)` in `@rareprotocol/rare-sdk` (`client` entry, typed by its `types/client` module).
 
 Scope:
 - Includes `createRareClient` and the methods reachable from the returned client object.

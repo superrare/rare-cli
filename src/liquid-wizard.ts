@@ -5,7 +5,7 @@ import {
   type CurvePresetKey,
   type LiquidCurvePreview,
   type LiquidCurveSegment,
-} from './curve-config.js';
+} from '@rareprotocol/rare-sdk/liquid/curve-config';
 
 const PRESETS: CurvePresetKey[] = ['low-demand', 'medium-demand', 'high-demand'];
 

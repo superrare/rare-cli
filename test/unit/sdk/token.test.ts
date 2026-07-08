@@ -4,7 +4,7 @@ import {
   custom,
 } from 'viem';
 import { mainnet } from 'viem/chains';
-import { createTokenNamespace } from '../../../src/sdk/token.js';
+import { createTokenNamespace } from '@rareprotocol/rare-sdk/token';
 
 const contract = '0x1111111111111111111111111111111111111111';
 

@@ -6,9 +6,9 @@ import {
   encodeFunctionResult,
 } from 'viem';
 import { mainnet } from 'viem/chains';
-import { collectionOwnerAbi } from '../../../src/contracts/abis/collection-owner.js';
-import { collectionStatusAbi } from '../../../src/contracts/abis/collection-status.js';
-import { createCollectionNamespace } from '../../../src/sdk/collection.js';
+import { collectionOwnerAbi } from '@rareprotocol/rare-sdk/contracts/abis/collection-owner';
+import { collectionStatusAbi } from '@rareprotocol/rare-sdk/contracts/abis/collection-status';
+import { createCollectionNamespace } from '@rareprotocol/rare-sdk/collection';
 
 const contract = '0x1111111111111111111111111111111111111111';
 const receiver = '0x2222222222222222222222222222222222222222';

@@ -10,7 +10,7 @@ import {
   parseBatchTokenProofInput,
   validateBatchTokenProofInputMatchesTarget,
   verifyBatchTokenProof,
-} from '../../../src/sdk/batch-core.js';
+} from '@rareprotocol/rare-sdk/batch-core';
 
 const CONTRACT_A = '0x1111111111111111111111111111111111111111';
 const CONTRACT_B = '0x2222222222222222222222222222222222222222';

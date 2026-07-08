@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseEther } from 'viem';
-import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '../../../src/contracts/addresses.js';
+import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '@rareprotocol/rare-sdk/contracts/addresses';
 import {
   planAuctionBid,
   planAuctionCreate,
@@ -15,7 +15,7 @@ import {
   shapeAuctionStatus,
   shapeListingStatus,
   shapeOfferStatus,
-} from '../../../src/sdk/marketplace-core.js';
+} from '@rareprotocol/rare-sdk/marketplace-core';
 
 const accountAddress = '0x0000000000000000000000000000000000000001' as const;
 const buyerAddress = '0x0000000000000000000000000000000000000002' as const;

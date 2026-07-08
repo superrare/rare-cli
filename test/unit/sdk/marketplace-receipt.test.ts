@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-syntax, @typescript-eslint/explicit-function-return-type */
 import { describe, expect, it, vi } from 'vitest';
 import { type Address, type Hash, type PublicClient, type TransactionReceipt, type WalletClient } from 'viem';
-import { createRareClient } from '../../../src/sdk/client.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
 
 const accountAddress = '0x1000000000000000000000000000000000000000' as Address;
 const contract = '0x2000000000000000000000000000000000000000' as Address;

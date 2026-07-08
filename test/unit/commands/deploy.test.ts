@@ -14,7 +14,7 @@ vi.mock('../../../src/client.js', () => ({
   getWalletClient,
 }));
 
-vi.mock('../../../src/sdk/client.js', () => ({
+vi.mock('@rareprotocol/rare-sdk/client', () => ({
   createRareClient,
 }));
 

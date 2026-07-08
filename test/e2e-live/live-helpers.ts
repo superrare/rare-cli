@@ -9,8 +9,8 @@ import {
   supportedChains,
   viemChains,
   type SupportedChain,
-} from '../../src/contracts/addresses.js';
-import { parseAddress } from '../../src/sdk/validation.js';
+} from '@rareprotocol/rare-sdk/contracts/addresses';
+import { parseAddress } from '@rareprotocol/rare-sdk/validation';
 import { parseJsonStdout, runCli } from '../helpers/cli.js';
 import { loadDotEnv, missingLiveEnv } from './env.mjs';
 import { isLiveWriteCommand, withLiveWriteConsent } from './helpers/live-consent.js';

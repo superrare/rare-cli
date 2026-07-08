@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { isAddressEqual, type Address } from 'viem';
-import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '../../src/contracts/addresses.js';
+import { ETH_ADDRESS, PUBLIC_LISTING_TARGET } from '@rareprotocol/rare-sdk/contracts/addresses';
 import {
   cleanupLiveFixture,
   createLiveFixture,

@@ -5,7 +5,7 @@ import { mintCommand } from '../../../src/commands/mint.js';
 const uploadMedia = vi.hoisted(() => vi.fn());
 const pinMetadata = vi.hoisted(() => vi.fn());
 
-vi.mock('../../../src/sdk/api.js', () => {
+vi.mock('@rareprotocol/rare-sdk/api', () => {
   return {
     uploadMedia,
     pinMetadata,

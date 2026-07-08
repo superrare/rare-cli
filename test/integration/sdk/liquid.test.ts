@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createWalletClient, http } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import { resolveCurrency } from '../../../src/contracts/addresses.js';
-import { createRareClient } from '../../../src/sdk/client.js';
+import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import { createTestSepoliaPublicClient, getTestRpcUrl, hasTestRpcUrl } from '../../helpers/liveViem.js';
 
 const describeLive = hasTestRpcUrl() ? describe : describe.skip;

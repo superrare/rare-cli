@@ -158,7 +158,7 @@ rare status --contract <addr> [--token-id <id>] [--chain <chain>]
 - CLI framework: Commander.js v12
 - Blockchain: Viem v2
 - Build: tsup v8 (`npm run build`, `npm run dev` for watch)
-- Commands are in `src/commands/`, ABIs in `src/contracts/abis/`, addresses in `src/contracts/addresses.ts`
+- Commands are in `src/commands/`, ABIs and addresses come from `@rareprotocol/rare-sdk/contracts`
 
 ## Using the CLI as an Agent
 

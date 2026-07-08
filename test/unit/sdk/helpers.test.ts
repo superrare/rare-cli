@@ -23,9 +23,9 @@ import {
   toSafeIntegerNumber,
   toUnixTimestamp,
   toWei,
-} from '../../../src/sdk/helpers.js';
-import { resolveCurrency } from '../../../src/contracts/addresses.js';
-import type { UniswapTransactionRequest } from '../../../src/swap/uniswap-api.js';
+} from '@rareprotocol/rare-sdk/helpers';
+import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses';
+import type { UniswapTransactionRequest } from '@rareprotocol/rare-sdk/swap/uniswap-api';
 
 const sellerAccount = privateKeyToAccount(
   '0x0000000000000000000000000000000000000000000000000000000000000001',

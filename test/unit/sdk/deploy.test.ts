@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createPublicClient, createWalletClient, custom } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { mainnet } from 'viem/chains';
-import { createDeployNamespace } from '../../../src/sdk/deploy.js';
+import { createDeployNamespace } from '@rareprotocol/rare-sdk/deploy';
 
 const account = privateKeyToAccount(
   '0x0000000000000000000000000000000000000000000000000000000000000001',

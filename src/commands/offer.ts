@@ -2,17 +2,17 @@ import { Command } from 'commander';
 import { formatUnits } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
-import { createRareClient } from '../sdk/client.js';
-import { ETH_ADDRESS, resolveCurrency } from '../contracts/addresses.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import { ETH_ADDRESS, resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses';
 import {
   planOfferAcceptLocalInputs,
   planOfferCancel,
   planOfferCreateLocalInputs,
-} from '../sdk/marketplace-core.js';
-import { parseAddress } from '../sdk/validation.js';
+} from '@rareprotocol/rare-sdk/marketplace-core';
+import { parseAddress } from '@rareprotocol/rare-sdk/validation';
 import { output, log } from '../output.js';
 import { createOfferListCommand } from './account-market-list.js';
-import { resolveCurrencyDecimals } from '../sdk/payments-shell.js';
+import { resolveCurrencyDecimals } from '@rareprotocol/rare-sdk/payments-shell';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 import { offerBatchCommand } from './batch.js';

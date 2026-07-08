@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createRareApi } from '../../../src/sdk/api.js';
+import { createRareApi } from '@rareprotocol/rare-sdk/api';
 
 describe('SDK API failure handling', () => {
   it('surfaces missing search response data with a specific SDK error', async () => {

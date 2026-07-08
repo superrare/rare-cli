@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-syntax, @typescript-eslint/explicit-function-return-type */
 import { describe, expect, it, vi } from 'vitest';
 import { keccak256, toBytes, type Address, zeroAddress } from 'viem';
-import { createCollectionMint } from '../../../src/sdk/mint.js';
+import { createCollectionMint } from '@rareprotocol/rare-sdk/mint';
 
 const accountAddress = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' as Address;
 const receiverAddress = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' as Address;

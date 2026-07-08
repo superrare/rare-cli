@@ -4,7 +4,7 @@ import {
   encodeBridgeDistribution,
   getBridgeInfo,
   validateBridgeRoute,
-} from '../../../src/sdk/bridge-core.js';
+} from '@rareprotocol/rare-sdk/bridge-core';
 
 const recipient = '0x1111111111111111111111111111111111111111' as const;
 

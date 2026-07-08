@@ -7,11 +7,11 @@ import {
   getCanonicalRareEthPool,
   getCanonicalUsdcEthPool,
   getV4QuoterAddress,
-} from '../../../src/contracts/addresses.js';
-import { buildCanonicalTokenBuyRoute, buildV4SwapStep } from '../../../src/swap/build-route.js';
-import { quoteRoute } from '../../../src/swap/quoter.js';
-import { encodeRoute } from '../../../src/swap/route-encoding.js';
-import type { ResolvedRoute, RouteQuote } from '../../../src/swap/route-types.js';
+} from '@rareprotocol/rare-sdk/contracts/addresses';
+import { buildCanonicalTokenBuyRoute, buildV4SwapStep } from '@rareprotocol/rare-sdk/swap/build-route';
+import { quoteRoute } from '@rareprotocol/rare-sdk/swap/quoter';
+import { encodeRoute } from '@rareprotocol/rare-sdk/swap/route-encoding';
+import type { ResolvedRoute, RouteQuote } from '@rareprotocol/rare-sdk/swap/route-types';
 import {
   expectTx,
   parseTokenAmount,

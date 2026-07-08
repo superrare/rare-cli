@@ -1,11 +1,11 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getConfiguredAccountAddress, getPublicClient } from '../client.js';
-import { createRareClient } from '../sdk/client.js';
-import type { SupportedChain } from '../contracts/addresses.js';
-import type { NftSearchParams } from '../sdk/api.js';
-import type { RareClientEventSearchParams } from '../sdk/client.js';
-import { parseAddress, parseOptionalAddress } from '../sdk/validation.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import type { SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
+import type { NftSearchParams } from '@rareprotocol/rare-sdk/api';
+import type { RareClientEventSearchParams } from '@rareprotocol/rare-sdk/client';
+import { parseAddress, parseOptionalAddress } from '@rareprotocol/rare-sdk/validation';
 import { output, log, printNftRow, printCollectionRow, printNftEventRow, printPagination } from '../output.js';
 import { collectOption, parseNftEventSort, parseNftEventTypes } from './event-options.js';
 import { parsePositiveInteger } from './pagination-core.js';

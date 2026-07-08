@@ -23,7 +23,7 @@ import {
   shapeReleaseMintTokenRange,
   shapeReleaseStatus,
   verifyReleaseAllowlistProof,
-} from '../../../src/sdk/release-core.js';
+} from '@rareprotocol/rare-sdk/release-core';
 
 const ETH_ADDRESS = zeroAddress;
 const accountAddress = '0x0000000000000000000000000000000000000001' as const;

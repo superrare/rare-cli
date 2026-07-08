@@ -2,11 +2,11 @@ import { Command } from 'commander';
 import { formatUnits } from 'viem';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
-import { createRareClient } from '../sdk/client.js';
-import { parseAddress } from '../sdk/validation.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import { parseAddress } from '@rareprotocol/rare-sdk/validation';
 import { log, output } from '../output.js';
-import type { RareClient } from '../sdk/client.js';
-import type { LiquidEditionPoolKey } from '../sdk/liquid.js';
+import type { RareClient } from '@rareprotocol/rare-sdk/client';
+import type { LiquidEditionPoolKey } from '@rareprotocol/rare-sdk/liquid';
 import { deployLiquidEditionCommand } from './deploy.js';
 
 type ChainOptions = {

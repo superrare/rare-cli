@@ -2,9 +2,9 @@ import { Command } from 'commander';
 import { getAddress, isAddress, type Address } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { createRareClient } from '../sdk/client.js';
-import { getContractAddresses, requireContractAddress, type SupportedChain } from '../contracts/addresses.js';
-import type { RareClient } from '../sdk/client.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import { getContractAddresses, requireContractAddress, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
+import type { RareClient } from '@rareprotocol/rare-sdk/client';
 import {
   lazySovereignCollectionContractTypes,
   normalizeLazySovereignCollectionContractType,
@@ -13,8 +13,8 @@ import {
   planCollectionRoyaltyPercentage,
   planCollectionTokenReceiver,
   planCollectionTokenUri,
-} from '../sdk/collection-core.js';
-import { toPositiveInteger } from '../sdk/amounts-core.js';
+} from '@rareprotocol/rare-sdk/collection-core';
+import { toPositiveInteger } from '@rareprotocol/rare-sdk/amounts-core';
 import { output, log, printCollection } from '../output.js';
 import { createCollectionListCommand } from './account-market-list.js';
 import { mintCommand } from './mint.js';

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, type TestContext } from 'vit
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { formatEther } from 'viem';
-import { ETH_ADDRESS } from '../../src/contracts/addresses.js';
+import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts/addresses';
 import {
   cleanupLiveFixture,
   createLiveFixture,

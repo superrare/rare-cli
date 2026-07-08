@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import type { Address, Hash } from 'viem';
 import {
   runWithApprovalSideEffectAlert,
-} from '../../../src/sdk/approvals-shell.js';
-import type { ApprovalSideEffectError } from '../../../src/sdk/approvals-shell.js';
+} from '@rareprotocol/rare-sdk/approvals-shell';
+import type { ApprovalSideEffectError } from '@rareprotocol/rare-sdk/approvals-shell';
 
 const token = '0x1000000000000000000000000000000000000000' as Address;
 const spender = '0x2000000000000000000000000000000000000000' as Address;

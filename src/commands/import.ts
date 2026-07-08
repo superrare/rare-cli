@@ -1,9 +1,9 @@
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { chainIds } from '../contracts/addresses.js';
-import { createRareClient } from '../sdk/client.js';
-import { parseAddress } from '../sdk/validation.js';
+import { chainIds } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import { parseAddress } from '@rareprotocol/rare-sdk/validation';
 import { output, log } from '../output.js';
 
 type ImportErc721Options = {

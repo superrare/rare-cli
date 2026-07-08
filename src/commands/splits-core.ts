@@ -1,6 +1,6 @@
 import type { Address } from 'viem';
-import { MAX_PAYOUT_SPLIT_RECIPIENTS, planProvidedPayoutSplits } from '../sdk/splits-core.js';
-import { parseAddress } from '../sdk/validation.js';
+import { MAX_PAYOUT_SPLIT_RECIPIENTS, planProvidedPayoutSplits } from '@rareprotocol/rare-sdk/splits-core';
+import { parseAddress } from '@rareprotocol/rare-sdk/validation';
 
 export type SplitAccumulator = {
   addresses: Address[];

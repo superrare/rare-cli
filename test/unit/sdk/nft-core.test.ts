@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildNftUniversalTokenId } from '../../../src/sdk/nft-core.js';
+import { buildNftUniversalTokenId } from '@rareprotocol/rare-sdk/nft-core';
 
 const contract = '0xb932a70A57673d89f4ACFfBE830E8ed7f75Fb9E0';
 

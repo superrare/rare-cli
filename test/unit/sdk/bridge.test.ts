@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { maxUint256, type Address, type Hash, type PublicClient, type WalletClient } from 'viem';
-import type { ApprovalSideEffectError } from '../../../src/sdk/approvals-shell.js';
-import { PaymentApprovalRequiredError } from '../../../src/sdk/payments-shell.js';
-import { createRareClient } from '../../../src/sdk/client.js';
-import { encodeBridgeDistribution, getBridgeInfo } from '../../../src/sdk/bridge-core.js';
+import type { ApprovalSideEffectError } from '@rareprotocol/rare-sdk/approvals-shell';
+import { PaymentApprovalRequiredError } from '@rareprotocol/rare-sdk/payments-shell';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import { encodeBridgeDistribution, getBridgeInfo } from '@rareprotocol/rare-sdk/bridge-core';
 
 const accountAddress = '0x1234567890123456789012345678901234567890' as const;
 const recipientAddress = '0x9999999999999999999999999999999999999999' as const;

@@ -1,8 +1,8 @@
 /* eslint-disable no-restricted-syntax, @typescript-eslint/explicit-function-return-type, functional/immutable-data */
 import { describe, expect, it } from 'vitest';
 import type { Address } from 'viem';
-import { createBatchListingNamespace } from '../../../src/sdk/batch-listing.js';
-import { getBatchListingAddress } from '../../../src/contracts/addresses.js';
+import { createBatchListingNamespace } from '@rareprotocol/rare-sdk/batch-listing';
+import { getBatchListingAddress } from '@rareprotocol/rare-sdk/contracts/addresses';
 
 const batchListingAddress = '0xF2bE72d4343beD375Cb6d0E799a3c003163860e0' as Address;
 const marketplaceSettingsAddress = '0x972dEe8fa339ad2D9c6cbDA31b67f98Fac242d13' as Address;

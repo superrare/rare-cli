@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import { erc20Abi, parseUnits } from 'viem';
-import { resolveCurrency } from '../../src/contracts/addresses.js';
+import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses';
 import { describeLive, expectTx, jsonCommand, step, type TxResult } from './live-helpers.js';
 import {
   cleanupLiveCliFixture,

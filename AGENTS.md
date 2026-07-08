@@ -114,7 +114,7 @@ The rule of thumb is: **if the caller wants to handle the failure differently in
 
 ### Return a discriminated result when
 
-- The failure is expected and part of the function's contract — input validation, parsing, business-rule checks. `src/liquid/curve-config.ts`'s `{ isValid: true, ... } | { isValid: false, error, errorMessage }` is the model.
+- The failure is expected and part of the function's contract — input validation, parsing, business-rule checks. `@rareprotocol/rare-sdk`'s `liquid/curve-config` `{ isValid: true, ... } | { isValid: false, error, errorMessage }` is the model.
 - The caller often wants to branch on the failure mode (re-prompt, accumulate errors, try alternatives) rather than propagate.
 - The function lives in the functional core. The core's whole point is that decisions return structured data. Throwing from the core makes outputs harder to test and reason about.
 - The caller wants to enumerate failure cases at compile time. Pair a tagged union with `@typescript-eslint/switch-exhaustiveness-check` (already on) so new failure modes force handling.
@@ -131,12 +131,12 @@ The rule of thumb is: **if the caller wants to handle the failure differently in
 - **Catch-rewrap-rethrow without `cause`.** If you must wrap, always set `{ cause: original }` so `printError` can walk the chain.
 - **Catching `unknown` and swallowing it.** `catch { return undefined }` silently hides real bugs.
 - **`console.error` + `process.exit(1)` from shell code.** Throw instead and let `printError` handle it.
-- **Domain errors with no `instanceof` discriminator.** If you add a custom error class, model it on `RareApiError` in `src/data-access/errors.ts` so `errors.ts` can pull specific fields out of it.
+- **Domain errors with no `instanceof` discriminator.** If you add a custom error class, model it on `RareApiError` in `@rareprotocol/rare-sdk/data-access/errors` so `errors.ts` can pull specific fields out of it.
 
 ### Where the two patterns currently live
 
-- Throwing: `src/sdk/**` (SDK methods, viem/API errors), `src/sdk/validation.ts` (parsers called from command setup), `src/commands/**` (action handlers).
-- Returning: `src/liquid/curve-config.ts` (interactive wizard validators — re-prompts on failure rather than aborting).
+- Throwing: `@rareprotocol/rare-sdk` (SDK methods, viem/API errors, and its `validation` parsers called from command setup), `src/commands/**` (action handlers).
+- Returning: `src/liquid-wizard.ts` + the SDK's `liquid/curve-config` (interactive wizard validators — re-prompts on failure rather than aborting).
 
 Both are correct because they sit on opposite sides of the I/O boundary. Match new code to whichever side it belongs on.
 

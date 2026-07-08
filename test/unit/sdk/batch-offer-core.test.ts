@@ -6,11 +6,11 @@ import {
   planBatchOfferRoot,
   shapeBatchOfferRead,
   shapeBatchOfferStatus,
-} from '../../../src/sdk/batch-offer-core.js';
+} from '@rareprotocol/rare-sdk/batch-offer-core';
 import {
   buildBatchTokenTreeArtifact,
   getBatchTokenProof,
-} from '../../../src/sdk/batch-core.js';
+} from '@rareprotocol/rare-sdk/batch-core';
 
 const ACCOUNT = '0x1111111111111111111111111111111111111111';
 const CREATOR = '0x2222222222222222222222222222222222222222';

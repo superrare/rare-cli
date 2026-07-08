@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isAddressEqual, zeroAddress, type Address } from 'viem';
-import { chainIds } from '../../src/contracts/addresses.js';
+import { chainIds } from '@rareprotocol/rare-sdk/contracts/addresses';
 import { describeLive, expectTx, jsonCommand, step, type TxResult } from './live-helpers.js';
 import {
   cleanupLiveCliFixture,

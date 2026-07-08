@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getAddress, isAddress, isAddressEqual, zeroAddress, type Address } from 'viem';
-import { createRareClient } from '../../../src/sdk/client.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import {
   ETH_ADDRESS,
   getContractAddresses,
@@ -9,7 +9,7 @@ import {
   getErc1155MarketplaceAddress,
   rareErc1155ContractFactoryAbi,
   rareErc1155MarketplaceAbi,
-} from '../../../src/sdk/contracts.js';
+} from '@rareprotocol/rare-sdk/contracts';
 import { createTestSepoliaPublicClient, hasTestRpcUrl } from '../../helpers/liveViem.js';
 
 const describeRpc = hasTestRpcUrl() ? describe : describe.skip;

@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPublicClient, http } from 'viem';
 import { mainnet } from 'viem/chains';
-import * as client from '../../../src/sdk/index.js';
-import * as contracts from '../../../src/sdk/contracts.js';
-import * as utils from '../../../src/sdk/public-utils.js';
+import * as client from '@rareprotocol/rare-sdk/index';
+import * as contracts from '@rareprotocol/rare-sdk/contracts';
+import * as utils from '@rareprotocol/rare-sdk/public-utils';
 
 afterEach(() => {
   vi.unstubAllGlobals();

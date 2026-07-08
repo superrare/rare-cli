@@ -1,12 +1,14 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
-    "src/sdk/index.ts",
-    "src/sdk/contracts.ts",
-    "src/sdk/public-utils.ts"
+    "node_modules/@rareprotocol/rare-sdk/dist/sdk/index.d.ts",
+    "node_modules/@rareprotocol/rare-sdk/dist/sdk/contracts.d.ts",
+    "node_modules/@rareprotocol/rare-sdk/dist/sdk/public-utils.d.ts"
   ],
   "entryPointStrategy": "resolve",
-  "plugin": ["typedoc-plugin-markdown"],
+  "plugin": [
+    "typedoc-plugin-markdown"
+  ],
   "out": "docs/sdk/reference",
   "readme": "none",
   "excludePrivate": true,
@@ -16,5 +18,6 @@
   "validation": {
     "notExported": false
   },
-  "hideGenerator": true
+  "hideGenerator": true,
+  "tsconfig": "tsconfig.typedoc.json"
 }

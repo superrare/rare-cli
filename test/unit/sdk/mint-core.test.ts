@@ -4,7 +4,7 @@ import {
   isMintMetadataOptionsError,
   parseMintAttribute,
   planMintTokenUri,
-} from '../../../src/sdk/mint-core.js';
+} from '@rareprotocol/rare-sdk/mint-core';
 
 const imageMedia = {
   url: 'ipfs://image',

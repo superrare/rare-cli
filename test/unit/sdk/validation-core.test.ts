@@ -4,7 +4,7 @@ import {
   requireInput,
   toUnixTimestamp,
   validateRouterPayload,
-} from '../../../src/sdk/validation-core.js';
+} from '@rareprotocol/rare-sdk/validation-core';
 
 describe('SDK validation core', () => {
   it('requires present inputs and configured contract addresses', () => {
