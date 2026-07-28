@@ -46,7 +46,9 @@ describeLive('live deploy liquid-edition CLI write command', () => {
     expect(deployed.chainId).toBe(fixture.chainId);
     expect(deployed.tokenUri).toBe(E2E_TOKEN_URI);
     expect(deployed.source).toBe(`file:${fixture.curvesFile}`);
-    expect(deployed.liquidEditionUrl).toBe(`https://superrare.com/liquid-editions/${fixture.chainId}/${deployed.contract}`);
+    expect(deployed.liquidEditionUrl).toBe(
+      `https://studio.superrare.com/liquid-editions/${fixture.chainId}/${deployed.contract}`,
+    );
     expect(deployed.curves).toEqual(LIQUID_CURVES);
 
     const tokenUri = await readLiquidEditionTokenUri(fixture, deployed.contract);

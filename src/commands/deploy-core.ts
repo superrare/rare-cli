@@ -176,7 +176,7 @@ export function getLiquidEditionDeployConfirmationDecision(opts: {
 }
 
 export function formatLiquidEditionUrl(chainId: number, contractAddress: string): string {
-  return `https://superrare.com/liquid-editions/${chainId}/${contractAddress}`;
+  return `https://studio.superrare.com/liquid-editions/${chainId}/${contractAddress}`;
 }
 
 export function formatCurvePreview(preview: LiquidCurvePreview, source: string, targetChain?: string): string[] {

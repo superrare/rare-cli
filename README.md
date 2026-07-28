@@ -1,6 +1,6 @@
 # RARE Protocol CLI
 
-Command-line tool for the [RARE Protocol](https://superrare.com) on Ethereum. Deploy NFT contracts, mint tokens, run auctions, create offers and listings, and search the network — all from your terminal.
+Command-line tool for the [RARE Protocol](https://studio.superrare.com) on Ethereum. Deploy NFT contracts, mint tokens, run auctions, create offers and listings, and search the network — all from your terminal.
 
 ## Install
 

@@ -2,11 +2,19 @@ import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import {
   formatCurvePreview,
+  formatLiquidEditionUrl,
   getLiquidEditionDeployConfirmationDecision,
   parseAttribute,
   resolveCurveSourceMode,
   validateLiquidEditionDeployMetadataOptions,
 } from '../../../src/commands/deploy-core.js';
+
+test('formatLiquidEditionUrl targets SuperRare Studio', () => {
+  assert.equal(
+    formatLiquidEditionUrl(11155111, '0x1234'),
+    'https://studio.superrare.com/liquid-editions/11155111/0x1234',
+  );
+});
 
 test('resolveCurveSourceMode rejects omitted curves outside a TTY', () => {
   assert.throws(() => resolveCurveSourceMode({}, false), /interactive curve wizard/i);

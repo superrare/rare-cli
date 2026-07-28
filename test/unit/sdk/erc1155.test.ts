@@ -13,11 +13,13 @@ const erc20 = '0xdddddddddddddddddddddddddddddddddddddddd' as Address;
 const marketplace = '0x1111111111111111111111111111111111111111' as Address;
 const approvalManager = '0x2222222222222222222222222222222222222222' as Address;
 const marketplaceSettings = '0x3333333333333333333333333333333333333333' as Address;
+const erc20ApprovalManager = '0x7777777777777777777777777777777777777777' as Address;
 const hex32 = (byte: string): `0x${string}` => `0x${byte.repeat(64)}`;
 
 const addresses: ContractAddresses = {
   factory: '0x4444444444444444444444444444444444444444',
   auction: '0x5555555555555555555555555555555555555555',
+  erc20ApprovalManager,
   erc1155Marketplace: marketplace,
   erc1155ContractFactory: '0x6666666666666666666666666666666666666666',
   erc1155ApprovalManager: approvalManager,
