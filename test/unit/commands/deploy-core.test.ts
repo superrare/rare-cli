@@ -9,10 +9,10 @@ import {
   validateLiquidEditionDeployMetadataOptions,
 } from '../../../src/commands/deploy-core.js';
 
-test('formatLiquidEditionUrl targets SuperRare Studio', () => {
+test('formatLiquidEditionUrl targets the SuperRare Liquid Editions route', () => {
   assert.equal(
     formatLiquidEditionUrl(11155111, '0x1234'),
-    'https://studio.superrare.com/liquid-editions/11155111/0x1234',
+    'https://superrare.com/liquid-editions/11155111/0x1234',
   );
 });
 
