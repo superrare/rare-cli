@@ -66,7 +66,7 @@ export function resolveConnectIntentProgress(intent: ConnectIntent): ConnectInte
  * if the buyer pays with crypto instead of card, the hosted flow sends them
  * back to this origin when done.
  */
-const CLI_INITIATING_ORIGIN = 'https://superrare.com';
+const CLI_INITIATING_ORIGIN = 'https://studio.superrare.com';
 
 export type PreparedConnectCheckout = {
   intentId: string;

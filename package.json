@@ -79,7 +79,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@rareprotocol/rare-sdk": "0.1.2",
+    "@rareprotocol/rare-sdk": "0.1.3",
     "commander": "12.1.0",
     "viem": "2.54.6",
     "zod": "^4.4.3"
