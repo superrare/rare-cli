@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Address } from 'viem';
 import {
   getContractAddresses,
-} from '@rareprotocol/rare-sdk/contracts/addresses';
+} from '@rareprotocol/rare-sdk/contracts';
 import {
   approveToken,
   cleanupLiveFixture,
