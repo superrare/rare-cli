@@ -1,6 +1,8 @@
 import { Command } from 'commander';
-import { getUser } from '@rareprotocol/rare-sdk/api';
-import { parseAddress } from '@rareprotocol/rare-sdk/validation';
+import { getPublicClient } from '../client.js';
+import { getActiveChain } from '../config.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import { parseAddress } from '../input-core.js';
 import { log, output, printUser } from '../output.js';
 
 export function userCommand(): Command {
@@ -16,7 +18,8 @@ export function userCommand(): Command {
 
       log(`Getting user ${userAddress}...`);
 
-      const result = await getUser(userAddress);
+      const chain = getActiveChain();
+      const result = await createRareClient({ publicClient: getPublicClient(chain) }).user.get(userAddress);
       output(result, () => {
         printUser(result);
       });

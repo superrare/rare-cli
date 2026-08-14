@@ -5,13 +5,8 @@ import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import {
-  parseCurveConfig,
-  type LiquidCurvePreview,
-  type LiquidCurveSegment,
-} from '@rareprotocol/rare-sdk/liquid/curve-config';
-import { toPositiveInteger } from '@rareprotocol/rare-sdk/amounts-core';
-import { resolveLiquidFactoryConfigForSupply } from '@rareprotocol/rare-sdk/liquid/factory-config-core';
+import type { LiquidCurvePreview, LiquidCurveSegment } from '@rareprotocol/rare-sdk';
+import { toPositiveInteger } from '../input-core.js';
 import { runLiquidCurveWizard } from '../liquid-wizard.js';
 import { output, log, isJsonMode } from '../output.js';
 import {
@@ -158,17 +153,6 @@ async function confirmLiquidEditionDeploy(chain: string, yes?: boolean): Promise
   throw new Error('Aborted.');
 }
 
-function resolveFactoryConfigForSupplyOrThrow(
-  factoryConfig: Awaited<ReturnType<ReturnType<typeof createRareClient>['liquidEdition']['getFactoryConfig']>>,
-  totalSupply?: string,
-): Awaited<ReturnType<ReturnType<typeof createRareClient>['liquidEdition']['getFactoryConfig']>> {
-  const result = resolveLiquidFactoryConfigForSupply(factoryConfig, totalSupply);
-  if (!result.isValid) {
-    throw new Error(result.errorMessage);
-  }
-  return result.factoryConfig;
-}
-
 async function resolveCurves(
   opts: {
     curvesFile?: string;
@@ -191,12 +175,17 @@ async function resolveCurves(
     if (!opts.curvesFile) {
       throw new Error('--curves-file is required for file curve source.');
     }
-    const factoryConfig = resolveFactoryConfigForSupplyOrThrow(
-      await rare.liquidEdition.getFactoryConfig(),
-      opts.totalSupply,
-    );
+    const liquidEdition = rare.liquidEdition;
+    if (!supportsSupplyAwareFactoryConfig(liquidEdition)) {
+      throw new Error('The installed RARE SDK does not support custom liquid edition supplies.');
+    }
+    const factoryConfig = await liquidEdition.getFactoryConfig({ totalSupply: opts.totalSupply });
     const raw = await readFile(opts.curvesFile, 'utf-8');
-    const curves = parseCurveConfig(raw, factoryConfig.curvePoolSupplyTokens, factoryConfig.poolTickSpacing);
+    const curves = rare.utils.liquidCurve.parseConfig({
+      value: raw,
+      totalCurveSupplyTokens: factoryConfig.curvePoolSupplyTokens,
+      tickSpacing: factoryConfig.poolTickSpacing,
+    });
     const preview = await rare.liquidEdition.validateCurves({ curves, totalSupply: opts.totalSupply });
     return {
       source: `file:${opts.curvesFile}`,
@@ -235,6 +224,15 @@ async function resolveCurves(
     preview: wizard.preview,
     rarePriceUsd: wizard.rarePriceUsd,
   };
+}
+
+type SupplyAwareLiquidEdition = ReturnType<typeof createRareClient>['liquidEdition'] & {
+  getFactoryConfig: (params?: { totalSupply?: string }) => Promise<Awaited<ReturnType<ReturnType<typeof createRareClient>['liquidEdition']['getFactoryConfig']>>>;
+};
+
+function supportsSupplyAwareFactoryConfig(value: unknown): value is SupplyAwareLiquidEdition {
+  return typeof value === 'object' && value !== null &&
+    'getFactoryConfig' in value && typeof value.getFactoryConfig === 'function';
 }
 
 export function deployErc721Command(): Command {

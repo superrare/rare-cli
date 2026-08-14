@@ -15,8 +15,8 @@ import {
   type ChainConfig,
   type Config,
 } from '../config.js';
-import { chainIds, isSupportedChain, supportedChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
-import { isPrivateKeyString, parsePrivateKey } from '@rareprotocol/rare-sdk/validation';
+import { chainIds, isSupportedChain, supportedChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
+import { isPrivateKeyString, parsePrivateKey } from '../input-core.js';
 import { readOnePasswordPrivateKey, readOnePasswordSecret } from '../one-password.js';
 import { isJsonMode, output } from '../output.js';
 

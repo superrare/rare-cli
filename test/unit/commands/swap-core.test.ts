@@ -1,6 +1,6 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts';
 import {
   ensureHex,
   formatBuyRareQuoteLines,

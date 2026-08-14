@@ -1,4 +1,4 @@
-import type { AuctionCreateParams } from '@rareprotocol/rare-sdk/auction';
+import type { AuctionCreateParams } from '@rareprotocol/rare-sdk';
 
 export type AuctionTypeOption = NonNullable<AuctionCreateParams['auctionType']>;
 

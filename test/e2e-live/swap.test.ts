@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it, type TestContext } from 'vit
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { formatEther } from 'viem';
-import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts';
 import {
   cleanupLiveFixture,
   createLiveFixture,
@@ -12,7 +12,6 @@ import {
   jsonCommand,
   liveSwapEthAmount,
   liveSwapRareAmount,
-  liveSwapRareToUsdcAmount,
   LiveFixtureRef,
   missingEnv,
   step,
@@ -20,8 +19,8 @@ import {
   type TxResult,
 } from './helpers/live-harness.js';
 import {
-  encodeEthToUsdcViaWethSwap,
-  encodeRareToUsdcSwap,
+  encodeEthToUsdcSwap,
+  encodeRareToEthSwap,
   expectKnownPoolSwap,
   type TokenTradeResult,
 } from './helpers/live-swap.js';
@@ -104,13 +103,13 @@ describeLive('live swap CLI write commands', () => {
     expectKnownPoolSwap(result);
   });
 
-  it('swaps RARE for USDC', async () => {
+  it('swaps RARE for ETH through the generic raw-router command', async () => {
     const fixture = live.value;
-    await expectTokenBalanceAtLeast(fixture, fixture.sellerAddress, fixture.rareAddress, liveSwapRareToUsdcAmount());
+    await expectTokenBalanceAtLeast(fixture, fixture.sellerAddress, fixture.rareAddress, liveSwapRareAmount());
 
-    const encoded = await encodeRareToUsdcSwap(fixture, liveSwapRareToUsdcAmount());
+    const encoded = await encodeRareToEthSwap(fixture, liveSwapRareAmount());
     const amountIn = await formatTokenAmount(fixture, fixture.rareAddress, encoded.amountIn);
-    const minAmountOut = await formatTokenAmount(fixture, fixture.usdcAddress, encoded.quote.minAmountOut);
+    const minAmountOut = formatEther(encoded.quote.minAmountOut);
 
     const result = await step('swap RARE for USDC', () =>
       jsonCommand<TxResult>(fixture.sellerHome, [
@@ -121,7 +120,7 @@ describeLive('live swap CLI write commands', () => {
         '--amount-in',
         amountIn,
         '--token-out',
-        fixture.usdcAddress,
+        ETH_ADDRESS,
         '--min-amount-out',
         minAmountOut,
         '--commands',
@@ -137,13 +136,13 @@ describeLive('live swap CLI write commands', () => {
     expectTx(result);
   });
 
-  it('swaps ETH for USDC through a router-funded WETH V4 pool', async () => {
+  it('swaps ETH for USDC through the public SDK local route quote', async () => {
     const fixture = live.value;
     if (fixture.chain !== 'sepolia') {
       return;
     }
 
-    const encoded = await encodeEthToUsdcViaWethSwap(fixture, liveSwapEthAmount());
+    const encoded = await encodeEthToUsdcSwap(fixture, liveSwapEthAmount());
     const minAmountOut = await formatTokenAmount(fixture, fixture.usdcAddress, encoded.quote.minAmountOut);
 
     const result = await step('swap ETH for USDC through WETH V4 pool', () =>

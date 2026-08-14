@@ -3,8 +3,8 @@ import path from 'path';
 import os from 'os';
 import { randomUUID } from 'crypto';
 import { getAddress, isAddress, type Address } from 'viem';
-import { chainIds, supportedChains, isSupportedChain, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
-import { parsePrivateKey } from '@rareprotocol/rare-sdk/validation';
+import { chainIds, supportedChains, isSupportedChain, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
+import { parsePrivateKey } from './input-core.js';
 
 export type PrivateKeyReference = `op://${string}`;
 
