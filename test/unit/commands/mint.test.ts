@@ -2,19 +2,12 @@ import assert from 'node:assert/strict';
 import { beforeEach, test, vi } from 'vitest';
 import { mintCommand } from '../../../src/commands/mint.js';
 
-const uploadMedia = vi.hoisted(() => vi.fn());
-const pinMetadata = vi.hoisted(() => vi.fn());
+const createRareClient = vi.hoisted(() => vi.fn());
 
-vi.mock('@rareprotocol/rare-sdk/api', () => {
-  return {
-    uploadMedia,
-    pinMetadata,
-  };
-});
+vi.mock('@rareprotocol/rare-sdk/client', () => ({ createRareClient }));
 
 beforeEach(() => {
-  uploadMedia.mockReset();
-  pinMetadata.mockReset();
+  createRareClient.mockReset();
 });
 
 test('mint validates local write prerequisites before uploading generated metadata', async () => {
@@ -36,6 +29,5 @@ test('mint validates local write prerequisites before uploading generated metada
     /--contract must be a valid EVM address/,
   );
 
-  assert.equal(uploadMedia.mock.calls.length, 0);
-  assert.equal(pinMetadata.mock.calls.length, 0);
+  assert.equal(createRareClient.mock.calls.length, 0);
 });

@@ -18,7 +18,7 @@ npm install && npm run build
 
 ## Commands
 
-See [rare-cli-commands.md](./rare-cli-commands.md) for the current command map and [rare-cli-sdk-client-functions.md](./rare-cli-sdk-client-functions.md) for the public SDK surface.
+See [rare-cli-commands.md](./rare-cli-commands.md) for the current command map. The public SDK surface is owned and documented by [rare-sdk](https://github.com/superrare/rare-sdk#readme).
 
 Most commands accept `--chain <chain>` or `--chain-id <id>` to override the configured default network.
 

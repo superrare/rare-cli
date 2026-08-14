@@ -10,14 +10,8 @@ import {
 } from '../checkout.js';
 import { createApiClient } from '@rareprotocol/rare-sdk/data-access';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses';
-import {
-  planListingBuyLocalInputs,
-  planListingCancel,
-  planListingCreateLocalInputs,
-} from '@rareprotocol/rare-sdk/marketplace-core';
-import { parseAddress } from '@rareprotocol/rare-sdk/validation';
-import { resolveCurrencyDecimals } from '@rareprotocol/rare-sdk/payments-shell';
+import { ETH_ADDRESS, PUBLIC_LISTING_TARGET, resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
+import { parseAddress, toNonNegativeInteger, toNonNegativeWei, toPositiveWei } from '../input-core.js';
 import { output, log } from '../output.js';
 import { createListingListCommand } from './account-market-list.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
@@ -104,9 +98,10 @@ export function listingCommand(): Command {
         throw new Error('rare listing create requires --price.');
       }
       const contract = parseAddress(opts.contract, '--contract');
+      toNonNegativeWei(price, 'price');
       const target = opts.target ? parseAddress(opts.target, '--target') : PUBLIC_LISTING_TARGET;
       const splits = finalizeSplits(opts.split);
-      const localPlan = planListingCreateLocalInputs({ tokenId: opts.tokenId, price });
+      const tokenId = toNonNegativeInteger(opts.tokenId, 'tokenId');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
@@ -117,7 +112,7 @@ export function listingCommand(): Command {
       log(`Creating listing on ${chain}...`);
       log(`  Marketplace contract: ${rare.contracts.auction}`);
       log(`  NFT contract: ${contract}`);
-      log(`  Token ID: ${localPlan.tokenId.toString()}`);
+      log(`  Token ID: ${tokenId.toString()}`);
       log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
       log(`  Target: ${isAddressEqual(target, PUBLIC_LISTING_TARGET) ? 'public' : target}`);
       if (splits) {
@@ -129,7 +124,7 @@ export function listingCommand(): Command {
 
       const listingParams = {
         contract,
-        tokenId: localPlan.tokenId,
+        tokenId,
         price,
         currency,
         target,
@@ -181,7 +176,7 @@ export function listingCommand(): Command {
       requireTokenScopeOptions(opts, 'cancel');
       const contract = parseAddress(opts.contract, '--contract');
       const target = opts.target ? parseAddress(opts.target, '--target') : PUBLIC_LISTING_TARGET;
-      const localPlan = planListingCancel({ contract, tokenId: opts.tokenId, target });
+      const tokenId = toNonNegativeInteger(opts.tokenId, 'tokenId');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
@@ -191,8 +186,8 @@ export function listingCommand(): Command {
 
       const result = await rare.listing.cancel({
         contract,
-        tokenId: localPlan.tokenId,
-        target: localPlan.target,
+        tokenId,
+        target,
       });
 
       output(
@@ -224,7 +219,8 @@ export function listingCommand(): Command {
         throw new Error('rare listing buy requires --price.');
       }
       const contract = parseAddress(opts.contract, '--contract');
-      const localPlan = planListingBuyLocalInputs({ tokenId: opts.tokenId, price });
+      toPositiveWei(price, 'price');
+      const tokenId = toNonNegativeInteger(opts.tokenId, 'tokenId');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
@@ -235,12 +231,12 @@ export function listingCommand(): Command {
       log(`Buying token on ${chain}...`);
       log(`  Marketplace contract: ${rare.contracts.auction}`);
       log(`  NFT contract: ${contract}`);
-      log(`  Token ID: ${localPlan.tokenId.toString()}`);
+      log(`  Token ID: ${tokenId.toString()}`);
       log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
 
       const buyParams = {
         contract,
-        tokenId: localPlan.tokenId,
+        tokenId,
         price,
         currency,
       };
@@ -409,7 +405,7 @@ export function listingCommand(): Command {
       });
       const amount = formatUnits(
         result.amount,
-        await resolveCurrencyDecimals(publicClient, chain, result.currencyAddress),
+        (await rare.currency.resolveDecimals(result.currencyAddress)).decimals,
       );
 
       output(result, () => {
