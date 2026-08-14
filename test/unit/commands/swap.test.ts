@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, test, vi } from 'vitest';
 import type { TransactionReceipt } from 'viem';
-import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { ETH_ADDRESS } from '@rareprotocol/rare-sdk/contracts';
 import { swapCommand } from '../../../src/commands/swap.js';
-import type { TokenTradeQuote, TokenTradeResult } from '@rareprotocol/rare-sdk/swap';
+import type { TokenTradeQuote, TokenTradeResult } from '@rareprotocol/rare-sdk';
 
 const getPublicClient = vi.hoisted(() => vi.fn());
 const getWalletClient = vi.hoisted(() => vi.fn());
@@ -262,6 +262,45 @@ test('raw token swap requires confirmation before loading a wallet', async () =>
   assert.equal(getPublicClient.mock.calls.length, 0);
   assert.equal(createRareClient.mock.calls.length, 0);
   assert.equal(swapTokens.mock.calls.length, 0);
+});
+
+test('raw token swap validates amounts before confirmation or wallet setup', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'rare-cli-swap-test-'));
+  const inputsFile = join(tempDir, 'inputs.json');
+  const originalArgv = [...process.argv];
+  // eslint-disable-next-line functional/immutable-data
+  process.argv.push('--json');
+
+  try {
+    await writeFile(inputsFile, JSON.stringify(['0x1234']), 'utf8');
+    await assert.rejects(
+      swapCommand().parseAsync([
+        'tokens',
+        '--token-in',
+        ETH_ADDRESS,
+        '--amount-in',
+        '0',
+        '--token-out',
+        token,
+        '--min-amount-out',
+        '1',
+        '--commands',
+        '0x10',
+        '--inputs-file',
+        inputsFile,
+        '--chain',
+        'sepolia',
+      ], { from: 'user' }),
+      /amountIn must be greater than 0/,
+    );
+  } finally {
+    // eslint-disable-next-line functional/immutable-data
+    process.argv.splice(0, process.argv.length, ...originalArgv);
+    await rm(tempDir, { recursive: true, force: true });
+  }
+
+  assert.equal(getWalletClient.mock.calls.length, 0);
+  assert.equal(createRareClient.mock.calls.length, 0);
 });
 
 function tokenQuote(params: { direction: 'buy' | 'sell' }): TokenTradeQuote {

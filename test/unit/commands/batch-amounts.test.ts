@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseBatchAmount, formatBatchAmount, getBatchCurrencyDecimals } from '../../../src/commands/batch-amounts.js';
-import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 
 // eslint-disable-next-line no-restricted-syntax
 const mockPublicClient = {

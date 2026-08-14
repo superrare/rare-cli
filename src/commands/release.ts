@@ -6,21 +6,17 @@ import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient, type RareClient } from '@rareprotocol/rare-sdk/client';
 import {
-  buildReleaseAllowlistArtifactFromInput,
-  getReleaseAllowlistProof,
-  normalizeReleaseAllowlistProof,
-  normalizeReleasePrice,
-  normalizeReleaseStartTime,
-  planReleaseAllowlistConfig,
-  parseReleaseAllowlistArtifactJson,
-} from '@rareprotocol/rare-sdk/release-core';
-import type {
-  ReleaseAllowlistArtifact,
-  ReleaseAllowlistInputFormat,
-} from '@rareprotocol/rare-sdk/types/release';
-import { toInteger, toNonNegativeInteger, toPositiveInteger } from '@rareprotocol/rare-sdk/amounts-core';
-import { resolveCurrencyDecimals } from '@rareprotocol/rare-sdk/payments-shell';
-import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses';
+  buildUtilsReleaseAllowlist,
+  getUtilsReleaseAllowlistProof,
+  normalizeUtilsReleaseAllowlistProof,
+  normalizeUtilsReleasePrice,
+  normalizeUtilsReleaseStartTime,
+  validateUtilsReleaseAllowlistConfig,
+  parseUtilsReleaseAllowlistArtifact,
+} from '@rareprotocol/rare-sdk/utils';
+import type { ReleaseAllowlistArtifact, ReleaseAllowlistInputFormat } from '@rareprotocol/rare-sdk';
+import { toInteger, toNonNegativeInteger, toPositiveInteger } from '../input-core.js';
+import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 import { output, log } from '../output.js';
 import { runWithMinterApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, type SplitAccumulator } from './splits-core.js';
@@ -154,7 +150,7 @@ function assertBytes32Option(value: string, label: string): asserts value is Hex
 }
 
 function loadAllowlistArtifact(filePath: string): ReleaseAllowlistArtifact {
-  return parseReleaseAllowlistArtifactJson(readTextFile(filePath, 'allowlist artifact'));
+  return parseUtilsReleaseAllowlistArtifact(readTextFile(filePath, 'allowlist artifact'));
 }
 
 function readProofFile(filePath: string): Hex[] {
@@ -170,7 +166,7 @@ function readProofFile(filePath: string): Hex[] {
     throw new Error('--proof must be a JSON array or an object with a proof array.');
   }
 
-  return normalizeReleaseAllowlistProof(proof);
+  return normalizeUtilsReleaseAllowlistProof(proof);
 }
 
 function parseProofJson(content: string): unknown {
@@ -224,9 +220,9 @@ export function releaseCommand(): Command {
       const currency = opts.currency === undefined ? ETH_ADDRESS : resolveCurrency(opts.currency, chain);
       const currencyDecimals = currency === ETH_ADDRESS
         ? null
-        : await resolveCurrencyDecimals(publicClient, chain, currency);
-      normalizeReleasePrice({ currencyAddress: currency, amount: opts.price, currencyDecimals });
-      normalizeReleaseStartTime(opts.startTime, currentUnixTimestamp());
+        : (await createRareClient({ publicClient }).currency.resolveDecimals(currency)).decimals;
+      normalizeUtilsReleasePrice({ currencyAddress: currency, amount: opts.price, currencyDecimals });
+      normalizeUtilsReleaseStartTime(opts.startTime, currentUnixTimestamp());
       const { client, account } = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const isEth = currency === ETH_ADDRESS;
@@ -325,8 +321,8 @@ export function releaseCommand(): Command {
         const priceCurrency = currency ?? ETH_ADDRESS;
         const currencyDecimals = priceCurrency === ETH_ADDRESS
           ? null
-          : await resolveCurrencyDecimals(getPublicClient(chain), chain, priceCurrency);
-        normalizeReleasePrice({
+          : (await createRareClient({ publicClient: getPublicClient(chain) }).currency.resolveDecimals(priceCurrency)).decimals;
+        normalizeUtilsReleasePrice({
           currencyAddress: priceCurrency,
           amount: opts.price,
           currencyDecimals,
@@ -415,7 +411,7 @@ export function releaseCommand(): Command {
     .action((opts: AllowlistBuildOptions): void => {
       const format = detectAllowlistFormat(opts.input, opts.format);
       const raw = readTextFile(opts.input, 'allowlist input');
-      const artifact = buildReleaseAllowlistArtifactFromInput(raw, format);
+      const artifact = buildUtilsReleaseAllowlist(raw, format);
 
       if (opts.output !== undefined) {
         writeJsonFile(opts.output, artifact);
@@ -443,7 +439,7 @@ export function releaseCommand(): Command {
     .action((opts: AllowlistProofOptions): void => {
       assertAddressOption(opts.account, 'account');
       const artifact = loadAllowlistArtifact(opts.input);
-      const proof = getReleaseAllowlistProof({ artifact, address: opts.account });
+      const proof = getUtilsReleaseAllowlistProof({ artifact, address: opts.account });
       if (proof === null) {
         throw new Error(`Account ${opts.account} is not present in allowlist artifact ${opts.input}.`);
       }
@@ -493,7 +489,7 @@ export function releaseCommand(): Command {
       }
       const root = opts.root;
       const contract = opts.contract;
-      planReleaseAllowlistConfig({ contract, root, artifact, endTime });
+      validateUtilsReleaseAllowlistConfig({ contract, root, artifact, endTime });
       const chain = getActiveChain(opts.chain, opts.chainId);
       const rare = releaseWriteClient(chain);
 

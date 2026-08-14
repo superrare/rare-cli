@@ -1,7 +1,0 @@
-{
-  "extends": "./tsconfig.json",
-  "compilerOptions": {
-    "rootDir": "."
-  },
-  "include": ["node_modules/@rareprotocol/rare-sdk/dist/**/*.d.ts"]
-}

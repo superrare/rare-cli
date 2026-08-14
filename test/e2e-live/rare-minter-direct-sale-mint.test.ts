@@ -3,7 +3,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createWalletClient, http, zeroAddress, type Address } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { getContractAddresses, viemChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { getContractAddresses, viemChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
 import {
   cleanupTempHome,
   configureLiveHome,
