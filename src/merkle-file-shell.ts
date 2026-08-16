@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import type { BatchListingProofArtifact, BatchListingRootArtifact } from '@rareprotocol/rare-sdk';
-import { validateUtilsMerkleProofArtifact, validateUtilsMerkleRootArtifact } from '@rareprotocol/rare-sdk/utils';
+import { validateMerkleProofArtifact, validateMerkleRootArtifact } from '@rareprotocol/rare-sdk/utils';
 
 function parseJson(text: string): unknown {
   return JSON.parse(text) as unknown;
@@ -8,13 +8,13 @@ function parseJson(text: string): unknown {
 
 export async function loadMerkleRootArtifact(path: string): Promise<BatchListingRootArtifact> {
   const parsed = parseJson(await readFile(path, 'utf8'));
-  validateUtilsMerkleRootArtifact(parsed);
+  validateMerkleRootArtifact(parsed);
   return parsed;
 }
 
 export async function loadMerkleProofArtifact(path: string): Promise<BatchListingProofArtifact> {
   const parsed = parseJson(await readFile(path, 'utf8'));
-  validateUtilsMerkleProofArtifact(parsed);
+  validateMerkleProofArtifact(parsed);
   return parsed;
 }
 
