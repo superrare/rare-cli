@@ -10,16 +10,16 @@ import { output, log, isJsonMode } from '../output.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import type { RareClient } from '@rareprotocol/rare-sdk/client';
 import {
-  buildUtilsBatchListingArtifact,
-  buildUtilsMerkleProof,
-  getUtilsTreeProof,
-  normalizeUtilsMerkleRoot,
-  normalizeUtilsTokenId,
-  parseUtilsBatchListingArtifact,
-  parseUtilsTreeInput,
-  parseUtilsTreeProof,
-  validateUtilsTreeProofTarget,
-  verifyUtilsTreeProof,
+  buildBatchListingArtifact,
+  buildMerkleProof,
+  getBatchTokenProof,
+  normalizeMerkleRoot,
+  normalizeTokenId,
+  parseBatchListingArtifact,
+  parseBatchTokenTreeInput,
+  parseBatchTokenProof,
+  validateBatchTokenProofTarget,
+  verifyBatchTokenProof,
 } from '@rareprotocol/rare-sdk/utils';
 import { requireInput, toPositiveWei, toUnixTimestamp } from '../input-core.js';
 import {
@@ -296,7 +296,7 @@ function createUtilsTreeProofCommand(): Command {
     .action(async (opts: TreeProofOptions) => {
       const artifact = await readBatchTreeArtifact(opts);
       const contractAddress = parseAddressOption(opts.contract, '--contract');
-      const proof = getUtilsTreeProof({
+      const proof = getBatchTokenProof({
         artifact,
         contractAddress,
         tokenId: opts.tokenId,
@@ -354,7 +354,7 @@ function createUtilsTreeVerifyCommand(): Command {
       const contractAddress = parseAddressOption(opts.contract, '--contract');
       const proofInput = opts.proof === undefined ? undefined : await readBatchProofFile(opts.proof);
       const generatedProof = proofInput === undefined
-        ? getUtilsTreeProof({
+        ? getBatchTokenProof({
             artifact,
             contractAddress,
             tokenId: opts.tokenId,
@@ -364,9 +364,9 @@ function createUtilsTreeVerifyCommand(): Command {
       const proof = proofInput?.proof ?? generatedProof?.proof ?? [];
       const root = opts.root === undefined
         ? proofInput?.root ?? generatedProof?.root ?? artifact.root
-        : normalizeUtilsMerkleRoot(opts.root, '--root');
+        : normalizeMerkleRoot(opts.root, '--root');
 
-      validateUtilsTreeProofTarget(proofInput, {
+      validateBatchTokenProofTarget(proofInput, {
         artifact,
         contractAddress,
         tokenId: opts.tokenId,
@@ -374,7 +374,7 @@ function createUtilsTreeVerifyCommand(): Command {
         allowRootOverride: opts.root !== undefined,
       });
 
-      const valid = verifyUtilsTreeProof({
+      const valid = verifyBatchTokenProof({
         root,
         contractAddress,
         tokenId: opts.tokenId,
@@ -555,7 +555,7 @@ function createOfferAcceptCommand(): Command {
         ? opts.root === undefined ? undefined : parseBytes32(opts.root, '--root')
         : resolveProofRoot(proofInput, opts.root);
       if (proofInput !== undefined && root !== undefined) {
-        validateUtilsTreeProofTarget(proofInput, {
+        validateBatchTokenProofTarget(proofInput, {
           artifact: createRootOnlyArtifact(root),
           contractAddress: contract,
           tokenId: opts.tokenId,
@@ -564,7 +564,7 @@ function createOfferAcceptCommand(): Command {
         });
       }
       const splits = finalizeSplits(opts.split);
-      const tokenId = normalizeUtilsTokenId(opts.tokenId, 'tokenId');
+      const tokenId = normalizeTokenId(opts.tokenId, 'tokenId');
       const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
 
       log(`Accepting batch offer on ${chain}...`);
@@ -831,7 +831,7 @@ function createAuctionBidCommand(): Command {
         ? opts.root === undefined ? undefined : parseBytes32(opts.root, '--root')
         : resolveProofRoot(proofInput, opts.root);
       if (proofInput !== undefined && root !== undefined) {
-        validateUtilsTreeProofTarget(proofInput, {
+        validateBatchTokenProofTarget(proofInput, {
           artifact: createRootOnlyArtifact(root),
           contractAddress: contract,
           tokenId: opts.tokenId,
@@ -839,7 +839,7 @@ function createAuctionBidCommand(): Command {
           allowRootOverride: opts.root !== undefined,
         });
       }
-      const tokenId = normalizeUtilsTokenId(opts.tokenId, 'tokenId');
+      const tokenId = normalizeTokenId(opts.tokenId, 'tokenId');
       toPositiveWei(opts.price, 'price');
       const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
@@ -918,7 +918,7 @@ function createAuctionSettleCommand(): Command {
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: AuctionSettleOptions) => {
       const contract = parseAddressOption(opts.contract, '--contract');
-      const tokenId = normalizeUtilsTokenId(opts.tokenId, 'tokenId');
+      const tokenId = normalizeTokenId(opts.tokenId, 'tokenId');
       const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
 
       log(`Settling batch auction token on ${chain}...`);
@@ -977,7 +977,7 @@ function createAuctionStatusCommand(): Command {
         ? rootInput?.root
         : resolveProofRoot(proofInput, rootInput?.root);
       if (proofInput !== undefined && root !== undefined) {
-        validateUtilsTreeProofTarget(proofInput, {
+        validateBatchTokenProofTarget(proofInput, {
           artifact: createRootOnlyArtifact(root),
           contractAddress: contract,
           tokenId: opts.tokenId,
@@ -1062,7 +1062,7 @@ export function createUtilsMerkleCommand(): Command {
     .option('--output <path>', 'write artifact to this path (otherwise stdout)')
     .action(async (opts: MerkleProofOptions): Promise<void> => {
       const rootArtifact = await loadMerkleRootArtifact(opts.input);
-      const proof = buildUtilsMerkleProof({
+      const proof = buildMerkleProof({
         artifact: rootArtifact,
         contract: parseAddress(opts.contract, '--contract'),
         tokenId: opts.tokenId,
@@ -1185,7 +1185,7 @@ function addBatchListingCommands(cmd: Command): void {
       const artifact = opts.input === undefined ? undefined : await loadMerkleRootArtifact(opts.input);
       const root = opts.root === undefined ? undefined : parseBytes32(opts.root, '--root');
       const contract = parseOptionalAddress(opts.contract, '--contract');
-      const tokenId = opts.tokenId === undefined ? undefined : normalizeUtilsTokenId(opts.tokenId, 'tokenId');
+      const tokenId = opts.tokenId === undefined ? undefined : normalizeTokenId(opts.tokenId, 'tokenId');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
@@ -1405,7 +1405,7 @@ function addBatchListingCommands(cmd: Command): void {
 async function readBatchTreeArtifact(opts: TreeInputOptions): Promise<BatchTokenListArtifact> {
   const format = parseFormatOption(opts.format);
   const content = await readFile(opts.input, 'utf8');
-  return parseUtilsTreeInput({
+  return parseBatchTokenTreeInput({
     content,
     format,
     sourceName: opts.input,
@@ -1422,7 +1422,7 @@ async function resolveBatchListingCreateArtifact(
   const splits = finalizeSplits(opts.split);
   const rootArtifact = parsedObject === undefined
     ? undefined
-    : parseUtilsBatchListingArtifact(parsedObject);
+    : parseBatchListingArtifact(parsedObject);
 
   if (rootArtifact !== undefined) {
     const currencyOverride = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, context.chain);
@@ -1435,7 +1435,7 @@ async function resolveBatchListingCreateArtifact(
           opts.price,
         )).toString();
 
-    return buildUtilsBatchListingArtifact({
+    return buildBatchListingArtifact({
       source: 'root-artifact',
       artifact: rootArtifact,
       currency: currencyOverride,
@@ -1453,14 +1453,14 @@ async function resolveBatchListingCreateArtifact(
 
   const currency = opts.currency === undefined ? ETH_ADDRESS : resolveCurrency(opts.currency, context.chain);
   const amount = await parseBatchAmount(context.publicClient, context.chain, currency, opts.price);
-  const tokenTreeArtifact = parseUtilsTreeInput({
+  const tokenTreeArtifact = parseBatchTokenTreeInput({
     content,
     format: parseFormatOption(opts.format),
     sourceName: opts.input,
     chainId: resolveTreeChainId(opts),
   });
 
-  return buildUtilsBatchListingArtifact({
+  return buildBatchListingArtifact({
     source: 'token-tree',
     artifact: tokenTreeArtifact,
     currency,
@@ -1568,7 +1568,7 @@ async function selectRootCandidate(params: {
 }
 
 async function resolveAuctionRootInput(opts: OfferRootOptions): Promise<AuctionRootInput> {
-  const directRoot = opts.root === undefined ? undefined : normalizeUtilsMerkleRoot(opts.root, '--root');
+  const directRoot = opts.root === undefined ? undefined : normalizeMerkleRoot(opts.root, '--root');
   if (opts.input === undefined) {
     if (directRoot === undefined) {
       throw new Error('Pass --input, or pass --root as an override.');
@@ -1593,7 +1593,7 @@ async function resolveAuctionRootInput(opts: OfferRootOptions): Promise<AuctionR
 }
 
 async function resolveBatchCreateRootInput(opts: OfferRootOptions): Promise<BatchCreateRootInput> {
-  const directRoot = opts.root === undefined ? undefined : normalizeUtilsMerkleRoot(opts.root, '--root');
+  const directRoot = opts.root === undefined ? undefined : normalizeMerkleRoot(opts.root, '--root');
   if (opts.input === undefined) {
     if (directRoot === undefined) {
       throw new Error('Pass --input, or pass --root as an override.');
@@ -1623,7 +1623,7 @@ async function resolveOptionalAuctionRootInput(opts: OfferRootOptions): Promise<
 }
 
 function resolveProofRoot(proofInput: BatchTokenProofInput, rawRoot: string | undefined): Hex {
-  const root = rawRoot === undefined ? proofInput.root : normalizeUtilsMerkleRoot(rawRoot, '--root');
+  const root = rawRoot === undefined ? proofInput.root : normalizeMerkleRoot(rawRoot, '--root');
   if (root === undefined) {
     throw new Error('Proof overrides must include a root field, or pass --root as an override.');
   }
@@ -1646,7 +1646,7 @@ function createRootOnlyArtifact(root: Hex): BatchTokenListArtifact {
 
 async function readBatchProofFile(inputPath: string): Promise<BatchTokenProofInput> {
   const content = await readFile(inputPath, 'utf8');
-  return parseUtilsTreeProof(content);
+  return parseBatchTokenProof(content);
 }
 
 function currentUnixTimestamp(): bigint {
