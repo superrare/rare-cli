@@ -723,7 +723,7 @@ Public package subpaths are intentionally scoped:
 ```ts
 import { createRareClient } from '@rareprotocol/rare-cli/client';
 import { contractAddresses, supportedChains } from '@rareprotocol/rare-cli/contracts';
-import { buildUtilsTree, getUtilsTreeProof } from '@rareprotocol/rare-cli/utils';
+import { buildBatchTokenTree, getBatchTokenProof } from '@rareprotocol/rare-cli/utils';
 ```
 
 Use `@rareprotocol/rare-cli/client` for app-level SDK workflows, `@rareprotocol/rare-cli/contracts` for lower-level viem contract metadata and ABIs, and `@rareprotocol/rare-cli/utils` for standalone pure artifact/proof helpers.

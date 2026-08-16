@@ -6,13 +6,13 @@ import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient, type RareClient } from '@rareprotocol/rare-sdk/client';
 import {
-  buildUtilsReleaseAllowlist,
-  getUtilsReleaseAllowlistProof,
-  normalizeUtilsReleaseAllowlistProof,
-  normalizeUtilsReleasePrice,
-  normalizeUtilsReleaseStartTime,
-  validateUtilsReleaseAllowlistConfig,
-  parseUtilsReleaseAllowlistArtifact,
+  buildReleaseAllowlistArtifact,
+  getReleaseAllowlistProof,
+  normalizeReleaseAllowlistProof,
+  normalizeReleasePrice,
+  normalizeReleaseStartTime,
+  normalizeReleaseAllowlistConfig,
+  parseReleaseAllowlistArtifact,
 } from '@rareprotocol/rare-sdk/utils';
 import type { ReleaseAllowlistArtifact, ReleaseAllowlistInputFormat } from '@rareprotocol/rare-sdk';
 import { toInteger, toNonNegativeInteger, toPositiveInteger } from '../input-core.js';
@@ -150,7 +150,7 @@ function assertBytes32Option(value: string, label: string): asserts value is Hex
 }
 
 function loadAllowlistArtifact(filePath: string): ReleaseAllowlistArtifact {
-  return parseUtilsReleaseAllowlistArtifact(readTextFile(filePath, 'allowlist artifact'));
+  return parseReleaseAllowlistArtifact(readTextFile(filePath, 'allowlist artifact'));
 }
 
 function readProofFile(filePath: string): Hex[] {
@@ -166,7 +166,7 @@ function readProofFile(filePath: string): Hex[] {
     throw new Error('--proof must be a JSON array or an object with a proof array.');
   }
 
-  return normalizeUtilsReleaseAllowlistProof(proof);
+  return normalizeReleaseAllowlistProof(proof);
 }
 
 function parseProofJson(content: string): unknown {
@@ -221,8 +221,8 @@ export function releaseCommand(): Command {
       const currencyDecimals = currency === ETH_ADDRESS
         ? null
         : (await createRareClient({ publicClient }).currency.resolveDecimals(currency)).decimals;
-      normalizeUtilsReleasePrice({ currencyAddress: currency, amount: opts.price, currencyDecimals });
-      normalizeUtilsReleaseStartTime(opts.startTime, currentUnixTimestamp());
+      normalizeReleasePrice({ currencyAddress: currency, amount: opts.price, currencyDecimals });
+      normalizeReleaseStartTime(opts.startTime, currentUnixTimestamp());
       const { client, account } = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
       const isEth = currency === ETH_ADDRESS;
@@ -322,7 +322,7 @@ export function releaseCommand(): Command {
         const currencyDecimals = priceCurrency === ETH_ADDRESS
           ? null
           : (await createRareClient({ publicClient: getPublicClient(chain) }).currency.resolveDecimals(priceCurrency)).decimals;
-        normalizeUtilsReleasePrice({
+        normalizeReleasePrice({
           currencyAddress: priceCurrency,
           amount: opts.price,
           currencyDecimals,
@@ -411,7 +411,7 @@ export function releaseCommand(): Command {
     .action((opts: AllowlistBuildOptions): void => {
       const format = detectAllowlistFormat(opts.input, opts.format);
       const raw = readTextFile(opts.input, 'allowlist input');
-      const artifact = buildUtilsReleaseAllowlist(raw, format);
+      const artifact = buildReleaseAllowlistArtifact(raw, format);
 
       if (opts.output !== undefined) {
         writeJsonFile(opts.output, artifact);
@@ -439,7 +439,7 @@ export function releaseCommand(): Command {
     .action((opts: AllowlistProofOptions): void => {
       assertAddressOption(opts.account, 'account');
       const artifact = loadAllowlistArtifact(opts.input);
-      const proof = getUtilsReleaseAllowlistProof({ artifact, address: opts.account });
+      const proof = getReleaseAllowlistProof({ artifact, address: opts.account });
       if (proof === null) {
         throw new Error(`Account ${opts.account} is not present in allowlist artifact ${opts.input}.`);
       }
@@ -489,7 +489,7 @@ export function releaseCommand(): Command {
       }
       const root = opts.root;
       const contract = opts.contract;
-      validateUtilsReleaseAllowlistConfig({ contract, root, artifact, endTime });
+      normalizeReleaseAllowlistConfig({ contract, root, artifact, endTime });
       const chain = getActiveChain(opts.chain, opts.chainId);
       const rare = releaseWriteClient(chain);
 
