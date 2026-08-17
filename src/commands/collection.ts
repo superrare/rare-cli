@@ -18,26 +18,24 @@ type LazyBatchMintOptions = {
   chainId?: string;
 };
 
-const lazySovereignCollectionContractTypes = [
-  'lazy',
-  'lazy-royalty-guard',
-  'lazy-deadman-royalty-guard',
+const lazyErc721DeploymentVariants = [
+  'standard',
+  'royalty-guard',
+  'deadman-royalty-guard',
 ] as const;
 
-function normalizeLazySovereignCollectionContractType(input: string | undefined): typeof lazySovereignCollectionContractTypes[number] | undefined {
+function normalizeLazyErc721DeploymentVariant(input: string | undefined): typeof lazyErc721DeploymentVariants[number] | undefined {
   if (input === undefined) return undefined;
   const normalized = input.trim().toLowerCase();
-  if (normalized === 'lazy' || normalized === 'lazy-sovereign') return 'lazy';
-  if (normalized === 'lazy-royalty-guard' || normalized === 'royalty-guard') return 'lazy-royalty-guard';
-  if (normalized === 'lazy-deadman-royalty-guard' || normalized === 'deadman-royalty-guard' || normalized === 'deadman') {
-    return 'lazy-deadman-royalty-guard';
-  }
-  throw new Error(`Unsupported Lazy Sovereign collection contract type "${input}". Supported: ${lazySovereignCollectionContractTypes.join(', ')}.`);
+  if (normalized === 'standard') return 'standard';
+  if (normalized === 'royalty-guard') return 'royalty-guard';
+  if (normalized === 'deadman-royalty-guard') return 'deadman-royalty-guard';
+  throw new Error(`Unsupported Lazy ERC-721 deployment variant "${input}". Supported: ${lazyErc721DeploymentVariants.join(', ')}.`);
 }
 
 type CreateLazySovereignOptions = {
   maxTokens: string;
-  contractType?: string;
+  variant?: string;
   chain?: string;
   chainId?: string;
 };
@@ -173,14 +171,14 @@ function deployLazyErc721CollectionCommand(): Command {
     .argument('<symbol>', 'symbol of the NFT collection')
     .requiredOption('--max-tokens <number>', 'maximum number of tokens')
     .option(
-      '--contract-type <type>',
-      `contract type (${lazySovereignCollectionContractTypes.join(', ')})`,
-      'lazy',
+      '--variant <variant>',
+      `deployment variant (${lazyErc721DeploymentVariants.join(', ')})`,
+      'standard',
     )
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (name: string, symbol: string, opts: CreateLazySovereignOptions): Promise<void> => {
-      const contractType = normalizeLazySovereignCollectionContractType(opts.contractType);
+      const variant = normalizeLazyErc721DeploymentVariant(opts.variant);
       const maxTokens = toPositiveInteger(opts.maxTokens, 'maxTokens');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const factoryAddress = requireContractAddress(chain, 'lazySovereignFactory');
@@ -191,7 +189,7 @@ function deployLazyErc721CollectionCommand(): Command {
       log(`Deploying Lazy ERC-721 collection on ${chain}...`);
       log(`  Name: ${name}`);
       log(`  Symbol: ${symbol}`);
-      log(`  Contract type: ${contractType ?? 'lazy'}`);
+      log(`  Variant: ${variant ?? 'standard'}`);
       log(`  Factory: ${factoryAddress}`);
       log(`  Max tokens: ${maxTokens.toString()}`);
       log('Waiting for transaction confirmation...');
@@ -200,7 +198,7 @@ function deployLazyErc721CollectionCommand(): Command {
         name,
         symbol,
         maxTokens,
-        contractType,
+        variant,
       });
 
       output(
@@ -209,7 +207,7 @@ function deployLazyErc721CollectionCommand(): Command {
           blockNumber: result.receipt.blockNumber.toString(),
           contract: result.contract,
           factory: result.factory,
-          contractType: result.contractType,
+          variant: result.variant,
           nextStep: result.nextStep,
         },
         () => {
