@@ -219,6 +219,7 @@ test('raw token swap supports the legacy swap alias', async () => {
     inputs: ['0x1234'],
     recipient: undefined,
     deadline: undefined,
+    autoApprove: true,
   });
 });
 
