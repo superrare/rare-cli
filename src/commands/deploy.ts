@@ -382,6 +382,7 @@ export function deployLiquidEditionCommand(): Command {
           initialRareLiquidity: opts.initialRareLiquidity,
           totalSupply: opts.totalSupply,
           curves: curves.curves,
+          autoApprove: true,
         });
         const liquidEditionUrl = formatLiquidEditionUrl(rare.chainId, result.contract);
 
