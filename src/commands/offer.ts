@@ -11,6 +11,7 @@ import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './appr
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 import { offerBatchCommand } from './batch.js';
 import { offerErc1155Command } from './erc1155.js';
+import { parseBatchAmount } from './batch-amounts.js';
 
 type OfferCreateOptions = {
   contract?: string;
@@ -80,6 +81,7 @@ export function offerCommand(): Command {
       const isEth = currency === ETH_ADDRESS;
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
+      const priceAmount = await parseBatchAmount(publicClient, chain, currency, price);
       const rare = createRareClient({ publicClient, walletClient: client });
 
       log(`Creating offer on ${chain}...`);
@@ -91,7 +93,7 @@ export function offerCommand(): Command {
       const offerParams = {
         contract,
         tokenId,
-        price,
+        price: priceAmount,
         currency,
       };
       const result = await runWithPaymentApprovalConsent({
@@ -195,6 +197,7 @@ export function offerCommand(): Command {
       const isEth = currency === ETH_ADDRESS;
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
+      const priceAmount = await parseBatchAmount(publicClient, chain, currency, price);
       const rare = createRareClient({ publicClient, walletClient: client });
 
       log(`Accepting offer on ${chain}...`);
@@ -211,7 +214,7 @@ export function offerCommand(): Command {
       const acceptParams = {
         contract,
         tokenId,
-        price,
+        price: priceAmount,
         currency,
         splitAddresses: splits?.addresses,
         splitRatios: splits?.ratios,

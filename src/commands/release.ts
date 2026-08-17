@@ -20,6 +20,7 @@ import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 import { output, log } from '../output.js';
 import { runWithMinterApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, type SplitAccumulator } from './splits-core.js';
+import { parseBatchAmount } from './batch-amounts.js';
 
 const ETH_ADDRESS = zeroAddress;
 
@@ -218,10 +219,8 @@ export function releaseCommand(): Command {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const currency = opts.currency === undefined ? ETH_ADDRESS : resolveCurrency(opts.currency, chain);
-      const currencyDecimals = currency === ETH_ADDRESS
-        ? null
-        : (await createRareClient({ publicClient }).currency.resolveDecimals(currency)).decimals;
-      normalizeReleasePrice({ currencyAddress: currency, amount: opts.price, currencyDecimals });
+      const price = await parseBatchAmount(publicClient, chain, currency, opts.price);
+      normalizeReleasePrice({ currencyAddress: currency, amount: price, currencyDecimals: null });
       normalizeReleaseStartTime(opts.startTime, currentUnixTimestamp());
       const { client, account } = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
@@ -245,7 +244,7 @@ export function releaseCommand(): Command {
       const configureParams = {
         contract: opts.contract,
         currency,
-        price: opts.price,
+        price,
         startTime: opts.startTime,
         maxMints: normalizedMaxMints,
         splitAddresses: splits?.addresses,
@@ -317,17 +316,11 @@ export function releaseCommand(): Command {
       }
       const chain = getActiveChain(opts.chain, opts.chainId);
       const currency = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain);
-      if (opts.price !== undefined) {
-        const priceCurrency = currency ?? ETH_ADDRESS;
-        const currencyDecimals = priceCurrency === ETH_ADDRESS
-          ? null
-          : (await createRareClient({ publicClient: getPublicClient(chain) }).currency.resolveDecimals(priceCurrency)).decimals;
-        normalizeReleasePrice({
-          currencyAddress: priceCurrency,
-          amount: opts.price,
-          currencyDecimals,
-        });
-      }
+      const priceCurrency = currency ?? ETH_ADDRESS;
+      const price = opts.price === undefined
+        ? undefined
+        : await parseBatchAmount(getPublicClient(chain), chain, priceCurrency, opts.price);
+      if (price !== undefined) normalizeReleasePrice({ currencyAddress: priceCurrency, amount: price, currencyDecimals: null });
       const rare = releaseWriteClient(chain);
 
       log(`Minting direct sale release on ${chain}...`);
@@ -348,7 +341,7 @@ export function releaseCommand(): Command {
         contract: opts.contract,
         quantity: normalizedQuantity,
         currency,
-        price: opts.price,
+        price,
         proof,
         recipient: opts.recipient,
       };

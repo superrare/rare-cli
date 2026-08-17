@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
+import { parseEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
@@ -170,6 +171,7 @@ async function resolveCurves(
   rarePriceUsd?: number;
 }> {
   const mode = resolveCurveSourceMode(opts, Boolean(process.stdin.isTTY));
+  const totalSupply = opts.totalSupply === undefined ? undefined : parseEther(opts.totalSupply);
 
   if (mode === 'file') {
     if (!opts.curvesFile) {
@@ -179,14 +181,14 @@ async function resolveCurves(
     if (!supportsSupplyAwareFactoryConfig(liquidEdition)) {
       throw new Error('The installed RARE SDK does not support custom liquid edition supplies.');
     }
-    const factoryConfig = await liquidEdition.getFactoryConfig({ totalSupply: opts.totalSupply });
+    const factoryConfig = await liquidEdition.getFactoryConfig({ totalSupply });
     const raw = await readFile(opts.curvesFile, 'utf-8');
     const curves = rare.utils.liquidCurve.parseConfig({
       value: raw,
       totalCurveSupplyTokens: factoryConfig.curvePoolSupplyTokens,
       tickSpacing: factoryConfig.poolTickSpacing,
     });
-    const preview = await rare.liquidEdition.validateCurves({ curves, totalSupply: opts.totalSupply });
+    const preview = await rare.liquidEdition.validateCurves({ curves, totalSupply });
     return {
       source: `file:${opts.curvesFile}`,
       curves,
@@ -201,7 +203,7 @@ async function resolveCurves(
     }
     const generated = await rare.liquidEdition.generatePresetCurves({
       preset: opts.curvePreset,
-      totalSupply: opts.totalSupply,
+      totalSupply,
     });
     await writeGeneratedCurves(opts.writeCurvesFile, generated.curves);
     return {
@@ -215,7 +217,7 @@ async function resolveCurves(
   const wizard = await runLiquidCurveWizard({
     skipConfirmation: opts.yes,
     targetChain: opts.targetChain,
-    generatePresetCurves: async (preset) => rare.liquidEdition.generatePresetCurves({ preset, totalSupply: opts.totalSupply }),
+    generatePresetCurves: async (preset) => rare.liquidEdition.generatePresetCurves({ preset, totalSupply }),
   });
   await writeGeneratedCurves(opts.writeCurvesFile, wizard.curves);
   return {
@@ -379,8 +381,8 @@ export function deployLiquidEditionCommand(): Command {
           name,
           symbol,
           tokenUri,
-          initialRareLiquidity: opts.initialRareLiquidity,
-          totalSupply: opts.totalSupply,
+          initialRareLiquidity: opts.initialRareLiquidity === undefined ? undefined : parseEther(opts.initialRareLiquidity),
+          totalSupply: opts.totalSupply === undefined ? undefined : parseEther(opts.totalSupply),
           curves: curves.curves,
           autoApprove: true,
         });
