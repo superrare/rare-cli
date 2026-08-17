@@ -1325,11 +1325,13 @@ describe('built CLI deterministic behavior', () => {
           'create',
           '--input',
           input,
+          '--price',
+          '1',
           '--chain',
           'sepolia',
         ];
       },
-      'Error: root must be a 0x-prefixed bytes32 hex string',
+      'Error: Batch token JSON must be an array of token objects or an object with a tokens array.',
     );
     await expectLocalValidationBeforeWalletSetup(
       async (home) => {
@@ -1351,11 +1353,13 @@ describe('built CLI deterministic behavior', () => {
           'create',
           '--input',
           input,
+          '--price',
+          '1',
           '--chain',
           'sepolia',
         ];
       },
-      'Error: splitAddresses and splitRatios must have the same length.',
+      'Error: Legacy batch listing registration artifacts are not accepted in V2.',
     );
     await expectLocalValidationBeforeWalletSetup(
       async (home) => {
@@ -1371,7 +1375,7 @@ describe('built CLI deterministic behavior', () => {
           'sepolia',
         ];
       },
-      'Error: rare listing batch create requires --price when --input is a token tree artifact from rare utils tree build.',
+      "error: required option '--price <amount>' not specified",
     );
     await expectLocalValidationBeforeWalletSetup(
       async (home) => {
