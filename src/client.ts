@@ -1,7 +1,7 @@
 import { createPublicClient, createWalletClient, http, type Address, type PublicClient, type WalletClient } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import type { LocalAccount, PrivateKeyAccount } from 'viem/accounts';
-import { viemChains, defaultRpcUrls, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { viemChains, defaultRpcUrls, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
 import {
   getChainConfig,
   readConfig,

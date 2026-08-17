@@ -19,7 +19,7 @@ rare --help
 ```
 
 See [CHANGELOG.md](./CHANGELOG.md) for release notes and migration guidance.
-For generated reference maps, see [rare-cli-commands.md](./rare-cli-commands.md), [rare-cli-sdk-client-functions.md](./rare-cli-sdk-client-functions.md), and [rare-cli-mcp-tools.md](./rare-cli-mcp-tools.md).
+For generated CLI reference maps, see [rare-cli-commands.md](./rare-cli-commands.md) and [rare-cli-mcp-tools.md](./rare-cli-mcp-tools.md). The SDK and its API reference are maintained in the [rare-sdk repository](https://github.com/superrare/rare-sdk#readme).
 
 ## Getting Started
 
@@ -680,7 +680,14 @@ rare status --contract 0x...
 rare status --contract 0x... --token-id 1
 ```
 
-## SDK Client Usage
+## TypeScript SDK
+
+The TypeScript SDK is maintained and documented in the [rare-sdk repository](https://github.com/superrare/rare-sdk#readme). Install and import `@rareprotocol/rare-sdk` for new integrations.
+
+The `@rareprotocol/rare-cli/client`, `@rareprotocol/rare-cli/contracts`, and `@rareprotocol/rare-cli/utils` subpaths are deprecated compatibility shims. Existing applications may keep using them while migrating, but this repository no longer generates or owns SDK API reference documentation.
+
+<details>
+<summary>Legacy compatibility examples</summary>
 
 Use the client export when integrating RARE flows directly in your app code.
 
@@ -716,7 +723,7 @@ Public package subpaths are intentionally scoped:
 ```ts
 import { createRareClient } from '@rareprotocol/rare-cli/client';
 import { contractAddresses, supportedChains } from '@rareprotocol/rare-cli/contracts';
-import { buildUtilsTree, getUtilsTreeProof } from '@rareprotocol/rare-cli/utils';
+import { buildBatchTokenTree, getBatchTokenProof } from '@rareprotocol/rare-cli/utils';
 ```
 
 Use `@rareprotocol/rare-cli/client` for app-level SDK workflows, `@rareprotocol/rare-cli/contracts` for lower-level viem contract metadata and ABIs, and `@rareprotocol/rare-cli/utils` for standalone pure artifact/proof helpers.
@@ -903,6 +910,8 @@ await rare.import.erc721({
   contract: '0xYourContractAddress',
 });
 ```
+
+</details>
 
 ## Configuration
 

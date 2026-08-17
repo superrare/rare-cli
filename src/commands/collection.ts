@@ -3,18 +3,9 @@ import { getAddress, isAddress, type Address } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import { getContractAddresses, requireContractAddress, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { getContractAddresses, requireContractAddress, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
 import type { RareClient } from '@rareprotocol/rare-sdk/client';
-import {
-  lazySovereignCollectionContractTypes,
-  normalizeLazySovereignCollectionContractType,
-  planCollectionMintBatch,
-  planCollectionPrepareLazyMint,
-  planCollectionRoyaltyPercentage,
-  planCollectionTokenReceiver,
-  planCollectionTokenUri,
-} from '@rareprotocol/rare-sdk/collection-core';
-import { toPositiveInteger } from '@rareprotocol/rare-sdk/amounts-core';
+import { toNonNegativeInteger, toPositiveInteger } from '../input-core.js';
 import { output, log, printCollection } from '../output.js';
 import { createCollectionListCommand } from './account-market-list.js';
 import { mintCommand } from './mint.js';
@@ -26,6 +17,23 @@ type LazyBatchMintOptions = {
   chain?: string;
   chainId?: string;
 };
+
+const lazySovereignCollectionContractTypes = [
+  'lazy',
+  'lazy-royalty-guard',
+  'lazy-deadman-royalty-guard',
+] as const;
+
+function normalizeLazySovereignCollectionContractType(input: string | undefined): typeof lazySovereignCollectionContractTypes[number] | undefined {
+  if (input === undefined) return undefined;
+  const normalized = input.trim().toLowerCase();
+  if (normalized === 'lazy' || normalized === 'lazy-sovereign') return 'lazy';
+  if (normalized === 'lazy-royalty-guard' || normalized === 'royalty-guard') return 'lazy-royalty-guard';
+  if (normalized === 'lazy-deadman-royalty-guard' || normalized === 'deadman-royalty-guard' || normalized === 'deadman') {
+    return 'lazy-deadman-royalty-guard';
+  }
+  throw new Error(`Unsupported Lazy Sovereign collection contract type "${input}". Supported: ${lazySovereignCollectionContractTypes.join(', ')}.`);
+}
 
 type CreateLazySovereignOptions = {
   maxTokens: string;
@@ -232,7 +240,7 @@ function createMintBatchCommand(): Command {
       if (amount === undefined) {
         throw new Error('collection mint-batch requires --amount.');
       }
-      const plan = planCollectionMintBatch({ contract, baseUri: opts.baseUri, amount });
+      const tokenCount = toPositiveInteger(amount, 'amount');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
@@ -241,13 +249,13 @@ function createMintBatchCommand(): Command {
       log(`Batch minting collection tokens on ${chain}...`);
       log(`  Contract: ${contract}`);
       log(`  Base URI: ${opts.baseUri}`);
-      log(`  Amount: ${plan.tokenCount.toString()}`);
+      log(`  Amount: ${tokenCount.toString()}`);
       log('Waiting for transaction confirmation...');
 
       const result = await rare.collection.mintBatch({
         contract,
         baseUri: opts.baseUri,
-        amount: plan.tokenCount,
+        amount: tokenCount,
       });
 
       output(
@@ -296,7 +304,7 @@ function createPrepareLazyMintCommand(): Command {
         chain,
         '--minter',
       );
-      const plan = planCollectionPrepareLazyMint({ contract, baseUri: opts.baseUri, amount, minter });
+      const tokenCount = toPositiveInteger(amount, 'amount');
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
@@ -304,14 +312,14 @@ function createPrepareLazyMintCommand(): Command {
       log(`Preparing Lazy Sovereign mint on ${chain}...`);
       log(`  Contract: ${contract}`);
       log(`  Base URI: ${opts.baseUri}`);
-      log(`  Amount: ${plan.tokenCount.toString()}`);
+      log(`  Amount: ${tokenCount.toString()}`);
       if (minter !== undefined) log(`  Minter: ${minter}`);
       log('Waiting for transaction confirmation...');
 
       const result = await rare.collection.prepareLazyMint({
         contract,
         baseUri: opts.baseUri,
-        amount: plan.tokenCount,
+        amount: tokenCount,
         minter,
       });
 
@@ -471,17 +479,18 @@ function createSetDefaultRoyaltyPercentageCommand(): Command {
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionRoyaltyPercentageOptions) => {
       const contract = parseAddressOption(opts.contract, '--contract');
-      const plan = planCollectionRoyaltyPercentage({ contract, percentage: opts.percentage });
+      const percentage = Number(toNonNegativeInteger(opts.percentage, 'percentage'));
+      if (percentage > 100) throw new Error('percentage must be between 0 and 100.');
       const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
       log(`Setting default royalty percentage on ${chain}...`);
       log(`  Contract: ${contract}`);
-      log(`  Percentage: ${plan.percentage}%`);
+      log(`  Percentage: ${percentage}%`);
       log('Waiting for transaction confirmation...');
 
       const result = await rare.collection.setDefaultRoyaltyPercentage({
         contract,
-        percentage: plan.percentage,
+        percentage,
       });
 
       output(
@@ -515,19 +524,19 @@ function createSetTokenRoyaltyReceiverCommand(): Command {
     .action(async (opts: CollectionTokenRoyaltyReceiverOptions) => {
       const contract = parseAddressOption(opts.contract, '--contract');
       const receiver = parseAddressOption(opts.receiver, '--receiver');
-      const plan = planCollectionTokenReceiver({ contract, tokenId: opts.tokenId, receiver });
+      const tokenId = toNonNegativeInteger(opts.tokenId, 'tokenId');
       const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
       log(`Setting token royalty receiver on ${chain}...`);
-      log(`  Contract: ${plan.contract}`);
-      log(`  Token ID: ${plan.tokenId.toString()}`);
-      log(`  Receiver: ${plan.receiver}`);
+      log(`  Contract: ${contract}`);
+      log(`  Token ID: ${tokenId.toString()}`);
+      log(`  Receiver: ${receiver}`);
       log('Waiting for transaction confirmation...');
 
       const result = await rare.collection.setTokenRoyaltyReceiver({
-        contract: plan.contract,
-        tokenId: plan.tokenId,
-        receiver: plan.receiver,
+        contract,
+        tokenId,
+        receiver,
       });
 
       output(
@@ -732,19 +741,19 @@ function createUpdateTokenUriCommand(): Command {
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: CollectionUpdateTokenUriOptions) => {
       const contract = parseAddressOption(opts.contract, '--contract');
-      const plan = planCollectionTokenUri({ contract, tokenId: opts.tokenId, tokenUri: opts.tokenUri });
+      const tokenId = toNonNegativeInteger(opts.tokenId, 'tokenId');
       const { chain, rare } = createWriteCollectionClient(opts.chain, opts.chainId);
 
       log(`Updating token metadata URI on ${chain}...`);
-      log(`  Contract: ${plan.contract}`);
-      log(`  Token ID: ${plan.tokenId.toString()}`);
-      log(`  Token URI: ${plan.tokenUri}`);
+      log(`  Contract: ${contract}`);
+      log(`  Token ID: ${tokenId.toString()}`);
+      log(`  Token URI: ${opts.tokenUri}`);
       log('Waiting for transaction confirmation...');
 
       const result = await rare.collection.updateTokenUri({
-        contract: plan.contract,
-        tokenId: plan.tokenId,
-        tokenUri: plan.tokenUri,
+        contract,
+        tokenId,
+        tokenUri: opts.tokenUri,
       });
 
       output(

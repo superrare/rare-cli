@@ -9,4 +9,6 @@ docs-site/.docusaurus/
 .env
 .context/
 .clawpatch
-/docs
+/docs/*
+!/docs/intro.md
+!/docs/compatibility-shims.md

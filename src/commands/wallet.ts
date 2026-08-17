@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { readConfig, setChainConfig, writeConfig, getActiveChain } from '../config.js';
 import { getConfiguredAccountAddress, getWalletClient } from '../client.js';
-import { chainIds, supportedChains } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { chainIds, supportedChains } from '@rareprotocol/rare-sdk/contracts';
 import { output } from '../output.js';
 
 type WalletGenerateOptions = {

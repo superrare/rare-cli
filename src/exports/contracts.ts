@@ -1,6 +1,7 @@
 /**
- * Compatibility shim: the SDK now lives in @rareprotocol/rare-sdk. This keeps
- * the `@rareprotocol/rare-cli/contracts` subpath working for existing
- * consumers; new code should import `@rareprotocol/rare-sdk/contracts`.
+ * Compatibility shim for the former SDK contracts entry point.
+ *
+ * @deprecated Import from `@rareprotocol/rare-sdk/contracts` instead. This
+ * re-export remains only for existing `@rareprotocol/rare-cli/contracts` consumers.
  */
 export * from '@rareprotocol/rare-sdk/contracts';

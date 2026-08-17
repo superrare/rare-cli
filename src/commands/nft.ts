@@ -3,7 +3,7 @@ import { getActiveChain } from '../config.js';
 import { getPublicClient } from '../client.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import type { RareClientNftGetParams } from '@rareprotocol/rare-sdk/client';
-import { parseAddress } from '@rareprotocol/rare-sdk/validation';
+import { parseAddress } from '../input-core.js';
 import { log, output, printNft } from '../output.js';
 
 type NftReadOptions = {

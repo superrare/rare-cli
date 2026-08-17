@@ -1,4 +1,4 @@
-import type { NftEventOptions } from '@rareprotocol/rare-sdk/api';
+import type { RareClientEventSearchParams } from '@rareprotocol/rare-sdk';
 
 const eventTypes = [
   'CANCEL_AUCTION',
@@ -26,11 +26,11 @@ export function collectOption(value: string, previous: string[] | undefined): st
   return [...(previous ?? []), value];
 }
 
-export function parseNftEventTypes(values: string[] | undefined): NftEventOptions['eventType'] | undefined {
+export function parseNftEventTypes(values: string[] | undefined): RareClientEventSearchParams['eventType'] | undefined {
   return parseEventTypes(values);
 }
 
-export function parseNftEventSort(value: string | undefined): NftEventOptions['sortBy'] | undefined {
+export function parseNftEventSort(value: string | undefined): RareClientEventSearchParams['sortBy'] | undefined {
   return parseEventSort(value);
 }
 

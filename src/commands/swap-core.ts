@@ -1,5 +1,6 @@
-import { formatEther, formatUnits, getAddress, isHex, type Address } from 'viem';
-import type { BuyRareQuote, TokenTradeExecutionRoute, TokenTradeQuote } from '@rareprotocol/rare-sdk/swap';
+import { formatEther, formatUnits, getAddress, isHex, parseEther, type Address } from 'viem';
+import { toInteger, toPositiveWei } from '../input-core.js';
+import type { BuyRareQuote, TokenTradeExecutionRoute, TokenTradeQuote } from '@rareprotocol/rare-sdk';
 
 export function parseInputsJson(raw: string, label: string): readonly `0x${string}`[] {
   const parsed = parseJson(raw, label);
@@ -28,6 +29,25 @@ export function ensureHex(value: string, label: string): `0x${string}` {
     throw new Error(`${label} must be a hex string.`);
   }
   return value;
+}
+
+export function validatePositiveRawSwapAmount(value: string, label: string): void {
+  toPositiveWei(value, label);
+}
+
+export function validateTokenTradeInputs(params: {
+  amountIn: string;
+  minAmountOut?: string;
+  slippageBps?: string;
+}): void {
+  parseEther(params.amountIn);
+  if (params.minAmountOut !== undefined) parseEther(params.minAmountOut);
+  if (params.slippageBps !== undefined) {
+    const slippageBps = toInteger(params.slippageBps, 'slippageBps');
+    if (slippageBps < 0n || slippageBps >= 10_000n) {
+      throw new Error('slippageBps must be an integer between 0 and 9999.');
+    }
+  }
 }
 
 export function parseAddress(value: string, label: string): Address {
