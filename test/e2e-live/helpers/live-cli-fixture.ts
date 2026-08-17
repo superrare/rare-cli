@@ -30,7 +30,7 @@ export type CreateSovereignResult = {
   blockNumber: string;
   contract: Address;
   factory: Address;
-  contractType: string;
+  variant: string;
   nextStep?: string;
 };
 
