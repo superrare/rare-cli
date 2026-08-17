@@ -11,6 +11,7 @@ import { parseAuctionTypeOption } from './auction-core.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 import { auctionBatchCommand } from './batch.js';
+import { parseBatchAmount } from './batch-amounts.js';
 
 type AuctionCreateOptions = {
   contract: string;
@@ -98,6 +99,7 @@ export function auctionCommand(): Command {
       const isEth = currency === ETH_ADDRESS;
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
+      const priceAmount = await parseBatchAmount(publicClient, chain, currency, price);
       const rare = createRareClient({ publicClient, walletClient: client });
 
       log(`Creating auction on ${chain}...`);
@@ -121,7 +123,7 @@ export function auctionCommand(): Command {
       const auctionParams = {
         contract,
         tokenId,
-        price,
+        price: priceAmount,
         endTime: opts.endTime,
         currency,
         auctionType,
@@ -188,6 +190,7 @@ export function auctionCommand(): Command {
       const isEth = currency === ETH_ADDRESS;
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
+      const priceAmount = await parseBatchAmount(publicClient, chain, currency, price);
       const rare = createRareClient({ publicClient, walletClient: client });
 
       log(`Placing bid on ${chain}...`);
@@ -199,7 +202,7 @@ export function auctionCommand(): Command {
       const bidParams = {
         contract,
         tokenId,
-        price,
+        price: priceAmount,
         currency,
       };
       const result = await runWithPaymentApprovalConsent({
