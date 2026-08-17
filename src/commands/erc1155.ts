@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import { formatUnits, isAddress, isHex, type Address, type Hex } from 'viem';
 import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
-import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
+import { ETH_ADDRESS, resolveCurrency, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
 import { output, log } from '../output.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import { toNonNegativeInteger, toPositiveInteger } from '../input-core.js';
@@ -17,6 +17,7 @@ import type {
 } from '@rareprotocol/rare-sdk';
 import { collectSplit, finalizeSplits, type SplitAccumulator } from './splits-core.js';
 import { runWithMinterApprovalConsent, runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
+import { parseBatchAmount } from './batch-amounts.js';
 
 type ChainOptions = {
   chain?: string;
@@ -493,7 +494,7 @@ export function listingErc1155Command(): Command {
         contract: parseAddressOption(opts.contract, '--contract'),
         tokenId: toNonNegativeInteger(opts.tokenId, 'tokenId'),
         quantity: toPositiveInteger(opts.quantity, 'quantity'),
-        price: opts.price,
+        price: await parseErc1155Price(chain, currency, opts.price),
         currency,
         expirationTime: opts.expirationTime,
         splitAddresses: splits?.addresses,
@@ -529,7 +530,7 @@ export function listingErc1155Command(): Command {
       const params = {
         contract: parseAddressOption(opts.contract, '--contract'),
         currency,
-        items: readListingCreateBatchItems(opts.input),
+        items: await parseErc1155ItemPrices(chain, currency, readListingCreateBatchItems(opts.input)),
         splitAddresses: splits?.addresses,
         splitRatios: splits?.ratios,
       };
@@ -572,7 +573,7 @@ export function listingErc1155Command(): Command {
         seller: parseAddressOption(opts.seller, '--seller'),
         tokenId: toNonNegativeInteger(opts.tokenId, 'tokenId'),
         quantity: toPositiveInteger(opts.quantity, 'quantity'),
-        price: opts.price,
+        price: await parseErc1155Price(chain, currency, opts.price),
         currency,
         recipient: opts.recipient === undefined ? undefined : parseAddressOption(opts.recipient, '--recipient'),
       };
@@ -602,7 +603,7 @@ export function listingErc1155Command(): Command {
     .option('--chain-id <id>', 'chain ID (11155111)')
     .action(async (opts: ListingCheckoutOptions) => {
       const chain = getActiveChain(opts.chain, opts.chainId);
-      const items = readCheckoutItems(opts.input, chain);
+      const items = await readCheckoutItems(opts.input, chain);
       const recipient = opts.recipient === undefined ? undefined : parseAddressOption(opts.recipient, '--recipient');
       const rare = writeRare(chain);
       const result = await runCheckoutWithApprovalConsent({
@@ -703,7 +704,7 @@ export function offerErc1155Command(): Command {
         contract: parseAddressOption(opts.contract, '--contract'),
         tokenId: toNonNegativeInteger(opts.tokenId, 'tokenId'),
         quantity: toPositiveInteger(opts.quantity, 'quantity'),
-        price: opts.price,
+        price: await parseErc1155Price(chain, currency, opts.price),
         currency,
         expirationTime: opts.expirationTime,
       };
@@ -741,7 +742,7 @@ export function offerErc1155Command(): Command {
         tokenId: toNonNegativeInteger(opts.tokenId, 'tokenId'),
         buyer: parseAddressOption(opts.buyer, '--buyer'),
         quantity: toPositiveInteger(opts.quantity, 'quantity'),
-        price: opts.price,
+        price: await parseErc1155Price(chain, currency, opts.price),
         currency,
         splitAddresses: splits?.addresses,
         splitRatios: splits?.ratios,
@@ -839,7 +840,7 @@ function releaseErc1155Command(): Command {
       const params = {
         contract: parseAddressOption(opts.contract, '--contract'),
         tokenId: toNonNegativeInteger(opts.tokenId, 'tokenId'),
-        price: opts.price,
+        price: await parseErc1155Price(chain, currency, opts.price),
         maxMints: toNonNegativeInteger(opts.maxMints, 'maxMints'),
         currency,
         startTime: opts.startTime,
@@ -880,7 +881,7 @@ function releaseErc1155Command(): Command {
       const params = {
         contract: parseAddressOption(opts.contract, '--contract'),
         currency,
-        items: readReleaseConfigureBatchItems(opts.input),
+        items: await parseErc1155ItemPrices(chain, currency, readReleaseConfigureBatchItems(opts.input)),
         splitAddresses: splits?.addresses,
         splitRatios: splits?.ratios,
       };
@@ -939,12 +940,13 @@ function releaseErc1155Command(): Command {
     .option('--chain-id <id>', 'chain ID (11155111)')
     .action(async (opts: ReleaseMintOptions) => {
       const chain = getActiveChain(opts.chain, opts.chainId);
+      const currency = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain);
       const params = {
         contract: parseAddressOption(opts.contract, '--contract'),
         tokenId: toNonNegativeInteger(opts.tokenId, 'tokenId'),
         quantity: toPositiveInteger(opts.quantity, 'quantity'),
-        currency: opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain),
-        price: opts.price,
+        currency,
+        price: opts.price === undefined ? undefined : await parseErc1155Price(chain, currency, opts.price),
         proof: opts.proof === undefined ? undefined : readProofFile(opts.proof),
         recipient: opts.recipient === undefined ? undefined : parseAddressOption(opts.recipient, '--recipient'),
       };
@@ -1341,7 +1343,10 @@ function readInputItems(filePath: string, label: string): Record<string, unknown
   return records;
 }
 
-function readCheckoutItems(filePath: string, chain: ReturnType<typeof getActiveChain>): Erc1155CheckoutItemInput[] {
+async function readCheckoutItems(
+  filePath: string,
+  chain: ReturnType<typeof getActiveChain>,
+): Promise<Erc1155CheckoutItemInput[]> {
   const parsed = parseJson(readTextFile(filePath, 'checkout input'), 'checkout input');
   if (!isRecord(parsed) || !Array.isArray(parsed.items)) {
     throw new Error('--input must be a JSON object with an items array.');
@@ -1350,7 +1355,7 @@ function readCheckoutItems(filePath: string, chain: ReturnType<typeof getActiveC
     throw new Error('items must include at least one checkout item.');
   }
 
-  return parsed.items.map((item, index) => {
+  return Promise.all(parsed.items.map(async (item, index) => {
     if (!isRecord(item)) {
       throw new Error(`Checkout item ${index} must be an object.`);
     }
@@ -1368,7 +1373,9 @@ function readCheckoutItems(filePath: string, chain: ReturnType<typeof getActiveC
       return {
         kind,
         ...base,
-        price: item.price === undefined ? undefined : parseStringValue(item.price, `items[${index}].price`),
+        price: item.price === undefined
+          ? undefined
+          : await parseErc1155Price(chain, base.currency, parseStringValue(item.price, `items[${index}].price`)),
         proof: item.proof === undefined ? undefined : parseProofValue(item.proof, `items[${index}].proof`),
       };
     }
@@ -1379,9 +1386,28 @@ function readCheckoutItems(filePath: string, chain: ReturnType<typeof getActiveC
       kind,
       ...base,
       seller: parseAddressOption(String(item.seller), `items[${index}].seller`),
-      price: parseStringValue(item.price, `items[${index}].price`),
+      price: await parseErc1155Price(chain, base.currency, parseStringValue(item.price, `items[${index}].price`)),
     };
-  });
+  }));
+}
+
+async function parseErc1155Price(
+  chain: SupportedChain,
+  currency: Address | undefined,
+  value: string,
+): Promise<bigint> {
+  return parseBatchAmount(getPublicClient(chain), chain, currency ?? ETH_ADDRESS, value);
+}
+
+async function parseErc1155ItemPrices<T extends { price: string }>(
+  chain: SupportedChain,
+  currency: Address | undefined,
+  items: T[],
+): Promise<Array<Omit<T, 'price'> & { price: bigint }>> {
+  return Promise.all(items.map(async (item) => ({
+    ...item,
+    price: await parseErc1155Price(chain, currency, item.price),
+  })));
 }
 
 function readProofFile(filePath: string): Hex[] {
