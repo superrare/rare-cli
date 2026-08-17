@@ -785,7 +785,13 @@ const toolHandlers: Record<string, ToolHandler> = {
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.collection.deploy.erc1155(args as never))),
   },
   collection_deploy_lazy_erc721: {
-    inputSchema: { ...optionalChain, name: z.string(), symbol: z.string(), maxTokens: integerSchema, contractType: z.string().optional() },
+    inputSchema: {
+      ...optionalChain,
+      name: z.string(),
+      symbol: z.string(),
+      maxTokens: integerSchema,
+      variant: z.enum(['standard', 'royalty-guard', 'deadman-royalty-guard']).optional(),
+    },
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.collection.deploy.lazyErc721(args as never))),
   },
   collection_deploy_lazy_batch_mint: {

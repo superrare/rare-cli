@@ -699,7 +699,8 @@ describe('built CLI deterministic behavior', () => {
       const lazyErc721 = await runCli(['collection', 'deploy', 'lazy-erc721', '--help'], { home });
       expect(lazyErc721.code).toBe(0);
       expect(lazyErc721.stdout).toContain('Usage: rare collection deploy lazy-erc721 [options] <name> <symbol>');
-      expect(lazyErc721.stdout).toContain('--contract-type <type>');
+      expect(lazyErc721.stdout).toContain('--variant <variant>');
+      expect(lazyErc721.stdout).not.toContain('--contract-type');
       expect(lazyErc721.stdout).toContain('--max-tokens <number>');
       expect(lazyErc721.stderr).toBe('');
 
