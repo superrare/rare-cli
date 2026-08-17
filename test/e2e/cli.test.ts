@@ -3086,6 +3086,7 @@ describe('built CLI deterministic behavior', () => {
       expect(mintHelp.stdout).not.toContain('--amount <number>');
       expect(mintHelp.stdout).toContain('--proof <file>');
       expect(mintHelp.stdout).toContain('--chain-id <id>');
+      expect(mintHelp.stdout).not.toContain('--recipient');
 
       const allowlistProofHelp = await runCli(['listing', 'release', 'allowlist', 'proof', '--help'], { home });
       expect(allowlistProofHelp.code).toBe(0);
