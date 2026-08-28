@@ -1,6 +1,7 @@
 export type ConfirmationOptions = {
   yes?: boolean;
   quoteOnly?: boolean;
+  preview?: boolean;
 };
 
 export type ConfirmationDecision = 'skip' | 'prompt' | 'reject-json' | 'reject-non-interactive';
@@ -8,6 +9,11 @@ export type ConfirmationDecision = 'skip' | 'prompt' | 'reject-json' | 'reject-n
 const confirmationRequiredCommands = new Set([
   'rare swap swap',
   'rare swap tokens',
+  'rare cart listing create',
+  'rare cart listing cancel',
+  'rare cart listing cancel-root',
+  'rare cart listing invalidate-nonce',
+  'rare cart checkout',
 ]);
 
 export function getConfirmationDecision(params: {
@@ -17,7 +23,7 @@ export function getConfirmationDecision(params: {
   skipConfirmation: boolean;
   jsonMode: boolean;
 }): ConfirmationDecision {
-  if (params.options.yes === true || params.options.quoteOnly === true) {
+  if (params.options.yes === true || params.options.quoteOnly === true || params.options.preview === true) {
     return 'skip';
   }
   if (!requiresExplicitConfirmation(params.commandPath)) {
