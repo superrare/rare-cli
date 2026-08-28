@@ -21,7 +21,7 @@ describe('confirmation policy', () => {
     })).toBe('reject-json');
   });
 
-  it('skips confirmation when the command has explicit consent or is quote-only', () => {
+  it('skips confirmation when the command has explicit consent or is read-only', () => {
     expect(getConfirmationDecision({
       ...confirmableCommand,
       options: { yes: true },
@@ -30,6 +30,11 @@ describe('confirmation policy', () => {
     expect(getConfirmationDecision({
       ...confirmableCommand,
       options: { quoteOnly: true },
+      jsonMode: true,
+    })).toBe('skip');
+    expect(getConfirmationDecision({
+      ...confirmableCommand,
+      options: { preview: true },
       jsonMode: true,
     })).toBe('skip');
   });
@@ -73,6 +78,11 @@ describe('confirmation policy', () => {
     expect(requiresExplicitConfirmation(['rare', 'swap', 'sell-token'])).toBe(false);
     expect(requiresExplicitConfirmation(['rare', 'swap', 'swap'])).toBe(true);
     expect(requiresExplicitConfirmation(['rare', 'swap', 'tokens'])).toBe(true);
+    expect(requiresExplicitConfirmation(['rare', 'cart', 'listing', 'create'])).toBe(true);
+    expect(requiresExplicitConfirmation(['rare', 'cart', 'listing', 'cancel'])).toBe(true);
+    expect(requiresExplicitConfirmation(['rare', 'cart', 'listing', 'cancel-root'])).toBe(true);
+    expect(requiresExplicitConfirmation(['rare', 'cart', 'listing', 'invalidate-nonce'])).toBe(true);
+    expect(requiresExplicitConfirmation(['rare', 'cart', 'checkout'])).toBe(true);
     expect(requiresExplicitConfirmation(['rare', 'collection', 'deploy', 'erc721'])).toBe(false);
     expect(requiresExplicitConfirmation(['rare', 'listing', 'cancel'])).toBe(false);
   });
