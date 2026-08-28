@@ -18,6 +18,8 @@ import {
 } from './helpers/live-harness.js';
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
 
+const cartUnitPriceEth = '0.000001';
+
 const missingCartEnv = [
   ...missingEnv,
   ...(process.env.RARE_API_BASE_URL ? [] : ['RARE_API_BASE_URL']),
@@ -78,7 +80,7 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
         listings: skus.map((sku) => ({
           sku,
           settlementCurrency: 'eth',
-          unitPrice: process.env.E2E_CART_UNIT_PRICE_ETH ?? '0.000001',
+          unitPrice: cartUnitPriceEth,
           quantity: '1',
           paymentRecipient: fixture.sellerAddress,
         })),
