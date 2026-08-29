@@ -3,6 +3,7 @@ import {
   parseCartAmount,
   parseCartListingFile,
   parseCartListingSelections,
+  parseCartSellerFulfillmentKind,
 } from '../../../src/commands/cart-core.js';
 
 const sku = `0x${'11'.repeat(32)}`;
@@ -40,6 +41,53 @@ describe('Cart CLI input planning', () => {
     if (!result.isValid) {
       expect(result.issues.join(' ')).toContain('deadline');
     }
+  });
+
+  it('normalizes an explicit seller fulfillment kind in a listing intent file', () => {
+    const result = parseCartListingFile(JSON.stringify({
+      deadline: '2030-01-01T00:00:00.000Z',
+      listings: [{
+        sku,
+        settlementCurrency: 'ETH',
+        unitPrice: '1',
+        fulfillmentKind: 'ERC1155_MINT_TO',
+      }],
+    }));
+
+    expect(result).toEqual({
+      isValid: true,
+      value: {
+        deadline: 1_893_456_000n,
+        listings: [{
+          sku,
+          settlementCurrency: 'eth',
+          unitPrice: '1',
+          quantity: 1n,
+          fulfillmentKind: 5,
+        }],
+      },
+    });
+  });
+
+  it.each([
+    ['ERC721_TRANSFER', 2],
+    ['ERC1155_TRANSFER', 3],
+    ['ERC721_MINT_TO', 4],
+    ['ERC1155_MINT_TO', 5],
+  ])('maps seller fulfillment %s to SDK kind %s', (fulfillmentKind, expected) => {
+    expect(parseCartSellerFulfillmentKind(fulfillmentKind, 'fulfillmentKind')).toEqual({
+      isValid: true,
+      value: expected,
+    });
+  });
+
+  it('rejects fulfillment kinds that sellers cannot publish', () => {
+    expect(parseCartSellerFulfillmentKind('OFF_CHAIN', 'fulfillmentKind')).toEqual({
+      isValid: false,
+      issues: [
+        'fulfillmentKind must be ERC721_TRANSFER, ERC1155_TRANSFER, ERC721_MINT_TO, or ERC1155_MINT_TO.',
+      ],
+    });
   });
 
   it('parses repeatable checkout listings and defaults quantity to one', () => {
