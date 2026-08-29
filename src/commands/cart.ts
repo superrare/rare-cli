@@ -96,6 +96,7 @@ function cartListingCreateCommand(): Command {
           settlementCurrency: currency.address,
           unitPrice,
           quantity: listing.quantity,
+          ...(listing.fulfillmentKind === undefined ? {} : { fulfillmentKind: listing.fulfillmentKind }),
           ...(listing.paymentRecipient === undefined ? {} : { paymentRecipient: listing.paymentRecipient }),
         };
       }));

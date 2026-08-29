@@ -1,3 +1,4 @@
+import { cartFulfillmentKinds, type CartSellerFulfillmentKind } from '@rareprotocol/rare-sdk';
 import { getAddress, isAddress, isHex, parseUnits, type Address, type Hex } from 'viem';
 
 export type CartCliResult<T> =
@@ -13,6 +14,7 @@ export type CartListingFile = {
     settlementCurrency: CartCliCurrency;
     unitPrice: string;
     quantity: bigint;
+    fulfillmentKind?: CartSellerFulfillmentKind;
     paymentRecipient?: Address;
   }>;
 };
@@ -124,7 +126,14 @@ export function unwrapCartCliResult<T>(result: CartCliResult<T>): T {
 function parseListing(value: unknown, index: number): CartCliResult<CartListingFile['listings'][number]> {
   const field = `listings[${index}]`;
   if (!isRecord(value)) return invalid(`${field} must be an object.`);
-  const allowedFields = new Set(['sku', 'settlementCurrency', 'unitPrice', 'quantity', 'paymentRecipient']);
+  const allowedFields = new Set([
+    'sku',
+    'settlementCurrency',
+    'unitPrice',
+    'quantity',
+    'fulfillmentKind',
+    'paymentRecipient',
+  ]);
   const extraFields = Object.keys(value).filter((key) => !allowedFields.has(key));
   if (extraFields.length > 0) {
     return invalid(`${field} contains unsupported field${extraFields.length === 1 ? '' : 's'}: ${extraFields.join(', ')}.`);
@@ -138,6 +147,7 @@ function parseListing(value: unknown, index: number): CartCliResult<CartListingF
     ? value.unitPrice
     : undefined;
   const quantity = parsePositiveInteger(value.quantity ?? '1', `${field}.quantity`);
+  const fulfillmentKind = parseCartSellerFulfillmentKind(value.fulfillmentKind, `${field}.fulfillmentKind`);
   const paymentRecipient = typeof value.paymentRecipient === 'string' || value.paymentRecipient === undefined
     ? parseCartAddress(value.paymentRecipient, `${field}.paymentRecipient`)
     : invalid<Address | undefined>(`${field}.paymentRecipient must be an address string.`);
@@ -146,9 +156,11 @@ function parseListing(value: unknown, index: number): CartCliResult<CartListingF
     ...(currency.isValid ? [] : currency.issues),
     ...(unitPrice === undefined ? [`${field}.unitPrice must be a positive decimal amount string.`] : []),
     ...(quantity.isValid ? [] : quantity.issues),
+    ...(fulfillmentKind.isValid ? [] : fulfillmentKind.issues),
     ...(paymentRecipient.isValid ? [] : paymentRecipient.issues),
   ];
-  if (issues.length > 0 || !sku.isValid || !currency.isValid || unitPrice === undefined || !quantity.isValid || !paymentRecipient.isValid) {
+  if (issues.length > 0 || !sku.isValid || !currency.isValid || unitPrice === undefined ||
+    !quantity.isValid || !fulfillmentKind.isValid || !paymentRecipient.isValid) {
     return { isValid: false, issues };
   }
 
@@ -159,9 +171,32 @@ function parseListing(value: unknown, index: number): CartCliResult<CartListingF
       settlementCurrency: currency.value,
       unitPrice,
       quantity: quantity.value,
+      ...(fulfillmentKind.value === undefined ? {} : { fulfillmentKind: fulfillmentKind.value }),
       ...(paymentRecipient.value === undefined ? {} : { paymentRecipient: paymentRecipient.value }),
     },
   };
+}
+
+export function parseCartSellerFulfillmentKind(
+  value: unknown,
+  field: string,
+): CartCliResult<CartSellerFulfillmentKind | undefined> {
+  if (value === undefined) return { isValid: true, value: undefined };
+  if (value === 'ERC721_TRANSFER') {
+    return { isValid: true, value: cartFulfillmentKinds.erc721Transfer };
+  }
+  if (value === 'ERC1155_TRANSFER') {
+    return { isValid: true, value: cartFulfillmentKinds.erc1155Transfer };
+  }
+  if (value === 'ERC721_MINT_TO') {
+    return { isValid: true, value: cartFulfillmentKinds.erc721MintTo };
+  }
+  if (value === 'ERC1155_MINT_TO') {
+    return { isValid: true, value: cartFulfillmentKinds.erc1155MintTo };
+  }
+  return invalid(
+    `${field} must be ERC721_TRANSFER, ERC1155_TRANSFER, ERC721_MINT_TO, or ERC1155_MINT_TO.`,
+  );
 }
 
 function parseSelection(value: string, index: number): CartCliResult<CartListingSelection> {

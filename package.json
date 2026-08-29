@@ -79,7 +79,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@rareprotocol/rare-sdk": "github:superrare/rare-sdk#0d7d54d88bea2b70190417ee651c35d5286c1321",
+    "@rareprotocol/rare-sdk": "github:superrare/rare-sdk#3608547bd07c30714e24c21db980c92abce5d2ac",
     "commander": "12.1.0",
     "viem": "2.54.6",
     "zod": "^4.4.3"
