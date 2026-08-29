@@ -1,9 +1,9 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { createRareClient } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress } from '@rareprotocol/rare-sdk/contracts';
-import { erc721Abi, isHex, type Address, type Hex } from 'viem';
-import { z } from 'zod';
+import { erc721Abi, type Address, type Hex } from 'viem';
 import {
   cleanupLiveFixture,
   createLiveFixture,
@@ -23,7 +23,6 @@ const cartUnitPriceEth = '0.000001';
 const missingCartEnv = [
   ...missingEnv,
   ...(process.env.RARE_API_BASE_URL ? [] : ['RARE_API_BASE_URL']),
-  ...(process.env.RARE_API_AUTH_TOKEN ? [] : ['RARE_API_AUTH_TOKEN']),
 ];
 const describeLive = missingCartEnv.length === 0 ? describe.sequential : describe.skip;
 const live = new LiveFixtureRef<CartLiveFixture>(`Live Cart environment is not configured: ${missingCartEnv.join(', ')}`);
@@ -68,12 +67,25 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
       throw new Error('Cart live E2E currently requires TEST_RPC_URL to target Sepolia.');
     }
     try {
+      const rare = createRareClient({
+        publicClient: fixture.publicClient,
+        apiBaseUrl: process.env.RARE_API_BASE_URL,
+      });
+      await step('preflight public Cart Variant catalog', () =>
+        rare.cart.catalog.variants.search({
+          nft: {
+            contract: '0x0000000000000000000000000000000000000001',
+            tokenId: 0n,
+          },
+          perPage: 1,
+        }));
       const collection = await deployErc721Collection(fixture, '3');
       const firstToken = await mintToken(fixture, collection.contract);
       const secondToken = await mintToken(fixture, collection.contract);
       const thirdToken = await mintToken(fixture, collection.contract);
       const tokens = [firstToken, secondToken, thirdToken];
-      const skus = await createCartCatalogFixtures(fixture, collection.contract, tokens.map((token) => token.tokenId));
+      const skus = await Promise.all(tokens.map((token) =>
+        pollForIndexedSku(rare, collection.contract, token.tokenId)));
       const inputPath = join(fixture.tempDir, 'cart-listings.json');
       await writeFile(inputPath, JSON.stringify({
         deadline: String(Math.floor(Date.now() / 1_000) + 3_600),
@@ -203,48 +215,23 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
   }, 180_000);
 });
 
-async function createCartCatalogFixtures(
-  fixture: BuyerLiveFixture,
+async function pollForIndexedSku(
+  rare: ReturnType<typeof createRareClient>,
   tokenContract: Address,
-  tokenIds: readonly string[],
-): Promise<Hex[]> {
-  const runId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const product = await postCartFixture('/v1/cart/products', {
-    slug: `rare-cli-cart-${runId}`,
-    metadata: { source: 'rare-cli-e2e', runId },
-  }, z.object({ id: z.string() }));
-  return Promise.all(tokenIds.map(async (tokenId, position) => {
-    const created = await postCartFixture('/v1/cart/skus', {
-      metadata: { chainId: fixture.chainId, tokenContract, tokenId },
-    }, z.object({ sku: z.custom<Hex>((value) => typeof value === 'string' && isHex(value) && value.length === 66) }));
-    await postCartFixture(`/v1/cart/products/${product.id}/skus`, {
-      sku: created.sku,
-      position,
-      metadata: { runId },
-    }, z.unknown());
-    return created.sku;
-  }));
-}
-
-async function postCartFixture<T>(path: string, body: unknown, schema: z.ZodType<T>): Promise<T> {
-  const baseUrl = process.env.RARE_API_BASE_URL;
-  const authToken = process.env.RARE_API_AUTH_TOKEN;
-  if (!baseUrl || !authToken) throw new Error('RARE_API_BASE_URL and RARE_API_AUTH_TOKEN are required.');
-  const response = await fetch(new URL(path, baseUrl), {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${authToken}`,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) throw new Error(`Cart fixture request ${path} failed with ${response.status}.`);
-  const payload = await response.json();
-  if (!isRecord(payload) || payload.data === undefined) throw new Error(`Cart fixture request ${path} returned no data.`);
-  const data: unknown = payload.data;
-  return schema.parse(data);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  tokenId: string,
+): Promise<Hex> {
+  const deadline = Date.now() + 180_000;
+  while (Date.now() < deadline) {
+    const result = await rare.cart.catalog.variants.search({
+      nft: { contract: tokenContract, tokenId },
+      perPage: 2,
+    });
+    if (result.data.length > 1) {
+      throw new Error(`Cart catalog returned multiple Variants for ${tokenContract}:${tokenId}.`);
+    }
+    const variant = result.data[0];
+    if (variant) return variant.sku;
+    await new Promise((resolve) => setTimeout(resolve, 2_000));
+  }
+  throw new Error(`Timed out waiting for Cart catalog indexing of ${tokenContract}:${tokenId}.`);
 }
