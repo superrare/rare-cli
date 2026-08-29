@@ -19,6 +19,7 @@ import {
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
 
 const cartUnitPriceEth = '0.000001';
+const contractIndexingDelayMs = 15_000;
 
 const missingCartEnv = [
   ...missingEnv,
@@ -84,6 +85,8 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
           perPage: 1,
         }));
       const collection = await deployErc721Collection(fixture, '3');
+      await step('wait for ERC-721 contract indexing', () =>
+        new Promise((resolve) => setTimeout(resolve, contractIndexingDelayMs)));
       const firstToken = await mintToken(fixture, collection.contract);
       const secondToken = await mintToken(fixture, collection.contract);
       const thirdToken = await mintToken(fixture, collection.contract);
