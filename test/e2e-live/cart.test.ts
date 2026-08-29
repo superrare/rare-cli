@@ -39,6 +39,10 @@ type CartListingCreateResult = {
   rootDigest: Hex;
   listingDigests: Hex[];
   approvalTxHashes: Hex[];
+  publishedRoot: {
+    seller: Address;
+    listingCount: number;
+  };
   signedArtifact: { signature: Hex; entries: unknown[] };
 };
 
@@ -111,8 +115,14 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
           'cart', 'listing', 'create', '--input', inputPath, '--output', artifactPath, '--chain', fixture.chain,
         ], 240_000));
       expect(created.listingDigests).toHaveLength(3);
+      expect(created.approvalTxHashes).toHaveLength(1);
+      expect(created.approvalTxHashes[0]).toMatch(/^0x[0-9a-fA-F]{64}$/);
+      expect(created.publishedRoot.listingCount).toBe(3);
+      expect(created.publishedRoot.seller.toLowerCase()).toBe(fixture.sellerAddress.toLowerCase());
       expect(created.signedArtifact.signature).toMatch(/^0x[0-9a-fA-F]+$/);
       expect(created.signedArtifact.entries).toHaveLength(3);
+      await expect(rare.cart.approval.status(collection.contract, fixture.sellerAddress)).resolves.toBe(true);
+      await pollForPublishedListings(rare, fixture.sellerAddress, created.listingDigests);
       const nonceBeforeInvalidation = await fixture.publicClient.readContract({
         address: getCartAddress(fixture.chain),
         abi: cartAbi,
@@ -230,8 +240,30 @@ async function pollForIndexedSku(
       throw new Error(`Cart catalog returned multiple Variants for ${tokenContract}:${tokenId}.`);
     }
     const variant = result.data[0];
-    if (variant) return variant.sku;
+    if (variant) {
+      const bySku = await rare.cart.catalog.variants.search({ sku: variant.sku, perPage: 2 });
+      if (bySku.data.length !== 1 || bySku.data[0]?.sku !== variant.sku) {
+        throw new Error(`Cart catalog could not resolve indexed SKU ${variant.sku} uniquely.`);
+      }
+      return variant.sku;
+    }
     await new Promise((resolve) => setTimeout(resolve, 2_000));
   }
   throw new Error(`Timed out waiting for Cart catalog indexing of ${tokenContract}:${tokenId}.`);
+}
+
+async function pollForPublishedListings(
+  rare: ReturnType<typeof createRareClient>,
+  seller: Address,
+  listingDigests: readonly Hex[],
+): Promise<void> {
+  const expected = new Set(listingDigests.map((digest) => digest.toLowerCase()));
+  const deadline = Date.now() + 60_000;
+  while (Date.now() < deadline) {
+    const result = await rare.cart.api.listing.search({ seller, perPage: 100 });
+    const published = new Set(result.data.map((listing) => listing.listingDigest.toLowerCase()));
+    if ([...expected].every((digest) => published.has(digest))) return;
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  throw new Error(`Timed out waiting for Rare API to return ${listingDigests.length} published Cart listings.`);
 }
