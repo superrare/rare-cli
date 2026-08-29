@@ -329,9 +329,9 @@ function printCheckoutPreparation(preparation: CartCheckoutPreparation, symbol: 
   console.log(`  Payment: ${formatUnits(preparation.paymentAmount, decimals)} ${symbol}`);
   console.log(`  Fees: ${preparation.fees.length}`);
   console.log(`  Settlements: ${preparation.settlements.length}`);
+  console.log(`  Route actions: ${preparation.route.inputs.length}`);
   console.log(`  Prepared: ${preparation.preparedAt}`);
   console.log(`  Expires: ${preparation.expiresAt}`);
-  if (preparation.quoteEvidence !== undefined) console.log(`  Route: ${preparation.quoteEvidence.summary}`);
 }
 
 function formatUnixTimestamp(value: string): string {
