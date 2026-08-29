@@ -8,6 +8,7 @@ import {
   cleanupLiveFixture,
   createLiveFixture,
   expectTx,
+  expectTokenBalanceAtLeast,
   jsonCommand,
   LiveFixtureRef,
   missingEnv,
@@ -30,7 +31,7 @@ const live = new LiveFixtureRef<CartLiveFixture>(`Live Cart environment is not c
 
 type CartLiveFixture = BuyerLiveFixture & {
   collection: Address;
-  purchasedTokenId: bigint;
+  purchasedTokenIds: bigint[];
   listingDigests: Hex[];
   rootDigest: Hex;
   nonceBeforeInvalidation: bigint;
@@ -53,12 +54,15 @@ type CartCheckoutPreviewResult = {
     intent: { items: Array<{ listingDigest: Hex; quantity: string; recipient: Address }> };
     paymentAmount: string;
     expiresAt: string;
+    route: { inputs: Hex[] };
   };
 };
 
 type CartPurchaseResult = TxResult & {
+  approvalTxHash: Hex | null;
   orderId: Hex;
   payer: Address;
+  paymentCurrency: Address;
   paymentAmount: string;
   lineCount: number;
   actionCount: number;
@@ -84,6 +88,7 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
           },
           perPage: 1,
         }));
+      await expectTokenBalanceAtLeast(fixture, fixture.buyerAddress, fixture.rareAddress, '1');
       const collection = await deployErc721Collection(fixture, '3');
       await step('wait for ERC-721 contract indexing', () =>
         new Promise((resolve) => setTimeout(resolve, contractIndexingDelayMs)));
@@ -135,7 +140,7 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
       live.set({
         ...fixture,
         collection: collection.contract,
-        purchasedTokenId: BigInt(firstToken.tokenId),
+        purchasedTokenIds: [BigInt(firstToken.tokenId), BigInt(secondToken.tokenId)],
         listingDigests: created.listingDigests,
         rootDigest: created.rootDigest,
         nonceBeforeInvalidation,
@@ -150,43 +155,51 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
     await cleanupLiveFixture(live.optionalValue);
   });
 
-  it('previews and purchases a fixed-price Cart checkout', async () => {
+  it('routes RARE payment across a multi-item fixed-price Cart checkout', async () => {
     const fixture = live.value;
-    const listingDigest = fixture.listingDigests[0]!;
+    const listingDigests = fixture.listingDigests.slice(0, 2);
+    expect(listingDigests).toHaveLength(2);
+    const listingArgs = listingDigests.flatMap((listingDigest) => ['--listing', listingDigest]);
     const preview = await step('preview Cart checkout', () =>
       jsonCommand<CartCheckoutPreviewResult>(fixture.buyerHome, [
-        'cart', 'checkout', '--listing', listingDigest, '--payment-currency', 'eth', '--preview', '--chain', fixture.chain,
+        'cart', 'checkout', ...listingArgs, '--payment-currency', 'rare', '--preview', '--chain', fixture.chain,
       ], 240_000));
     expect(preview.preview).toBe(true);
-    expect(preview.preparation.intent.items).toEqual([{
+    expect(preview.preparation.intent.items).toEqual(listingDigests.map((listingDigest) => ({
       listingDigest,
       quantity: '1',
       recipient: fixture.buyerAddress,
-    }]);
+    })));
     expect(BigInt(preview.preparation.paymentAmount)).toBeGreaterThan(0n);
     expect(Date.parse(preview.preparation.expiresAt)).toBeGreaterThan(Date.now());
+    expect(preview.preparation.route.inputs.length).toBeGreaterThan(0);
 
     const purchase = await step('purchase Cart checkout', () =>
       jsonCommand<CartPurchaseResult>(fixture.buyerHome, [
-        'cart', 'checkout', '--listing', listingDigest, '--payment-currency', 'eth', '--chain', fixture.chain,
+        'cart', 'checkout', ...listingArgs, '--payment-currency', 'rare', '--chain', fixture.chain,
       ], 300_000));
     expectTx(purchase);
+    expect(purchase.approvalTxHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+    await expect(fixture.publicClient.getTransactionReceipt({ hash: purchase.approvalTxHash! })).resolves.toMatchObject({ status: 'success' });
     expect(purchase.orderId).toMatch(/^0x[0-9a-fA-F]{64}$/);
     expect(purchase.payer.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
-    expect(purchase.lineCount).toBeGreaterThanOrEqual(1);
-    expect(purchase.actionCount).toBe(1);
-    const owner = await fixture.publicClient.readContract({
-      address: fixture.collection,
-      abi: erc721Abi,
-      functionName: 'ownerOf',
-      args: [fixture.purchasedTokenId],
-    });
-    expect(owner.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
+    expect(purchase.paymentCurrency.toLowerCase()).toBe(fixture.rareAddress.toLowerCase());
+    expect(purchase.lineCount).toBeGreaterThanOrEqual(2);
+    expect(purchase.actionCount).toBe(2);
+    for (const tokenId of fixture.purchasedTokenIds) {
+      const owner = await fixture.publicClient.readContract({
+        address: fixture.collection,
+        abi: erc721Abi,
+        functionName: 'ownerOf',
+        args: [tokenId],
+      });
+      expect(owner.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
+    }
   }, 360_000);
 
   it('cancels one listing and its Listing Root on-chain', async () => {
     const fixture = live.value;
-    const listingDigest = fixture.listingDigests[1]!;
+    const listingDigest = fixture.listingDigests[2]!;
     const cancelled = await step('cancel Cart listing', () =>
       jsonCommand<TxResult>(fixture.sellerHome, [
         'cart', 'listing', 'cancel', '--listing-digest', listingDigest, '--chain', fixture.chain,
