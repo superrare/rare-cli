@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRareClient } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress } from '@rareprotocol/rare-sdk/contracts';
-import { erc721Abi, type Address, type Hex } from 'viem';
+import { erc721Abi, getAddress, parseEventLogs, zeroAddress, type Address, type Hex } from 'viem';
 import {
   cleanupLiveFixture,
   createLiveFixture,
@@ -12,6 +12,7 @@ import {
   jsonCommand,
   LiveFixtureRef,
   missingEnv,
+  readTokenBalance,
   requireBuyerFixture,
   step,
   type BuyerLiveFixture,
@@ -54,11 +55,21 @@ type CartCheckoutPreviewResult = {
     intent: { items: Array<{ listingDigest: Hex; quantity: string; recipient: Address }> };
     paymentAmount: string;
     expiresAt: string;
+    lines: Array<{
+      sku: Hex;
+      listingDigest: Hex;
+      fulfillmentKind: number;
+      quantity: string;
+      settlementCurrency: Address;
+      amount: string;
+      paymentRecipient: Address;
+    }>;
     route: { inputs: Hex[] };
   };
 };
 
 type CartPurchaseResult = TxResult & {
+  txHash: Hex;
   approvalTxHash: Hex | null;
   orderId: Hex;
   payer: Address;
@@ -173,19 +184,62 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
     expect(BigInt(preview.preparation.paymentAmount)).toBeGreaterThan(0n);
     expect(Date.parse(preview.preparation.expiresAt)).toBeGreaterThan(Date.now());
     expect(preview.preparation.route.inputs.length).toBeGreaterThan(0);
+    const entitlements = aggregateEntitlements(preview.preparation.lines);
+    expect(entitlements.length).toBeGreaterThan(0);
+    const payoutBalancesBefore = await Promise.all(entitlements.map(async (entitlement) => ({
+      ...entitlement,
+      balance: await readCurrencyBalance(fixture, entitlement.recipient, entitlement.currency),
+    })));
+    const buyerRareBalanceBefore = await readTokenBalance(fixture, fixture.buyerAddress, fixture.rareAddress);
 
     const purchase = await step('purchase Cart checkout', () =>
       jsonCommand<CartPurchaseResult>(fixture.buyerHome, [
         'cart', 'checkout', ...listingArgs, '--payment-currency', 'rare', '--chain', fixture.chain,
       ], 300_000));
     expectTx(purchase);
-    expect(purchase.approvalTxHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
-    await expect(fixture.publicClient.getTransactionReceipt({ hash: purchase.approvalTxHash! })).resolves.toMatchObject({ status: 'success' });
+    if (purchase.approvalTxHash !== null) {
+      expect(purchase.approvalTxHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
+      await expect(fixture.publicClient.getTransactionReceipt({ hash: purchase.approvalTxHash })).resolves.toMatchObject({ status: 'success' });
+    }
     expect(purchase.orderId).toMatch(/^0x[0-9a-fA-F]{64}$/);
     expect(purchase.payer.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
     expect(purchase.paymentCurrency.toLowerCase()).toBe(fixture.rareAddress.toLowerCase());
     expect(purchase.lineCount).toBeGreaterThanOrEqual(2);
     expect(purchase.actionCount).toBe(2);
+    const purchaseReceipt = await fixture.publicClient.getTransactionReceipt({ hash: purchase.txHash });
+    const settledLines = parseEventLogs({
+      abi: cartAbi,
+      logs: purchaseReceipt.logs,
+      eventName: 'OrderLineSettled',
+    });
+    expect(settledLines).toHaveLength(preview.preparation.lines.length);
+    for (const [lineIndex, line] of preview.preparation.lines.entries()) {
+      const settled = settledLines.find((event) => event.args.lineIndex === BigInt(lineIndex));
+      expect(settled?.args).toMatchObject({
+        orderId: purchase.orderId,
+        lineIndex: BigInt(lineIndex),
+        sku: line.sku,
+        listingDigest: line.listingDigest,
+        quantity: BigInt(line.quantity),
+        settlementCurrency: getAddress(line.settlementCurrency),
+        amount: BigInt(line.amount),
+        paymentRecipient: getAddress(line.paymentRecipient),
+        fulfillmentKind: line.fulfillmentKind,
+      });
+    }
+    const buyerRareBalanceAfter = await readTokenBalance(fixture, fixture.buyerAddress, fixture.rareAddress);
+    const buyerRareSpent = buyerRareBalanceBefore - buyerRareBalanceAfter;
+    expect(buyerRareSpent).toBeGreaterThan(0n);
+    expect(buyerRareSpent).toBeLessThanOrEqual(BigInt(purchase.paymentAmount));
+    for (const entitlement of payoutBalancesBefore) {
+      const balanceAfter = await readCurrencyBalance(fixture, entitlement.recipient, entitlement.currency);
+      const balanceDelta = balanceAfter - entitlement.balance;
+      if (entitlement.recipient === fixture.sellerAddress) {
+        expect(balanceDelta).toBe(entitlement.amount);
+      } else {
+        expect(balanceDelta).toBeGreaterThanOrEqual(entitlement.amount);
+      }
+    }
     for (const tokenId of fixture.purchasedTokenIds) {
       const owner = await fixture.publicClient.readContract({
         address: fixture.collection,
@@ -282,4 +336,36 @@ async function pollForPublishedListings(
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
   throw new Error(`Timed out waiting for Rare API to return ${listingDigests.length} published Cart listings.`);
+}
+
+type CartEntitlement = {
+  recipient: Address;
+  currency: Address;
+  amount: bigint;
+};
+
+function aggregateEntitlements(
+  lines: CartCheckoutPreviewResult['preparation']['lines'],
+): CartEntitlement[] {
+  return lines.reduce<CartEntitlement[]>((totals, line) => {
+    const recipient = getAddress(line.paymentRecipient);
+    const currency = getAddress(line.settlementCurrency);
+    const existing = totals.find((entitlement) =>
+      entitlement.recipient === recipient && entitlement.currency === currency);
+    return existing === undefined
+      ? [...totals, { recipient, currency, amount: BigInt(line.amount) }]
+      : totals.map((entitlement) => entitlement === existing
+        ? { ...entitlement, amount: entitlement.amount + BigInt(line.amount) }
+        : entitlement);
+  }, []);
+}
+
+async function readCurrencyBalance(
+  fixture: BuyerLiveFixture,
+  owner: Address,
+  currency: Address,
+): Promise<bigint> {
+  return currency === zeroAddress
+    ? fixture.publicClient.getBalance({ address: owner })
+    : readTokenBalance(fixture, owner, currency);
 }
