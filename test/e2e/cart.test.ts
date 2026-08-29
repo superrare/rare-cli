@@ -163,7 +163,12 @@ async function handleCartApiRequest(
   }
 
   response.writeHead(200, { 'content-type': 'application/json' });
-  response.end(JSON.stringify({ data: preparedPurchaseFixture() }));
+  response.end(JSON.stringify({
+    data: {
+      preparationReference: 'cart-checkout-fixture',
+      preparation: preparedPurchaseFixture(),
+    },
+  }));
 }
 
 function preparedPurchaseFixture(): Record<string, unknown> {
