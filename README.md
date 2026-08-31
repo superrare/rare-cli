@@ -456,6 +456,56 @@ rare listing status --contract 0x... --token-id 1
 
 `--split <ADDR=RATIO>` is repeatable. Ratios must sum to exactly 100. If you omit `--split`, the SDK defaults to `[caller, 100]` (100% to your wallet). If you pass any `--split`, you must specify the complete list — the caller is **not** auto-appended.
 
+### Cart
+
+Cart commands publish API-backed listing roots and purchase one or more listings in a single checkout. Create listings from a JSON intent file such as:
+
+```json
+{
+  "deadline": "2026-12-31T23:59:59Z",
+  "listings": [
+    {
+      "sku": "0x...bytes32",
+      "settlementCurrency": "usdc",
+      "unitPrice": "25",
+      "quantity": "2",
+      "paymentRecipient": "0x...seller"
+    }
+  ]
+}
+```
+
+`quantity` defaults to `"1"`, and `paymentRecipient` defaults to the seller. Amounts and quantities are strings so they remain exact. Named currencies (`eth`, `usdc`, and `rare`) and ERC-20 addresses are supported.
+
+```bash
+# Inspect the root, listing digests, and required NFT approvals without writing
+rare cart listing create --input ./cart-listings.json --preview --output ./prepared-cart.json
+
+# Sign and publish the root; approve NFT contracts when needed
+rare cart listing create --input ./cart-listings.json --output ./signed-cart.json --yes
+
+# Preview a multi-listing checkout; quantity defaults to one
+rare cart checkout \
+  --listing 0x...listingDigestA \
+  --listing 0x...listingDigestB=2 \
+  --payment-currency usdc \
+  --preview
+
+# Execute the verified checkout and approve ERC-20 spending when needed
+rare cart checkout \
+  --listing 0x...listingDigestA \
+  --payment-currency usdc \
+  --recipient 0x...recipient \
+  --yes
+
+# Cancel one listing, cancel a whole root, or invalidate the current seller nonce
+rare cart listing cancel --listing-digest 0x... --yes
+rare cart listing cancel-root --root-digest 0x... --yes
+rare cart listing invalidate-nonce --yes
+```
+
+`--preview` returns the Rare API quote and SDK preparation without signing, approving, publishing, or submitting a transaction. Before purchase, the SDK verifies the API bundle against the requested listing digests, quantities, payment currency, recipient, chain, and connected payer. Routing, proofs, authorization, order construction, and platform signing remain internal to the Rare API and SDK.
+
 ### Batch Listings
 
 Batch listing roots are built from token sets. For create flows, you can pass a CSV file, a JSON token list, a token tree artifact from `rare utils tree build`, or the older root artifact shape that already includes listing config. Running `rare utils tree build` first is optional; use it when you want a reusable artifact or want to inspect/share the root before registering it.
