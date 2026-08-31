@@ -484,14 +484,16 @@ describeLive('live secondary-sale Cart royalties', () => {
         new Promise((resolve) => setTimeout(resolve, contractIndexingDelayMs)));
       const token = await mintToken(creator, collection.contract, { to: secondarySeller.sellerAddress });
       const sku = await pollForIndexedSku(creatorRare, collection.contract, token.tokenId);
-      const sellerProceeds = parseEther(cartUnitPriceEth);
+      const grossSalePrice = parseEther(cartUnitPriceEth);
       const royalty = await creatorRare.collection.royalty.status({
         contract: collection.contract,
         tokenId: token.tokenId,
-        price: sellerProceeds,
+        price: grossSalePrice,
       });
       expect(royalty.receiver.toLowerCase()).toBe(creator.sellerAddress.toLowerCase());
       expect(royalty.royaltyAmount).toBeGreaterThan(0n);
+      const sellerProceeds = grossSalePrice - royalty.royaltyAmount;
+      expect(sellerProceeds).toBeGreaterThan(0n);
       await expect(creator.publicClient.readContract({
         address: collection.contract,
         abi: erc721Abi,
