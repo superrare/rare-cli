@@ -90,7 +90,13 @@ export class LiveFixtureRef<TFixture> {
   }
 }
 
-export async function createLiveFixture(options: { buyer?: boolean } = {}): Promise<LiveFixture> {
+export async function createLiveFixture(options: {
+  buyer?: boolean;
+  buyerWalletFilter?: (
+    wallet: LiveWalletLease,
+    context: { chain: SupportedChain; publicClient: PublicClient },
+  ) => Promise<boolean>;
+} = {}): Promise<LiveFixture> {
   const sellerHome = await createTempHome('rare-cli-live-seller-home-');
   const buyerHome = options.buyer ? await createTempHome('rare-cli-live-buyer-home-') : undefined;
   const tempDir = await mkdtemp(join(tmpdir(), 'rare-cli-live-'));
@@ -101,10 +107,16 @@ export async function createLiveFixture(options: { buyer?: boolean } = {}): Prom
   try {
     const chain = await step('detect live chain', () => detectLiveChain());
     const publicClient = createLivePublicClient(chain);
+    const buyerWalletFilter = options.buyerWalletFilter;
     if (buyerHome === undefined) {
       sellerWallet = await step('reserve seller live wallet', () => reserveLiveWallet('seller', chain));
     } else {
-      ({ sellerWallet, buyerWallet } = await step('reserve seller and buyer live wallets', () => reserveLiveWalletPair(chain)));
+      ({ sellerWallet, buyerWallet } = await step('reserve seller and buyer live wallets', () =>
+        reserveLiveWalletPair(chain, {
+          ...(buyerWalletFilter === undefined ? {} : {
+            buyerFilter: async (wallet): Promise<boolean> => buyerWalletFilter(wallet, { chain, publicClient }),
+          }),
+        })));
     }
     if (sellerWallet === undefined) {
       throw new Error('Seller wallet lease was not created.');
