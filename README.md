@@ -1080,3 +1080,5 @@ The default test run does not verify native keychain integration. No hosted logi
 ## License
 
 [MIT](LICENSE)
+
+Account auth endpoints now run at `/auth/v2` on the existing auth service. Configure `RARE_AUTH_URL` to that issuer and `RARE_API_URL` to the matching API; no separate authority deployment or client-side signing-key configuration is needed. Session credentials are opaque and remain validated by the SDK/API flow.
