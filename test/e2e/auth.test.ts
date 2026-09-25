@@ -104,7 +104,7 @@ async function fixture(operation: (service: AuthService, home: string, run: (arg
     service.configure({ base: `http://127.0.0.1:${address.port}` });
     const run = async (args: string[], input?: string): Promise<CliResult> => {
       const result = await runCli(['--json', ...args], { home, input, env: {
-        RARE_AUTH_URL: `${service.base}/auth/v2`, RARE_API_URL: service.base, RARE_AUTH_STORAGE: 'file',
+        RARE_API_URL: service.base, RARE_AUTH_STORAGE: 'file', RARE_AUTH_DIRECTORY: join(home, '.rare/auth'),
       } });
       for (const secret of [deviceSecret, accessSecret, refreshSecret, key]) {
         expect(result.stdout + result.stderr).not.toContain(secret);
@@ -124,10 +124,63 @@ async function start(run: (args: string[]) => Promise<CliResult>): Promise<strin
 }
 
 describe.skipIf(process.platform === 'win32')('built CLI account authentication', () => {
+  it('defaults to the production API without a separate auth URL and keeps endpoint overrides isolated', async () => {
+    await withTempHome(async temporary => {
+      const home = await realpath(temporary);
+      const directory = join(home, 'production-auth');
+      const scope = { apiBaseUrl: 'https://api.superrare.com', authBaseUrl: 'https://api.superrare.com/auth/v2', clientId: 'rare-cli' };
+      const store = createAuthStore({ ...scope, backend: 'file', directory });
+      await store.withLock(async () => { await store.set({ ...scope, revision: 'test-production', accessToken: accessSecret,
+        refreshToken: refreshSecret, expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
+      const env = { RARE_API_URL: undefined, RARE_AUTH_URL: 'https://obsolete-auth.example/auth/v2',
+        RARE_AUTH_STORAGE: 'file', RARE_AUTH_DIRECTORY: directory };
+      const result = await runCli(['--json', 'auth', 'status'], { home, env });
+      expect(parseJsonStdout(result)).toMatchObject({ status: 'present', verified: false });
+      expect(result.stdout + result.stderr).not.toContain(accessSecret);
+      expect(result.stdout + result.stderr).not.toContain(refreshSecret);
+      expect(parseJsonStdout(await runCli(['--json', 'auth', 'status', '--api-url', 'https://other-api.example'], { home, env })))
+        .toMatchObject({ status: 'signed_out' });
+      const help = await runCli(['auth', 'login', '--help'], { home, env });
+      expect(help.stdout).toContain('--api-url');
+      expect(help.stdout).not.toContain('--auth-url');
+      expect((await runCli(['auth', 'status', '--auth-url', 'https://obsolete-auth.example'], { home, env })).code).toBe(1);
+    });
+  });
+
+  it('uses a normalized API flag over the environment for both device and profile routes', async () => {
+    await fixture(async (service, home) => {
+      const directory = join(home, 'one-api');
+      const env = { RARE_API_URL: 'https://unused-api.example', RARE_AUTH_STORAGE: 'file', RARE_AUTH_DIRECTORY: directory };
+      const run = async (args: string[]): Promise<CliResult> => runCli(['--json', ...args, '--api-url', `${service.base}/`], { home, env });
+      const requestId = await start(run);
+      const pending = createAuthStore({ apiBaseUrl: service.base, authBaseUrl: `${service.base}/auth/v2`, clientId: 'rare-cli', backend: 'file', directory, pendingRequestId: requestId });
+      await pending.withLock(async () => { expect(await pending.get()).toMatchObject({ apiBaseUrl: service.base, authBaseUrl: `${service.base}/auth/v2` }); });
+      expect(parseJsonStdout(await run(['auth', 'login', '--resume', requestId]))).toMatchObject({ status: 'authorized' });
+      expect(parseJsonStdout(await run(['profile', 'get']))).toEqual(profile);
+    });
+  });
+
+  it('does not load or migrate sessions and pending grants from a direct auth-service scope', async () => {
+    await fixture(async (service, home, run) => {
+      const scope = { apiBaseUrl: service.base, authBaseUrl: 'https://previous-auth.example/auth/v2', clientId: 'rare-cli' };
+      const storage = { ...scope, backend: 'file' as const, directory: join(home, '.rare/auth') };
+      const legacy = createAuthStore(storage);
+      const session = { ...scope, revision: 'legacy', accessToken: accessSecret, refreshToken: refreshSecret,
+        expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' };
+      await legacy.withLock(async () => { await legacy.set(session); });
+      const pending = createAuthStore({ ...storage, pendingRequestId: 'legacy-request' });
+      await pending.withLock(async () => { await pending.set({ ...scope, deviceCode: deviceSecret }); });
+      expect(parseJsonStdout(await run(['auth', 'status']))).toMatchObject({ status: 'signed_out' });
+      expect((await run(['auth', 'login', '--poll', 'legacy-request'])).stderr).toContain('missing or invalid');
+      expect(service.polls + service.refreshes).toBe(0);
+      await legacy.withLock(async () => { expect(await legacy.get()).toEqual(session); });
+    });
+  });
+
   it('isolates auth records through directory flag and environment without changing wallet configuration', async () => {
     await fixture(async (service, home) => {
       const directory = join(home, 'isolated-auth');
-      const env = { RARE_AUTH_URL: `${service.base}/auth/v2`, RARE_API_URL: service.base,
+      const env = { RARE_API_URL: service.base,
         RARE_AUTH_STORAGE: 'file', RARE_AUTH_DIRECTORY: directory };
       const started = parseJsonStdout<{ requestId: string }>(await runCli(['--json', 'auth', 'login', '--no-wait'], { home, env }));
       expect((await readdir(directory)).some(name => name.startsWith('device-'))).toBe(true);

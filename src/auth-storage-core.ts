@@ -3,6 +3,14 @@ export type StorageScopeResult =
   | { ok: true; scope: AuthStorageScope }
   | { ok: false; message: string };
 
+/** Account authentication shares the normalized public API base. */
+export function deriveAccountStorageScope(apiUrl: URL, clientId: string): StorageScopeResult {
+  const result = validateStorageScope(apiUrl, apiUrl, clientId);
+  return result.ok
+    ? { ok: true, scope: { ...result.scope, authBaseUrl: `${result.scope.apiBaseUrl}/auth/v2` } }
+    : result;
+}
+
 /** URL parsing belongs at the shell boundary; this function validates plain data. */
 export function validateStorageScope(url: URL, apiUrl: URL, clientId: string): StorageScopeResult {
   if (![url, apiUrl].every(isSafeUrl)) {

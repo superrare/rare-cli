@@ -4,12 +4,13 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 import { Command, Option } from 'commander';
 import { createRareAccountClient, RareAuthError, type RareAccountClient, type RareDeviceAuthorization, type RareAccountSession } from '@rareprotocol/rare-sdk';
+import { DEFAULT_RARE_API_BASE_URL } from '@rareprotocol/rare-sdk/data-access/base-url';
 import { AuthStorageError, createAuthStore, type AuthStorageOptions } from './auth-storage.js';
+import { deriveAccountStorageScope } from './auth-storage-core.js';
 import { parsePendingAuthorization } from './commands/auth-core.js';
 import { output } from './output.js';
 
 export type AccountCommandOptions = {
-  authUrl?: string;
   apiUrl?: string;
   authDirectory?: string;
   storage: 'file' | 'keychain';
@@ -17,23 +18,23 @@ export type AccountCommandOptions = {
 
 export function accountCommand(name: string): Command {
   return new Command(name)
-    .addOption(new Option('--auth-url <url>', 'authentication authority URL (required with API URL)').env('RARE_AUTH_URL'))
-    .addOption(new Option('--api-url <url>', 'matching Rare API URL (required with auth URL)').env('RARE_API_URL'))
+    .addOption(new Option('--api-url <url>', 'Rare API base URL; authentication uses its /auth/v2 route').default(DEFAULT_RARE_API_BASE_URL).env('RARE_API_URL'))
     .addOption(new Option('--auth-directory <path>', 'private absolute directory for auth records and locks').env('RARE_AUTH_DIRECTORY'))
     .addOption(new Option('--storage <backend>', 'credential backend; file explicitly opts into plaintext with private POSIX permissions').choices(['keychain', 'file']).default('keychain').env('RARE_AUTH_STORAGE'));
 }
 
 export function storageOptions(options: AccountCommandOptions): AuthStorageOptions {
-  if (options.authUrl === undefined || options.apiUrl === undefined) {
-    throw new Error('Account commands require both --auth-url and --api-url (or RARE_AUTH_URL and RARE_API_URL). No auth deployment is assumed.');
-  }
-  return { authBaseUrl: options.authUrl, apiBaseUrl: options.apiUrl, clientId: 'rare-cli', backend: options.storage,
+  const apiUrl = URL.parse(options.apiUrl ?? DEFAULT_RARE_API_BASE_URL);
+  if (apiUrl === null) throw new AuthStorageError('storage_invalid', 'Rare API base URL is invalid.');
+  const result = deriveAccountStorageScope(apiUrl, 'rare-cli');
+  if (!result.ok) throw new AuthStorageError('storage_invalid', result.message);
+  return { ...result.scope, backend: options.storage,
     ...(options.authDirectory === undefined ? {} : { directory: options.authDirectory }) };
 }
 
 export function accountClient(options: AuthStorageOptions): RareAccountClient {
   const sessionStore = createAuthStore(options);
-  return createRareAccountClient({ authBaseUrl: options.authBaseUrl, apiBaseUrl: options.apiBaseUrl, clientId: 'rare-cli', sessionStore });
+  return createRareAccountClient({ apiBaseUrl: options.apiBaseUrl, clientId: 'rare-cli', sessionStore });
 }
 
 /** Verify writes using a disposable record before issuing durable server credentials. */

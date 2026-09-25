@@ -107,11 +107,9 @@ Feature deployment varies by chain. Batch listing, batch offer, batch auction, R
 
 ### Account authentication and profile
 
-Account login is independent of the configured wallet used for transactions. Login never generates a wallet or changes transaction keys. New auth endpoints are not deployed by this change: configure both matching endpoints explicitly.
+Account login is independent of the configured wallet used for transactions. Login never generates a wallet or changes transaction keys. Account and authentication requests share one Rare API base, defaulting to `https://api.superrare.com`; authentication uses its `/auth/v2` route.
 
 ```bash
-export RARE_AUTH_URL=https://your-auth-host/auth/v2
-export RARE_API_URL=https://your-api-host
 rare auth login
 rare auth login --wallet --chain sepolia
 rare auth status --verify --json
@@ -132,7 +130,14 @@ Each process returns one JSON value. Polling cadence survives process restarts. 
 
 The default credential backend is the OS keychain (macOS Keychain or Linux Secret Service). Unavailable/locked stores fail without silently falling back. Headless POSIX hosts may explicitly select `--storage file` or `RARE_AUTH_STORAGE=file`: this stores plaintext credentials under `~/.rare/auth` with private permissions and atomic replacement. Windows auth storage currently fails closed because lock-directory ACL validation is not implemented. Existing transaction commands remain available.
 
-Credentials and pending device requests are isolated by auth URL, API URL and client. Endpoint flags `--auth-url` and `--api-url` override the corresponding environment variables. HTTP is restricted to loopback development; credential-bearing redirects are refused. No credentials are accepted as CLI flags.
+Use `--api-url` or `RARE_API_URL` to select another Rare API deployment; the flag takes precedence. For the development environment:
+
+```bash
+export RARE_API_URL=https://rare-api-devmainnet-784573620320.us-east1.run.app
+rare auth login
+```
+
+The CLI derives the authentication URL from the normalized API base and does not accept a separate auth-service URL. Credentials and pending requests remain bound to the API base, derived auth URL and client. Sessions from a previous direct-auth configuration are not migrated silently; sign in again through the selected API. HTTP is restricted to loopback development; credential-bearing redirects are refused. No credentials are accepted as CLI flags.
 
 Use `--auth-directory /absolute/private/path` or `RARE_AUTH_DIRECTORY` to isolate auth records and locks without changing your home or wallet configuration. The directory must be owned by the current user with private permissions; symlink paths are rejected. With the keychain backend, secrets remain in the OS store, namespaced by this directory, and the directory holds locks. Processes sharing a session must use the same directory.
 
@@ -1080,7 +1085,3 @@ The default test run does not verify native keychain integration. No hosted logi
 ## License
 
 [MIT](LICENSE)
-
-Account auth endpoints now run at `/auth/v2` on the existing auth service. Configure `RARE_AUTH_URL` to that issuer and `RARE_API_URL` to the matching API; no separate authority deployment or client-side signing-key configuration is needed. Session credentials are opaque and remain validated by the SDK/API flow.
-
-The server derives auth endpoint paths from deployment service URLs; CLI `authUrl` still includes `/auth/v2`. This does not change the CLI runtime or credential format.
