@@ -51,11 +51,13 @@ export function printAuthorized(session: RareAccountSession): void {
   output({ status: 'authorized', ...safeSession(session) }, () => { console.log('Logged in. Credentials saved.'); });
 }
 
-export function printDeviceRequest(requestId: string, authorization: RareDeviceAuthorization): void {
-  output({ status: 'pending', requestId, verificationUri: authorization.verificationUri,
+export function printDeviceRequest(requestId: string, authorization: RareDeviceAuthorization, showResume = false): void {
+  output({ status: 'pending', requestId, verificationUri: authorization.verificationUri, verificationUriComplete: authorization.verificationUriComplete,
     userCode: authorization.userCode, expiresAt: authorization.expiresAt, interval: authorization.interval, nextPollAt: authorization.nextPollAt }, () => {
-    console.log(`Open ${authorization.verificationUri} and enter code ${authorization.userCode}.`);
-    console.log(`Request: ${requestId}. This login grants full account access.`);
+    console.log(`Open ${authorization.verificationUriComplete ?? authorization.verificationUri}`);
+    console.log(`Confirmation code: ${authorization.userCode}`);
+    console.log('Check that this code matches the browser. This login grants full account access.');
+    if (showResume) console.log(`To resume later: rare auth login --resume ${requestId}`);
   });
 }
 

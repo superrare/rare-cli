@@ -40,8 +40,8 @@ export function authCommand(): Command {
           const pending = createAuthStore({ ...config, pendingRequestId: requestId });
           const authorization = await client.auth.startDeviceAuthorization({ signal });
           await pending.withLock(async () => { await pending.set(authorization); });
-          printDeviceRequest(requestId, authorization);
-          if (plan.value.openBrowser) await openVerificationUrl(authorization.verificationUri);
+          printDeviceRequest(requestId, authorization, !plan.value.wait);
+          if (plan.value.openBrowser) await openVerificationUrl(authorization.verificationUriComplete ?? authorization.verificationUri);
           if (plan.value.wait) await continueDeviceLogin(client, config, requestId, true, signal);
         }
       });
