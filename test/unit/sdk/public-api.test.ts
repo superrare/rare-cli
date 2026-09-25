@@ -16,6 +16,9 @@ describe('public SDK API surface', () => {
       'Erc1155CheckoutAllItemsSkippedError',
       'NftApprovalRequiredError',
       'PaymentApprovalRequiredError',
+      'RareAuthError',
+      'createMemoryAccountSessionStore',
+      'createRareAccountClient',
       'createRareClient',
     ]);
   });

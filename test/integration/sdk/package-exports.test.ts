@@ -15,6 +15,9 @@ describe('published package subpath exports', () => {
       'Erc1155CheckoutAllItemsSkippedError',
       'NftApprovalRequiredError',
       'PaymentApprovalRequiredError',
+      'RareAuthError',
+      'createMemoryAccountSessionStore',
+      'createRareAccountClient',
       'createRareClient',
     ]);
     expect(contracts).toHaveProperty('getContractAddresses');

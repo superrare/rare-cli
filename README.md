@@ -105,6 +105,46 @@ Supported chains: `mainnet`, `sepolia`, `base`, `base-sepolia`
 
 Feature deployment varies by chain. Batch listing, batch offer, batch auction, RareMinter release, Liquid Edition, and swap flows are currently available on `mainnet` and `sepolia`.
 
+### Account authentication and profile
+
+Account login is independent of the configured wallet used for transactions. Login never generates a wallet or changes transaction keys. Account and authentication requests share one Rare API base, defaulting to `https://api.superrare.com`; authentication uses its `/auth/v2` route.
+
+```bash
+rare auth login
+rare auth login --wallet --chain sepolia
+rare auth status --verify --json
+rare profile get --json
+printf '%s' '{"profile":{"bio":null}}' | rare profile update --stdin --json
+rare auth logout
+```
+
+Device approval grants full account access. `--no-browser` prints instructions without opening a browser. For automation, start a request and pass its local request ID to a later poll or wait; JSON output never contains access/refresh tokens or the device secret:
+
+```bash
+rare auth login --no-wait --json
+rare auth login --poll <request-id> --json
+rare auth login --resume <request-id> --json
+```
+
+Each process returns one JSON value. Polling cadence survives process restarts. `auth status` reports local metadata unless `--verify` is used; verification may refresh credentials. `profile update --stdin` accepts `username` and nested `profile.displayName`, `profile.bio`, `profile.avatarUrl`; omitted values are preserved and null clears a profile field. Email changes are not supported.
+
+The default credential backend is the OS keychain (macOS Keychain or Linux Secret Service). Unavailable/locked stores fail without silently falling back. Headless POSIX hosts may explicitly select `--storage file` or `RARE_AUTH_STORAGE=file`: this stores plaintext credentials under `~/.rare/auth` with private permissions and atomic replacement. Windows auth storage currently fails closed because lock-directory ACL validation is not implemented. Existing transaction commands remain available.
+
+Use `--api-url` or `RARE_API_URL` to select another Rare API deployment; the flag takes precedence. For the development environment:
+
+```bash
+export RARE_API_URL=https://rare-api-devmainnet-784573620320.us-east1.run.app
+rare auth login
+```
+
+The CLI derives the authentication URL from the normalized API base and does not accept a separate auth-service URL. Credentials and pending requests remain bound to the API base, derived auth URL and client. Sessions from a previous direct-auth configuration are not migrated silently; sign in again through the selected API. HTTP is restricted to loopback development; credential-bearing redirects are refused. No credentials are accepted as CLI flags.
+
+Use `--auth-directory /absolute/private/path` or `RARE_AUTH_DIRECTORY` to isolate auth records and locks without changing your home or wallet configuration. The directory must be owned by the current user with private permissions; symlink paths are rejected. With the keychain backend, secrets remain in the OS store, namespaced by this directory, and the directory holds locks. Processes sharing a session must use the same directory.
+
+Refresh/login/logout use a cross-process lock. A crashed process can leave an empty `.lock` directory: the error identifies its path. Stop all CLI auth processes before removing that exact empty directory with `rmdir`; locks are never stolen merely because they are old. Do not remove a live process's lock. A lost refresh response may require login again rather than risking reuse of a spent token.
+
+Logout revokes the server session before removing local tokens; revocation failures retain credentials for retry. `auth logout --local-only` removes local tokens without claiming server revocation. Neither operation deletes wallet config. Logout invalidates previously started device logins; start a new request afterward.
+
 ### MCP Server
 
 `rare mcp serve` starts a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for MCP clients such as Claude Desktop, Codex, Cursor, Windsurf, or the MCP Inspector. By default it registers read-only tools around the public Rare SDK surface:
@@ -1002,6 +1042,8 @@ If you want to inspect the on-chain contracts used by this CLI:
 Most users should use the globally installed package and run `rare ...` commands directly.
 The steps below are only for contributors working on this repository.
 
+The SDK dependency is pinned to an immutable GitHub commit until its account API is released on npm. Installation requires Git and HTTPS access to that repository; npm runs the SDK's prepare build.
+
 ```bash
 git clone https://github.com/superrare/rare-cli.git
 cd rare-cli
@@ -1025,6 +1067,20 @@ rare --help
 ```
 
 Requires Node.js 22+. Built with [Commander](https://github.com/tj/commander.js) and [Viem](https://viem.sh).
+
+Account command tests run the built CLI against a local HTTP fixture; credential storage tests use private temporary directories and multiple Node processes. Run them after building:
+
+```bash
+npx vitest run test/e2e/auth.test.ts test/integration/auth-storage.test.ts
+```
+
+Native keychain tests are opt-in because they access the real OS credential store and may trigger its access controls. With an unlocked macOS Keychain or Linux Secret Service, the following creates and removes a uniquely scoped disposable item:
+
+```bash
+RARE_TEST_KEYCHAIN=1 npx vitest run test/integration/auth-keychain.test.ts
+```
+
+The default test run does not verify native keychain integration. No hosted login service is started or deployed by these tests.
 
 ## License
 

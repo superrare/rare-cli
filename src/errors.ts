@@ -1,5 +1,7 @@
 import { isJsonMode } from './output.js';
 import { RareApiError } from '@rareprotocol/rare-sdk/data-access/errors';
+import { RareAuthError } from '@rareprotocol/rare-sdk';
+import { AuthStorageError } from './auth-storage.js';
 
 type ErrorDetails = {
   message: string;
@@ -122,6 +124,7 @@ export function printError(error: unknown): never {
     const json: Record<string, unknown> = {
       error: true,
       message,
+      ...(error instanceof RareAuthError || error instanceof AuthStorageError ? { code: error.code } : {}),
       ...(details.length > 0 ? { details } : {}),
       ...(causes.length > 0 ? { causes } : {}),
     };
