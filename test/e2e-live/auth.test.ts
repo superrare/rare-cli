@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isPrivateKeyString } from '@rareprotocol/rare-sdk/validation';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -71,7 +71,8 @@ describe('built CLI against deployed account services', () => {
     const privateKey = required('RARE_ACCOUNT_TEST_PRIVATE_KEY');
     if (!isPrivateKeyString(privateKey)) throw new Error('Invalid dedicated test wallet key');
     const wallet = privateKeyToAccount(privateKey);
-    await withTempHome(async home => {
+    await withTempHome(async temporary => {
+      const home = await realpath(temporary);
       const directory = join(home, '.rare');
       const authDirectory = join(directory, 'auth');
       await mkdir(directory, { mode: 0o700 });
