@@ -9,7 +9,7 @@ export function profileCommand(): Command {
     const result = await accountClient(storageOptions(opts)).profile.get();
     output(result, () => { console.log(JSON.stringify(result, null, 2)); });
   }));
-  profile.addCommand(accountCommand('update').description('Read a profile patch from stdin; null clears profile fields, omission preserves them')
+  profile.addCommand(accountCommand('update').description('Read a profile patch from stdin; omitted fields are unchanged')
     .requiredOption('--stdin', 'read one JSON profile patch from standard input')
     .action(async (opts: AccountCommandOptions): Promise<void> => {
       const config = storageOptions(opts);

@@ -15,7 +15,7 @@ const wallet = privateKeyToAccount(key);
 const deviceSecret = 'device-secret-do-not-print';
 const accessSecret = 'access-secret-do-not-print';
 const refreshSecret = 'refresh-secret-do-not-print';
-const profile = { accountId: '123', address: wallet.address, username: 'tester', email: null, profile: { displayName: null, bio: null, avatarUrl: null } };
+const profile = { accountId: '123', address: wallet.address, username: 'tester', email: 'n/a', profile: { fullName: null, bio: null, avatar: null } };
 
 class AuthService {
   base = '';
@@ -123,7 +123,7 @@ async function start(run: (args: string[]) => Promise<CliResult>): Promise<strin
   return result.requestId;
 }
 
-describe.skipIf(process.platform === 'win32')('built CLI account authentication', () => {
+describe.skipIf(process.platform === 'win32')('built CLI account command contract', () => {
   it('defaults to the production API without a separate auth URL and keeps endpoint overrides isolated', async () => {
     await withTempHome(async temporary => {
       const home = await realpath(temporary);
@@ -209,7 +209,7 @@ describe.skipIf(process.platform === 'win32')('built CLI account authentication'
       });
       expect(parseJsonStdout(await run(['profile', 'get']))).toEqual(profile);
       expect(service.refreshes).toBe(1);
-      const patch = { profile: { bio: null } };
+      const patch = { profile: { bio: 'Updated biography' } };
       expect(parseJsonStdout(await run(['profile', 'update', '--stdin'], JSON.stringify(patch)))).toEqual(profile);
       expect(service.lastPatch).toEqual(patch);
       service.configure({ revokeFails: true });

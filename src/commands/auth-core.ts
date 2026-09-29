@@ -53,11 +53,11 @@ export function parsePendingAuthorization(value: unknown): Result<RareDeviceAuth
 
 const profilePatchSchema = z.object({
   username: z.string().optional(),
-  profile: z.object({ displayName: z.string().nullable().optional(), bio: z.string().nullable().optional(), avatarUrl: z.string().nullable().optional() }).strict().optional(),
+  profile: z.object({ fullName: z.string().optional(), bio: z.string().optional(), avatar: z.string().optional() }).strict().optional(),
 }).strict();
 
 /** Structural narrowing at the stdin boundary; domain validation remains in the SDK. */
 export function parseProfileInput(value: unknown): Result<RareAccountProfilePatch> {
   const result = profilePatchSchema.safeParse(value);
-  return result.success ? { ok: true, value: result.data } : { ok: false, message: 'Profile input must contain only username and profile displayName, bio or avatarUrl fields.' };
+  return result.success ? { ok: true, value: result.data } : { ok: false, message: 'Profile input must contain only username and profile fullName, bio or avatar fields.' };
 }

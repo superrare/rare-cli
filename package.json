@@ -70,17 +70,18 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test:typecheck": "tsc -p tsconfig.test.json --noEmit",
-    "test": "npm run build && npm run test:typecheck && vitest run test/unit test/integration test/e2e --config vitest.config.ts",
-    "test:live": "npm run build && npm run test:typecheck && vitest run test/unit test/integration test/e2e test/e2e-live --config vitest.config.ts",
+    "test": "npm run build && npm run test:typecheck && vitest run test/unit test/integration test/contract test/e2e --config vitest.config.ts",
+    "test:auth:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/auth.test.ts --config vitest.config.ts",
+    "test:live": "npm run build && npm run test:typecheck && vitest run test/unit test/integration test/contract test/e2e test/e2e-live --config vitest.config.ts",
     "test:clear-locks": "node scripts/clear-locks.mjs",
-    "test:coverage": "npm run build && npm run test:typecheck && vitest run test/unit test/integration test/e2e --coverage --config vitest.config.ts",
+    "test:coverage": "npm run build && npm run test:typecheck && vitest run test/unit test/integration test/contract test/e2e --coverage --config vitest.config.ts",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@napi-rs/keyring": "2.1.0",
-    "@rareprotocol/rare-sdk": "git+https://github.com/superrare/rare-sdk.git#20667bcd3007dcee6aab08efc14668215bddd834",
+    "@rareprotocol/rare-sdk": "git+https://github.com/superrare/rare-sdk.git#947903b128ba03b3791e1fa2d3a7aab85c5aa26c",
     "commander": "12.1.0",
     "viem": "2.54.6",
     "zod": "^4.4.3"

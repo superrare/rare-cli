@@ -126,7 +126,7 @@ rare auth login --poll <request-id> --json
 rare auth login --resume <request-id> --json
 ```
 
-Each process returns one JSON value. Polling cadence survives process restarts. `auth status` reports local metadata unless `--verify` is used; verification may refresh credentials. `profile update --stdin` accepts `username` and nested `profile.displayName`, `profile.bio`, `profile.avatarUrl`; omitted values are preserved and null clears a profile field. Email changes are not supported.
+Each process returns one JSON value. Polling cadence survives process restarts. `auth status` reports local metadata unless `--verify` is used; verification may refresh credentials. `profile update --stdin` accepts `username` and nested `profile.fullName`, `profile.bio`, `profile.avatar`; omitted values are preserved. Email changes are not supported.
 
 The default credential backend is the OS keychain (macOS Keychain or Linux Secret Service). Unavailable/locked stores fail without silently falling back. Headless POSIX hosts may explicitly select `--storage file` or `RARE_AUTH_STORAGE=file`: this stores plaintext credentials under `~/.rare/auth` with private permissions and atomic replacement. Windows auth storage currently fails closed because lock-directory ACL validation is not implemented. Existing transaction commands remain available.
 
@@ -1068,10 +1068,10 @@ rare --help
 
 Requires Node.js 22+. Built with [Commander](https://github.com/tj/commander.js) and [Viem](https://viem.sh).
 
-Account command tests run the built CLI against a local HTTP fixture; credential storage tests use private temporary directories and multiple Node processes. Run them after building:
+The account command contract tests run the built CLI against a controlled HTTP fixture; credential storage tests use private temporary directories and multiple Node processes. Run them after building:
 
 ```bash
-npx vitest run test/e2e/auth.test.ts test/integration/auth-storage.test.ts
+npx vitest run test/contract/auth-cli.test.ts test/integration/auth-storage.test.ts
 ```
 
 Native keychain tests are opt-in because they access the real OS credential store and may trigger its access controls. With an unlocked macOS Keychain or Linux Secret Service, the following creates and removes a uniquely scoped disposable item:
@@ -1080,7 +1080,16 @@ Native keychain tests are opt-in because they access the real OS credential stor
 RARE_TEST_KEYCHAIN=1 npx vitest run test/integration/auth-keychain.test.ts
 ```
 
-The default test run does not verify native keychain integration. No hosted login service is started or deployed by these tests.
+The auth/profile E2E suite runs the built CLI against deployed non-production Rare API, Auth, and Connect services. It signs in with a dedicated test wallet, approves a device request through Connect's deployed API, reads and updates the account profile, and revokes both sessions. It writes a stable profile marker on the test account. Run it manually, separate from `npm test`:
+
+```bash
+export RARE_ACCOUNT_TEST_API_URL=https://your-feature-rare-api.example
+export RARE_ACCOUNT_TEST_CONNECT_URL=https://your-feature-connect.example
+export RARE_ACCOUNT_TEST_PRIVATE_KEY=... # dedicated, unfunded test wallet
+npm run test:auth:e2e
+```
+
+This command fails if required services or configuration are missing. The default `npm test` remains local. Native keychain testing remains separate.
 
 ## License
 
