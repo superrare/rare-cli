@@ -22,7 +22,7 @@ const deployedOrigin = (name: string, productionHost: string): string => {
   return url.origin;
 };
 
-async function approveThroughConnect(connect: string, code: string, wallet: ReturnType<typeof privateKeyToAccount>): Promise<void> {
+async function approveThroughConnect(connect: string, code: string, wallet: ReturnType<typeof privateKeyToAccount>, decision: 'approve' | 'deny' = 'approve'): Promise<void> {
   const cookies = new Map<string, string>();
   const remember = (response: Response): void => {
     for (const setCookie of response.headers.getSetCookie()) {
@@ -55,6 +55,24 @@ async function approveThroughConnect(connect: string, code: string, wallet: Retu
   };
   const review = await request({ action: 'review', userCode: code }, z.object({ client_id: z.string(), user_code: z.string() }));
   expect(review).toMatchObject({ client_id: 'rare-cli', user_code: code });
+  if (decision === 'deny') {
+    expect(await request({ action: 'deny' }, z.object({ status: z.string() }))).toMatchObject({ status: 'denied' });
+    return;
+  }
+  // Attack the deployed browser boundary before the legitimate approval.
+  const attackHeaders: Record<string, string>[] = [
+    { origin: 'https://attacker.example', 'x-device-csrf': csrf },
+    { origin: connect, 'x-device-csrf': 'invalid' },
+    { origin: connect },
+  ];
+  for (const overrides of attackHeaders) {
+    const rejected = await fetch(`${connect}/api/device`, {
+      method: 'POST', headers: { 'content-type': 'application/json',
+        cookie: [...cookies].map(([name, value]) => `${name}=${value}`).join('; '), ...overrides },
+      body: JSON.stringify({ action: 'deny' }), signal: AbortSignal.timeout(20_000),
+    });
+    expect(rejected.status).toBe(403);
+  }
   const identity = { address: wallet.address, chainId: 1 };
   const challenge = await request({ action: 'challenge', ...identity }, z.object({ message: z.string() }));
   expect(challenge.message).toContain(wallet.address);
@@ -83,6 +101,15 @@ describe('built CLI against deployed account services', () => {
       const run = (args: string[], input?: string): Promise<CliResult> => runCli(['--json', ...args], { home, env, input, timeoutMs: 45_000 });
       try {
         expect(parseJsonStdout(await run(['auth', 'status']))).toMatchObject({ status: 'signed_out' });
+        const denied = parseJsonStdout<{ requestId: string; userCode: string }>(await run(
+          ['auth', 'login', '--device', '--no-browser', '--no-wait'],
+        ));
+        await approveThroughConnect(connect, denied.userCode, wallet, 'deny');
+        const resumed = await run(['auth', 'login', '--resume', denied.requestId]);
+        expect(resumed.code).not.toBe(0);
+        expect(`${resumed.stdout}${resumed.stderr}`).toContain('access_denied');
+        expect(parseJsonStdout(await run(['auth', 'status']))).toMatchObject({ status: 'signed_out' });
+        expect((await run(['profile', 'get'])).code).not.toBe(0);
         expect(parseJsonStdout(await run(['auth', 'login', '--wallet', '--chain', 'mainnet']))).toMatchObject({ status: 'authorized' });
         const walletStatus = parseJsonStdout<{ accountId: string; address: string }>(await run(['auth', 'status', '--verify']));
         expect(walletStatus.address.toLowerCase()).toBe(wallet.address.toLowerCase());

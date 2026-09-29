@@ -1089,6 +1089,8 @@ export RARE_ACCOUNT_TEST_PRIVATE_KEY=... # dedicated, unfunded test wallet
 npm run test:auth:e2e
 ```
 
+The suite also denies a device request and verifies that the CLI cannot sign in or read a profile afterward. It checks that Connect rejects missing or invalid CSRF tokens and a foreign Origin before completing a legitimate approval. Approval uses real HTTP and wallet signatures, not the Reown browser UI.
+
 This command fails if required services or configuration are missing. The default `npm test` remains local. Native keychain testing remains separate.
 
 ## License
