@@ -1,6 +1,7 @@
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isPrivateKeyString } from '@rareprotocol/rare-sdk/validation';
+import { parseSiweMessage } from 'viem/siwe';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
@@ -76,6 +77,9 @@ async function approveThroughConnect(connect: string, code: string, wallet: Retu
   const identity = { address: wallet.address, chainId: 1 };
   const challenge = await request({ action: 'challenge', ...identity }, z.object({ message: z.string() }));
   expect(challenge.message).toContain(wallet.address);
+  expect(parseSiweMessage(challenge.message)).toMatchObject({
+    scheme: 'https', domain: new URL(connect).host, uri: connect, chainId: identity.chainId,
+  });
   const approved = await request({
     action: 'approve', ...identity, signature: await wallet.signMessage({ message: challenge.message }),
   }, z.object({ status: z.string() }));
