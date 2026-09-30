@@ -1,6 +1,6 @@
 import { isJsonMode } from './output.js';
 import { RareApiError } from '@rareprotocol/rare-sdk/data-access/errors';
-import { RareAuthError } from '@rareprotocol/rare-sdk';
+import { AvatarProfileUpdateError, RareAuthError } from '@rareprotocol/rare-sdk';
 import { AuthStorageError } from './auth-storage.js';
 
 type ErrorDetails = {
@@ -44,6 +44,10 @@ function getDetailLines(error: Error): string[] {
     ...getReasonLines(error),
     ...getMetaMessageLines(error),
     ...getApiErrorLines(error),
+    ...(error instanceof AvatarProfileUpdateError ? [
+      `Uploaded avatar URL: ${sanitize(error.avatar)}`,
+      'Retry with: rare profile update --avatar <uploaded-avatar-url>',
+    ] : []),
   ];
 }
 

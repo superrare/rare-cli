@@ -53,11 +53,49 @@ export function parsePendingAuthorization(value: unknown): Result<RareDeviceAuth
 
 const profilePatchSchema = z.object({
   username: z.string().optional(),
-  profile: z.object({ fullName: z.string().optional(), bio: z.string().optional(), avatar: z.string().optional() }).strict().optional(),
+  email: z.string().optional(),
+  profile: z.object({
+    fullName: z.string().optional(), bio: z.string().optional(), avatar: z.string().optional(),
+    website: z.string().optional(), twitterlink: z.string().optional(), discordlink: z.string().optional(),
+    instagramlink: z.string().optional(), youtubelink: z.string().optional(), masthead_universal_token_id: z.string().optional(),
+  }).strict().optional(),
 }).strict();
 
-/** Structural narrowing at the stdin boundary; domain validation remains in the SDK. */
+/** Structural narrowing at the input boundary; domain validation remains in the SDK. */
 export function parseProfileInput(value: unknown): Result<RareAccountProfilePatch> {
   const result = profilePatchSchema.safeParse(value);
-  return result.success ? { ok: true, value: result.data } : { ok: false, message: 'Profile input must contain only username and profile fullName, bio or avatar fields.' };
+  return result.success ? { ok: true, value: result.data } : { ok: false, message: 'Profile input contains unsupported fields or non-string values.' };
+}
+
+export type ProfileUpdateOptions = {
+  stdin?: boolean; file?: string; username?: string; email?: string; fullName?: string; bio?: string;
+  avatar?: string; website?: string; twitter?: string; discord?: string; instagram?: string; youtube?: string;
+  masthead?: string; clearAvatar?: boolean; clearMasthead?: boolean;
+};
+type ProfileInputPlan = { source: 'stdin' } | { source: 'file'; path: string } | { source: 'flags'; patch: RareAccountProfilePatch };
+
+export function planProfileUpdate(options: ProfileUpdateOptions): Result<ProfileInputPlan> {
+  const fields: [string, string | undefined][] = [
+    ['fullName', options.fullName], ['bio', options.bio], ['website', options.website],
+    ['twitterlink', options.twitter], ['discordlink', options.discord], ['instagramlink', options.instagram],
+    ['youtubelink', options.youtube],
+    ['avatar', options.clearAvatar === true ? '' : options.avatar],
+    ['masthead_universal_token_id', options.clearMasthead === true ? '' : options.masthead],
+  ];
+  const profile: Record<string, string | undefined> = Object.fromEntries(fields.filter(([, value]) => value !== undefined));
+  const hasFlags = options.username !== undefined || options.email !== undefined || Object.keys(profile).length > 0;
+  if ([options.stdin === true, options.file !== undefined, hasFlags].filter(Boolean).length !== 1) {
+    return { ok: false, message: 'Choose profile flags, --stdin, or --file; do not combine input sources.' };
+  }
+  if ((options.avatar !== undefined && options.clearAvatar === true) || (options.masthead !== undefined && options.clearMasthead === true)) {
+    return { ok: false, message: 'Do not combine a field value with its clear flag.' };
+  }
+  if (options.stdin === true) return { ok: true, value: { source: 'stdin' } };
+  if (options.file !== undefined) return { ok: true, value: { source: 'file', path: options.file } };
+  const parsed = parseProfileInput({
+    ...(options.username !== undefined ? { username: options.username } : {}),
+    ...(options.email !== undefined ? { email: options.email } : {}),
+    ...(Object.keys(profile).length > 0 ? { profile } : {}),
+  });
+  return parsed.ok ? { ok: true, value: { source: 'flags', patch: parsed.value } } : parsed;
 }

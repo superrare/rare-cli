@@ -1,7 +1,7 @@
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isPrivateKeyString } from '@rareprotocol/rare-sdk/validation';
-import { privateKeyToAccount } from 'viem/accounts';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { parseJsonStdout, runCli, withTempHome, type CliResult } from '../helpers/cli.js';
@@ -83,6 +83,30 @@ async function approveThroughConnect(connect: string, code: string, wallet: Retu
 }
 
 describe('built CLI against deployed account services', () => {
+  it('logs in a fresh wallet without creating a profile', async () => {
+    const api = deployedOrigin('RARE_ACCOUNT_TEST_API_URL', 'api.superrare.com');
+    const privateKey = generatePrivateKey();
+    await withTempHome(async temporary => {
+      const home = await realpath(temporary);
+      const directory = join(home, '.rare');
+      await mkdir(directory, { mode: 0o700 });
+      await writeFile(join(directory, 'config.json'), JSON.stringify({
+        defaultChain: 'mainnet', chains: { mainnet: { privateKey } },
+      }), { mode: 0o600 });
+      const env = { RARE_API_URL: api, RARE_AUTH_STORAGE: 'file', RARE_AUTH_DIRECTORY: join(directory, 'auth') };
+      const run = (args: string[]): Promise<CliResult> => runCli(['--json', ...args], { home, env, timeoutMs: 45_000 });
+      try {
+        expect(parseJsonStdout(await run(['auth', 'login', '--wallet', '--chain', 'mainnet']))).toMatchObject({ status: 'authorized' });
+        for (const args of [['profile', 'get'], ['profile', 'update', '--bio', 'No automatic signup']]) {
+          const response = await run(args);
+          expect(response.code).not.toBe(0);
+          expect(`${response.stdout}${response.stderr}`).toContain('account_required');
+        }
+      } finally {
+        expect((await run(['auth', 'logout'])).code).toBe(0);
+      }
+    });
+  }, 120_000);
   it('logs in by wallet and device, updates the profile, and revokes both sessions', async () => {
     const api = deployedOrigin('RARE_ACCOUNT_TEST_API_URL', 'api.superrare.com');
     const connect = deployedOrigin('RARE_ACCOUNT_TEST_CONNECT_URL', 'connect.superrare.com');
@@ -114,9 +138,43 @@ describe('built CLI against deployed account services', () => {
         const walletStatus = parseJsonStdout<{ accountId: string; address: string }>(await run(['auth', 'status', '--verify']));
         expect(walletStatus.address.toLowerCase()).toBe(wallet.address.toLowerCase());
         const updated = parseJsonStdout<{ profile: { bio: string } }>(await run(
-          ['profile', 'update', '--stdin'], JSON.stringify({ profile: { bio: 'Rare CLI deployed E2E' } }),
+          ['profile', 'update', '--bio', 'Rare CLI deployed E2E'],
         ));
         expect(updated.profile.bio).toBe('Rare CLI deployed E2E');
+        for (const args of [
+          ['profile', 'update', '--bio', 'x'.repeat(181)],
+          ['profile', 'update', '--avatar', 'https://example.com/a.png', '--clear-avatar'],
+          ['profile', 'update', '--stdin', '--bio', 'conflicting'],
+          ['profile', 'update', '--email', 'not-an-email'],
+        ]) expect((await run(args)).code).not.toBe(0);
+        expect((await run(['profile', 'update', '--stdin'], JSON.stringify({ accountId: '999', profile: { bio: 'unauthorized' } }))).code).not.toBe(0);
+        const email = `cli-${wallet.address.slice(2, 10)}@example.com`;
+        const socials = parseJsonStdout<{ email: string; profile: { website: string; twitterlink: string } }>(await run([
+          'profile', 'update', '--email', email, '--website', 'https://example.com', '--twitter', 'https://x.com/rareprotocol',
+        ]));
+        expect(socials.email).toBe(email);
+        expect(socials.profile.website).toBe('https://example.com');
+        expect(socials.profile.twitterlink).toBe('https://x.com/rareprotocol');
+        const own = parseJsonStdout<{ username: string }>(await run(['profile', 'get']));
+        const publicProfile = parseJsonStdout(await run(['user', 'resolve', '--username', own.username]));
+        expect(publicProfile.username).toBe(own.username);
+        expect(JSON.stringify(publicProfile)).not.toContain(email);
+        const avatarFile = join(directory, 'avatar.png');
+        await writeFile(avatarFile, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9uQAAAAASUVORK5CYII=', 'base64'));
+        const avatar = parseJsonStdout<{ profile: { avatar: string } }>(await run(['profile', 'avatar', 'upload', '--file', avatarFile]));
+        expect(avatar.profile.avatar).toMatch(/^https:\/\//u);
+        await writeFile(join(directory, 'invalid.png'), 'not an image');
+        expect((await run(['profile', 'avatar', 'upload', '--file', join(directory, 'invalid.png')])).code).not.toBe(0);
+
+        const patchFile = join(directory, 'profile-patch.json');
+        await writeFile(patchFile, JSON.stringify({ profile: { fullName: 'CLI profile fixture' } }));
+        expect(parseJsonStdout(await run(['profile', 'update', '--file', patchFile]))).toMatchObject({
+          email, profile: { fullName: 'CLI profile fixture', bio: 'Rare CLI deployed E2E' },
+        });
+        expect(parseJsonStdout(await run(['profile', 'update', '--clear-avatar', '--clear-masthead']))).toMatchObject({
+          profile: { avatar: '', masthead_universal_token_id: '' },
+        });
+
         expect(parseJsonStdout(await run(['profile', 'get']))).toMatchObject({ accountId: walletStatus.accountId });
         expect(parseJsonStdout(await run(['auth', 'logout']))).toMatchObject({ status: 'signed_out' });
 

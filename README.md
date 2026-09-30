@@ -114,7 +114,12 @@ rare auth login
 rare auth login --wallet --chain sepolia
 rare auth status --verify --json
 rare profile get --json
-printf '%s' '{"profile":{"bio":null}}' | rare profile update --stdin --json
+rare profile update --bio 'hackin' --full-name 'My name' --json
+rare profile update --website https://example.com --twitter https://x.com/myname
+rare profile update --clear-avatar --clear-masthead
+rare profile avatar upload --file ./avatar.png
+rare user resolve --username myname
+rare profile update --file ./profile-patch.json --json
 rare auth logout
 ```
 
@@ -126,7 +131,7 @@ rare auth login --poll <request-id> --json
 rare auth login --resume <request-id> --json
 ```
 
-Each process returns one JSON value. Polling cadence survives process restarts. `auth status` reports local metadata unless `--verify` is used; verification may refresh credentials. `profile update --stdin` accepts `username` and nested `profile.fullName`, `profile.bio`, `profile.avatar`; omitted values are preserved. Email changes are not supported.
+Each process returns one JSON value. Polling cadence survives process restarts. `auth status` reports local metadata unless `--verify` is used; verification may refresh credentials. `profile update` accepts individual flags for username, email, full name, bio, avatar URL, website, Twitter/X, Discord, Instagram, YouTube, and masthead artwork. Omitted fields are preserved; empty strings clear optional profile fields. Use `--clear-avatar` and `--clear-masthead` to remove those fields. You can also supply a structured JSON patch with `--stdin` or `--file`, but cannot combine input sources. `profile avatar upload --file` uploads and saves an image through the SDK. Your own email is private and does not appear in public profile lookup results.
 
 The default credential backend is the OS keychain (macOS Keychain or Linux Secret Service). Unavailable/locked stores fail without silently falling back. Headless POSIX hosts may explicitly select `--storage file` or `RARE_AUTH_STORAGE=file`: this stores plaintext credentials under `~/.rare/auth` with private permissions and atomic replacement. Windows auth storage currently fails closed because lock-directory ACL validation is not implemented. Existing transaction commands remain available.
 
@@ -1085,7 +1090,7 @@ The auth/profile E2E suite runs the built CLI against deployed non-production Ra
 ```bash
 export RARE_ACCOUNT_TEST_API_URL=https://your-feature-rare-api.example
 export RARE_ACCOUNT_TEST_CONNECT_URL=https://your-feature-connect.example
-export RARE_ACCOUNT_TEST_PRIVATE_KEY=... # dedicated, unfunded test wallet
+export RARE_ACCOUNT_TEST_PRIVATE_KEY=... # dedicated, unfunded wallet with an existing SuperRare account
 npm run test:auth:e2e
 ```
 
@@ -1096,3 +1101,5 @@ This command fails if required services or configuration are missing. The defaul
 ## License
 
 [MIT](LICENSE)
+
+Login authenticates the wallet without creating a SuperRare account. Profile commands require an existing account and return `account_required` when signup is needed. The live account suite also checks a fresh wallet that has no account.
