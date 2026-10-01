@@ -7,6 +7,18 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { parseJsonStdout, runCli, withTempHome, type CliResult } from '../helpers/cli.js';
 
+const runRateLimitedCli = async (...args: Parameters<typeof runCli>): Promise<CliResult> => {
+  const result = await runCli(...args);
+  if (result.code === 0) return result;
+  const parsed = z.object({ code: z.literal('slow_down') }).safeParse(
+    ((): unknown => { try { return JSON.parse(result.stderr) as unknown; } catch { return undefined; } })(),
+  );
+  if (!parsed.success) return result;
+  console.warn('[live e2e] Rate limited; retrying once after 60 seconds.');
+  await new Promise(resolve => setTimeout(resolve, 60_000));
+  return runCli(...args);
+};
+
 const required = (name: string): string => {
   const value = process.env[name];
   if (!value) throw new Error(`Missing ${name}`);
@@ -98,7 +110,7 @@ describe('built CLI against deployed account services', () => {
         defaultChain: 'mainnet', chains: { mainnet: { privateKey } },
       }), { mode: 0o600 });
       const env = { RARE_API_URL: api, RARE_AUTH_STORAGE: 'file', RARE_AUTH_DIRECTORY: join(directory, 'auth') };
-      const run = (args: string[]): Promise<CliResult> => runCli(['--json', ...args], { home, env, timeoutMs: 45_000 });
+      const run = (args: string[]): Promise<CliResult> => runRateLimitedCli(['--json', ...args], { home, env, timeoutMs: 45_000 });
       try {
         expect(parseJsonStdout(await run(['auth', 'login', '--wallet', '--chain', 'mainnet']))).toMatchObject({ status: 'authorized' });
         for (const args of [['profile', 'get'], ['profile', 'update', '--bio', 'No automatic signup']]) {
@@ -110,7 +122,7 @@ describe('built CLI against deployed account services', () => {
         expect((await run(['auth', 'logout'])).code).toBe(0);
       }
     });
-  }, 120_000);
+  }, 240_000);
   it('logs in by wallet and device, updates the profile, and revokes both sessions', async () => {
     const api = deployedOrigin('RARE_ACCOUNT_TEST_API_URL', 'api.superrare.com');
     const connect = deployedOrigin('RARE_ACCOUNT_TEST_CONNECT_URL', 'connect.superrare.com');
@@ -126,7 +138,7 @@ describe('built CLI against deployed account services', () => {
         defaultChain: 'mainnet', chains: { mainnet: { privateKey } },
       }), { mode: 0o600 });
       const env = { RARE_API_URL: api, RARE_AUTH_STORAGE: 'file', RARE_AUTH_DIRECTORY: authDirectory };
-      const run = (args: string[], input?: string): Promise<CliResult> => runCli(['--json', ...args], { home, env, input, timeoutMs: 45_000 });
+      const run = (args: string[], input?: string): Promise<CliResult> => runRateLimitedCli(['--json', ...args], { home, env, input, timeoutMs: 45_000 });
       try {
         expect(parseJsonStdout(await run(['auth', 'status']))).toMatchObject({ status: 'signed_out' });
         const denied = parseJsonStdout<{ requestId: string; userCode: string }>(await run(
@@ -200,5 +212,5 @@ describe('built CLI against deployed account services', () => {
         await run(['auth', 'logout']).catch(() => undefined);
       }
     });
-  }, 180_000);
+  }, 300_000);
 });
