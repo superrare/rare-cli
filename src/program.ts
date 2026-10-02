@@ -1,3 +1,6 @@
+import { dropsCommand } from './commands/drops.js';
+import { postsCommand } from './commands/posts.js';
+import { favoritesCommand } from './commands/favorites.js';
 import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
 import { configureCommand } from './commands/configure.js';
@@ -18,6 +21,8 @@ import { userCommand } from './commands/user.js';
 import { utilsCommand } from './commands/utils.js';
 import { ipfsCommand } from './commands/ipfs.js';
 import { mcpCommand } from './commands/mcp.js';
+import { authCommand } from './commands/auth.js';
+import { profileCommand } from './commands/profile.js';
 import { getConfirmationDecision, type ConfirmationOptions } from './confirmation.js';
 import pkg from '../package.json' with { type: 'json' };
 
@@ -56,6 +61,9 @@ export function createRareProgram(): Command {
   program.addCommand(offerCommand());
   program.addCommand(listingCommand());
   program.addCommand(nftCommand());
+  program.addCommand(favoritesCommand());
+  program.addCommand(postsCommand());
+  program.addCommand(dropsCommand());
   program.addCommand(collectionCommand());
   program.addCommand(currenciesCommand());
   program.addCommand(liquidEditionCommand());
@@ -65,6 +73,8 @@ export function createRareProgram(): Command {
   program.addCommand(utilsCommand());
   program.addCommand(ipfsCommand());
   program.addCommand(mcpCommand());
+  program.addCommand(authCommand());
+  program.addCommand(profileCommand());
 
   return program;
 }
