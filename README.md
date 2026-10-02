@@ -1171,3 +1171,17 @@ Run `npm run test:posts:e2e` manually after deploying the creator-post routes. S
 `RARE_ACCOUNT_TEST_PRIVATE_KEY` / `RARE_ACCOUNT_TEST_SECOND_PRIVATE_KEY` to two distinct,
 unfunded test wallets with existing SuperRare accounts. The suite uses the built CLI and
 deployed services, removes its posts and comments, and revokes its sessions. It is not a CI job.
+
+### Drop announcements and calendar
+
+```bash
+rare drops list --from "$FROM" --to "$TO" --username artist
+rare drops get 42
+rare drops create --starts-at "$STARTS_AT" --headline 'New work' --description 'A new release' --image-url "$IMAGE_URL"
+rare drops update 42 --headline 'Updated title'
+rare drops delete 42
+```
+
+Reads are public. Calendar windows are at most 30 days. Use `--address`, `--username` or `--user-id` to filter a creator. Create and update require an existing account and preserve the website's artist rule: approved SuperRare artists on mainnet, with the existing Sepolia/Base Sepolia exception. Deletion requires ownership. Images must be PNG, JPEG, GIF or WebP URLs returned by the shared uploader. Omitted update fields remain unchanged.
+
+Run `npm run test:drops:e2e` manually after deploying the new routes. Configure `RARE_ACCOUNT_TEST_API_URL` and two distinct existing test accounts through `RARE_ACCOUNT_TEST_PRIVATE_KEY` and `RARE_ACCOUNT_TEST_SECOND_PRIVATE_KEY`. The suite signs in on Sepolia, seeds an image through the live SDK uploader and exercises announcement operations through the built CLI. It deletes its announcements afterward, fails on missing prerequisites, and does not run in CI.
