@@ -1103,3 +1103,20 @@ This command fails if required services or configuration are missing. The defaul
 [MIT](LICENSE)
 
 Login authenticates the wallet without creating a SuperRare account. Profile commands require an existing account and return `account_required` when signup is needed. The live account suite also checks a fresh wallet that has no account.
+
+Public user queries accept an address or one explicit selector:
+
+```bash
+rare user get --username artist
+rare user get --user-id 123
+rare user followers --username artist --page 1 --per-page 20
+rare user following --address 0x...
+rare user follow --username artist
+rare user unfollow --user-id 123
+```
+
+Reads are public. Follow/unfollow use the existing signed-in account. Run
+`npm run test:follows:e2e` manually after deploying the GQL userId filter and
+Rare API follow routes. Set `RARE_ACCOUNT_TEST_API_URL` and the two dedicated
+wallet keys documented for account E2E. Use disposable accounts with no existing
+follow relationship; the test removes its relationship and logs out afterward.

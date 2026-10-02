@@ -71,7 +71,7 @@ class AuthService {
       this.challenges += 1;
       send({ challenge_id: 'challenge-id', expires_in: 300, message: createSiweMessage({
         address: wallet.address, chainId: 11155111, domain: new URL(this.base).host,
-        uri: `${this.base}/auth/v2`, version: '1', nonce: 'testnonce12345678',
+        uri: this.base, version: '1', nonce: 'testnonce12345678',
         issuedAt: new Date(), expirationTime: new Date(Date.now() + 300000),
       }) });
     } else if (request.url === '/auth/v2/revoke') {

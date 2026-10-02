@@ -13,6 +13,7 @@ describe('public SDK API surface', () => {
   it('keeps the client runtime exports focused on the high-level SDK', () => {
     expect(Object.keys(client).sort()).toEqual([
       'ApprovalSideEffectError',
+      'AvatarProfileUpdateError',
       'Erc1155CheckoutAllItemsSkippedError',
       'NftApprovalRequiredError',
       'PaymentApprovalRequiredError',
