@@ -1120,3 +1120,20 @@ Reads are public. Follow/unfollow use the existing signed-in account. Run
 Rare API follow routes. Set `RARE_ACCOUNT_TEST_API_URL` and the two dedicated
 wallet keys documented for account E2E. Use disposable accounts with no existing
 follow relationship; the test removes its relationship and logs out afterward.
+
+### Artwork favorites
+
+```bash
+rare favorites list --page 1 --per-page 20
+rare favorites add 1-0xb932a70a57673d89f4acffbe830e8ed7f75fb9e0-12345
+rare favorites status 1-0xb932a70a57673d89f4acffbe830e8ed7f75fb9e0-12345
+rare favorites remove 1-0xb932a70a57673d89f4acffbe830e8ed7f75fb9e0-12345
+rare nft favorite-count --contract 0xb932a70a57673d89f4acffbe830e8ed7f75fb9e0 --token-id 12345 --chain mainnet
+```
+
+The count is public. Every `favorites` command uses your saved account session and an existing SuperRare account.
+Lists include artwork identifiers, favorite timestamps, names, and page metadata. There is no command that lists another account's favorites or people who favorited an artwork.
+
+Run `npm run test:favorites:e2e` manually against deployed test services. Set `RARE_ACCOUNT_TEST_API_URL`,
+`RARE_ACCOUNT_TEST_PRIVATE_KEY`, and `RARE_ACCOUNT_TEST_ARTWORK_ID`. Use an existing disposable account and a dedicated mainnet artwork it does not already favorite.
+The suite runs the built CLI, checks public access before login, and exercises persisted authenticated add, status, list, and removal with cleanup. It runs outside CI and fails on missing fixtures.

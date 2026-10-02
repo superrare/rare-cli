@@ -1,3 +1,4 @@
+import { favoritesCommand } from './commands/favorites.js';
 import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
 import { configureCommand } from './commands/configure.js';
@@ -58,6 +59,7 @@ export function createRareProgram(): Command {
   program.addCommand(offerCommand());
   program.addCommand(listingCommand());
   program.addCommand(nftCommand());
+  program.addCommand(favoritesCommand());
   program.addCommand(collectionCommand());
   program.addCommand(currenciesCommand());
   program.addCommand(liquidEditionCommand());

@@ -77,12 +77,13 @@
     "test:coverage": "npm run build && npm run test:typecheck && vitest run test/unit test/integration test/contract test/e2e --coverage --config vitest.config.ts",
     "prepare": "npm run build",
     "prepublishOnly": "npm run build",
-    "test:follows:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/follows.test.ts --config vitest.config.ts"
+    "test:follows:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/follows.test.ts --config vitest.config.ts",
+    "test:favorites:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/favorites.test.ts --config vitest.config.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@napi-rs/keyring": "2.1.0",
-    "@rareprotocol/rare-sdk": "git+https://github.com/superrare/rare-sdk.git#8d13ee6b6592960cfb482a72c8a7b16d2d13c8cb",
+    "@rareprotocol/rare-sdk": "git+https://github.com/superrare/rare-sdk.git#9093f40e2f3880298e3eb00b70ed6436cf72c7bc",
     "commander": "12.1.0",
     "viem": "2.54.6",
     "zod": "^4.4.3"
