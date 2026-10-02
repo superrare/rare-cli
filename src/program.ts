@@ -1,3 +1,4 @@
+import { postsCommand } from './commands/posts.js';
 import { favoritesCommand } from './commands/favorites.js';
 import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
@@ -60,6 +61,7 @@ export function createRareProgram(): Command {
   program.addCommand(listingCommand());
   program.addCommand(nftCommand());
   program.addCommand(favoritesCommand());
+  program.addCommand(postsCommand());
   program.addCommand(collectionCommand());
   program.addCommand(currenciesCommand());
   program.addCommand(liquidEditionCommand());

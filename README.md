@@ -1137,3 +1137,37 @@ Lists include artwork identifiers, favorite timestamps, names, and page metadata
 Run `npm run test:favorites:e2e` manually against deployed test services. Set `RARE_ACCOUNT_TEST_API_URL`,
 `RARE_ACCOUNT_TEST_PRIVATE_KEY`, and `RARE_ACCOUNT_TEST_ARTWORK_ID`. Use an existing disposable account and a dedicated mainnet artwork it does not already favorite.
 The suite runs the built CLI, checks public access before login, and exercises persisted authenticated add, status, list, and removal with cleanup. It runs outside CI and fails on missing fixtures.
+
+### Creator posts
+
+Public posts and comments can be read without signing in:
+
+```bash
+rare posts list --username creator --page 1 --per-page 20
+rare posts list --address 0x... # Or --user-id 123.
+rare posts get 123
+rare posts comments 123 --page 1 --per-page 20
+```
+
+After `rare auth login`, create posts and comments without constructing JSON:
+
+```bash
+rare posts create --title 'Studio update' --body '**New work**'
+rare posts create --title 'Studio update' --body-file ./post.md --image-url https://...
+rare posts comment 123 --body-file ./comment.md
+rare posts favorites add 123
+rare posts favorites status 123
+rare posts favorites list --page 1 --per-page 20
+rare posts favorites remove 123
+rare posts delete-comment 123 456
+rare posts delete 123
+```
+
+`--image-url` accepts shared uploader URLs and can be repeated up to five times.
+Favorite lists belong to the signed-in account. Deletion is limited to your own content.
+
+Run `npm run test:posts:e2e` manually after deploying the creator-post routes. Set
+`RARE_ACCOUNT_TEST_API_URL` to a non-production HTTPS API origin and
+`RARE_ACCOUNT_TEST_PRIVATE_KEY` / `RARE_ACCOUNT_TEST_SECOND_PRIVATE_KEY` to two distinct,
+unfunded test wallets with existing SuperRare accounts. The suite uses the built CLI and
+deployed services, removes its posts and comments, and revokes its sessions. It is not a CI job.
