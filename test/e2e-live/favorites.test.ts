@@ -11,7 +11,7 @@ const required = (name: string): string => {
   if (!value) throw new Error(`Missing ${name}`);
   return value;
 };
-describe('private artwork favorites through the built CLI and deployed services', () => {
+describe('authenticated artwork favorites through the built CLI and deployed services', () => {
   it('reads a public count before login and manages only its own favorites with persisted credentials', async () => {
     const url = new URL(required('RARE_ACCOUNT_TEST_API_URL'));
     if (url.protocol !== 'https:' || url.hostname === 'api.superrare.com' || url.pathname !== '/' || url.search || url.hash || url.username || url.password) throw new Error('Use a non-production HTTPS API origin');
@@ -46,6 +46,10 @@ describe('private artwork favorites through the built CLI and deployed services'
           const list = await run(['favorites', 'list', '--per-page', '1']);
           expect(list.code).toBe(0);
           expect(list.stdout).toContain(id);
+          const visible = await account.favorites.list({ perPage: 100 });
+          expect(parseJsonStdout(await run(['favorites', 'list', '--per-page', '100']))).toEqual(visible);
+          const beyond = parseJsonStdout(await run(['favorites', 'list', '--page', String(visible.pagination.totalPages + 1), '--per-page', '100']));
+          expect(beyond).toMatchObject({ data: [], pagination: { totalCount: visible.pagination.totalCount } });
           expect((await run(['favorites', 'list', '--user-id', '123'])).code).not.toBe(0);
           expect((await run(['favorites', 'list', '--per-page', '101'])).code).not.toBe(0);
           expect(parseJsonStdout(await run(['favorites', 'remove', id]))).toEqual({ favorited: false });
