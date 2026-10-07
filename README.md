@@ -105,6 +105,51 @@ Supported chains: `mainnet`, `sepolia`, `base`, `base-sepolia`
 
 Feature deployment varies by chain. Batch listing, batch offer, batch auction, RareMinter release, Liquid Edition, and swap flows are currently available on `mainnet` and `sepolia`.
 
+### Account authentication and profile
+
+Account login is independent of the configured wallet used for transactions. Login never generates a wallet or changes transaction keys. Account and authentication requests share one Rare API base, defaulting to `https://api.superrare.com`; authentication uses its `/auth/v2` route.
+
+```bash
+rare auth login
+rare auth login --wallet --chain sepolia
+rare auth status --verify --json
+rare profile get --json
+rare profile update --bio 'hackin' --full-name 'My name' --json
+rare profile update --website https://example.com --twitter https://x.com/myname
+rare profile update --clear-avatar --clear-masthead
+rare profile avatar upload --file ./avatar.png
+rare user resolve --username myname
+rare profile update --file ./profile-patch.json --json
+rare auth logout
+```
+
+Device approval grants full account access. `--no-browser` prints instructions without opening a browser. For automation, start a request and pass its local request ID to a later poll or wait; JSON output never contains access/refresh tokens or the device secret:
+
+```bash
+rare auth login --no-wait --json
+rare auth login --poll <request-id> --json
+rare auth login --resume <request-id> --json
+```
+
+Each process returns one JSON value. Polling cadence survives process restarts. `auth status` reports local metadata unless `--verify` is used; verification may refresh credentials. `profile update` accepts individual flags for username, email, full name, bio, avatar URL, website, Twitter/X, Discord, Instagram, YouTube, and masthead artwork. Omitted fields are preserved; empty strings clear optional profile fields. Use `--clear-avatar` and `--clear-masthead` to remove those fields. You can also supply a structured JSON patch with `--stdin` or `--file`, but cannot combine input sources. `profile avatar upload --file` uploads and saves an image through the SDK. Your own email is private and does not appear in public profile lookup results.
+
+The default credential backend is the OS keychain (macOS Keychain or Linux Secret Service). Unavailable/locked stores fail without silently falling back. Headless POSIX hosts may explicitly select `--storage file` or `RARE_AUTH_STORAGE=file`: this stores plaintext credentials under `~/.rare/auth` with private permissions and atomic replacement. Windows auth storage currently fails closed because lock-directory ACL validation is not implemented. Existing transaction commands remain available.
+
+Use `--api-url` or `RARE_API_URL` to select another Rare API deployment; the flag takes precedence. For the development environment:
+
+```bash
+export RARE_API_URL=https://rare-api-devmainnet-784573620320.us-east1.run.app
+rare auth login
+```
+
+The CLI derives the authentication URL from the normalized API base and does not accept a separate auth-service URL. Credentials and pending requests remain bound to the API base, derived auth URL and client. Sessions from a previous direct-auth configuration are not migrated silently; sign in again through the selected API. HTTP is restricted to loopback development; credential-bearing redirects are refused. No credentials are accepted as CLI flags.
+
+Use `--auth-directory /absolute/private/path` or `RARE_AUTH_DIRECTORY` to isolate auth records and locks without changing your home or wallet configuration. The directory must be owned by the current user with private permissions; symlink paths are rejected. With the keychain backend, secrets remain in the OS store, namespaced by this directory, and the directory holds locks. Processes sharing a session must use the same directory.
+
+Refresh/login/logout use a cross-process lock. A crashed process can leave an empty `.lock` directory: the error identifies its path. Stop all CLI auth processes before removing that exact empty directory with `rmdir`; locks are never stolen merely because they are old. Do not remove a live process's lock. A lost refresh response may require login again rather than risking reuse of a spent token.
+
+Logout revokes the server session before removing local tokens; revocation failures retain credentials for retry. `auth logout --local-only` removes local tokens without claiming server revocation. Neither operation deletes wallet config. Logout invalidates previously started device logins; start a new request afterward.
+
 ### MCP Server
 
 `rare mcp serve` starts a stdio [Model Context Protocol](https://modelcontextprotocol.io/) server for MCP clients such as Claude Desktop, Codex, Cursor, Windsurf, or the MCP Inspector. By default it registers read-only tools around the public Rare SDK surface:
@@ -1002,6 +1047,8 @@ If you want to inspect the on-chain contracts used by this CLI:
 Most users should use the globally installed package and run `rare ...` commands directly.
 The steps below are only for contributors working on this repository.
 
+The SDK dependency is pinned to an immutable GitHub commit until its account API is released on npm. Installation requires Git and HTTPS access to that repository; npm runs the SDK's prepare build.
+
 ```bash
 git clone https://github.com/superrare/rare-cli.git
 cd rare-cli
@@ -1026,6 +1073,115 @@ rare --help
 
 Requires Node.js 22+. Built with [Commander](https://github.com/tj/commander.js) and [Viem](https://viem.sh).
 
+The account command contract tests run the built CLI against a controlled HTTP fixture; credential storage tests use private temporary directories and multiple Node processes. Run them after building:
+
+```bash
+npx vitest run test/contract/auth-cli.test.ts test/integration/auth-storage.test.ts
+```
+
+Native keychain tests are opt-in because they access the real OS credential store and may trigger its access controls. With an unlocked macOS Keychain or Linux Secret Service, the following creates and removes a uniquely scoped disposable item:
+
+```bash
+RARE_TEST_KEYCHAIN=1 npx vitest run test/integration/auth-keychain.test.ts
+```
+
+The auth/profile E2E suite runs the built CLI against deployed non-production Rare API, Auth, and Connect services. It signs in with a dedicated test wallet, approves a device request through Connect's deployed API, reads and updates the account profile, and revokes both sessions. It writes a stable profile marker on the test account. Run it manually, separate from `npm test`:
+
+```bash
+export RARE_ACCOUNT_TEST_API_URL=https://your-feature-rare-api.example
+export RARE_ACCOUNT_TEST_CONNECT_URL=https://your-feature-connect.example
+export RARE_ACCOUNT_TEST_PRIVATE_KEY=... # dedicated, unfunded wallet with an existing SuperRare account
+npm run test:auth:e2e
+```
+
+The suite also denies a device request and verifies that the CLI cannot sign in or read a profile afterward. It checks that Connect rejects missing or invalid CSRF tokens and a foreign Origin before completing a legitimate approval. Approval uses real HTTP and wallet signatures, not the Reown browser UI.
+
+This command fails if required services or configuration are missing. The default `npm test` remains local. Native keychain testing remains separate.
+
 ## License
 
 [MIT](LICENSE)
+
+Login authenticates the wallet without creating a SuperRare account. Profile commands require an existing account and return `account_required` when signup is needed. The live account suite also checks a fresh wallet that has no account.
+
+Public user queries accept an address or one explicit selector:
+
+```bash
+rare user get --username artist
+rare user get --user-id 123
+rare user followers --username artist --page 1 --per-page 20
+rare user following --address 0x...
+rare user follow --username artist
+rare user unfollow --user-id 123
+```
+
+Reads are public. Follow/unfollow use the existing signed-in account. Run
+`npm run test:follows:e2e` manually after deploying the GQL userId filter and
+Rare API follow routes. Set `RARE_ACCOUNT_TEST_API_URL` and the two dedicated
+wallet keys documented for account E2E. Use disposable accounts with no existing
+follow relationship; the test removes its relationship and logs out afterward.
+
+### Artwork favorites
+
+```bash
+rare favorites list --page 1 --per-page 20
+rare favorites add 1-0xb932a70a57673d89f4acffbe830e8ed7f75fb9e0-12345
+rare favorites status 1-0xb932a70a57673d89f4acffbe830e8ed7f75fb9e0-12345
+rare favorites remove 1-0xb932a70a57673d89f4acffbe830e8ed7f75fb9e0-12345
+rare nft favorite-count --contract 0xb932a70a57673d89f4acffbe830e8ed7f75fb9e0 --token-id 12345 --chain mainnet
+```
+
+The count is public. Every `favorites` command uses your saved account session and an existing SuperRare account.
+Lists include artwork identifiers, favorite timestamps, names, and page metadata. There is no command that lists another account's favorites or people who favorited an artwork.
+
+Run `npm run test:favorites:e2e` manually against deployed test services. Set `RARE_ACCOUNT_TEST_API_URL`,
+`RARE_ACCOUNT_TEST_PRIVATE_KEY`, and `RARE_ACCOUNT_TEST_ARTWORK_ID`. Use an existing disposable account and a dedicated mainnet artwork it does not already favorite.
+The suite runs the built CLI, checks public access before login, and exercises persisted authenticated add, status, list, and removal with cleanup. It runs outside CI and fails on missing fixtures.
+
+### Creator posts
+
+Public posts and comments can be read without signing in:
+
+```bash
+rare posts list --username creator --page 1 --per-page 20
+rare posts list --address 0x... # Or --user-id 123.
+rare posts get 123
+rare posts comments 123 --page 1 --per-page 20
+```
+
+After `rare auth login`, create posts and comments without constructing JSON:
+
+```bash
+rare posts create --title 'Studio update' --body '**New work**'
+rare posts create --title 'Studio update' --body-file ./post.md --image-url https://...
+rare posts comment 123 --body-file ./comment.md
+rare posts favorites add 123
+rare posts favorites status 123
+rare posts favorites list --page 1 --per-page 20
+rare posts favorites remove 123
+rare posts delete-comment 123 456
+rare posts delete 123
+```
+
+`--image-url` accepts shared uploader URLs and can be repeated up to five times.
+Favorite lists belong to the signed-in account. Deletion is limited to your own content.
+
+Run `npm run test:posts:e2e` manually after deploying the creator-post routes. Set
+`RARE_ACCOUNT_TEST_API_URL` to a non-production HTTPS API origin and
+`RARE_ACCOUNT_TEST_PRIVATE_KEY` / `RARE_ACCOUNT_TEST_SECOND_PRIVATE_KEY` to two distinct,
+unfunded test wallets with existing SuperRare accounts. The suite uses the built CLI and
+deployed services, removes its posts and comments, and revokes its sessions. It is not a CI job.
+
+### Drop announcements and calendar
+
+```bash
+rare drops list --from "$FROM" --to "$TO" --username artist
+rare drops get 42
+rare drops create --starts-at "$STARTS_AT" --headline 'New work' --description 'A new release' --image-url "$IMAGE_URL"
+rare drops update 42 --headline 'Updated title'
+rare drops delete 42
+```
+
+Reads are public. Calendar windows are at most 30 days. Use `--address`, `--username` or `--user-id` to filter a creator. Create and update require an existing account and preserve the website's artist rule: approved SuperRare artists on mainnet, with the existing Sepolia/Base Sepolia exception. Deletion requires ownership. Images must be PNG, JPEG, GIF or WebP URLs returned by the shared uploader. Omitted update fields remain unchanged.
+
+Run `npm run test:drops:e2e` manually after deploying the new routes. Configure `RARE_ACCOUNT_TEST_API_URL` and two distinct existing test accounts through `RARE_ACCOUNT_TEST_PRIVATE_KEY` and `RARE_ACCOUNT_TEST_SECOND_PRIVATE_KEY`. The suite signs in on Sepolia, seeds an image through the live SDK uploader and exercises announcement operations through the built CLI. It deletes its announcements afterward, fails on missing prerequisites, and does not run in CI.
