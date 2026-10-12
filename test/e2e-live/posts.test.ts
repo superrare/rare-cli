@@ -89,7 +89,7 @@ describe('uploaded post images through the built CLI', () => {
     const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
     const comment = Buffer.from(randomBytes(16).toString('hex'));
     const bytes = Buffer.concat([gif.subarray(0, -1), Buffer.from([0x21, 0xfe, comment.length]), comment, Buffer.from([0, 0x3b])]);
-    execFileSync('gcloud', ['--project=superrare-dev', 'storage', 'buckets', 'describe', 'gs://rare-api-upload-dev', '--format=value(name)'], { stdio: 'pipe' });
+    execFileSync('gcloud', ['--project=superrare-dev', 'storage', 'buckets', 'describe', 'gs://rare-api-public-upload-dev', '--format=value(name)'], { stdio: 'pipe' });
     await fixture.auth.loginWithWallet({ address: signer.address, chainId: 1, signMessage: message => signer.signMessage({ message }) });
     const image = await fixture.uploads.upload(bytes, 'cli-post.gif', { contentType: 'image/gif' }).finally(() => fixture.auth.logout());
     try {
@@ -114,7 +114,7 @@ describe('uploaded post images through the built CLI', () => {
         }
       }));
     } finally {
-      execFileSync('gcloud', ['--project=superrare-dev', 'storage', 'rm', `gs://rare-api-upload-dev/${image.key}`], { stdio: 'pipe' });
+      execFileSync('gcloud', ['--project=superrare-dev', 'storage', 'rm', `gs://rare-api-public-upload-dev/${image.key}`], { stdio: 'pipe' });
     }
   }, 180_000);
 });
