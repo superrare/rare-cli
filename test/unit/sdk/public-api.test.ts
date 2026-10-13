@@ -20,6 +20,7 @@ describe('public SDK API surface', () => {
       'RareAuthError',
       'createMemoryAccountSessionStore',
       'createRareAccountClient',
+      'createRareApi',
       'createRareClient',
     ]);
   });

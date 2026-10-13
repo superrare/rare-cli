@@ -19,6 +19,7 @@ describe('published package subpath exports', () => {
       'RareAuthError',
       'createMemoryAccountSessionStore',
       'createRareAccountClient',
+      'createRareApi',
       'createRareClient',
     ]);
     expect(contracts).toHaveProperty('getContractAddresses');

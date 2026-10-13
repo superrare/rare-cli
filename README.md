@@ -1185,3 +1185,28 @@ rare drops delete 42
 Reads are public. Calendar windows are at most 30 days. Use `--address`, `--username` or `--user-id` to filter a creator. Create and update require an existing account and preserve the website's artist rule: approved SuperRare artists on mainnet, with the existing Sepolia/Base Sepolia exception. Deletion requires ownership. Images must be PNG, JPEG, GIF or WebP URLs returned by the shared uploader. Omitted update fields remain unchanged.
 
 Run `npm run test:drops:e2e` manually after deploying the new routes. Configure `RARE_ACCOUNT_TEST_API_URL` and two distinct existing test accounts through `RARE_ACCOUNT_TEST_PRIVATE_KEY` and `RARE_ACCOUNT_TEST_SECOND_PRIVATE_KEY`. The suite signs in on Sepolia, seeds an image through the live SDK uploader and exercises announcement operations through the built CLI. It deletes its announcements afterward, fails on missing prerequisites, and does not run in CI.
+
+### Durable messaging
+
+```bash
+rare messaging inbox
+rare messaging people alice
+rare messaging direct 123 --body 'Hello'
+rare messaging group --title 'Collectors' --invite 123 --invite 456
+rare messaging send CONVERSATION_ID --body-file message.md --reply-to MESSAGE_ID --mention 123
+rare messaging history CONVERSATION_ID
+rare messaging watch CONVERSATION_ID
+rare messaging preferences CONVERSATION_ID --notification muted
+rare messaging public resolve auction AUCTION_ID
+rare messaging public resolve liquid-edition --chain-id 1 --contract-address 0x...
+rare messaging public resolve drop-announcement DROP_ID
+rare messaging public history ROOM_ID
+rare messaging public watch ROOM_ID
+rare messaging public send ROOM_ID --body 'Hello'
+```
+
+Private commands use the account saved by `rare auth login`. Public room resolution and history do not need login; the first successful send joins the room. System messages are written by trusted backend producers. `public watch` streams newly added entries; reload `public history` to see edits and deletions.
+
+Text accepts `--body` or `--body-file`. Repeat `--mention`, `--attachment` or `--invite` for each account or attachment. Direct, group and send commands generate client UUIDs. For retries, supply the original `--client-message-id` or group `--client-operation-id` with the same payload. Run `rare messaging --help` for read markers, invitations, moderation, previews and image commands.
+
+Run `npm run test:messaging:e2e` manually against a deployed non-production API with `RARE_ACCOUNT_TEST_API_URL`, `RARE_ACCOUNT_TEST_PRIVATE_KEY`, and `RARE_ACCOUNT_TEST_SECOND_PRIVATE_KEY` pointing to two existing test accounts. Public tests also require `RARE_MESSAGING_TEST_AUCTION_ID`, `RARE_MESSAGING_TEST_DROP_ID`, `RARE_MESSAGING_TEST_EDITION_ADDRESS`, and `RARE_MESSAGING_TEST_EDITION_CHAIN_ID`. Tests use the built CLI, delete their messages, close private test rooms, leave public rooms and revoke sessions. Closed rooms retain durable records. The suite is not added to CI.
