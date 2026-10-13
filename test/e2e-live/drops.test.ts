@@ -26,7 +26,7 @@ describe('drops through the built CLI and deployed services', () => {
     // The generic uploader has no CLI command. Seed a real image through the SDK;
     // every announcement action and account login below uses the built CLI.
     const fixtureClient = createRareAccountClient({ apiBaseUrl: url.origin });
-    const image = await (async (): Promise<RareUpload> => {
+    const image = await (async (): Promise<Extract<RareUpload, { url: string }>> => {
       try {
         await fixtureClient.auth.loginWithWallet({ address: wallet.address, chainId: 11155111, signMessage: message => wallet.signMessage({ message }) });
         return await fixtureClient.uploads.upload(Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'), 'drop.gif', { contentType: 'image/gif' });
