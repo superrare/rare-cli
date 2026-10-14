@@ -1,3 +1,4 @@
+import { notificationsCommand } from './commands/notifications.js';
 import { messagingCommand } from './commands/messaging.js';
 import { dropsCommand } from './commands/drops.js';
 import { postsCommand } from './commands/posts.js';
@@ -65,6 +66,7 @@ export function createRareProgram(): Command {
   program.addCommand(favoritesCommand());
   program.addCommand(postsCommand());
   program.addCommand(messagingCommand());
+  program.addCommand(notificationsCommand());
   program.addCommand(dropsCommand());
   program.addCommand(collectionCommand());
   program.addCommand(currenciesCommand());
