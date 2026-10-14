@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createRareAccountClient } from '@rareprotocol/rare-sdk';
@@ -30,7 +31,16 @@ describe('authenticated artwork favorites through the built CLI and deployed ser
       const env = { RARE_API_URL: url.origin, RARE_AUTH_STORAGE: 'file', RARE_AUTH_DIRECTORY: join(directory, 'auth') };
       const run = (args: string[]): Promise<CliResult> => runCli(['--json', ...args], { home, env, timeoutMs: 45_000 });
       const countArgs = ['nft', 'favorite-count', '--contract', contract, '--token-id', tokenId, '--chain', 'mainnet'];
-      const publicCount = parseJsonStdout(await run(countArgs));
+      const countSchema = z.object({ count: z.number().int().nonnegative() });
+      const publicCount = countSchema.parse(parseJsonStdout(await run(countArgs)));
+      // Wait only for successful indexed reads; command and HTTP failures propagate.
+      const waitPublicCount = async (deadline = Date.now() + 30_000): Promise<z.infer<typeof countSchema>> => {
+        const current = countSchema.parse(parseJsonStdout(await run(countArgs)));
+        if (current.count === publicCount.count) return current;
+        if (Date.now() >= deadline) throw new Error('Favorite index did not reflect removal within 30 seconds');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return waitPublicCount(deadline);
+      };
       expect(publicCount).toHaveProperty('count');
       for (const args of [['favorites', 'list'], ['favorites', 'status', id], ['favorites', 'add', id], ['favorites', 'remove', id]]) expect((await run(args)).code).not.toBe(0);
       expect(parseJsonStdout(await run(['auth', 'login', '--wallet', '--chain', 'mainnet']))).toMatchObject({ status: 'authorized' });
@@ -55,7 +65,7 @@ describe('authenticated artwork favorites through the built CLI and deployed ser
           expect(parseJsonStdout(await run(['favorites', 'remove', id]))).toEqual({ favorited: false });
           expect(parseJsonStdout(await run(['favorites', 'status', id]))).toEqual({ favorited: false });
           expect(await account.favorites.list()).toEqual(before);
-          expect(parseJsonStdout(await run(countArgs))).toEqual(publicCount);
+          expect(await waitPublicCount()).toEqual(publicCount);
         } finally {
           expect((await run(['favorites', 'remove', id])).code).toBe(0);
         }
