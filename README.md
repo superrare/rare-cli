@@ -1195,6 +1195,7 @@ rare messaging direct 123 --body 'Hello'
 rare messaging group --title 'Collectors' --invite 123 --invite 456
 rare messaging send CONVERSATION_ID --body-file message.md --reply-to MESSAGE_ID --mention 123
 rare messaging history CONVERSATION_ID
+rare messaging edit CONVERSATION_ID MESSAGE_ID --body 'Updated message' --expected-version 1
 rare messaging watch CONVERSATION_ID
 rare messaging preferences CONVERSATION_ID --notification muted
 rare messaging public resolve auction AUCTION_ID

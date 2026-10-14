@@ -47,8 +47,9 @@ describe('durable messaging through the built CLI and deployed services', () => 
         const page = history.parse(parseJsonStdout(await owner(['messaging', 'history', room.id])));
         expect(page.messages.filter(row => row.clientMessageId === clientId)).toHaveLength(1);
         expect(page.messages.some(row => row.id === reply.id)).toBe(true);
-        expect((await owner(['messaging', 'edit', room.id, sent.id, '--body', 'Edited message', '--version', String(sent.version)])).code).toBe(0);
-        expect((await outsider(['messaging', 'edit', room.id, sent.id, '--body', 'Unauthorized edit', '--version', String(sent.version)])).code).not.toBe(0);
+        const edited = message.parse(parseJsonStdout(await owner(['messaging', 'edit', room.id, sent.id, '--body', 'Edited message', '--expected-version', String(sent.version)])));
+        expect(edited.body).toBe('Edited message');
+        expect((await outsider(['messaging', 'edit', room.id, sent.id, '--body', 'Unauthorized edit', '--expected-version', String(edited.version)])).code).not.toBe(0);
         expect((await owner(['messaging', 'invite', room.id, otherSession.user.id])).code).toBe(0);
         expect((await outsider(['messaging', 'accept', room.id])).code).toBe(0);
         const memberReply = message.parse(parseJsonStdout(await outsider(['messaging', 'send', room.id, '--body', 'Member reply', '--reply-to', sent.id])));
