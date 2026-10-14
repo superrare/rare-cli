@@ -47,8 +47,9 @@ describe('durable messaging through the built CLI and deployed services', () => 
         const page = history.parse(parseJsonStdout(await owner(['messaging', 'history', room.id])));
         expect(page.messages.filter(row => row.clientMessageId === clientId)).toHaveLength(1);
         expect(page.messages.some(row => row.id === reply.id)).toBe(true);
-        const edited = message.parse(parseJsonStdout(await owner(['messaging', 'edit', room.id, sent.id, '--body', 'Edited message', '--expected-version', String(sent.version)])));
+        const edited = message.parse(parseJsonStdout(await owner(['messaging', 'edit', room.id, sent.id, '--body', 'Edited message'])));
         expect(edited.body).toBe('Edited message');
+        expect((await owner(['messaging', 'edit', room.id, sent.id, '--body', 'Stale edit', '--expected-version', String(sent.version)])).code).not.toBe(0);
         expect((await outsider(['messaging', 'edit', room.id, sent.id, '--body', 'Unauthorized edit', '--expected-version', String(edited.version)])).code).not.toBe(0);
         expect((await owner(['messaging', 'invite', room.id, otherSession.user.id])).code).toBe(0);
         expect((await outsider(['messaging', 'accept', room.id])).code).toBe(0);
@@ -103,6 +104,8 @@ describe('public contextual chats through the built CLI', () => {
         expect(z.object({ id: z.string() }).parse(parseJsonStdout(await run(args))).id).toBe(sent.id);
         const page = publicMessages.parse(parseJsonStdout(await run(['messaging', 'public', 'history', room.id])));
         expect(page.messages.filter(row => row.id === sent.id)).toHaveLength(1);
+        const edited = z.object({ body: z.string() }).parse(parseJsonStdout(await run(['messaging', 'edit', room.id, sent.id, '--body', 'Updated public CLI message'])));
+        expect(edited.body).toBe('Updated public CLI message');
         expect((await run(['messaging', 'preferences', room.id, '--notification', 'muted'])).code).toBe(0);
       } finally {
         expect((await run(['messaging', 'delete', room.id, sent.id])).code).toBe(0);

@@ -1195,7 +1195,7 @@ rare messaging direct 123 --body 'Hello'
 rare messaging group --title 'Collectors' --invite 123 --invite 456
 rare messaging send CONVERSATION_ID --body-file message.md --reply-to MESSAGE_ID --mention 123
 rare messaging history CONVERSATION_ID
-rare messaging edit CONVERSATION_ID MESSAGE_ID --body 'Updated message' --expected-version 1
+rare messaging edit CONVERSATION_ID MESSAGE_ID --body 'Updated message'
 rare messaging watch CONVERSATION_ID
 rare messaging preferences CONVERSATION_ID --notification muted
 rare messaging public resolve auction AUCTION_ID
@@ -1207,6 +1207,8 @@ rare messaging public send ROOM_ID --body 'Hello'
 ```
 
 Private commands use the account saved by `rare auth login`. Public room resolution and history do not need login; the first successful send joins the room. System messages are written by trusted backend producers. `public watch` streams newly added entries; reload `public history` to see edits and deletions.
+
+Edits do not require a version number. Use `--expected-version <number>` when editing from a previously read message to reject stale edits. Without it, the latest successful edit wins.
 
 Text accepts `--body` or `--body-file`. Repeat `--mention`, `--attachment` or `--invite` for each account or attachment. Direct, group and send commands generate client UUIDs. For retries, supply the original `--client-message-id` or group `--client-operation-id` with the same payload. Run `rare messaging --help` for read markers, invitations, moderation, previews and image commands.
 
