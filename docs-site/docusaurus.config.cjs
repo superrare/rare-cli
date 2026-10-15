@@ -3,7 +3,7 @@ const path = require('node:path');
 /** @type {import('@docusaurus/types').Config} */
 const config = {
   title: 'RARE Protocol CLI',
-  tagline: 'CLI and SDK documentation for the RARE protocol tooling.',
+  tagline: 'Command-line documentation for the RARE protocol tooling.',
   url: 'http://localhost',
   baseUrl: '/',
   organizationName: 'superrare',

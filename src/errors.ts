@@ -1,5 +1,5 @@
 import { isJsonMode } from './output.js';
-import { RareApiError } from '@rareprotocol/rare-sdk/data-access/errors';
+import { RareApiError } from '@rareprotocol/rare-sdk/data-access';
 import { AvatarProfileUpdateError, RareAuthError } from '@rareprotocol/rare-sdk';
 import { AuthStorageError } from './auth-storage.js';
 

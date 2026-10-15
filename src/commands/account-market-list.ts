@@ -2,8 +2,8 @@ import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient } from '../client.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import type { Nft } from '@rareprotocol/rare-sdk/api';
-import { parseAddress } from '@rareprotocol/rare-sdk/validation';
+import type { Nft } from '@rareprotocol/rare-sdk';
+import { parseAddress } from '../input-core.js';
 import { parsePositiveInteger } from './pagination-core.js';
 import {
   log,

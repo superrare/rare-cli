@@ -4,14 +4,17 @@ import { Command } from 'commander';
 import { formatUnits, isAddress, isHex, type Address, type Hex } from 'viem';
 import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
-import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 import { output, log } from '../output.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import { toNonNegativeInteger, toPositiveInteger } from '@rareprotocol/rare-sdk/amounts-core';
-import { Erc1155CheckoutAllItemsSkippedError } from '@rareprotocol/rare-sdk/erc1155';
-import { resolveCurrencyDecimals } from '@rareprotocol/rare-sdk/payments-shell';
-import type { Erc1155CheckoutExecution, Erc1155CheckoutItemInput } from '@rareprotocol/rare-sdk/types/erc1155';
-import type { ReleaseAllowlistArtifact, ReleaseAllowlistInputFormat } from '@rareprotocol/rare-sdk/types/release';
+import { toNonNegativeInteger, toPositiveInteger } from '../input-core.js';
+import { Erc1155CheckoutAllItemsSkippedError } from '@rareprotocol/rare-sdk';
+import type {
+  Erc1155CheckoutExecution,
+  Erc1155CheckoutItemInput,
+  ReleaseAllowlistArtifact,
+  ReleaseAllowlistInputFormat,
+} from '@rareprotocol/rare-sdk';
 import { collectSplit, finalizeSplits, type SplitAccumulator } from './splits-core.js';
 import { runWithMinterApprovalConsent, runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 
@@ -662,7 +665,7 @@ export function listingErc1155Command(): Command {
         seller: parseAddressOption(opts.seller, '--seller'),
         tokenId: opts.tokenId,
       });
-      const amount = formatUnits(result.price, await resolveCurrencyDecimals(publicClient, chain, result.currencyAddress));
+      const amount = formatUnits(result.price, (await rare.currency.resolveDecimals(result.currencyAddress)).decimals);
       output(result, () => {
         console.log('\nERC-1155 Listing Details:');
         if (!result.hasListing) console.log('  No active listing found.');
@@ -797,7 +800,7 @@ export function offerErc1155Command(): Command {
         buyer: opts.buyer === undefined ? undefined : parseAddressOption(opts.buyer, '--buyer'),
         currency: opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain),
       });
-      const amount = formatUnits(result.price, await resolveCurrencyDecimals(publicClient, chain, result.currencyAddress));
+      const amount = formatUnits(result.price, (await rare.currency.resolveDecimals(result.currencyAddress)).decimals);
       output(result, () => {
         console.log('\nERC-1155 Offer Details:');
         if (!result.hasOffer) console.log('  No active offer found.');
@@ -980,7 +983,7 @@ function releaseErc1155Command(): Command {
         tokenId: opts.tokenId,
         account: opts.account === undefined ? undefined : parseAddressOption(opts.account, '--account'),
       });
-      const amount = formatUnits(result.price, await resolveCurrencyDecimals(publicClient, chain, result.currencyAddress));
+      const amount = formatUnits(result.price, (await rare.currency.resolveDecimals(result.currencyAddress)).decimals);
       output(result, () => {
         console.log('\nERC-1155 Release Details:');
         if (!result.configured) console.log('  No active release found.');
@@ -1292,7 +1295,9 @@ function readAllowlistSetBatchItems(filePath: string): Array<{
     }
     return {
       tokenId: toNonNegativeInteger(String(item.tokenId), `items[${index}].tokenId`),
-      root: item.root === undefined ? undefined : parseBytes32Option(String(item.root), `items[${index}].root`),
+      root: item.root === undefined
+        ? undefined
+        : parseBytes32Option(parseStringValue(item.root, `items[${index}].root`), `items[${index}].root`),
       artifact: item.artifact === undefined ? undefined : parseAllowlistArtifactValue(item.artifact, `items[${index}].artifact`),
       endTime: parseRequiredStringValue(item.endTime, `items[${index}].endTime`),
     };

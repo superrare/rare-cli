@@ -1,6 +1,6 @@
 import { privateKeyToAccount } from 'viem/accounts';
 import type { Config } from '../config.js';
-import { supportedChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { supportedChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
 
 export type McpToolAccess = 'read' | 'write';
 

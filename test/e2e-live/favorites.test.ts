@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createRareAccountClient } from '@rareprotocol/rare-sdk';
-import { isPrivateKeyString } from '@rareprotocol/rare-sdk/validation';
+import { isPrivateKeyString } from '../../src/input-core.js';
 import { privateKeyToAccount } from 'viem/accounts';
 import { describe, expect, it } from 'vitest';
 import { parseJsonStdout, runCli, withTempHome, type CliResult } from '../helpers/cli.js';

@@ -8,7 +8,7 @@ import { z } from 'zod';
 import pkg from '../../package.json' with { type: 'json' };
 import { getConfiguredAccountAddress, getConfiguredUniswapApiKey, getPublicClient, tryGetWalletClient } from '../client.js';
 import { getChainConfig, readConfig } from '../config.js';
-import { supportedChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { supportedChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import {
   mcpToolSpecs,

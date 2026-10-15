@@ -5,41 +5,39 @@ import { Command } from 'commander';
 import { getAddress, isAddress, isAddressEqual, isHex, type Address, type Hex, type PublicClient } from 'viem';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
-import { ETH_ADDRESS, chainIds, resolveCurrency, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { ETH_ADDRESS, chainIds, resolveCurrency, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
 import { output, log, isJsonMode } from '../output.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import type { RareClient } from '@rareprotocol/rare-sdk/client';
 import {
+  buildBatchListingArtifact,
+  buildMerkleProof,
   getBatchTokenProof,
-  normalizeBytes32,
+  normalizeMerkleRoot,
   normalizeTokenId,
-  parseBatchTokenListArtifactOrBuild,
-  parseBatchTokenProofInput,
-  validateBatchTokenProofInputMatchesTarget,
+  parseBatchListingArtifact,
+  parseBatchTokenTreeInput,
+  parseBatchTokenProof,
+  validateBatchTokenProofTarget,
   verifyBatchTokenProof,
-  type BatchTokenListArtifact,
-  type BatchTokenListInputFormat,
-  type BatchTokenProofInput,
-} from '@rareprotocol/rare-sdk/batch-core';
-import {
-  parseBatchListingCreateRootArtifactInput,
-  planBatchListingCreateArtifact,
-} from '@rareprotocol/rare-sdk/batch-listing-core';
-import {
-  planBatchAuctionBidLocalInputs,
-  planBatchAuctionCreateLocalInputs,
-  planBatchAuctionToken,
-} from '@rareprotocol/rare-sdk/batch-auction-core';
-import { planBatchOfferAcceptLocalInputs, planBatchOfferCreateLocalInputs } from '@rareprotocol/rare-sdk/batch-offer-core';
-import { buildMerkleProofArtifact } from '@rareprotocol/rare-sdk/merkle-core';
-import { requireInput, toUnixTimestamp } from '@rareprotocol/rare-sdk/validation-core';
+} from '@rareprotocol/rare-sdk/utils';
+import { requireInput, toPositiveWei, toUnixTimestamp } from '../input-core.js';
 import {
   loadMerkleProofArtifact,
   loadMerkleRootArtifact,
   writeMerkleArtifact,
-} from '@rareprotocol/rare-sdk/merkle-file';
-import type { BatchListingRootArtifact } from '@rareprotocol/rare-sdk/types/batch-listing';
-import { parseAddress } from '@rareprotocol/rare-sdk/validation';
+} from '../merkle-file-shell.js';
+import type {
+  BatchListingRootArtifact,
+  BuildUtilsTreeParams,
+  UtilsTreeArtifact,
+  UtilsTreeProofArtifact,
+} from '@rareprotocol/rare-sdk';
+
+type BatchTokenListArtifact = UtilsTreeArtifact;
+type BatchTokenListInputFormat = BuildUtilsTreeParams['format'];
+type BatchTokenProofInput = Partial<UtilsTreeProofArtifact> & { proof: readonly Hex[] };
+import { parseAddress } from '../input-core.js';
 import { createBatchListingListCommand } from './account-market-list.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { formatBatchAmount, parseBatchAmount } from './batch-amounts.js';
@@ -366,9 +364,9 @@ function createUtilsTreeVerifyCommand(): Command {
       const proof = proofInput?.proof ?? generatedProof?.proof ?? [];
       const root = opts.root === undefined
         ? proofInput?.root ?? generatedProof?.root ?? artifact.root
-        : normalizeBytes32(opts.root, '--root');
+        : normalizeMerkleRoot(opts.root, '--root');
 
-      validateBatchTokenProofInputMatchesTarget(proofInput, {
+      validateBatchTokenProofTarget(proofInput, {
         artifact,
         contractAddress,
         tokenId: opts.tokenId,
@@ -418,7 +416,11 @@ function createOfferCreateCommand(): Command {
     .option('--yes', 'yes to all prompts, including approval and transaction submission')
     .action(async (opts: OfferCreateOptions) => {
       const rootInput = await resolveBatchCreateRootInput(opts);
-      planBatchOfferCreateLocalInputs(rootInputToCreateParams(rootInput, opts), currentUnixTimestamp());
+      toPositiveWei(opts.price, 'price');
+      const expiry = toUnixTimestamp(opts.endTime, 'endTime');
+      if (expiry <= currentUnixTimestamp()) {
+        throw new Error('expiry must be in the future.');
+      }
       const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
 
@@ -553,7 +555,7 @@ function createOfferAcceptCommand(): Command {
         ? opts.root === undefined ? undefined : parseBytes32(opts.root, '--root')
         : resolveProofRoot(proofInput, opts.root);
       if (proofInput !== undefined && root !== undefined) {
-        validateBatchTokenProofInputMatchesTarget(proofInput, {
+        validateBatchTokenProofTarget(proofInput, {
           artifact: createRootOnlyArtifact(root),
           contractAddress: contract,
           tokenId: opts.tokenId,
@@ -562,14 +564,14 @@ function createOfferAcceptCommand(): Command {
         });
       }
       const splits = finalizeSplits(opts.split);
-      const localPlan = planBatchOfferAcceptLocalInputs({ tokenId: opts.tokenId });
+      const tokenId = normalizeTokenId(opts.tokenId, 'tokenId');
       const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
 
       log(`Accepting batch offer on ${chain}...`);
       log(`  BatchOfferCreator: ${rare.contracts.batchOfferCreator}`);
       log(`  Creator: ${creator}`);
       log(`  Root: ${root ?? 'rare-api'}`);
-      log(`  Token: ${contract} #${localPlan.tokenId.toString()}`);
+      log(`  Token: ${contract} #${tokenId.toString()}`);
       if (splits !== undefined) {
         log('  Splits:');
         formatSplitLines(splits).forEach((line) => {
@@ -583,7 +585,7 @@ function createOfferAcceptCommand(): Command {
         root,
         proof: proofInput?.proof,
         contract,
-        tokenId: localPlan.tokenId,
+        tokenId,
         splitAddresses: splits?.addresses,
         splitRatios: splits?.ratios,
       };
@@ -690,7 +692,11 @@ function createAuctionCreateCommand(): Command {
     .action(async (opts: AuctionCreateOptions) => {
       const rootInput = await resolveBatchCreateRootInput(opts);
       const splits = finalizeSplits(opts.split);
-      planBatchAuctionCreateLocalInputs(rootInputToCreateParams(rootInput, opts), currentUnixTimestamp());
+      toPositiveWei(opts.price, 'price');
+      const endTime = toUnixTimestamp(opts.endTime, 'endTime');
+      if (endTime <= currentUnixTimestamp()) {
+        throw new Error('endTime must be in the future.');
+      }
       const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
 
@@ -825,7 +831,7 @@ function createAuctionBidCommand(): Command {
         ? opts.root === undefined ? undefined : parseBytes32(opts.root, '--root')
         : resolveProofRoot(proofInput, opts.root);
       if (proofInput !== undefined && root !== undefined) {
-        validateBatchTokenProofInputMatchesTarget(proofInput, {
+        validateBatchTokenProofTarget(proofInput, {
           artifact: createRootOnlyArtifact(root),
           contractAddress: contract,
           tokenId: opts.tokenId,
@@ -833,7 +839,8 @@ function createAuctionBidCommand(): Command {
           allowRootOverride: opts.root !== undefined,
         });
       }
-      const localPlan = planBatchAuctionBidLocalInputs({ tokenId: opts.tokenId, price: opts.price });
+      const tokenId = normalizeTokenId(opts.tokenId, 'tokenId');
+      toPositiveWei(opts.price, 'price');
       const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
 
@@ -841,7 +848,7 @@ function createAuctionBidCommand(): Command {
       log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse}`);
       log(`  Creator: ${creator}`);
       log(`  Root: ${root ?? 'rare-api'}`);
-      log(`  Token: ${contract} #${localPlan.tokenId.toString()}`);
+      log(`  Token: ${contract} #${tokenId.toString()}`);
       log(`  Price: ${opts.price} ${currency === ETH_ADDRESS ? 'ETH' : currency}`);
       log('Waiting for confirmation...');
 
@@ -850,7 +857,7 @@ function createAuctionBidCommand(): Command {
         root,
         proof: proofInput?.proof,
         contract,
-        tokenId: localPlan.tokenId,
+        tokenId,
         currency,
         price: opts.price,
       };
@@ -911,17 +918,17 @@ function createAuctionSettleCommand(): Command {
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: AuctionSettleOptions) => {
       const contract = parseAddressOption(opts.contract, '--contract');
-      const localPlan = planBatchAuctionToken({ contract, tokenId: opts.tokenId });
+      const tokenId = normalizeTokenId(opts.tokenId, 'tokenId');
       const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
 
       log(`Settling batch auction token on ${chain}...`);
       log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse}`);
-      log(`  Token: ${localPlan.contract} #${localPlan.tokenId.toString()}`);
+      log(`  Token: ${contract} #${tokenId.toString()}`);
       log('Waiting for confirmation...');
 
       const result = await rare.auction.batch.settle({
-        contract: localPlan.contract,
-        tokenId: localPlan.tokenId,
+        contract,
+        tokenId,
       });
 
       output(
@@ -970,7 +977,7 @@ function createAuctionStatusCommand(): Command {
         ? rootInput?.root
         : resolveProofRoot(proofInput, rootInput?.root);
       if (proofInput !== undefined && root !== undefined) {
-        validateBatchTokenProofInputMatchesTarget(proofInput, {
+        validateBatchTokenProofTarget(proofInput, {
           artifact: createRootOnlyArtifact(root),
           contractAddress: contract,
           tokenId: opts.tokenId,
@@ -1055,12 +1062,12 @@ export function createUtilsMerkleCommand(): Command {
     .option('--output <path>', 'write artifact to this path (otherwise stdout)')
     .action(async (opts: MerkleProofOptions): Promise<void> => {
       const rootArtifact = await loadMerkleRootArtifact(opts.input);
-      const proof = buildMerkleProofArtifact(
-        rootArtifact,
-        parseAddress(opts.contract, '--contract'),
-        opts.tokenId,
-        parseOptionalAddress(opts.buyer, '--buyer'),
-      );
+      const proof = buildMerkleProof({
+        artifact: rootArtifact,
+        contract: parseAddress(opts.contract, '--contract'),
+        tokenId: opts.tokenId,
+        buyer: parseOptionalAddress(opts.buyer, '--buyer'),
+      });
 
       if (opts.output !== undefined) {
         await writeMerkleArtifact(opts.output, proof);
@@ -1398,7 +1405,7 @@ function addBatchListingCommands(cmd: Command): void {
 async function readBatchTreeArtifact(opts: TreeInputOptions): Promise<BatchTokenListArtifact> {
   const format = parseFormatOption(opts.format);
   const content = await readFile(opts.input, 'utf8');
-  return parseBatchTokenListArtifactOrBuild({
+  return parseBatchTokenTreeInput({
     content,
     format,
     sourceName: opts.input,
@@ -1415,7 +1422,7 @@ async function resolveBatchListingCreateArtifact(
   const splits = finalizeSplits(opts.split);
   const rootArtifact = parsedObject === undefined
     ? undefined
-    : parseBatchListingCreateRootArtifactInput(parsedObject);
+    : parseBatchListingArtifact(parsedObject);
 
   if (rootArtifact !== undefined) {
     const currencyOverride = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, context.chain);
@@ -1428,11 +1435,11 @@ async function resolveBatchListingCreateArtifact(
           opts.price,
         )).toString();
 
-    return planBatchListingCreateArtifact({
-      kind: 'root-artifact',
+    return buildBatchListingArtifact({
+      source: 'root-artifact',
       artifact: rootArtifact,
-      currencyOverride,
-      amountOverride,
+      currency: currencyOverride,
+      price: amountOverride,
       splitAddresses: splits?.addresses,
       splitRatios: splits?.ratios,
     });
@@ -1446,18 +1453,18 @@ async function resolveBatchListingCreateArtifact(
 
   const currency = opts.currency === undefined ? ETH_ADDRESS : resolveCurrency(opts.currency, context.chain);
   const amount = await parseBatchAmount(context.publicClient, context.chain, currency, opts.price);
-  const tokenTreeArtifact = parseBatchTokenListArtifactOrBuild({
+  const tokenTreeArtifact = parseBatchTokenTreeInput({
     content,
     format: parseFormatOption(opts.format),
     sourceName: opts.input,
     chainId: resolveTreeChainId(opts),
   });
 
-  return planBatchListingCreateArtifact({
-    kind: 'token-tree',
+  return buildBatchListingArtifact({
+    source: 'token-tree',
     artifact: tokenTreeArtifact,
     currency,
-    amount: amount.toString(),
+    price: amount.toString(),
     splitAddresses: splits?.addresses,
     splitRatios: splits?.ratios,
   });
@@ -1561,7 +1568,7 @@ async function selectRootCandidate(params: {
 }
 
 async function resolveAuctionRootInput(opts: OfferRootOptions): Promise<AuctionRootInput> {
-  const directRoot = opts.root === undefined ? undefined : normalizeBytes32(opts.root, '--root');
+  const directRoot = opts.root === undefined ? undefined : normalizeMerkleRoot(opts.root, '--root');
   if (opts.input === undefined) {
     if (directRoot === undefined) {
       throw new Error('Pass --input, or pass --root as an override.');
@@ -1586,7 +1593,7 @@ async function resolveAuctionRootInput(opts: OfferRootOptions): Promise<AuctionR
 }
 
 async function resolveBatchCreateRootInput(opts: OfferRootOptions): Promise<BatchCreateRootInput> {
-  const directRoot = opts.root === undefined ? undefined : normalizeBytes32(opts.root, '--root');
+  const directRoot = opts.root === undefined ? undefined : normalizeMerkleRoot(opts.root, '--root');
   if (opts.input === undefined) {
     if (directRoot === undefined) {
       throw new Error('Pass --input, or pass --root as an override.');
@@ -1616,7 +1623,7 @@ async function resolveOptionalAuctionRootInput(opts: OfferRootOptions): Promise<
 }
 
 function resolveProofRoot(proofInput: BatchTokenProofInput, rawRoot: string | undefined): Hex {
-  const root = rawRoot === undefined ? proofInput.root : normalizeBytes32(rawRoot, '--root');
+  const root = rawRoot === undefined ? proofInput.root : normalizeMerkleRoot(rawRoot, '--root');
   if (root === undefined) {
     throw new Error('Proof overrides must include a root field, or pass --root as an override.');
   }
@@ -1637,24 +1644,13 @@ function createRootOnlyArtifact(root: Hex): BatchTokenListArtifact {
   };
 }
 
-function rootInputToCreateParams(
-  rootInput: BatchCreateRootInput,
-  opts: { price: string; endTime: string },
-): BatchCreateRootInput & { price: string; endTime: string } {
-  return {
-    ...rootInput,
-    price: opts.price,
-    endTime: opts.endTime,
-  };
+async function readBatchProofFile(inputPath: string): Promise<BatchTokenProofInput> {
+  const content = await readFile(inputPath, 'utf8');
+  return parseBatchTokenProof(content);
 }
 
 function currentUnixTimestamp(): bigint {
   return BigInt(Math.floor(Date.now() / 1000));
-}
-
-async function readBatchProofFile(inputPath: string): Promise<BatchTokenProofInput> {
-  const content = await readFile(inputPath, 'utf8');
-  return parseBatchTokenProofInput(content);
 }
 
 function parseFormatOption(value: string | undefined): BatchTokenListInputFormat | undefined {

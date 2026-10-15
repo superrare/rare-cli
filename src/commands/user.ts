@@ -1,6 +1,6 @@
 import { Command, Option } from 'commander';
 import { createRareClient, type UserSelector } from '@rareprotocol/rare-sdk';
-import { DEFAULT_RARE_API_BASE_URL } from '@rareprotocol/rare-sdk/data-access/base-url';
+import { DEFAULT_RARE_API_BASE_URL } from '@rareprotocol/rare-sdk/data-access';
 import { getActiveChain } from '../config.js';
 import { getPublicClient } from '../client.js';
 import { output, printUser } from '../output.js';

@@ -2,7 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { text } from 'node:stream/consumers';
 import { Command } from 'commander';
-import { createRareApi, type IpfsUploadResult } from '@rareprotocol/rare-sdk/api';
+import { getPublicClient } from '../client.js';
+import { getActiveChain } from '../config.js';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import type { IpfsUploadResult } from '@rareprotocol/rare-sdk';
 import { output, log, isJsonMode } from '../output.js';
 
 type IpfsPinFileOptions = {
@@ -41,7 +44,8 @@ function pinFileCommand(): Command {
       const filename = opts.filename ?? basename(opts.file);
       logUpload(opts.uriOnly, `Uploading file: ${filename} (${buffer.byteLength.toString()} bytes)`);
 
-      printPinResult(await createRareApi().pinFile(new Uint8Array(buffer), filename), opts.uriOnly);
+      const chain = getActiveChain();
+      printPinResult(await createRareClient({ publicClient: getPublicClient(chain) }).ipfs.pinFile(new Uint8Array(buffer), filename), opts.uriOnly);
     });
 }
 
@@ -59,7 +63,8 @@ function pinJsonCommand(): Command {
       const value = parseJson(source.input, source.label);
       logUpload(opts.uriOnly, `Uploading JSON: ${opts.filename ?? 'metadata.json'} (${source.input.length.toString()} chars)`);
 
-      printPinResult(await createRareApi().pinJson(value, opts.filename), opts.uriOnly);
+      const chain = getActiveChain();
+      printPinResult(await createRareClient({ publicClient: getPublicClient(chain) }).ipfs.pinJson(value, opts.filename), opts.uriOnly);
     });
 }
 
