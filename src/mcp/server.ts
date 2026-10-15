@@ -96,6 +96,15 @@ const splitSchema = {
   splitRatios: z.array(z.number()).optional(),
 };
 const autoApproveSchema = { autoApprove: z.boolean().optional() };
+export const listingReleaseMintInputSchema = {
+  ...optionalChain,
+  contract: addressSchema,
+  quantity: integerSchema.optional(),
+  currency: currencySchema,
+  price: amountSchema.optional(),
+  proof: proofSchema.optional(),
+  ...autoApproveSchema,
+};
 const contractTokenSchema = {
   contract: addressSchema,
   tokenId: integerSchema,
@@ -709,7 +718,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.release.configure(args as never))),
   },
   listing_release_mint: {
-    inputSchema: { ...optionalChain, contract: addressSchema, quantity: integerSchema.optional(), currency: currencySchema, price: amountSchema.optional(), proof: proofSchema.optional(), recipient: addressSchema.optional(), ...autoApproveSchema },
+    inputSchema: listingReleaseMintInputSchema,
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.release.mint(args as never))),
   },
   listing_release_status: {
