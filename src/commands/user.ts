@@ -1,6 +1,6 @@
 import { Command, Option } from 'commander';
 import { createRareClient, type UserSelector } from '@rareprotocol/rare-sdk';
-import { DEFAULT_RARE_API_BASE_URL } from '@rareprotocol/rare-sdk/data-access/base-url';
+import { DEFAULT_RARE_API_BASE_URL } from '@rareprotocol/rare-sdk/data-access';
 import { output, printUser } from '../output.js';
 import { accountClient, accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
 import { selectUser, type UserOptions } from './user-core.js';
