@@ -9,6 +9,7 @@ import { output } from '../output.js';
 import { selectUser, type UserOptions } from './user-core.js';
 
 type PageOptions = { page: string; perPage: string };
+type ThreadOptions = { parentCommentId?: string; afterCommentId?: string };
 type BodyOptions = { body?: string; bodyFile?: string };
 const publicPosts = (apiUrl: string): ReturnType<typeof createRareClient>['posts'] => createRareClient({ publicClient: getPublicClient(getActiveChain()), apiBaseUrl: apiUrl }).posts;
 const publicCommand = (name: string): Command => new Command(name).addOption(new Option('--api-url <url>', 'Rare API base URL').default(DEFAULT_RARE_API_BASE_URL).env('RARE_API_URL'));
@@ -30,16 +31,16 @@ export function postsCommand(): Command {
     }));
   command.addCommand(publicCommand('get').description('Read a public post, including its favorite count').argument('<post-id>')
     .action(async (postId: string, options: { apiUrl: string }): Promise<void> => { print(await publicPosts(options.apiUrl).get(postId)); }));
-  command.addCommand(pageOptions(publicCommand('comments')).description('List comments on a public post').argument('<post-id>')
-    .action(async (postId: string, options: PageOptions & { apiUrl: string }): Promise<void> => { print(await publicPosts(options.apiUrl).comments(postId, { page: Number(options.page), perPage: Number(options.perPage) })); }));
+  command.addCommand(pageOptions(publicCommand('comments')).description('List top-level comments, or replies to one comment').argument('<post-id>').option('--parent-comment-id <id>', 'list replies to this top-level comment').option('--after-comment-id <id>', 'continue replies after this comment ID')
+    .action(async (postId: string, options: PageOptions & ThreadOptions & { apiUrl: string }): Promise<void> => { print(await publicPosts(options.apiUrl).comments(postId, { page: Number(options.page), perPage: Number(options.perPage), parentCommentId: options.parentCommentId, afterCommentId: options.afterCommentId })); }));
   command.addCommand(bodyOptions(accountCommand('create')).description('Create a post with your signed-in account').requiredOption('--title <text>', 'post title')
     .option('--image-url <url>', 'image URL from the shared uploader; repeat up to five times', (value: string, previous: string[]) => [...previous, value], [])
     .action(async (options: AccountCommandOptions & BodyOptions & { title: string; imageUrl: string[] }): Promise<void> => {
       const body = await bodyText(options);
       print(await accountClient(storageOptions(options)).posts.create({ title: options.title, body, imageUrls: options.imageUrl }));
     }));
-  command.addCommand(bodyOptions(accountCommand('comment')).description('Comment on any public post').argument('<post-id>')
-    .action(async (postId: string, options: AccountCommandOptions & BodyOptions): Promise<void> => { const body = await bodyText(options); print(await accountClient(storageOptions(options)).posts.comment(postId, body)); }));
+  command.addCommand(bodyOptions(accountCommand('comment')).description('Comment on a public post or reply to a top-level comment').argument('<post-id>').option('--parent-comment-id <id>', 'reply to this top-level comment')
+    .action(async (postId: string, options: AccountCommandOptions & BodyOptions & ThreadOptions): Promise<void> => { const body = await bodyText(options); print(await accountClient(storageOptions(options)).posts.comment(postId, body, { parentCommentId: options.parentCommentId })); }));
   command.addCommand(accountCommand('delete').description('Delete your own post').argument('<post-id>')
     .action(async (postId: string, options: AccountCommandOptions): Promise<void> => { await accountClient(storageOptions(options)).posts.delete(postId); print({ deleted: true }); }));
   command.addCommand(accountCommand('delete-comment').description('Delete your own comment').argument('<post-id>').argument('<comment-id>')

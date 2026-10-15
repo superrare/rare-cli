@@ -10,8 +10,8 @@ import { describe, expect, it } from 'vitest';
 import { parseJsonStdout, runCli, withTempHome, type CliResult } from '../helpers/cli.js';
 
 const required = (name: string): string => { const value = process.env[name]; if (!value) throw new Error(`Missing ${name}`); return value; };
-const postResult = z.object({ id: z.string(), creatorUserId: z.string(), title: z.string(), body: z.string(), imageUrls: z.array(z.string()), likeCount: z.number() });
-const commentResult = z.object({ id: z.string(), postId: z.string(), authorUserId: z.string(), body: z.string() });
+const postResult = z.object({ id: z.string(), creatorUserId: z.string(), title: z.string(), body: z.string(), imageUrls: z.array(z.string()), likeCount: z.number(), commentCount: z.number() });
+const commentResult = z.object({ id: z.string(), postId: z.string(), authorUserId: z.string(), parentCommentId: z.string().nullable(), replyCount: z.number(), body: z.string() });
 const setup = async (temporary: string, privateKey: string, apiUrl: string): Promise<{ home: string; run: (args: string[]) => Promise<CliResult> }> => {
   const home = await realpath(temporary);
   const directory = join(home, '.rare');
@@ -52,6 +52,20 @@ describe('creator posts through the built CLI and deployed services', () => {
         const comment = commentResult.parse(parseJsonStdout(await other.run(['posts', 'comment', post.id, '--body-file', commentFile])));
         const comments = z.object({ data: z.array(commentResult) }).parse(parseJsonStdout(await owner.run(['posts', 'comments', post.id])));
         expect(comments.data.find(row => row.id === comment.id)).toMatchObject({ postId: post.id, body: 'Comment from another account' });
+        const firstReply = commentResult.parse(parseJsonStdout(await owner.run(['posts', 'comment', post.id, '--body', 'First reply', '--parent-comment-id', comment.id])));
+        const secondReply = commentResult.parse(parseJsonStdout(await owner.run(['posts', 'comment', post.id, '--body', 'Second reply', '--parent-comment-id', comment.id])));
+        expect(firstReply).toMatchObject({ parentCommentId: comment.id, replyCount: 0 });
+        expect(postResult.parse(parseJsonStdout(await owner.run(['posts', 'get', post.id]))).commentCount).toBe(3);
+        const roots = z.object({ data: z.array(commentResult) }).parse(parseJsonStdout(await owner.run(['posts', 'comments', post.id])));
+        expect(roots.data).toMatchObject([{ id: comment.id, parentCommentId: null, replyCount: 2 }]);
+        const threadPage = z.object({ data: z.array(commentResult), nextCursor: z.string().nullable() });
+        const firstPage = threadPage.parse(parseJsonStdout(await owner.run(['posts', 'comments', post.id, '--parent-comment-id', comment.id, '--per-page', '1'])));
+        expect(firstPage.data.map(row => row.id)).toEqual([firstReply.id]);
+        expect(firstPage.nextCursor).toBe(firstReply.id);
+        const lastPage = threadPage.parse(parseJsonStdout(await owner.run(['posts', 'comments', post.id, '--parent-comment-id', comment.id, '--after-comment-id', firstReply.id, '--per-page', '1'])));
+        expect(lastPage.data.map(row => row.id)).toEqual([secondReply.id]);
+        expect(lastPage.nextCursor).toBeNull();
+        expect((await owner.run(['posts', 'comment', post.id, '--body', 'Nested', '--parent-comment-id', firstReply.id])).code).not.toBe(0);
         expect((await other.run(['posts', 'delete', post.id])).code).not.toBe(0);
         expect((await owner.run(['posts', 'delete-comment', post.id, comment.id])).code).not.toBe(0);
         expect(parseJsonStdout(await other.run(['posts', 'favorites', 'add', post.id]))).toEqual({ favorited: true });
@@ -66,6 +80,8 @@ describe('creator posts through the built CLI and deployed services', () => {
         expect(postResult.parse(parseJsonStdout(await owner.run(['posts', 'get', post.id]))).likeCount).toBe(0);
         expect(parseJsonStdout(await other.run(['posts', 'delete-comment', post.id, comment.id]))).toEqual({ deleted: true });
         expect(parseJsonStdout(await owner.run(['posts', 'comments', post.id]))).toMatchObject({ data: [] });
+        expect(postResult.parse(parseJsonStdout(await owner.run(['posts', 'get', post.id]))).commentCount).toBe(0);
+        expect((await owner.run(['posts', 'comments', post.id, '--parent-comment-id', comment.id])).code).not.toBe(0);
         expect((await owner.run(['posts', 'create', '--title', 'Invalid', '--body', 'a', '--body-file', bodyFile])).code).not.toBe(0);
         expect((await owner.run(['posts', 'list', '--address', address, '--user-id', '1'])).code).not.toBe(0);
       } finally {
