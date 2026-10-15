@@ -374,7 +374,7 @@ describeLive('live collection CLI writes', () => {
     expectTx(created);
     expect(created.contract).toMatch(/^0x[0-9a-fA-F]{40}$/);
     expect(created.factory).toBe(getContractAddresses(fixture.chain).lazySovereignFactory);
-    expect(created.contractType).toBe('lazy');
+    expect(created.variant).toBe('standard');
     expect(created.nextStep).toContain('Configure release sale and mint settings');
 
     const prepared = await step('prepare lazy mint batch', () =>
@@ -471,8 +471,8 @@ describeLive('live collection CLI writes', () => {
         `RCG${suffix.slice(-4).toUpperCase()}`,
         '--max-tokens',
         '2',
-        '--contract-type',
-        'lazy-royalty-guard',
+        '--variant',
+        'royalty-guard',
         '--chain',
         fixture.chain,
       ]),
@@ -481,7 +481,7 @@ describeLive('live collection CLI writes', () => {
     expectTx(created);
     expect(created.contract).toMatch(/^0x[0-9a-fA-F]{40}$/);
     expect(created.factory).toBe(getContractAddresses(fixture.chain).lazySovereignFactory);
-    expect(created.contractType).toBe('lazy-royalty-guard');
+    expect(created.variant).toBe('royalty-guard');
   });
 
   it('mints directly to another recipient', async () => {
