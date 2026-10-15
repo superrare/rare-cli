@@ -19,6 +19,7 @@ import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator }
 import { listingBatchCommand } from './batch.js';
 import { listingErc1155Command } from './erc1155.js';
 import { releaseCommand } from './release.js';
+import { parseBatchAmount } from './batch-amounts.js';
 
 type ListingCreateOptions = {
   contract?: string;
@@ -107,6 +108,7 @@ export function listingCommand(): Command {
       const isEth = currency === ETH_ADDRESS;
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
+      const priceAmount = await parseBatchAmount(publicClient, chain, currency, price);
       const rare = createRareClient({ publicClient, walletClient: client });
 
       log(`Creating listing on ${chain}...`);
@@ -125,7 +127,7 @@ export function listingCommand(): Command {
       const listingParams = {
         contract,
         tokenId,
-        price,
+        price: priceAmount,
         currency,
         target,
         splitAddresses: splits?.addresses,
@@ -226,6 +228,7 @@ export function listingCommand(): Command {
       const isEth = currency === ETH_ADDRESS;
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
+      const priceAmount = await parseBatchAmount(publicClient, chain, currency, price);
       const rare = createRareClient({ publicClient, walletClient: client });
 
       log(`Buying token on ${chain}...`);
@@ -237,7 +240,7 @@ export function listingCommand(): Command {
       const buyParams = {
         contract,
         tokenId,
-        price,
+        price: priceAmount,
         currency,
       };
 
