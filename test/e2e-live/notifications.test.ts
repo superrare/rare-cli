@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
-import { isPrivateKeyString } from '@rareprotocol/rare-sdk/validation';
+import { isPrivateKeyString } from '../../src/input-core.js';
 import { parseJsonStdout, runCli, withTempHome, type CliResult } from '../helpers/cli.js';
 const required = (name: string): string => { const value = process.env[name]; if (!value) throw new Error(`Missing ${name}`); return value; };
 const notificationSchema = z.object({ id: z.string(), category: z.string(), notificationId: z.string(), payload: z.record(z.string(), z.unknown()), readAt: z.string().nullable() });
