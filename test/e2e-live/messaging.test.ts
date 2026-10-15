@@ -15,8 +15,9 @@ const setup = async (temporary: string, key: string, apiUrl: string): Promise<(a
   return (args: string[]): Promise<CliResult> => runCli(['--json', ...args], { home, env: { RARE_API_URL: apiUrl, RARE_AUTH_STORAGE: 'file', RARE_AUTH_DIRECTORY: join(directory, 'auth') }, timeoutMs: 45_000 });
 };
 const conversation = z.object({ id: z.string().uuid() });
-const message = z.object({ id: z.string().uuid(), clientMessageId: z.string().uuid(), body: z.string(), version: z.number(), sequence: z.string() });
-const history = z.object({ messages: z.array(message), changeCursor: z.string() });
+const message = z.object({ id: z.string().uuid(), clientMessageId: z.string().uuid(), body: z.string(), version: z.number(), sequence: z.string(), deleted: z.boolean(), pinned: z.boolean(), reactions: z.array(z.object({ emoji: z.string(), count: z.number(), reacted: z.boolean() })) });
+const conversationState = z.object({ notification: z.enum(['all', 'mentions', 'muted']), readSequence: z.string(), unreadCount: z.number(), lifecycle: z.string() });
+const history = z.object({ messages: z.array(message), changeCursor: z.string(), conversation: conversationState });
 
 describe('durable messaging through the built CLI and deployed services', () => {
   it('protects private history and supports retries, replies, edits, reactions and notification preferences', async () => {
@@ -57,19 +58,35 @@ describe('durable messaging through the built CLI and deployed services', () => 
         expect(history.parse(parseJsonStdout(await owner(['messaging', 'history', room.id]))).messages.some(row => row.id === memberReply.id)).toBe(true);
         expect((await outsider(['messaging', 'delete', room.id, sent.id])).code).not.toBe(0);
         expect((await outsider(['messaging', 'delete', room.id, memberReply.id])).code).toBe(0);
+        expect(history.parse(parseJsonStdout(await owner(['messaging', 'history', room.id]))).messages.find(row => row.id === memberReply.id)).toMatchObject({ deleted: true, body: '' });
         expect((await outsider(['messaging', 'leave', room.id])).code).toBe(0);
+        const participants = z.object({ participants: z.array(z.object({ user: z.object({ id: z.string() }), state: z.string() })) }).parse(parseJsonStdout(await owner(['messaging', 'participants', room.id])));
+        expect(participants.participants.find(row => row.user.id === otherSession.user.id)?.state).toBe('left');
+        expect((await outsider(['messaging', 'send', room.id, '--body', 'After leaving'])).code).not.toBe(0);
         expect((await owner(['messaging', 'react', room.id, sent.id, '👍'])).code).toBe(0);
+        expect(history.parse(parseJsonStdout(await owner(['messaging', 'history', room.id]))).messages.find(row => row.id === sent.id)?.reactions).toContainEqual({ emoji: '👍', count: 1, reacted: true });
         expect((await owner(['messaging', 'react', room.id, sent.id, '👍', '--remove'])).code).toBe(0);
+        expect(history.parse(parseJsonStdout(await owner(['messaging', 'history', room.id]))).messages.find(row => row.id === sent.id)?.reactions.some(row => row.emoji === '👍')).toBe(false);
         expect((await owner(['messaging', 'pin', room.id, sent.id])).code).toBe(0);
+        expect(history.parse(parseJsonStdout(await owner(['messaging', 'history', room.id, '--pinned']))).messages.some(row => row.id === sent.id)).toBe(true);
         expect((await owner(['messaging', 'pin', room.id, sent.id, '--remove'])).code).toBe(0);
-        for (const notification of ['muted', 'mentions', 'all']) expect((await owner(['messaging', 'preferences', room.id, '--notification', notification])).code).toBe(0);
-        expect((await owner(['messaging', 'read', room.id, reply.sequence])).code).toBe(0);
-        expect((await owner(['messaging', 'changes', room.id, '--after', page.changeCursor])).code).toBe(0);
+        expect(history.parse(parseJsonStdout(await owner(['messaging', 'history', room.id, '--pinned']))).messages.some(row => row.id === sent.id)).toBe(false);
+        for (const notification of ['muted', 'mentions', 'all']) {
+          expect((await owner(['messaging', 'preferences', room.id, '--notification', notification])).code).toBe(0);
+          expect(history.parse(parseJsonStdout(await owner(['messaging', 'history', room.id]))).conversation.notification).toBe(notification);
+        }
+        expect((await owner(['messaging', 'read', room.id, memberReply.sequence])).code).toBe(0);
+        expect(history.parse(parseJsonStdout(await owner(['messaging', 'history', room.id]))).conversation).toMatchObject({ readSequence: memberReply.sequence, unreadCount: 0 });
+        const changes = z.object({ messages: z.array(message) }).parse(parseJsonStdout(await owner(['messaging', 'changes', room.id, '--after', page.changeCursor])));
+        expect(changes.messages.find(row => row.id === sent.id)).toMatchObject({ body: 'Edited message', pinned: false });
         expect(history.parse(parseJsonStdout(await owner(['messaging', 'history', room.id]))).messages.some(row => row.body === 'Edited message')).toBe(true);
         expect((await owner(['messaging', 'delete', room.id, reply.id])).code).toBe(0);
         expect((await owner(['messaging', 'delete', room.id, sent.id])).code).toBe(0);
+        const afterDelete = history.parse(parseJsonStdout(await owner(['messaging', 'history', room.id])));
+        for (const id of [reply.id, sent.id]) expect(afterDelete.messages.find(row => row.id === id)).toMatchObject({ deleted: true, body: '' });
       } finally {
         expect((await owner(['messaging', 'close', room.id])).code).toBe(0);
+        expect(history.parse(parseJsonStdout(await owner(['messaging', 'history', room.id]))).conversation.lifecycle).toBe('closed');
         expect((await owner(['auth', 'logout'])).code).toBe(0);
         expect((await outsider(['auth', 'logout'])).code).toBe(0);
       }
@@ -78,7 +95,7 @@ describe('durable messaging through the built CLI and deployed services', () => 
 });
 
 const publicRoom = z.object({ id: z.string().uuid() });
-const publicMessages = z.object({ messages: z.array(z.object({ id: z.string().uuid(), kind: z.enum(['user', 'system']) })) });
+const publicMessages = z.object({ messages: z.array(z.object({ id: z.string().uuid(), kind: z.enum(['user', 'system']), body: z.string() })) });
 
 describe('public contextual chats through the built CLI', () => {
   it.each([
@@ -106,10 +123,14 @@ describe('public contextual chats through the built CLI', () => {
         expect(page.messages.filter(row => row.id === sent.id)).toHaveLength(1);
         const edited = z.object({ body: z.string() }).parse(parseJsonStdout(await run(['messaging', 'edit', room.id, sent.id, '--body', 'Updated public CLI message'])));
         expect(edited.body).toBe('Updated public CLI message');
+        expect(publicMessages.parse(parseJsonStdout(await run(['messaging', 'public', 'history', room.id]))).messages.find(row => row.id === sent.id)?.body).toBe('Updated public CLI message');
         expect((await run(['messaging', 'preferences', room.id, '--notification', 'muted'])).code).toBe(0);
+        expect(z.object({ conversations: z.array(z.object({ id: z.string(), notification: z.string() })) }).parse(parseJsonStdout(await run(['messaging', 'inbox']))).conversations.find(row => row.id === room.id)?.notification).toBe('muted');
       } finally {
         expect((await run(['messaging', 'delete', room.id, sent.id])).code).toBe(0);
+        expect(publicMessages.parse(parseJsonStdout(await run(['messaging', 'public', 'history', room.id]))).messages.some(row => row.id === sent.id)).toBe(false);
         expect((await run(['messaging', 'leave', room.id])).code).toBe(0);
+        expect(z.object({ conversations: z.array(z.object({ id: z.string() })) }).parse(parseJsonStdout(await run(['messaging', 'inbox']))).conversations.some(row => row.id === room.id)).toBe(false);
         expect((await run(['auth', 'logout'])).code).toBe(0);
       }
     });

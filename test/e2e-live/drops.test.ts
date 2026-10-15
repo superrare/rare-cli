@@ -48,6 +48,10 @@ describe('drops through the built CLI and deployed services', () => {
         expect(JSON.stringify(page).toLowerCase()).not.toContain('email');
         const edited = dropResult.parse(parseJsonStdout(await owner.run(['drops', 'update', drop.id, '--headline', 'Updated through CLI'])));
         expect(edited.metadata.description).toBe(drop.metadata.description); expect(edited.metadata.slug).toBe(drop.metadata.slug); expect(edited.startsAt).toBe(drop.startsAt); expect(edited.metadata.imageUrl).toBe(image.url);
+        const persisted = dropResult.parse(parseJsonStdout(await other.run(['drops', 'get', drop.id])));
+        expect(persisted).toEqual({ ...drop, metadata: { ...drop.metadata, headline: 'Updated through CLI' } });
+        const calendar = z.object({ data: z.array(dropResult) }).parse(parseJsonStdout(await other.run(['drops', 'list', '--from', from, '--to', to, '--address', wallet.address, '--per-page', '100'])));
+        expect(calendar.data.find(row => row.id === drop.id)).toEqual(persisted);
         expect((await owner.run(['drops', 'update', drop.id])).code).not.toBe(0);
         expect(parseJsonStdout(await other.run(['auth', 'login', '--wallet', '--chain', 'sepolia']))).toMatchObject({ status: 'authorized' });
         expect((await other.run(['drops', 'update', drop.id, '--headline', 'Hijacked'])).code).not.toBe(0);

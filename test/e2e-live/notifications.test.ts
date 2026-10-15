@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { isPrivateKeyString } from '@rareprotocol/rare-sdk/validation';
 import { parseJsonStdout, runCli, withTempHome, type CliResult } from '../helpers/cli.js';
 const required = (name: string): string => { const value = process.env[name]; if (!value) throw new Error(`Missing ${name}`); return value; };
-const notificationSchema = z.object({ id: z.string(), category: z.string(), payload: z.record(z.string(), z.unknown()), readAt: z.string().nullable() });
+const notificationSchema = z.object({ id: z.string(), category: z.string(), notificationId: z.string(), payload: z.record(z.string(), z.unknown()), readAt: z.string().nullable() });
 const pageSchema = z.object({ data: z.array(notificationSchema), nextCursor: z.string().nullable() });
 const setup = async (temporary: string, key: string, apiUrl: string): Promise<(args: string[]) => Promise<CliResult>> => {
   const home = await realpath(temporary); const directory = join(home, '.rare');
@@ -35,6 +35,7 @@ describe('notifications through the built CLI and deployed services', () => {
       expect((await recipient(['notifications', 'list'])).code).not.toBe(0);
       expect((await owner(['auth', 'login', '--wallet', '--chain', 'mainnet'])).code).toBe(0);
       expect((await recipient(['auth', 'login', '--wallet', '--chain', 'mainnet'])).code).toBe(0);
+      const sender = z.object({ user: z.object({ id: z.string() }) }).parse(parseJsonStdout(await owner(['messaging', 'session'])));
       const actor = z.object({ user: z.object({ id: z.string() }) }).parse(parseJsonStdout(await recipient(['messaging', 'session'])));
       const room = z.object({ id: z.string() }).parse(parseJsonStdout(await owner(['messaging', 'group', '--title', `CLI notifications ${randomUUID()}`, '--invite', actor.user.id])));
       try {
@@ -43,7 +44,10 @@ describe('notifications through the built CLI and deployed services', () => {
         const messageId = randomUUID();
         expect((await owner(['messaging', 'send', room.id, '--body', 'Live CLI notification', '--client-message-id', messageId])).code).toBe(0);
         expect((await owner(['messaging', 'send', room.id, '--body', 'Live CLI notification', '--client-message-id', messageId])).code).toBe(0);
-        const delivered = await waitForDelivery(recipient, room.id, previous); expect(delivered.readAt).toBeNull();
+        const sourceHistory = z.object({ messages: z.array(z.object({ id: z.string(), clientMessageId: z.string(), body: z.string(), author: z.object({ id: z.string() }) })) }).parse(parseJsonStdout(await recipient(['messaging', 'history', room.id])));
+        expect(sourceHistory.messages.filter(row => row.clientMessageId === messageId)).toHaveLength(1);
+        expect(sourceHistory.messages.find(row => row.clientMessageId === messageId)).toMatchObject({ body: 'Live CLI notification', author: { id: sender.user.id } });
+        const delivered = await waitForDelivery(recipient, room.id, previous); expect(delivered.readAt).toBeNull(); expect(delivered.notificationId).toMatch(/^messaging:/);
         expect((await owner(['messaging', 'send', room.id, '--body', 'Second CLI notification'])).code).toBe(0);
         const secondDelivery = await waitForDelivery(recipient, room.id, [...previous, delivered.id]);
         const page = pageSchema.parse(parseJsonStdout(await recipient(['notifications', 'list', '--limit', '1']))); expect(page.data).toHaveLength(1); expect(page.nextCursor).not.toBeNull();
@@ -57,8 +61,37 @@ describe('notifications through the built CLI and deployed services', () => {
         expect((await recipient(['notifications', 'list', '--limit', '51'])).code).not.toBe(0);
         expect((await recipient(['notifications', 'list', '--user-id', '1'])).code).not.toBe(0);
         expect((await recipient(['notifications', 'read', secondDelivery.id])).code).toBe(0);
+        expect(pageSchema.parse(parseJsonStdout(await recipient(['notifications', 'list', '--limit', '50']))).data.find(row => row.id === secondDelivery.id)?.readAt).not.toBeNull();
+        const state = z.object({ conversation: z.object({ notification: z.string() }), messages: z.array(z.object({ id: z.string(), body: z.string(), sequence: z.string(), author: z.object({ id: z.string() }) })) });
+        expect((await recipient(['messaging', 'preferences', room.id, '--notification', 'muted'])).code).toBe(0);
+        expect(state.parse(parseJsonStdout(await recipient(['messaging', 'history', room.id]))).conversation.notification).toBe('muted');
+        const beforeMuted = pageSchema.parse(parseJsonStdout(await recipient(['notifications', 'list', '--limit', '50']))).data.filter(row => row.payload.conversationId === room.id).map(row => row.id).sort();
+        const mutedBody = `Muted CLI message ${randomUUID()}`;
+        const muted = z.object({ id: z.string(), sequence: z.string() }).parse(parseJsonStdout(await owner(['messaging', 'send', room.id, '--body', mutedBody])));
+        expect(state.parse(parseJsonStdout(await recipient(['messaging', 'history', room.id]))).messages.find(row => row.id === muted.id)).toMatchObject({ body: mutedBody, author: { id: sender.user.id } });
+        const control = z.object({ id: z.string() }).parse(parseJsonStdout(await owner(['messaging', 'group', '--title', `CLI notification control ${randomUUID()}`, '--invite', actor.user.id])));
+        try {
+          expect((await recipient(['messaging', 'accept', control.id])).code).toBe(0);
+          const controlBefore = pageSchema.parse(parseJsonStdout(await recipient(['notifications', 'list', '--limit', '50']))).data.filter(row => row.payload.conversationId === control.id).map(row => row.id);
+          expect((await owner(['messaging', 'send', control.id, '--body', 'Unmuted CLI worker control'])).code).toBe(0);
+          await waitForDelivery(recipient, control.id, controlBefore);
+          // Observe the muted room after proving real worker delivery in the control.
+          for (const waitMilliseconds of Array.from({ length: 15 }, () => 2000)) {
+            await delay(waitMilliseconds);
+            expect(pageSchema.parse(parseJsonStdout(await recipient(['notifications', 'list', '--limit', '50']))).data.filter(row => row.payload.conversationId === room.id).map(row => row.id).sort()).toEqual(beforeMuted);
+          }
+        } finally { expect((await owner(['messaging', 'close', control.id])).code).toBe(0); }
+        expect((await recipient(['messaging', 'read', room.id, muted.sequence])).code).toBe(0);
+        expect((await recipient(['messaging', 'preferences', room.id, '--notification', 'all'])).code).toBe(0);
+        expect(state.parse(parseJsonStdout(await recipient(['messaging', 'history', room.id]))).conversation.notification).toBe('all');
+        const resumedBody = `Resumed CLI message ${randomUUID()}`;
+        const resumed = z.object({ id: z.string() }).parse(parseJsonStdout(await owner(['messaging', 'send', room.id, '--body', resumedBody])));
+        expect(state.parse(parseJsonStdout(await recipient(['messaging', 'history', room.id]))).messages.find(row => row.id === resumed.id)).toMatchObject({ body: resumedBody, author: { id: sender.user.id } });
+        const resumedNotification = await waitForDelivery(recipient, room.id, beforeMuted);
+        expect(pageSchema.parse(parseJsonStdout(await recipient(['notifications', 'list', '--limit', '50']))).data.filter(row => row.payload.conversationId === room.id).map(row => row.id).sort()).toEqual([...beforeMuted, resumedNotification.id].sort());
+        expect((await recipient(['notifications', 'read', resumedNotification.id])).code).toBe(0);
       } finally { expect((await owner(['messaging', 'close', room.id])).code).toBe(0); }
       expect((await owner(['auth', 'logout'])).code).toBe(0); expect((await recipient(['auth', 'logout'])).code).toBe(0);
     }));
-  }, 240_000);
+  }, 420_000);
 });

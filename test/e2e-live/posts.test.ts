@@ -42,7 +42,7 @@ describe('creator posts through the built CLI and deployed services', () => {
       try {
         expect(post.body).toBe('**Markdown** from a file');
         expect(post.imageUrls).toEqual([]);
-        expect(postResult.parse(parseJsonStdout(await other.run(['posts', 'get', post.id]))).id).toBe(post.id);
+        expect(postResult.parse(parseJsonStdout(await other.run(['posts', 'get', post.id])))).toMatchObject({ id: post.id, title: post.title, body: '**Markdown** from a file', imageUrls: [] });
         const page = z.object({ data: z.array(postResult) }).parse(parseJsonStdout(await other.run(['posts', 'list', '--address', address, '--per-page', '100'])));
         expect(page.data.some(row => row.id === post.id)).toBe(true);
         // Public reads above run before this account signs in.
@@ -51,7 +51,7 @@ describe('creator posts through the built CLI and deployed services', () => {
         await writeFile(commentFile, 'Comment from another account', 'utf8');
         const comment = commentResult.parse(parseJsonStdout(await other.run(['posts', 'comment', post.id, '--body-file', commentFile])));
         const comments = z.object({ data: z.array(commentResult) }).parse(parseJsonStdout(await owner.run(['posts', 'comments', post.id])));
-        expect(comments.data.some(row => row.id === comment.id)).toBe(true);
+        expect(comments.data.find(row => row.id === comment.id)).toMatchObject({ postId: post.id, body: 'Comment from another account' });
         expect((await other.run(['posts', 'delete', post.id])).code).not.toBe(0);
         expect((await owner.run(['posts', 'delete-comment', post.id, comment.id])).code).not.toBe(0);
         expect(parseJsonStdout(await other.run(['posts', 'favorites', 'add', post.id]))).toEqual({ favorited: true });
@@ -62,6 +62,8 @@ describe('creator posts through the built CLI and deployed services', () => {
         const favorites = z.object({ data: z.array(postResult) }).parse(parseJsonStdout(await other.run(['posts', 'favorites', 'list'])));
         expect(favorites.data.some(row => row.id === post.id)).toBe(true);
         expect(parseJsonStdout(await other.run(['posts', 'favorites', 'remove', post.id]))).toEqual({ favorited: false });
+        expect(parseJsonStdout(await other.run(['posts', 'favorites', 'status', post.id]))).toEqual({ favorited: false });
+        expect(postResult.parse(parseJsonStdout(await owner.run(['posts', 'get', post.id]))).likeCount).toBe(0);
         expect(parseJsonStdout(await other.run(['posts', 'delete-comment', post.id, comment.id]))).toEqual({ deleted: true });
         expect(parseJsonStdout(await owner.run(['posts', 'comments', post.id]))).toMatchObject({ data: [] });
         expect((await owner.run(['posts', 'create', '--title', 'Invalid', '--body', 'a', '--body-file', bodyFile])).code).not.toBe(0);
