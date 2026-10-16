@@ -45,6 +45,7 @@ const nftSearchSortByValues = [
   'recentActivity',
   'bidAsc',
   'bidDesc',
+  'random',
 ] as const;
 const listingTypeValues = ['SALE_PRICE', 'BATCH_SALE_PRICE'] as const;
 const auctionStateValues = ['PENDING', 'RUNNING', 'UNSETTLED'] as const;

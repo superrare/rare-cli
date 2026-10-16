@@ -1213,3 +1213,17 @@ Edits do not require a version number. Use `--expected-version <number>` when ed
 Text accepts `--body` or `--body-file`. Repeat `--mention`, `--attachment` or `--invite` for each account or attachment. Direct, group and send commands generate client UUIDs. For retries, supply the original `--client-message-id` or group `--client-operation-id` with the same payload. Run `rare messaging --help` for read markers, invitations, moderation, previews and image commands.
 
 Run `npm run test:messaging:e2e` manually against a deployed non-production API with `RARE_ACCOUNT_TEST_API_URL`, `RARE_ACCOUNT_TEST_PRIVATE_KEY`, and `RARE_ACCOUNT_TEST_SECOND_PRIVATE_KEY` pointing to two existing test accounts. Public tests also require `RARE_MESSAGING_TEST_AUCTION_ID`, `RARE_MESSAGING_TEST_DROP_ID`, `RARE_MESSAGING_TEST_EDITION_ADDRESS`, and `RARE_MESSAGING_TEST_EDITION_CHAIN_ID`. Tests use the built CLI, delete their messages, close private test rooms, leave public rooms and revoke sessions. Closed rooms retain durable records. The suite is not added to CI.
+
+Random NFT sampling uses the existing search command:
+
+```bash
+rare search nfts --chain mainnet --sort-by random --per-page 1
+rare --json search nfts --chain mainnet --query art --sort-by random --per-page 3
+```
+
+The existing chain and market filters still apply. Each request uses native
+Typesense random ordering. Random pages are not a stable traversal; choose a
+nonrandom sort to page through a complete result set.
+
+Run the built-command live check with
+`RARE_ACCOUNT_TEST_API_URL=https://your-feature-api npm run test:nfts:e2e`.
