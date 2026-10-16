@@ -1,5 +1,5 @@
 import { expect } from 'vitest';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -49,6 +49,7 @@ export type TxResult = {
 };
 
 export type LiveFixture = {
+  accountApiBaseUrl?: string;
   sellerHome: string;
   buyerHome?: string;
   tempDir: string;
@@ -91,6 +92,7 @@ export class LiveFixtureRef<TFixture> {
 }
 
 export async function createLiveFixture(options: {
+  accountApiBaseUrl?: string;
   buyer?: boolean;
   buyerWalletFilter?: (
     wallet: LiveWalletLease,
@@ -123,16 +125,17 @@ export async function createLiveFixture(options: {
     }
     const reservedSellerWallet = sellerWallet;
     await writeFile(curvesFile, JSON.stringify(LIQUID_CURVES, null, 2), 'utf8');
-    await step('configure seller wallet', () => configureLiveHome(sellerHome, chain, reservedSellerWallet.privateKey));
+    await step('configure seller wallet', () => configureLiveHome(sellerHome, chain, reservedSellerWallet.privateKey, options.accountApiBaseUrl));
     if (buyerHome) {
       if (buyerWallet === undefined) {
         throw new Error('Buyer wallet lease was not created.');
       }
       const reservedBuyerWallet = buyerWallet;
-      await step('configure buyer wallet', () => configureLiveHome(buyerHome, chain, reservedBuyerWallet.privateKey));
+      await step('configure buyer wallet', () => configureLiveHome(buyerHome, chain, reservedBuyerWallet.privateKey, options.accountApiBaseUrl));
     }
 
     return {
+      ...(options.accountApiBaseUrl === undefined ? {} : { accountApiBaseUrl: options.accountApiBaseUrl }),
       sellerHome,
       buyerHome,
       tempDir,
@@ -148,15 +151,34 @@ export async function createLiveFixture(options: {
       usdcAddress: resolveCurrency('usdc', chain),
     };
   } catch (error) {
-    await cleanupLiveFixture({ sellerHome, buyerHome, tempDir, sellerWallet, buyerWallet });
+    await cleanupLiveFixture({ sellerHome, buyerHome, tempDir, sellerWallet, buyerWallet,
+      ...(options.accountApiBaseUrl === undefined ? {} : { accountApiBaseUrl: options.accountApiBaseUrl }),
+    });
     throw error;
   }
 }
 
+export async function createCartLiveFixture(
+  options: Parameters<typeof createLiveFixture>[0] = {},
+): Promise<LiveFixture> {
+  const apiBaseUrl = process.env.RARE_API_BASE_URL;
+  if (apiBaseUrl === undefined) throw new Error('RARE_API_BASE_URL is required for Cart live E2E.');
+  return createLiveFixture({ ...options, accountApiBaseUrl: apiBaseUrl });
+}
+
 export async function cleanupLiveFixture(
   live: Pick<LiveFixture, 'sellerHome' | 'buyerHome' | 'tempDir'> &
-    Partial<Pick<LiveFixture, 'sellerWallet' | 'buyerWallet'>> | undefined,
+    Partial<Pick<LiveFixture, 'sellerWallet' | 'buyerWallet' | 'accountApiBaseUrl'>> | undefined,
 ): Promise<void> {
+  if (live?.accountApiBaseUrl !== undefined) {
+    await Promise.all([live?.sellerHome, live?.buyerHome].map(async (home) => {
+      if (home === undefined) return;
+      const logout = await runCli(['--json', 'auth', 'logout'], {
+        home, env: liveAccountEnvironment(home),
+      });
+      if (logout.code !== 0) console.warn('[live e2e] Test account session revocation failed.');
+    }));
+  }
   await cleanupTempPath(live?.sellerHome);
   await cleanupTempPath(live?.buyerHome);
   await cleanupTempPath(live?.tempDir);
@@ -185,7 +207,17 @@ export async function detectLiveChain(): Promise<SupportedChain> {
 }
 
 export async function jsonCommand<T>(home: string, args: string[], timeoutMs = 180_000): Promise<T> {
-  return parseJsonStdout<T>(await runCli(['--json', ...withLiveWriteConsent(args)], { home, timeoutMs }));
+  return parseJsonStdout<T>(await runCli(['--json', ...withLiveWriteConsent(args)], {
+    home, timeoutMs, env: liveAccountEnvironment(home),
+  }));
+}
+
+function liveAccountEnvironment(home: string): NodeJS.ProcessEnv {
+  return process.env.RARE_API_BASE_URL === undefined ? {} : {
+    RARE_API_URL: process.env.RARE_API_BASE_URL,
+    RARE_AUTH_STORAGE: 'file',
+    RARE_AUTH_DIRECTORY: join(home, 'auth'),
+  };
 }
 
 export function expectTx(result: TxResult): void {
@@ -312,7 +344,7 @@ function createLivePublicClient(chain: SupportedChain): PublicClient {
   });
 }
 
-async function configureLiveHome(home: string, chain: SupportedChain, privateKey: string): Promise<void> {
+async function configureLiveHome(home: string, chain: SupportedChain, privateKey: string, apiBaseUrl?: string): Promise<void> {
   const result = await runCli([
     'configure',
     '--default-chain',
@@ -328,6 +360,17 @@ async function configureLiveHome(home: string, chain: SupportedChain, privateKey
 
   expect(result.code).toBe(0);
   expect(result.stderr).toBe('');
+
+  if (apiBaseUrl !== undefined) {
+    const login = await runCli(['--json', 'auth', 'login', '--wallet', '--chain', chain], {
+      home, env: liveAccountEnvironment(home),
+    });
+    expect(login.code, login.stderr).toBe(0);
+    const status = await runCli(['--json', 'auth', 'status', '--verify'], {
+      home, env: liveAccountEnvironment(home),
+    });
+    expect(status.code, status.stderr).toBe(0);
+  }
 }
 
 function liveUniswapApiKeyConfigureArgs(): string[] {
@@ -345,7 +388,7 @@ export function liveRpcUrl(): string {
 }
 
 async function createTempHome(prefix: string): Promise<string> {
-  return mkdtemp(join(tmpdir(), prefix));
+  return realpath(await mkdtemp(join(tmpdir(), prefix)));
 }
 
 async function cleanupTempPath(path: string | undefined): Promise<void> {
