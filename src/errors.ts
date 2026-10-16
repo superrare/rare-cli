@@ -1,5 +1,7 @@
 import { isJsonMode } from './output.js';
 import { RareApiError } from '@rareprotocol/rare-sdk/data-access/errors';
+import { AvatarProfileUpdateError, RareAuthError } from '@rareprotocol/rare-sdk';
+import { AuthStorageError } from './auth-storage.js';
 
 type ErrorDetails = {
   message: string;
@@ -42,6 +44,10 @@ function getDetailLines(error: Error): string[] {
     ...getReasonLines(error),
     ...getMetaMessageLines(error),
     ...getApiErrorLines(error),
+    ...(error instanceof AvatarProfileUpdateError ? [
+      `Uploaded avatar URL: ${sanitize(error.avatar)}`,
+      'Retry with: rare profile update --avatar <uploaded-avatar-url>',
+    ] : []),
   ];
 }
 
@@ -68,8 +74,19 @@ function getMetaMessageLines(error: Error): string[] {
 
 function getApiErrorLines(error: Error): string[] {
   return error instanceof RareApiError
-    ? [`Status: ${String(error.status)}`, `Path: ${error.path}`]
+    ? [`Status: ${String(error.status)}`, `Path: ${error.path}`, ...getApiFieldLines(error)]
     : [];
+}
+
+function getApiFieldLines(error: RareApiError): string[] {
+  const details = getProperty(error, 'details');
+  if (!Array.isArray(details)) return [];
+  return details.flatMap((value: unknown) => {
+    if (typeof value !== 'object' || value === null) return [];
+    const field = getStringProperty(value, 'field');
+    const message = getStringProperty(value, 'message');
+    return field === undefined || message === undefined ? [] : [`${sanitize(field)}: ${sanitize(message)}`];
+  });
 }
 
 function collectCauses(current: unknown): string[] {
@@ -122,6 +139,7 @@ export function printError(error: unknown): never {
     const json: Record<string, unknown> = {
       error: true,
       message,
+      ...(error instanceof RareAuthError || error instanceof AuthStorageError ? { code: error.code } : error instanceof RareApiError && getStringProperty(error, 'code') !== undefined ? { code: getStringProperty(error, 'code') } : {}),
       ...(details.length > 0 ? { details } : {}),
       ...(causes.length > 0 ? { causes } : {}),
     };

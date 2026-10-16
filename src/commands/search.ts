@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getConfiguredAccountAddress, getPublicClient } from '../client.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
@@ -19,6 +19,8 @@ type SearchPageOptions = {
 };
 
 type SearchNftsOptions = SearchPageOptions & {
+  sortBy?: NftSearchParams['sortBy'];
+  apiUrl?: string;
   owner?: string;
   mine?: boolean;
   hasAuction?: boolean;
@@ -44,6 +46,8 @@ type SearchEventsOptions = {
   perPage: string;
   page: string;
 };
+
+const nftSortOptions = ['newest', 'oldest', 'priceAsc', 'priceDesc', 'recentlySold', 'auctionEndingSoon', 'recentActivity', 'bidAsc', 'bidDesc', 'random'] as const;
 
 const auctionStates = ['PENDING', 'RUNNING', 'UNSETTLED'] as const;
 const listingTypes = ['SALE_PRICE', 'BATCH_SALE_PRICE'] as const;
@@ -89,9 +93,11 @@ export function searchCommand(): Command {
   cmd
     .command('nfts')
     .description('Search NFTs')
+    .addOption(new Option('--api-url <url>', 'Rare API base URL').env('RARE_API_URL'))
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .option('--query <text>', 'text search query', '')
+    .addOption(new Option('--sort-by <field>', 'NFT sort order').choices([...nftSortOptions]))
     .option('--owner <address>', 'filter by owner address')
     .option('--mine', 'filter by your configured wallet address')
     .option('--has-auction', 'filter to NFTs with auctions')
@@ -113,7 +119,7 @@ export function searchCommand(): Command {
       const auctionBidderAddress = parseOptionalAddress(opts.auctionBidder, '--auction-bidder');
       const listingType = parseListingType(opts.listingType);
       const offerBuyerAddress = parseOptionalAddress(opts.offerBuyer, '--offer-buyer');
-      const rare = createRareClient({ publicClient: getPublicClient(chain) });
+      const rare = createRareClient({ publicClient: getPublicClient(chain), apiBaseUrl: opts.apiUrl });
 
       const ownerAddress = opts.mine
         ? getWalletAddress(chain)
@@ -133,6 +139,7 @@ export function searchCommand(): Command {
 
       const result = await rare.search.nfts({
         query: opts.query,
+        sortBy: opts.sortBy,
         perPage,
         page,
         ownerAddress,

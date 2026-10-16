@@ -2141,7 +2141,9 @@ describe('built CLI deterministic behavior', () => {
 
       const userHelp = await runCli(['user', 'get', '--help'], { home });
       expect(userHelp.code).toBe(0);
-      expect(userHelp.stdout).toContain('Usage: rare user get [options] <address>');
+      expect(userHelp.stdout).toContain('Usage: rare user get [options] [address]');
+      expect(userHelp.stdout).toContain('--username <value>');
+      expect(userHelp.stdout).toContain('--user-id <value>');
       expect(userHelp.stdout).not.toContain('--chain <chain>');
       expect(userHelp.stdout).not.toContain('--chain-id <id>');
 
