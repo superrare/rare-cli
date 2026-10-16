@@ -82,7 +82,7 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
       await mintErc1155(live, erc1155, token.tokenId, '23', live.sellerAddress);
       await mintErc1155(live, erc1155, token.tokenId, '1', live.buyerAddress);
       await setMinter(live, erc1155, cart);
-      const [erc1155Sku] = await createCreatorVariantSkus(live, [{ contract: erc1155, tokenId: token.tokenId }]);
+      const [erc1155Sku] = await createCreatorVariantSkus(live, [{ contract: erc1155, tokenId: token.tokenId, fulfillmentKind: 3 }]);
       if (erc1155Sku === undefined) throw new Error('Creator fixture did not return an ERC-1155 SKU.');
       const transferListing = await publishListing(live, erc1155Sku, '2', 'ERC1155_TRANSFER', true);
       const mintListing = await publishListing(live, erc1155Sku, '2', 'ERC1155_MINT_TO', false);
