@@ -25,7 +25,6 @@ import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
 import { createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
 
 const cartUnitPriceEth = '0.000001';
-const contractIndexingDelayMs = 15_000;
 
 const missingCartEnv = [
   ...missingEnv,
@@ -129,8 +128,6 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
         }));
       await expectTokenBalanceAtLeast(fixture, fixture.buyerAddress, fixture.rareAddress, '1');
       const collection = await deployErc721Collection(fixture, '3');
-      await step('wait for ERC-721 contract indexing', () =>
-        new Promise((resolve) => setTimeout(resolve, contractIndexingDelayMs)));
       const firstToken = await mintToken(fixture, collection.contract);
       const secondToken = await mintToken(fixture, collection.contract);
       const thirdToken = await mintToken(fixture, collection.contract);
@@ -351,8 +348,6 @@ describeLive('live multi-seller and mixed-currency Cart routing', () => {
       });
       const firstCollection = await deployErc721Collection(buyer, '1');
       const secondCollection = await deployErc721Collection(secondSeller, '1');
-      await step('wait for multi-seller ERC-721 contract indexing', () =>
-        new Promise((resolve) => setTimeout(resolve, contractIndexingDelayMs)));
       const firstToken = await mintToken(buyer, firstCollection.contract);
       const secondToken = await mintToken(secondSeller, secondCollection.contract);
       const [[firstSku], [secondSku]] = await Promise.all([
@@ -481,10 +476,8 @@ describeLive('live secondary-sale Cart royalties', () => {
         apiBaseUrl: process.env.RARE_API_BASE_URL,
       });
       const collection = await deployErc721Collection(creator, '1');
-      await step('wait for royalty ERC-721 contract indexing', () =>
-        new Promise((resolve) => setTimeout(resolve, contractIndexingDelayMs)));
       const token = await mintToken(creator, collection.contract, { to: secondarySeller.sellerAddress });
-      const [sku] = await createCreatorVariantSkus(creator, [token]);
+      const [sku] = await createCreatorVariantSkus(secondarySeller, [token]);
       if (sku === undefined) throw new Error('Creator fixture did not return a SKU.');
       const grossSalePrice = parseEther(cartUnitPriceEth);
       const royalty = await creatorRare.collection.royalty.status({
