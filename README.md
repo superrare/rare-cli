@@ -503,6 +503,12 @@ rare listing status --contract 0x... --token-id 1
 
 ### Cart
 
+Cart Listing creation and checkout use the same saved account session as
+`rare auth login`. Pass `--api-url`, `--storage`, and `--auth-directory` to use
+the same account storage, or set `RARE_API_URL`, `RARE_AUTH_STORAGE`, and
+`RARE_AUTH_DIRECTORY`. Public checkout previews do not require login. Wallet
+configuration remains separate and controls Listing and transaction signatures.
+
 Cart commands publish API-backed listing roots and purchase one or more listings in a single checkout. Create listings from a JSON intent file such as:
 
 ```json

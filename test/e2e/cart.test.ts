@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { EventEmitter, once } from 'node:events';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { getCartAddress } from '@rareprotocol/rare-sdk/contracts';
 import { zeroAddress } from 'viem';
 import { parseJsonStdout, runCli, withTempHome } from '../helpers/cli.js';
+import { createAuthStore } from '../../src/auth-storage.js';
 
 const listingDigest = `0x${'22'.repeat(32)}`;
 const listingSalt = `0x${'33'.repeat(32)}`;
@@ -29,6 +30,8 @@ describe('built Cart CLI', () => {
       expect(listingHelp.stdout).toContain('--output <path>');
       expect(listingHelp.stdout).toContain('--preview');
       expect(listingHelp.stdout).toContain('--yes');
+      expect(listingHelp.stdout).toContain('--api-url <url>');
+      expect(listingHelp.stdout).toContain('--storage <backend>');
 
       const checkoutHelp = await runCli(['cart', 'checkout', '--help'], { home });
       expect(checkoutHelp.stdout).toContain('--listing <listing-digest[=quantity]>');
@@ -51,7 +54,7 @@ describe('built Cart CLI', () => {
         '--preview',
         '--chain',
         'sepolia',
-      ], { env: { RARE_API_BASE_URL: baseUrl } });
+      ], { env: { RARE_API_URL: baseUrl } });
 
       const body = parseJsonStdout<{ preview: boolean; preparation: { intent: unknown; paymentAmount: string } }>(result);
       expect(body.preview).toBe(true);
@@ -95,6 +98,34 @@ describe('built Cart CLI', () => {
     }
   });
 
+  it('reuses saved account credentials for Listing preparation without another login or wallet signature', async () => {
+    await withTempHome(async temporary => {
+      const home = await realpath(temporary);
+      await withCartApiFixture(async ({ baseUrl, request }) => {
+        const directory = join(home, 'auth');
+        const scope = { apiBaseUrl: baseUrl, authBaseUrl: `${baseUrl}/auth/v2`, clientId: 'rare-cli' };
+        const store = createAuthStore({ ...scope, backend: 'file', directory });
+        await store.withLock(async () => { await store.set({ ...scope, revision: 'cart-session',
+          accessToken: 'cart-access-secret', refreshToken: 'cart-refresh-secret',
+          expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
+        const configured = await runCli(['--json', 'configure', '--chain', 'sepolia', '--rpc-url', baseUrl,
+          '--private-key', `0x${'11'.repeat(32)}`], { home });
+        expect(configured.code).toBe(0);
+        const input = join(home, 'listing.json');
+        await writeFile(input, JSON.stringify({ deadline: '9999999999', listings: [{ sku,
+          settlementCurrency: 'eth', unitPrice: '1', quantity: '1' }] }));
+        const result = await runCli(['--json', 'cart', 'listing', 'create', '--preview', '--chain', 'sepolia',
+          '--input', input, '--api-url', baseUrl, '--storage', 'file', '--auth-directory', directory],
+        { home, env: { RARE_API_URL: 'https://unused-api.example' } });
+        expect(result.code).toBe(1);
+        expect(result.stderr).toContain('fixture listing rejected');
+        expect(result.stdout + result.stderr).not.toContain('cart-access-secret');
+        expect(result.stdout + result.stderr).not.toContain('cart-refresh-secret');
+        expect(await request).toMatchObject({ pathname: '/v1/cart/listings/preview', authorization: 'Bearer cart-access-secret' });
+      });
+    });
+  });
+
   it('requires explicit consent for Cart writes in JSON mode', async () => {
     const result = await runCli([
       '--json', 'cart', 'listing', 'cancel', '--listing-digest', listingDigest, '--chain', 'sepolia',
@@ -105,6 +136,7 @@ describe('built Cart CLI', () => {
 });
 
 type CartApiRequest = {
+  authorization?: string;
   pathname: string;
   searchParams: Record<string, string>;
   body: unknown;
@@ -155,7 +187,12 @@ async function handleCartApiRequest(
   const url = new URL(request.url ?? '/', 'http://127.0.0.1');
   const rawBody = await text(request);
   const body = rawBody.length === 0 ? undefined : JSON.parse(rawBody) as unknown;
-  capture({ pathname: url.pathname, searchParams: Object.fromEntries(url.searchParams), body });
+  capture({ pathname: url.pathname, searchParams: Object.fromEntries(url.searchParams), body, authorization: request.headers.authorization });
+  if (request.method === 'POST' && url.pathname === '/v1/cart/listings/preview') {
+    response.writeHead(400, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ error: 'fixture listing rejected' }));
+    return;
+  }
   if (request.method !== 'POST' || url.pathname !== '/v1/cart/checkout/preview') {
     response.writeHead(404, { 'content-type': 'application/json' });
     response.end(JSON.stringify({ error: 'not found' }));
