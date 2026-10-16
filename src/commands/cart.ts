@@ -11,6 +11,7 @@ import {
   getWalletClient,
 } from '../client.js';
 import { log, output } from '../output.js';
+import { accountClient, accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { addChainOptions, type ChainOptions } from './options.js';
 import {
@@ -23,7 +24,7 @@ import {
   unwrapCartCliResult,
 } from './cart-core.js';
 
-type CartListingCreateOptions = ChainOptions & {
+type CartListingCreateOptions = ChainOptions & AccountCommandOptions & {
   input: string;
   output?: string;
   preview?: boolean;
@@ -36,7 +37,7 @@ type CartDigestOptions = ChainOptions & {
   yes?: boolean;
 };
 
-type CartCheckoutOptions = ChainOptions & {
+type CartCheckoutOptions = ChainOptions & AccountCommandOptions & {
   listing: string[];
   paymentCurrency?: string;
   recipient?: string;
@@ -63,7 +64,7 @@ function cartListingCommand(): Command {
 }
 
 function cartListingCreateCommand(): Command {
-  const command = new Command('create');
+  const command = accountCommand('create');
   command.description('Prepare and publish a seller-signed Cart Listing Root');
   addChainOptions(command)
     .requiredOption('--input <path>', 'JSON file containing the listing intent')
@@ -81,6 +82,8 @@ function cartListingCreateCommand(): Command {
       }
       const rare = createRareClient({
         publicClient,
+        apiBaseUrl: opts.apiUrl,
+        accountClient: accountClient(storageOptions(opts)),
         account: seller,
         ...(wallet === undefined ? {} : { walletClient: wallet.client }),
       });
@@ -190,7 +193,7 @@ function cartListingInvalidateNonceCommand(): Command {
 }
 
 function cartCheckoutCommand(): Command {
-  const command = new Command('checkout');
+  const command = accountCommand('checkout');
   command.description('Preview or purchase an API-prepared Cart checkout');
   addChainOptions(command)
     .requiredOption('--listing <listing-digest[=quantity]>', 'Cart listing and optional quantity (repeatable)', collectValue, [])
@@ -214,6 +217,8 @@ function cartCheckoutCommand(): Command {
       }
       const rare = createRareClient({
         publicClient,
+        apiBaseUrl: opts.apiUrl,
+        accountClient: accountClient(storageOptions(opts)),
         account: wallet?.account.address ?? getConfiguredAccountAddress(chain),
         ...(wallet === undefined ? {} : { walletClient: wallet.client }),
       });
