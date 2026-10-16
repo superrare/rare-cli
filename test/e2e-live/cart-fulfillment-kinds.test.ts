@@ -1,13 +1,14 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { cartFulfillmentKinds, createRareClient } from '@rareprotocol/rare-sdk';
+import { cartFulfillmentKinds } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress, rareErc1155Abi, tokenAbi, viemChains } from '@rareprotocol/rare-sdk/contracts';
 import { createWalletClient, http, parseEventLogs, zeroAddress, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
+import { createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
 import {
   cleanupLiveFixture,
-  createLiveFixture,
+  createCartLiveFixture as createLiveFixture,
   E2E_TOKEN_URI,
   expectTx,
   jsonCommand,
@@ -62,7 +63,6 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
     }
 
     try {
-      const rare = createRareClient({ publicClient: live.publicClient, apiBaseUrl: process.env.RARE_API_BASE_URL });
       const cart = getCartAddress(live.chain);
       const erc1155 = await deploy(live, [
         'collection', 'deploy', 'erc1155', unique('Cart Kinds'), unique('CK'),
@@ -82,7 +82,8 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
       await mintErc1155(live, erc1155, token.tokenId, '23', live.sellerAddress);
       await mintErc1155(live, erc1155, token.tokenId, '1', live.buyerAddress);
       await setMinter(live, erc1155, cart);
-      const erc1155Sku = await pollForSku(rare, erc1155, token.tokenId);
+      const [erc1155Sku] = await createCreatorVariantSkus(live, [{ contract: erc1155, tokenId: token.tokenId }]);
+      if (erc1155Sku === undefined) throw new Error('Creator fixture did not return an ERC-1155 SKU.');
       const transferListing = await publishListing(live, erc1155Sku, '2', 'ERC1155_TRANSFER', true);
       const mintListing = await publishListing(live, erc1155Sku, '2', 'ERC1155_MINT_TO', false);
       const maxLineListings = await publishMaxLineListings(live, erc1155Sku);
@@ -175,7 +176,6 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
 
   it('executes ERC721_MINT_TO (kind 4)', async () => {
     const { live, erc721 } = liveRef.value;
-    const rare = createRareClient({ publicClient: live.publicClient, apiBaseUrl: process.env.RARE_API_BASE_URL });
     const cart = getCartAddress(live.chain);
     const seedPreparation = await step('prepare lazy ERC-721 catalog seed', () =>
       jsonCommand<{ minter: Address } & TxResult>(live.sellerHome, [
@@ -185,7 +185,8 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
     expectTx(seedPreparation);
     const indexedTokenId = await step('mint lazy ERC-721 catalog seed token', () =>
       mintLazyToken(live, erc721.contract, live.sellerAddress));
-    const erc721Sku = await pollForSku(rare, erc721.contract, indexedTokenId.toString());
+    const [erc721Sku] = await createCreatorVariantSkus(live, [{ contract: erc721.contract, tokenId: indexedTokenId.toString() }]);
+    if (erc721Sku === undefined) throw new Error('Creator fixture did not return an ERC-721 SKU.');
     const prepared = await step('prepare lazy ERC-721 inventory for Cart', () =>
       jsonCommand<{ minter: Address; tokenCount: string } & TxResult>(live.sellerHome, [
         'collection', 'prepare-lazy-mint', '--contract', erc721.contract, '--base-uri', E2E_TOKEN_URI,
@@ -274,28 +275,6 @@ async function setMinter(live: BuyerLiveFixture, contract: Address, minter: Addr
   await expect(live.publicClient.readContract({
     address: contract, abi: rareErc1155Abi, functionName: 'isApprovedMinter', args: [minter],
   })).resolves.toBe(true);
-}
-
-async function pollForSku(
-  rare: ReturnType<typeof createRareClient>,
-  contract: Address,
-  tokenId: string,
-): Promise<Hex> {
-  const deadline = Date.now() + 180_000;
-  let lastError: unknown;
-  while (Date.now() < deadline) {
-    try {
-      const result = await rare.cart.catalog.variants.search({ nft: { contract, tokenId }, perPage: 2 });
-      if (result.data.length > 1) throw new Error(`Multiple SKUs returned for ${contract}:${tokenId}.`);
-      if (result.data[0]) return result.data[0].sku;
-      lastError = undefined;
-    } catch (error) {
-      if (error instanceof Error && error.message.startsWith('Multiple SKUs returned')) throw error;
-      lastError = error;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
-  }
-  throw new Error(`Timed out waiting for SKU ${contract}:${tokenId}.`, { cause: lastError });
 }
 
 async function publishListing(
