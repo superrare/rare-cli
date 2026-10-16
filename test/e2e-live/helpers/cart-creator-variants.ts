@@ -1,22 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { createRareAccountClient } from '@rareprotocol/rare-sdk';
-import { isHex, type Address, type Hex } from 'viem';
+import { createRareAccountClient, createRareClient } from '@rareprotocol/rare-sdk';
+import { zeroAddress, type Address, type Hex } from 'viem';
 import { z } from 'zod';
 import { createAuthStore } from '../../../src/auth-storage.js';
 import type { LiveFixture } from './live-harness.js';
 
-const productSchema = z.object({ data: z.object({ id: z.string(), variants: z.array(z.object({
-  sku: z.string(), universalTokenId: z.string().nullable(),
-})) }) });
-const candidatesSchema = z.object({ records: z.array(z.object({ record: z.object({
-  universal_token_id: z.string(), contract_address: z.string(),
-  token_id: z.string(), chain_id: z.union([z.string(), z.number()]),
-}) })), hasNextPage: z.boolean() });
+const productSchema = z.object({ data: z.object({ id: z.string() }) });
 
+/** Exercise listing-time SKU creation using assets minted by this test run. */
 export async function createCreatorVariantSkus(
   live: LiveFixture,
-  tokens: readonly { contract: Address; tokenId: string }[],
+  tokens: readonly { contract: Address; tokenId: string; fulfillmentKind?: 2 | 3 }[],
 ): Promise<Hex[]> {
   const apiBaseUrl = live.accountApiBaseUrl;
   if (apiBaseUrl === undefined) throw new Error('Cart creator fixture requires an authenticated API deployment.');
@@ -24,32 +19,24 @@ export async function createCreatorVariantSkus(
     sessionStore: createAuthStore({ apiBaseUrl, authBaseUrl: `${apiBaseUrl}/auth/v2`,
       clientId: 'rare-cli', backend: 'file', directory: join(live.sellerHome, 'auth') }),
   });
-  const deadline = Date.now() + 180000;
-  const readCandidates = async (page = 1): Promise<z.infer<typeof candidatesSchema>['records']> => {
-    const response = await accountClient.authenticatedFetch(new URL(
-      `/v1/cart/products/variant-candidates?perPage=100&page=${page}`, apiBaseUrl,
-    ));
-    if (!response.ok) throw new Error(`Creator candidate lookup failed with ${response.status}.`);
-    const payload: unknown = await response.json();
-    const candidates = candidatesSchema.parse(payload);
-    return candidates.hasNextPage
-      ? [...candidates.records, ...await readCandidates(page + 1)] : candidates.records;
+  const rare = createRareClient({ publicClient: live.publicClient, apiBaseUrl, accountClient });
+  const intent = {
+    seller: live.sellerAddress,
+    deadline: BigInt(Math.floor(Date.now() / 1000) + 3600),
+    listings: tokens.map(token => ({
+      nft: { contract: token.contract, tokenId: BigInt(token.tokenId) },
+      fulfillmentKind: token.fulfillmentKind ?? 2,
+      settlementCurrency: zeroAddress,
+      unitPrice: 1_000_000_000_000n,
+      quantity: 1n,
+    })),
   };
-  const waitForCandidates = async (): Promise<string[]> => {
-    const candidates = await readCandidates();
-    const selected = tokens.map(token => candidates.find(({ record }) =>
-      String(record.chain_id) === String(live.chainId)
-      && record.contract_address.toLowerCase() === token.contract.toLowerCase()
-      && record.token_id === token.tokenId)?.record.universal_token_id);
-    if (selected.every(identifier => identifier !== undefined)) return selected;
-    if (Date.now() >= deadline) {
-      throw new Error('Creator variant fixture requires the minted NFTs to be indexed as creations of the authenticated account.');
-    }
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    return waitForCandidates();
-  };
-  const universalTokenIds = await waitForCandidates();
-  const post = async (path: string, body: unknown): Promise<z.infer<typeof productSchema>['data']> => {
+  const listings = await rare.cart.api.listing.preview(intent);
+  const repeated = await rare.cart.api.listing.preview(intent);
+  if (listings.some((listing, index) => listing.sku !== repeated[index]?.sku)) {
+    throw new Error('Repeated listing preparation created duplicate NFT SKUs.');
+  }
+  const post = async (path: string, body: unknown): Promise<unknown> => {
     const response = await accountClient.authenticatedFetch(new URL(path, apiBaseUrl), {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
     });
@@ -58,17 +45,15 @@ export async function createCreatorVariantSkus(
       const failure = z.object({ error: z.string() }).safeParse(payload);
       throw new Error(`Creator variant fixture ${path} failed with ${response.status}: ${failure.success ? failure.data.error : 'unrecognized API error'}.`);
     }
-    return productSchema.parse(payload).data;
+    return payload;
   };
   const runId = randomUUID();
-  const product = await post('/v1/cart/products', {
+  const product = productSchema.parse(await post('/v1/cart/products', {
     slug: `cli-cart-${runId}`, metadata: { title: 'CLI Cart E2E', source: 'rare-cli', runId },
-  });
-  const attached = await post(`/v1/cart/products/${product.id}/variants`, { universalTokenIds });
+  })).data;
+  for (const [position, listing] of listings.entries()) {
+    await post(`/v1/cart/products/${product.id}/skus`, { sku: listing.sku, position, metadata: {} });
+  }
   await post(`/v1/cart/products/${product.id}/publish`, {});
-  return universalTokenIds.map(universalTokenId => {
-    const variant = attached.variants.find(candidate => candidate.universalTokenId === universalTokenId);
-    if (variant === undefined || !isHex(variant.sku)) throw new Error('Creator Product did not create its requested SKU.');
-    return variant.sku;
-  });
+  return listings.map(listing => listing.sku);
 }
