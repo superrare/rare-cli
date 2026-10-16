@@ -7,7 +7,7 @@ import { createWalletClient, erc20Abi, erc721Abi, getAddress, http, parseEther, 
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   cleanupLiveFixture,
-  createLiveFixture,
+  createCartLiveFixture as createLiveFixture,
   expectTx,
   expectTokenBalanceAtLeast,
   jsonCommand,
@@ -22,6 +22,7 @@ import {
   type TxResult,
 } from './helpers/live-harness.js';
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
+import { createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
 
 const cartUnitPriceEth = '0.000001';
 const contractIndexingDelayMs = 15_000;
@@ -134,8 +135,7 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
       const secondToken = await mintToken(fixture, collection.contract);
       const thirdToken = await mintToken(fixture, collection.contract);
       const tokens = [firstToken, secondToken, thirdToken];
-      const skus = await Promise.all(tokens.map((token) =>
-        pollForIndexedSku(rare, collection.contract, token.tokenId)));
+      const skus = await createCreatorVariantSkus(fixture, tokens);
       const inputPath = join(fixture.tempDir, 'cart-listings.json');
       await writeFile(inputPath, JSON.stringify({
         deadline: String(Math.floor(Date.now() / 1_000) + 3_600),
@@ -355,10 +355,11 @@ describeLive('live multi-seller and mixed-currency Cart routing', () => {
         new Promise((resolve) => setTimeout(resolve, contractIndexingDelayMs)));
       const firstToken = await mintToken(buyer, firstCollection.contract);
       const secondToken = await mintToken(secondSeller, secondCollection.contract);
-      const [firstSku, secondSku] = await Promise.all([
-        pollForIndexedSku(buyerRare, firstCollection.contract, firstToken.tokenId),
-        pollForIndexedSku(secondSellerRare, secondCollection.contract, secondToken.tokenId),
+      const [[firstSku], [secondSku]] = await Promise.all([
+        createCreatorVariantSkus(buyer, [firstToken]),
+        createCreatorVariantSkus(secondSeller, [secondToken]),
       ]);
+      if (firstSku === undefined || secondSku === undefined) throw new Error('Creator fixtures did not return both SKUs.');
       const firstListingDigest = await publishSingleCartListing({
         fixture: buyer,
         rare: buyerRare,
@@ -483,7 +484,8 @@ describeLive('live secondary-sale Cart royalties', () => {
       await step('wait for royalty ERC-721 contract indexing', () =>
         new Promise((resolve) => setTimeout(resolve, contractIndexingDelayMs)));
       const token = await mintToken(creator, collection.contract, { to: secondarySeller.sellerAddress });
-      const sku = await pollForIndexedSku(creatorRare, collection.contract, token.tokenId);
+      const [sku] = await createCreatorVariantSkus(creator, [token]);
+      if (sku === undefined) throw new Error('Creator fixture did not return a SKU.');
       const grossSalePrice = parseEther(cartUnitPriceEth);
       const royalty = await creatorRare.collection.royalty.status({
         contract: collection.contract,
@@ -591,42 +593,6 @@ describeLive('live secondary-sale Cart royalties', () => {
     })).resolves.toBe(fixture.creator.buyerAddress);
   }, 360_000);
 });
-
-async function pollForIndexedSku(
-  rare: ReturnType<typeof createRareClient>,
-  tokenContract: Address,
-  tokenId: string,
-): Promise<Hex> {
-  const deadline = Date.now() + 180_000;
-  let lastError: unknown;
-  while (Date.now() < deadline) {
-    try {
-      const result = await rare.cart.catalog.variants.search({
-        nft: { contract: tokenContract, tokenId },
-        perPage: 2,
-      });
-      if (result.data.length > 1) {
-        throw new Error(`Cart catalog returned multiple Variants for ${tokenContract}:${tokenId}.`);
-      }
-      const variant = result.data[0];
-      if (variant) {
-        const bySku = await rare.cart.catalog.variants.search({ sku: variant.sku, perPage: 2 });
-        if (bySku.data.length !== 1 || bySku.data[0]?.sku !== variant.sku) {
-          throw new Error(`Cart catalog could not resolve indexed SKU ${variant.sku} uniquely.`);
-        }
-        return variant.sku;
-      }
-      lastError = undefined;
-    } catch (error) {
-      if (error instanceof Error && error.message.startsWith('Cart catalog ')) throw error;
-      lastError = error;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 2_000));
-  }
-  throw new Error(`Timed out waiting for Cart catalog indexing of ${tokenContract}:${tokenId}.`, {
-    cause: lastError,
-  });
-}
 
 async function pollForPublishedListings(
   rare: ReturnType<typeof createRareClient>,
