@@ -177,27 +177,25 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
   it('executes ERC721_MINT_TO (kind 4)', async () => {
     const { live, erc721 } = liveRef.value;
     const cart = getCartAddress(live.chain);
-    const seedPreparation = await step('prepare lazy ERC-721 catalog seed', () =>
-      jsonCommand<{ minter: Address } & TxResult>(live.sellerHome, [
+    // Lazy mint configuration is only allowed before the first token exists.
+    // Reserve both the owner-minted catalog seed and the subsequent Cart mint.
+    const prepared = await step('prepare lazy ERC-721 seed and Cart inventory', () =>
+      jsonCommand<{ minter: Address; tokenCount: string } & TxResult>(live.sellerHome, [
         'collection', 'prepare-lazy-mint', '--contract', erc721.contract, '--base-uri', E2E_TOKEN_URI,
-        '--amount', '1', '--minter', live.sellerAddress, '--chain', live.chain,
+        '--amount', '2', '--minter', cart, '--chain', live.chain,
       ], 300_000));
-    expectTx(seedPreparation);
+    expectTx(prepared);
+    expect(prepared.minter.toLowerCase()).toBe(cart.toLowerCase());
+    expect(prepared.tokenCount).toBe('2');
     const indexedTokenId = await step('mint lazy ERC-721 catalog seed token', () =>
       mintLazyToken(live, erc721.contract, live.sellerAddress));
     const [erc721Sku] = await createCreatorVariantSkus(live, [{ contract: erc721.contract, tokenId: indexedTokenId.toString() }]);
     if (erc721Sku === undefined) throw new Error('Creator fixture did not return an ERC-721 SKU.');
-    const prepared = await step('prepare lazy ERC-721 inventory for Cart', () =>
-      jsonCommand<{ minter: Address; tokenCount: string } & TxResult>(live.sellerHome, [
-        'collection', 'prepare-lazy-mint', '--contract', erc721.contract, '--base-uri', E2E_TOKEN_URI,
-        '--amount', '1', '--minter', cart, '--chain', live.chain,
-      ], 300_000));
-    expectTx(prepared);
-    expect(prepared.minter.toLowerCase()).toBe(cart.toLowerCase());
     const mintListing = await publishListing(live, erc721Sku, '1', 'ERC721_MINT_TO', false);
     const supplyBefore = await live.publicClient.readContract({
       address: erc721.contract, abi: tokenAbi, functionName: 'totalSupply',
     });
+    expect(supplyBefore).toBe(1n);
     await expectKind(live, mintListing, '1', cartFulfillmentKinds.erc721MintTo);
     const purchase = await checkout(live, mintListing, '1');
     expectTx(purchase);
