@@ -2,17 +2,15 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { cartFulfillmentKinds } from '@rareprotocol/rare-sdk';
-import { cartAbi, getCartAddress, rareErc1155Abi, tokenAbi, viemChains } from '@rareprotocol/rare-sdk/contracts';
-import { createWalletClient, http, parseEventLogs, zeroAddress, type Address, type Hex } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
-import { createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
+import { cartAbi, getCartAddress, rareErc1155Abi, tokenAbi } from '@rareprotocol/rare-sdk/contracts';
+import { parseEventLogs, type Address, type Hex } from 'viem';
+import { createCreatorMintVariantSku, createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
 import {
   cleanupLiveFixture,
   createCartLiveFixture as createLiveFixture,
   E2E_TOKEN_URI,
   expectTx,
   jsonCommand,
-  liveRpcUrl,
   LiveFixtureRef,
   missingEnv,
   requireBuyerFixture,
@@ -70,7 +68,7 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
       ]);
       const erc721 = await deploy(live, [
         'collection', 'deploy', 'lazy-erc721', unique('Cart Lazy'), unique('CL'),
-        '--max-tokens', '2', '--chain', live.chain,
+        '--max-tokens', '1', '--chain', live.chain,
       ]);
       await delayAfterDeployments();
       const token = await step('create ERC-1155 Cart token', () =>
@@ -177,30 +175,27 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
   it('executes ERC721_MINT_TO (kind 4)', async () => {
     const { live, erc721 } = liveRef.value;
     const cart = getCartAddress(live.chain);
-    // Lazy mint configuration is only allowed before the first token exists.
-    // Reserve both the owner-minted catalog seed and the subsequent Cart mint.
-    const prepared = await step('prepare lazy ERC-721 seed and Cart inventory', () =>
+    const prepared = await step('prepare lazy ERC-721 Cart inventory', () =>
       jsonCommand<{ minter: Address; tokenCount: string } & TxResult>(live.sellerHome, [
         'collection', 'prepare-lazy-mint', '--contract', erc721.contract, '--base-uri', E2E_TOKEN_URI,
-        '--amount', '2', '--minter', cart, '--chain', live.chain,
+        '--amount', '1', '--minter', cart, '--chain', live.chain,
       ], 300_000));
     expectTx(prepared);
     expect(prepared.minter.toLowerCase()).toBe(cart.toLowerCase());
-    expect(prepared.tokenCount).toBe('2');
-    const indexedTokenId = await step('mint lazy ERC-721 catalog seed token', () =>
-      mintLazyToken(live, erc721.contract, live.sellerAddress));
-    const [erc721Sku] = await createCreatorVariantSkus(live, [{ contract: erc721.contract, tokenId: indexedTokenId.toString() }]);
-    if (erc721Sku === undefined) throw new Error('Creator fixture did not return an ERC-721 SKU.');
+    expect(prepared.tokenCount).toBe('1');
+    const erc721Sku = await step('create creator mint variant without an NFT attachment', () =>
+      createCreatorMintVariantSku(live, erc721.contract));
     const mintListing = await publishListing(live, erc721Sku, '1', 'ERC721_MINT_TO', false);
     const supplyBefore = await live.publicClient.readContract({
       address: erc721.contract, abi: tokenAbi, functionName: 'totalSupply',
     });
-    expect(supplyBefore).toBe(1n);
+    expect(supplyBefore).toBe(0n);
     await expectKind(live, mintListing, '1', cartFulfillmentKinds.erc721MintTo);
     const purchase = await checkout(live, mintListing, '1');
     expectTx(purchase);
     expect(purchase.approvalTxHash).toBeNull();
     const event = await expectFulfillmentKind(live, purchase, cartFulfillmentKinds.erc721MintTo);
+    expect(event.tokenId).toBe(1n);
     await expect(live.publicClient.readContract({
       address: erc721.contract, abi: tokenAbi, functionName: 'ownerOf', args: [event.tokenId],
     })).resolves.toBe(live.buyerAddress);
@@ -234,34 +229,6 @@ async function mintErc1155(
     '--quantity', quantity, '--to', to, '--chain', live.chain,
   ], 240_000);
   expectTx(result);
-}
-
-async function mintLazyToken(
-  live: BuyerLiveFixture,
-  contract: Address,
-  recipient: Address,
-): Promise<bigint> {
-  const wallet = createWalletClient({
-    account: privateKeyToAccount(live.sellerWallet.privateKey),
-    chain: viemChains[live.chain],
-    transport: http(liveRpcUrl()),
-  });
-  const txHash = await wallet.writeContract({
-    address: contract,
-    abi: [{
-      type: 'function', name: 'mintTo', stateMutability: 'nonpayable',
-      inputs: [{ name: '_receiver', type: 'address' }],
-      outputs: [{ name: '', type: 'uint256' }],
-    }],
-    functionName: 'mintTo',
-    args: [recipient],
-  });
-  const receipt = await live.publicClient.waitForTransactionReceipt({ hash: txHash });
-  const transfer = parseEventLogs({ abi: tokenAbi, logs: receipt.logs, eventName: 'Transfer' })
-    .find((event) => event.address.toLowerCase() === contract.toLowerCase()
-      && event.args.from === zeroAddress && event.args.to.toLowerCase() === recipient.toLowerCase());
-  if (transfer === undefined) throw new Error(`Lazy catalog seed mint ${txHash} emitted no matching Transfer.`);
-  return transfer.args.tokenId;
 }
 
 async function setMinter(live: BuyerLiveFixture, contract: Address, minter: Address): Promise<void> {
