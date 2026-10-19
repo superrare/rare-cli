@@ -12,3 +12,4 @@ docs-site/.docusaurus/
 /docs/*
 !/docs/intro.md
 !/docs/compatibility-shims.md
+!/docs/eligibility.md
