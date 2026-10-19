@@ -1,7 +1,7 @@
 import { Command } from 'commander';
 import { z } from 'zod';
 import { accountClient, accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
-import { output } from '../output.js';
+import { outputJson } from '../output.js';
 import { parseCartBytes32, unwrapCartCliResult } from './cart-core.js';
 
 export function ordersCommand(): Command {
@@ -20,5 +20,5 @@ export function ordersCommand(): Command {
 }
 
 function print(value: unknown): void {
-  output(value, () => { console.log(JSON.stringify(value, null, 2)); });
+  outputJson(value);
 }

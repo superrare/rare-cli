@@ -15,7 +15,8 @@ import {
   getPublicClient,
   getWalletClient,
 } from '../client.js';
-import { log, output } from '../output.js';
+import { log, output, outputJson } from '../output.js';
+import { serializeOutputJson } from '../output-core.js';
 import { accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { addChainOptions, type ChainOptions } from './options.js';
@@ -362,10 +363,10 @@ function cartCardCommand(): Command {
       if (delivery === undefined) throw new Error('Card checkout requires --shipping-input or --saved-address-id.');
       const chain = getActiveChain(options.chain, options.chainId);
       const rare = createRareClient({ publicClient: getPublicClient(chain), apiBaseUrl: options.apiUrl,
-        accountClient: accountClient(storageOptions(options)), account: recipient });
+        sessionStore: createAuthStore(storageOptions(options)), account: recipient });
       const paymentCurrency = await rare.currency.resolveDecimals('usdc');
       const result = await rare.cart.checkout.coinflow({ paymentCurrency: paymentCurrency.address, items, delivery, idempotencyKey });
-      output(result, () => { console.log(JSON.stringify(result, null, 2)); });
+      outputJson(result);
     });
 }
 
@@ -405,11 +406,7 @@ function collectValue(value: string, previous: string[]): string[] {
 
 async function writeCartArtifact(path: string | undefined, artifact: unknown): Promise<void> {
   if (path === undefined) return;
-  await writeFile(path, `${JSON.stringify(artifact, bigintReplacer, 2)}\n`, 'utf8');
-}
-
-function bigintReplacer(_key: string, value: unknown): unknown {
-  return typeof value === 'bigint' ? value.toString() : value;
+  await writeFile(path, `${serializeOutputJson(artifact)}\n`, 'utf8');
 }
 
 function printListingPreparation(preparation: CartListingPreparation, outputPath: string | undefined): void {
