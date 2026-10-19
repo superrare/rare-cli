@@ -28,7 +28,7 @@ export const printDropInput = z.object({
   universalTokenId: z.string().optional(), chainId: z.literal('11155111').optional(),
   print: z.object({
     name: z.string(), description: z.string(), tags: z.array(z.string()),
-    productionUploadKey: z.string().regex(/^[0-9a-f]{64}$/u), images: z.array(z.url()).min(1),
+    productionUploadKey: z.string().regex(/^[0-9a-f]{64}$/u), images: z.array(z.url()).min(1).max(4),
     specificationId: z.string(),
   }).strict().optional(),
 }).strict();
@@ -40,6 +40,6 @@ export const printListingInput = z.object({
 
 export const printDraftPatch = z.object({
   name: z.string().optional(), description: z.string().optional(), tags: z.array(z.string()).optional(),
-  images: z.array(z.url()).optional(), productionUploadKey: z.string().regex(/^[0-9a-f]{64}$/u).optional(),
+  images: z.array(z.url()).min(1).max(4).optional(), productionUploadKey: z.string().regex(/^[0-9a-f]{64}$/u).optional(),
   specificationId: z.string().optional(),
 }).strict();

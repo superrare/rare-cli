@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { Command, Option } from 'commander';
 import { accountClient, accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
-import { output } from '../output.js';
+import { outputJson } from '../output.js';
 import { resolveUploadContentType } from './upload-input-core.js';
 
 export function uploadsCommand(): Command {
@@ -14,7 +14,7 @@ export function uploadsCommand(): Command {
       const result = await accountClient(storageOptions(options)).upload(await readFile(file), basename(file), {
         access: options.access, contentType: resolveUploadContentType(file, options.contentType),
       });
-      output(result, () => { console.log(JSON.stringify(result, null, 2)); });
+      outputJson(result);
     }));
   return command;
 }
