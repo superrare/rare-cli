@@ -95,17 +95,14 @@ export function parseCartCliCurrency(value: string, field: string): CartCliResul
 
 export function parseCartAmount(value: string, decimals: number, field: string): CartCliResult<bigint> {
   if (!/^\d+(?:\.\d+)?$/.test(value)) {
-    return invalid(`${field} must be a positive decimal amount.`);
+    return invalid(`${field} must be a non-negative decimal amount.`);
   }
   const fractionalDigits = value.split('.')[1]?.length ?? 0;
   if (fractionalDigits > decimals) {
     return invalid(`${field} has more than ${decimals} decimal places.`);
   }
   try {
-    const amount = parseUnits(value, decimals);
-    return amount > 0n
-      ? { isValid: true, value: amount }
-      : invalid(`${field} must be greater than zero.`);
+    return { isValid: true, value: parseUnits(value, decimals) };
   } catch {
     return invalid(`${field} has more than ${decimals} decimal places.`);
   }
@@ -154,7 +151,7 @@ function parseListing(value: unknown, index: number): CartCliResult<CartListingF
   const issues = [
     ...(sku.isValid ? [] : sku.issues),
     ...(currency.isValid ? [] : currency.issues),
-    ...(unitPrice === undefined ? [`${field}.unitPrice must be a positive decimal amount string.`] : []),
+    ...(unitPrice === undefined ? [`${field}.unitPrice must be a non-negative decimal amount string.`] : []),
     ...(quantity.isValid ? [] : quantity.issues),
     ...(fulfillmentKind.isValid ? [] : fulfillmentKind.issues),
     ...(paymentRecipient.isValid ? [] : paymentRecipient.issues),
