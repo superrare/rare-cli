@@ -16,6 +16,8 @@ import { accountClient, accountCommand, storageOptions, type AccountCommandOptio
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { addChainOptions, type ChainOptions } from './options.js';
 import { parseEligibilityRuleId } from './eligibility-core.js';
+import { parseCommerceUuid, shippingDetailsInput } from './print-input-core.js';
+import type { z } from 'zod';
 import {
   parseCartAddress,
   parseCartAmount,
@@ -49,6 +51,8 @@ type CartCheckoutOptions = ChainOptions & AccountCommandOptions & {
   outputAmount?: string;
   paymentCurrency?: string;
   recipient?: string;
+  shippingInput?: string;
+  savedAddressId?: string;
   preview?: boolean;
   prepareOnly?: boolean;
   yes?: boolean;
@@ -60,6 +64,7 @@ export function cartCommand(): Command {
   command.addCommand(cartListingCommand());
   command.addCommand(cartCheckoutCommand());
   command.addCommand(cartCheckoutCommand(true));
+  command.addCommand(cartCardCommand());
   return command;
 }
 
@@ -216,6 +221,8 @@ function cartCheckoutCommand(swap = false): Command {
     .option('--output-amount <amount>', 'exact tokens to receive for a swap, in output currency units')
     .requiredOption('--payment-currency <currency>', 'payment currency: eth, usdc, rare, or ERC-20 address')
     .option('--recipient <address>', 'fulfillment recipient (defaults to the configured wallet)')
+    .option('--shipping-input <path>', 'JSON shipping details for physical fulfillment')
+    .option('--saved-address-id <uuid>', 'use a saved private shipping address instead of --shipping-input')
     .option('--preview', 'show the API quote and SDK preparation without signing, approving, or submitting')
     .option('--prepare-only', 'reserve and authorize checkout without approving tokens or submitting payment; claims remain reserved until expiry')
     .option('--yes', 'approve payment currency if needed and skip transaction confirmation')
@@ -236,6 +243,7 @@ function cartCheckoutCommand(swap = false): Command {
           ...(hasSwap ? [{ kind: 'swap', mode: opts.inputAmount === undefined ? 'exact-output' : 'exact-input', outputCurrency: opts.outputCurrency,
             ...(opts.inputAmount === undefined ? { outputAmount: opts.outputAmount } : { inputAmount: opts.inputAmount }) }] : []),
         ] })));
+      const delivery = await readDelivery(opts.shippingInput, opts.savedAddressId);
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const wallet = opts.preview === true || opts.prepareOnly === true ? undefined : getWalletClient(chain);
@@ -262,6 +270,7 @@ function cartCheckoutCommand(swap = false): Command {
       const intent = {
         paymentCurrency: paymentCurrency.address,
         items,
+        ...(delivery === undefined ? {} : { delivery }),
       };
       const preparation = await rare.cart.checkout.prepare(intent);
 
@@ -327,6 +336,40 @@ function cartCheckoutCommand(swap = false): Command {
       );
     });
   return command;
+}
+
+function cartCardCommand(): Command {
+  return addChainOptions(accountCommand('card'))
+    .description('Prepare a hosted credit-card checkout without sending an on-chain payment')
+    .requiredOption('--listing <listing-digest[=quantity]>', 'Cart Listing and optional quantity (repeatable)', collectValue, [])
+    .requiredOption('--recipient <address>', 'fulfillment wallet recipient')
+    .requiredOption('--idempotency-key <uuid>', 'stable retry identity for this card checkout')
+    .option('--shipping-input <path>', 'JSON shipping details for physical fulfillment')
+    .option('--saved-address-id <uuid>', 'use a saved private shipping address')
+    .action(async (options: CartCheckoutOptions & { idempotencyKey: string }): Promise<void> => {
+      const recipient = unwrapCartCliResult(parseCartAddress(options.recipient, '--recipient'));
+      if (recipient === undefined) throw new Error('--recipient is required.');
+      const items = unwrapCartCliResult(parseCartListingSelections(options.listing)).map(selection => ({ ...selection, recipient }));
+      const idempotencyKey = parseCommerceUuid(options.idempotencyKey);
+      const delivery = await readDelivery(options.shippingInput, options.savedAddressId);
+      if (delivery === undefined) throw new Error('Card checkout requires --shipping-input or --saved-address-id.');
+      const chain = getActiveChain(options.chain, options.chainId);
+      const rare = createRareClient({ publicClient: getPublicClient(chain), apiBaseUrl: options.apiUrl,
+        accountClient: accountClient(storageOptions(options)), account: recipient });
+      const paymentCurrency = await rare.currency.resolveDecimals('usdc');
+      const result = await rare.cart.checkout.coinflow({ paymentCurrency: paymentCurrency.address, items, delivery, idempotencyKey });
+      output(result, () => { console.log(JSON.stringify(result, null, 2)); });
+    });
+}
+
+async function readDelivery(shippingInput: string | undefined, savedAddressId: string | undefined): Promise<
+  { recipientDetails: z.infer<typeof shippingDetailsInput> } | { savedAddressId: string } | undefined
+> {
+  if (shippingInput !== undefined && savedAddressId !== undefined) throw new Error('Use either --shipping-input or --saved-address-id, not both.');
+  if (savedAddressId !== undefined) return { savedAddressId: parseCommerceUuid(savedAddressId) };
+  if (shippingInput === undefined) return undefined;
+  const value: unknown = JSON.parse(await readFile(shippingInput, 'utf8'));
+  return { recipientDetails: shippingDetailsInput.parse(value) };
 }
 
 async function runSimpleCartWrite(

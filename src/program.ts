@@ -28,6 +28,8 @@ import { authCommand } from './commands/auth.js';
 import { profileCommand } from './commands/profile.js';
 import { cartCommand } from './commands/cart.js';
 import { eligibilityCommand } from './commands/eligibility.js';
+import { printsCommand } from './commands/prints.js';
+import { shippingCommand } from './commands/shipping.js';
 import { getConfirmationDecision, type ConfirmationOptions } from './confirmation.js';
 import pkg from '../package.json' with { type: 'json' };
 
@@ -85,6 +87,8 @@ export function createRareProgram(): Command {
   program.addCommand(uploadsCommand());
   program.addCommand(cartCommand());
   program.addCommand(eligibilityCommand());
+  program.addCommand(printsCommand());
+  program.addCommand(shippingCommand());
 
   return program;
 }
