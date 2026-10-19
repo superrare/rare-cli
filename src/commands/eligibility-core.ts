@@ -23,3 +23,7 @@ const eligibilityRuleInputSchema = z.object({
 export function parseEligibilityRuleInput(value: unknown): z.infer<typeof eligibilityRuleInputSchema> {
   return eligibilityRuleInputSchema.parse(value);
 }
+
+export function parseEligibilityRuleId(value: unknown): string {
+  return z.uuid().parse(value);
+}
