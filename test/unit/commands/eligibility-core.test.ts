@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseEligibilityRuleInput } from '../../../src/commands/eligibility-core.js';
+import { parseEligibilityRuleId, parseEligibilityRuleInput } from '../../../src/commands/eligibility-core.js';
 
 const input = {
   definition: {
@@ -17,6 +17,8 @@ describe('eligibility rule file validation', () => {
   });
 
   it('rejects malformed scopes before API or credential work', () => {
+    expect(parseEligibilityRuleId('b299b521-0f42-4b31-8b37-d686afaf7196')).toBe('b299b521-0f42-4b31-8b37-d686afaf7196');
+    expect(() => parseEligibilityRuleId('not-a-rule')).toThrow();
     expect(() => parseEligibilityRuleInput({ ...input, definition: { ...input.definition, targets: [] } })).toThrow();
     expect(() => parseEligibilityRuleInput({ ...input, definition: { ...input.definition, targets: [{ sku: 'anything' }] } })).toThrow();
     expect(() => parseEligibilityRuleInput({ ...input, definition: { ...input.definition,

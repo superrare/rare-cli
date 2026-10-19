@@ -9,6 +9,8 @@ describe('built eligibility CLI', () => {
       expect(help.stdout).toContain('rules');
       expect(help.stdout).toContain('claims');
       expect(help.stdout).toContain('listings');
+      const create = await runCli(['cart', 'listing', 'create', '--help'], { home });
+      expect(create.stdout).toContain('--eligibility-rule-id');
       for (const path of [['rules', 'create'], ['rules', 'list'], ['rules', 'disable'],
         ['claims', 'list'], ['listings', 'require'], ['listings', 'clear']]) {
         const result = await runCli(['eligibility', ...path, '--help'], { home });
