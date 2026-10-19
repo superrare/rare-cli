@@ -30,6 +30,7 @@ import { cartCommand } from './commands/cart.js';
 import { eligibilityCommand } from './commands/eligibility.js';
 import { printsCommand } from './commands/prints.js';
 import { shippingCommand } from './commands/shipping.js';
+import { ordersCommand } from './commands/orders.js';
 import { getConfirmationDecision, type ConfirmationOptions } from './confirmation.js';
 import pkg from '../package.json' with { type: 'json' };
 
@@ -89,6 +90,7 @@ export function createRareProgram(): Command {
   program.addCommand(eligibilityCommand());
   program.addCommand(printsCommand());
   program.addCommand(shippingCommand());
+  program.addCommand(ordersCommand());
 
   return program;
 }

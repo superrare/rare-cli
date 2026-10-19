@@ -1,11 +1,11 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { cleanupLiveFixture, createCartLiveFixture, jsonCommand } from './helpers/live-harness.js';
 
 describe('print tooling through the built CLI and deployed Rare API', () => {
-  it('uploads a private master, creates a print draft and round-trips private saved shipping', async () => {
+  it('uploads a private master, publishes a print and quotes generic checkout with saved shipping', async () => {
     const fixture = await createCartLiveFixture();
     const addressId = randomUUID();
     try {
@@ -27,24 +27,52 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
       const drop = await jsonCommand<{ id: string }>(fixture.sellerHome, ['prints', 'drops', 'create', '--input', file]);
       try {
         expect(await jsonCommand(fixture.sellerHome, ['prints', 'drops', 'get', '--id', drop.id])).toMatchObject({ id: drop.id });
+        const patch = join(fixture.tempDir, 'print-patch.json');
+        await writeFile(patch, JSON.stringify({ name: `${name} updated`, tags: ['test', 'edited'] }));
+        expect(await jsonCommand(fixture.sellerHome, ['prints', 'drops', 'update', '--id', drop.id, '--input', patch]))
+          .toMatchObject({ metadata: { name: `${name} updated`, tags: ['test', 'edited'] } });
+        expect(await jsonCommand(fixture.sellerHome, ['orders', 'list'])).toMatchObject({ data: expect.any(Array) });
+        const option = await jsonCommand<{ id: string }>(fixture.sellerHome, [
+          'prints', 'drops', 'configure', '--id', drop.id, '--price-usd-cents', '10000',
+        ]);
+        const terms = join(fixture.tempDir, 'listing.json');
+        await writeFile(terms, JSON.stringify({ optionId: option.id, seller: fixture.sellerAddress,
+          listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: String(Math.floor(Date.now() / 1000) + 3600),
+          availableQuantity: '10', fulfillmentKind: 1 }));
+        const publication = await jsonCommand<{ signedArtifact: { entries: { listingDigest: string }[] } }>(fixture.sellerHome, [
+          'prints', 'listing', 'publish', '--input', terms, '--chain', fixture.chain, '--yes',
+        ]);
+        const listing = publication.signedArtifact.entries[0];
+        if (listing === undefined) throw new Error('Print publication returned no Listing entry.');
+        const publicDrop = await jsonCommand<{ metadata: Record<string, unknown>; options: { listingDigest: string }[] }>(fixture.sellerHome, ['prints', 'get', '--id', drop.id]);
+        expect(publicDrop.options.some(item => item.listingDigest === listing.listingDigest)).toBe(true);
+        expect(publicDrop.metadata).not.toHaveProperty('productionUploadKey');
+        expect(await jsonCommand(fixture.sellerHome, ['prints', 'activity', '--id', drop.id])).toMatchObject({ events: [] });
         const address = join(fixture.tempDir, 'shipping.json');
         await writeFile(address, JSON.stringify({ id: addressId, label: 'CLI test', makeDefault: false,
           details: { name: 'CLI test', email: 'cli-test@example.com', phoneNumber: '+12025550123',
             addressLine1: '123 Test Street', townOrCity: 'New York', stateOrCounty: 'NY', postalOrZipCode: '10001', countryCode: 'US' } }));
         const saved = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'save', '--input', address]);
-        expect(saved.some(item => item.id === addressId)).toBe(true);
-        const loaded = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'list']);
-        expect(loaded.some(item => item.id === addressId)).toBe(true);
+        try {
+          expect(saved.some(item => item.id === addressId)).toBe(true);
+          const loaded = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'list']);
+          expect(loaded.some(item => item.id === addressId)).toBe(true);
+          const checkout = await jsonCommand<{ preparation: { paymentAmount: string; breakdown: { shipping: string; total: string } } }>(fixture.sellerHome, [
+            'cart', 'checkout', '--listing', listing.listingDigest, '--payment-currency', 'usdc',
+            '--saved-address-id', addressId, '--chain', fixture.chain, '--preview',
+          ]);
+          expect(BigInt(checkout.preparation.breakdown.shipping)).toBeGreaterThanOrEqual(0n);
+          expect(checkout.preparation.breakdown.total).toBe(checkout.preparation.paymentAmount);
+          // Preview only. Do not pay or submit a physical fulfillment order.
+        } finally {
+          const remaining = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'delete', '--id', addressId]);
+          expect(remaining.some(item => item.id === addressId)).toBe(false);
+        }
       } finally {
         await jsonCommand(fixture.sellerHome, ['prints', 'drops', 'archive', '--id', drop.id]);
       }
     } finally {
-      try {
-        const remaining = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'delete', '--id', addressId]);
-        expect(remaining.some(item => item.id === addressId)).toBe(false);
-      } finally {
-        await cleanupLiveFixture(fixture);
-      }
+      await cleanupLiveFixture(fixture);
     }
   }, 240_000);
 });

@@ -37,3 +37,9 @@ export const printListingInput = z.object({
   optionId: uuid, seller: address, listingSalt: bytes32, deadline: uint, availableQuantity: uint,
   fulfillmentKind: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(5)]),
 }).strict();
+
+export const printDraftPatch = z.object({
+  name: z.string().optional(), description: z.string().optional(), tags: z.array(z.string()).optional(),
+  images: z.array(z.url()).optional(), productionUploadKey: z.string().regex(/^[0-9a-f]{64}$/u).optional(),
+  specificationId: z.string().optional(),
+}).strict();
