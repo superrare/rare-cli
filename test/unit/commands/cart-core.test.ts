@@ -118,4 +118,16 @@ describe('Cart CLI input planning', () => {
       issues: ['unitPrice has more than 6 decimal places.'],
     });
   });
+
+  it('allows free listing prices while keeping purchase quantities positive', () => {
+    const listing = parseCartListingFile(JSON.stringify({ deadline: '2030-01-01T00:00:00.000Z',
+      listings: [{ sku, settlementCurrency: 'USDC', unitPrice: '0', quantity: '1' }] }));
+    expect(listing.isValid).toBe(true);
+    expect(parseCartAmount('0', 6, 'unitPrice')).toEqual({ isValid: true, value: 0n });
+    expect(parseCartAmount('0.00', 6, 'unitPrice')).toEqual({ isValid: true, value: 0n });
+    expect(parseCartAmount('-1', 6, 'unitPrice').isValid).toBe(false);
+    expect(parseCartListingSelections([`${listingA}=0`]).isValid).toBe(false);
+    expect(parseCartListingFile(JSON.stringify({ deadline: '2030-01-01T00:00:00.000Z',
+      listings: [{ sku, settlementCurrency: 'USDC', unitPrice: '0', quantity: '0' }] })).isValid).toBe(false);
+  });
 });
