@@ -35,4 +35,8 @@ Use `cart listing create --eligibility-rule-id` for a newly gated Listing. The A
 
 For existing holders, include `definition.source.tokenIds` with a `CURRENT_HOLDER` rule. The API initializes those holders at a confirmed block. Collection-wide rules without token IDs apply to future events. Historical purchase backfills are not included.
 
-Run `npx vitest run test/e2e-live/eligibility.test.ts` after deploying the eligibility API. The suite uses the existing Cart test wallet configuration and creates its own collection and SKU. Missing credentials or endpoints fail the selected suite.
+Run `npm run test:eligibility:e2e` after deploying the eligibility API. The suite uses the existing Cart test wallet pool with distinct registered creator and buyer accounts. Missing credentials or endpoints fail the selected suite.
+
+The lifecycle case creates three NFTs and their creator-owned SKUs, publishes an open source Listing and two gated reward Listings, then buys the source through the built CLI. It polls the buyer's claims until one is `AVAILABLE`, redeems one reward, and waits for that same claim to become `CONSUMED`. The second reward stays in stock and must be rejected for insufficient claims. The rule only watches the source token, so redemption cannot generate a replacement claim.
+
+The suite sends live Sepolia transactions with a quoted test budget of 0.001 ETH per purchase before network gas. Cleanup disables the rule, revokes sessions, releases wallet leases, and removes test-local files. Eligibility endpoints are checked before deploying assets.
