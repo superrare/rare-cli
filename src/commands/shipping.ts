@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { accountClient, accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
-import { output } from '../output.js';
+import { outputJson } from '../output.js';
 import { parseCommerceUuid, savedShippingInput } from './print-input-core.js';
 
 export function shippingCommand(): Command {
@@ -26,5 +26,5 @@ export function shippingCommand(): Command {
 }
 
 function print(value: unknown): void {
-  output(value, () => { console.log(JSON.stringify(value, null, 2)); });
+  outputJson(value);
 }

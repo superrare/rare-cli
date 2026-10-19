@@ -1,5 +1,6 @@
 import { formatEther } from 'viem';
 import type { Nft, Collection, NftEvent, Pagination, UserProfile } from '@rareprotocol/rare-sdk';
+import { serializeOutputJson } from './output-core.js';
 
 export function isJsonMode(): boolean {
   return process.argv.includes('--json');
@@ -12,7 +13,7 @@ export function isJsonMode(): boolean {
  */
 export function output(data: unknown, prettyPrint: () => void): void {
   if (isJsonMode()) {
-    const serialized = JSON.stringify(data, bigintReplacer, 2);
+    const serialized = serializeOutputJson(data);
     console.log(serialized);
   } else {
     prettyPrint();
@@ -30,8 +31,8 @@ export function log(message: string): void {
 
 // --- Serialization helpers ---
 
-function bigintReplacer(_key: string, value: unknown): unknown {
-  return typeof value === 'bigint' ? value.toString() : value;
+export function outputJson(data: unknown): void {
+  output(data, () => { console.log(serializeOutputJson(data)); });
 }
 
 // --- NFT pretty-printing ---
