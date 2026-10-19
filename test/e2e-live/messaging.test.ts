@@ -95,7 +95,7 @@ describe('durable messaging through the built CLI and deployed services', () => 
 });
 
 const publicRoom = z.object({ id: z.string().uuid() });
-const publicMessages = z.object({ messages: z.array(z.object({ id: z.string().uuid(), kind: z.enum(['user', 'system']), body: z.string() })) });
+const publicMessages = z.object({ messages: z.array(z.object({ id: z.string().uuid(), type: z.enum(['user', 'system']), body: z.string() })) });
 
 describe('public contextual chats through the built CLI', () => {
   it.each([
@@ -116,7 +116,7 @@ describe('public contextual chats through the built CLI', () => {
       expect((await run(['auth', 'login', '--wallet', '--chain', 'mainnet'])).code).toBe(0);
       const clientId = randomUUID();
       const args = ['messaging', 'public', 'send', room.id, '--body', `CLI public chat ${clientId}`, '--client-message-id', clientId];
-      const sent = z.object({ id: z.string().uuid(), kind: z.literal('user') }).parse(parseJsonStdout(await run(args)));
+      const sent = z.object({ id: z.string().uuid(), type: z.literal('user') }).parse(parseJsonStdout(await run(args)));
       try {
         expect(z.object({ id: z.string() }).parse(parseJsonStdout(await run(args))).id).toBe(sent.id);
         const page = publicMessages.parse(parseJsonStdout(await run(['messaging', 'public', 'history', room.id])));
