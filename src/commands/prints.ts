@@ -8,7 +8,7 @@ import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
 import { output } from '../output.js';
 import { addChainOptions, type ChainOptions } from './options.js';
-import { parseCommerceUuid, parsePrintPrice, printDropInput, printListingInput } from './print-input-core.js';
+import { parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, printListingInput } from './print-input-core.js';
 
 type PrintOptions = AccountCommandOptions & ChainOptions;
 type IdentityOptions = PrintOptions & { id: string };
@@ -40,6 +40,13 @@ export function printsCommand(): Command {
     .action(async (options: InputOptions): Promise<void> => {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
       print(await client(options).prints.drops.create(printDropInput.parse(input)));
+    }));
+  drops.addCommand(command('update').requiredOption('--id <uuid>', 'owned drop ID')
+    .requiredOption('--input <path>', 'JSON patch; published production changes require a new draft')
+    .action(async (options: InputOptions & { id: string }): Promise<void> => {
+      const id = parseCommerceUuid(options.id);
+      const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
+      print(await client(options).prints.drops.update(id, printDraftPatch.parse(input)));
     }));
   drops.addCommand(command('list').option('--after <uuid>', 'pagination cursor')
     .option('--take <number>', 'maximum records', (value: unknown) => z.coerce.number().int().min(1).max(100).parse(value))
