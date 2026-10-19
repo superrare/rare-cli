@@ -9,6 +9,7 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
     const fixture = await createCartLiveFixture();
     const addressId = randomUUID();
     try {
+      if (fixture.chain !== 'sepolia') throw new Error('Print tooling live E2E requires Sepolia.');
       const specifications = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['prints', 'specifications']);
       const specification = specifications[0];
       if (specification === undefined) throw new Error('Print tooling requires at least one supported specification.');

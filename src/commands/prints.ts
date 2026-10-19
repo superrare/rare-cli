@@ -6,7 +6,7 @@ import type { RareClient } from '@rareprotocol/rare-sdk';
 import { accountClient, accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
-import { output } from '../output.js';
+import { outputJson } from '../output.js';
 import { addChainOptions, type ChainOptions } from './options.js';
 import { parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, printListingInput } from './print-input-core.js';
 import { runWithNftApprovalConsent } from './approval-consent.js';
@@ -101,5 +101,5 @@ function client(options: PrintOptions, signing = false): RareClient {
 }
 
 function print(value: unknown): void {
-  output(value, () => { console.log(JSON.stringify(value, null, 2)); });
+  outputJson(value);
 }
