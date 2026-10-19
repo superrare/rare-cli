@@ -10,9 +10,10 @@ describe('built print and shipping CLI', () => {
       for (const path of [
         ['prints', 'specifications'], ['prints', 'get'], ['prints', 'activity'], ['prints', 'releases'],
         ['prints', 'drops', 'create'], ['prints', 'drops', 'list'], ['prints', 'drops', 'get'],
-        ['prints', 'drops', 'archive'], ['prints', 'drops', 'configure'],
+        ['prints', 'drops', 'archive'], ['prints', 'drops', 'configure'], ['prints', 'drops', 'update'],
         ['prints', 'listing', 'prepare'], ['prints', 'listing', 'publish'],
         ['shipping', 'list'], ['shipping', 'save'], ['shipping', 'delete'], ['uploads', 'upload'], ['cart', 'card'],
+        ['orders', 'list'], ['orders', 'get'],
       ]) {
         const result = await runCli([...path, '--help'], { home });
         expect(result.code).toBe(0);
