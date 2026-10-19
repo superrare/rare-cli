@@ -14,10 +14,10 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
       if (specification === undefined) throw new Error('Print tooling requires at least one supported specification.');
       const image = join(fixture.tempDir, 'print.png');
       await writeFile(image, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9uQAAAAASUVORK5CYII=', 'base64'));
-      const master = await jsonCommand<{ access: string; key: string; url?: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'private']);
+      const master = await jsonCommand<{ access: string; key: string; url?: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'private', '--content-type', 'image/png']);
       expect(master.access).toBe('private');
       expect(master.url).toBeUndefined();
-      const media = await jsonCommand<{ access: string; url: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'public']);
+      const media = await jsonCommand<{ access: string; url: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'public', '--content-type', 'image/png']);
       expect(media.access).toBe('public');
       const name = `CLI print ${randomUUID()}`;
       const file = join(fixture.tempDir, 'print.json');

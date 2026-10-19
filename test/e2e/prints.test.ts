@@ -21,7 +21,7 @@ describe('built print and shipping CLI', () => {
         expect(result.stdout).toContain('--storage');
       }
       const upload = await runCli(['uploads', 'upload', '--help'], { home });
-      expect(upload.stdout).toContain('default: "private"');
+      expect(upload.stdout).toContain('default: "public"');
     });
   });
 
