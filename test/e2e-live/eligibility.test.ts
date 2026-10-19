@@ -2,7 +2,9 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { EligibilityClaim, EligibilityRule } from '@rareprotocol/rare-sdk';
-import { cleanupLiveFixture, createCartLiveFixture, jsonCommand } from './helpers/live-harness.js';
+import { cartAbi, getCartAddress } from '@rareprotocol/rare-sdk/contracts';
+import { erc721Abi, type Hex } from 'viem';
+import { cleanupLiveFixture, createCartLiveFixture, expectTx, jsonCommand, requireBuyerFixture, type TxResult } from './helpers/live-harness.js';
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
 import { createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
 
@@ -11,6 +13,7 @@ describe('eligibility through the built CLI and deployed Rare API', () => {
     if (!process.env.RARE_API_BASE_URL) throw new Error('Set RARE_API_BASE_URL to a deployed eligibility API.');
     const fixture = await createCartLiveFixture();
     try {
+      await jsonCommand<EligibilityRule[]>(fixture.sellerHome, ['eligibility', 'rules', 'list']);
       const collection = await deployErc721Collection(fixture, '1');
       const token = await mintToken(fixture, collection.contract);
       const [sku] = await createCreatorVariantSkus(fixture, [token]);
@@ -47,4 +50,84 @@ describe('eligibility through the built CLI and deployed Rare API', () => {
       await cleanupLiveFixture(fixture);
     }
   }, 420_000);
+
+  it('issues a claim from an NFT purchase and consumes it when the buyer redeems one gated reward', async () => {
+    const fixture = requireBuyerFixture(await createCartLiveFixture({ buyer: true }));
+    try {
+      if (fixture.chain !== 'sepolia') throw new Error('Eligibility lifecycle E2E requires Sepolia.');
+      // Fail before deploying assets when the eligibility API or buyer account is unavailable.
+      await jsonCommand<EligibilityRule[]>(fixture.sellerHome, ['eligibility', 'rules', 'list']);
+      await jsonCommand<EligibilityClaim[]>(fixture.buyerHome, ['eligibility', 'claims', 'list']);
+      const collection = await deployErc721Collection(fixture, '3');
+      const source = await mintToken(fixture, collection.contract);
+      const reward = await mintToken(fixture, collection.contract);
+      const alternative = await mintToken(fixture, collection.contract);
+      const [sourceSku, rewardSku, alternativeSku] = await createCreatorVariantSkus(fixture, [source, reward, alternative]);
+      if (!sourceSku || !rewardSku || !alternativeSku) throw new Error('Eligibility lifecycle requires three creator-owned SKUs.');
+      const file = join(fixture.tempDir, 'purchase-claim-rule.json');
+      await writeFile(file, JSON.stringify({ definition: {
+        kind: 'EVERY_SALE',
+        source: { chainId: String(fixture.chainId), tokenContract: collection.contract, tokenIds: [source.tokenId] },
+        targets: [{ sku: rewardSku }, { sku: alternativeSku }],
+      } }), 'utf8');
+      const rule = await jsonCommand<EligibilityRule>(fixture.sellerHome, [
+        'eligibility', 'rules', 'create', '--input', file, '--chain', fixture.chain,
+      ]);
+      try {
+        const publish = async (sku: Hex, gated: boolean): Promise<Hex> => {
+          const listingFile = join(fixture.tempDir, `claim-listing-${sku}.json`);
+          await writeFile(listingFile, JSON.stringify({ deadline: String(Math.floor(Date.now() / 1000) + 3600),
+            listings: [{ sku, settlementCurrency: 'eth', unitPrice: '0.000001', quantity: '1' }] }), 'utf8');
+          const result = await jsonCommand<{ listingDigests: Hex[] }>(fixture.sellerHome, [
+            'cart', 'listing', 'create', '--input', listingFile,
+            ...(gated ? ['--eligibility-rule-id', rule.id] : []), '--chain', fixture.chain,
+          ]);
+          expect(result.listingDigests).toHaveLength(1);
+          const listingDigest = result.listingDigests[0];
+          if (!listingDigest) throw new Error('Published eligibility Listing has no digest.');
+          return listingDigest;
+        };
+        const sourceListing = await publish(sourceSku, false);
+        const rewardListing = await publish(rewardSku, true);
+        const alternativeListing = await publish(alternativeSku, true);
+        const claims = (): Promise<EligibilityClaim[]> => jsonCommand<EligibilityClaim[]>(fixture.buyerHome, [
+          'eligibility', 'claims', 'list', '--rule-id', rule.id,
+        ]);
+        const checkout = async (listingDigest: Hex): Promise<TxResult & { txHash: Hex; orderId: Hex }> => {
+          const args = ['cart', 'checkout', '--listing', listingDigest, '--payment-currency', 'eth', '--chain', fixture.chain];
+          const quote = await jsonCommand<{ preparation: { paymentAmount: string } }>(fixture.buyerHome, [...args, '--preview']);
+          expect(BigInt(quote.preparation.paymentAmount)).toBeLessThanOrEqual(1_000_000_000_000_000n);
+          return jsonCommand<TxResult & { txHash: Hex; orderId: Hex }>(fixture.buyerHome, args, 240_000);
+        };
+        expect(await claims()).toEqual([]);
+        await expect(checkout(rewardListing)).rejects.toThrow(/Insufficient unreserved claims/u);
+        const sourcePurchase = await checkout(sourceListing);
+        expectTx(sourcePurchase);
+        await expect(fixture.publicClient.readContract({ address: collection.contract, abi: erc721Abi,
+          functionName: 'ownerOf', args: [BigInt(source.tokenId)] })).resolves.toBe(fixture.buyerAddress);
+        await expect.poll(claims, { timeout: 180_000, interval: 2_000 }).toMatchObject([
+          { ruleId: rule.id, status: 'AVAILABLE', allowedSkus: expect.arrayContaining([rewardSku.toLowerCase(), alternativeSku.toLowerCase()]) },
+        ]);
+        const [issued] = await claims();
+        if (!issued) throw new Error('Indexed NFT purchase did not issue a claim.');
+        const redemption = await checkout(rewardListing);
+        expectTx(redemption);
+        await expect(fixture.publicClient.readContract({ address: getCartAddress(fixture.chain), abi: cartAbi,
+          functionName: 'executedOrderIds', args: [redemption.orderId] })).resolves.toBe(true);
+        await expect.poll(claims, { timeout: 180_000, interval: 2_000 }).toMatchObject([{ id: issued.id, status: 'CONSUMED' }]);
+        expect(await claims()).toHaveLength(1);
+        await expect(fixture.publicClient.readContract({ address: collection.contract, abi: erc721Abi,
+          functionName: 'ownerOf', args: [BigInt(reward.tokenId)] })).resolves.toBe(fixture.buyerAddress);
+        // Inventory remains available, so this must fail for eligibility rather than stock.
+        await expect(fixture.publicClient.readContract({ address: collection.contract, abi: erc721Abi,
+          functionName: 'ownerOf', args: [BigInt(alternative.tokenId)] })).resolves.toBe(fixture.sellerAddress);
+        await expect(checkout(alternativeListing)).rejects.toThrow(/Insufficient unreserved claims/u);
+        expect(await claims()).toMatchObject([{ id: issued.id, status: 'CONSUMED' }]);
+      } finally {
+        await jsonCommand(fixture.sellerHome, ['eligibility', 'rules', 'disable', '--rule-id', rule.id]);
+      }
+    } finally {
+      await cleanupLiveFixture(fixture);
+    }
+  }, 900_000);
 });
