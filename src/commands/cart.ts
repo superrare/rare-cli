@@ -42,6 +42,7 @@ type CartCheckoutOptions = ChainOptions & AccountCommandOptions & {
   paymentCurrency?: string;
   recipient?: string;
   preview?: boolean;
+  prepareOnly?: boolean;
   yes?: boolean;
 };
 
@@ -200,8 +201,10 @@ function cartCheckoutCommand(): Command {
     .requiredOption('--payment-currency <currency>', 'payment currency: eth, usdc, rare, or ERC-20 address')
     .option('--recipient <address>', 'fulfillment recipient (defaults to the configured wallet)')
     .option('--preview', 'show the API quote and SDK preparation without signing, approving, or submitting')
+    .option('--prepare-only', 'reserve and authorize checkout without approving tokens or submitting payment; claims remain reserved until expiry')
     .option('--yes', 'approve payment currency if needed and skip transaction confirmation')
     .action(async (opts: CartCheckoutOptions): Promise<void> => {
+      if (opts.preview === true && opts.prepareOnly === true) throw new Error('Use either --preview or --prepare-only, not both.');
       const configuredRecipient = unwrapCartCliResult(parseCartAddress(opts.recipient, '--recipient'));
       const paymentCurrencyInput = unwrapCartCliResult(parseCartCliCurrency(
         opts.paymentCurrency ?? '',
@@ -210,7 +213,7 @@ function cartCheckoutCommand(): Command {
       const selections = unwrapCartCliResult(parseCartListingSelections(opts.listing));
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
-      const wallet = opts.preview === true ? undefined : getWalletClient(chain);
+      const wallet = opts.preview === true || opts.prepareOnly === true ? undefined : getWalletClient(chain);
       const recipient = configuredRecipient ?? wallet?.account.address ?? getConfiguredAccountAddress(chain);
       if (recipient === undefined) {
         throw new Error(`rare cart checkout requires --recipient or a configured account for "${chain}".`);
@@ -236,6 +239,15 @@ function cartCheckoutCommand(): Command {
             printCheckoutPreparation(preparation, paymentCurrency.symbol ?? paymentCurrency.address, paymentCurrency.decimals);
           },
         );
+        return;
+      }
+
+      if (opts.prepareOnly === true) {
+        const preparedPurchase = await rare.cart.api.checkout.prepare(preparation.preparationReference);
+        output({ prepareOnly: true, preparation, preparedPurchase }, () => {
+          console.log(`Checkout authorized: ${preparedPurchase.executePurchase.order.orderId}`);
+          console.log('No payment was submitted. Any eligibility claims remain reserved until the order expires.');
+        });
         return;
       }
 
