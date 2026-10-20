@@ -296,7 +296,15 @@ function cartCheckoutCommand(swap = false): Command {
       }
 
       if (opts.prepareOnly === true) {
-        const preparedPurchase = await rare.cart.api.checkout.prepare(preparation.preparationReference);
+        const preparedDelivery = preparation.intent.delivery;
+        if (preparedDelivery !== undefined && preparation.idempotencyKey === undefined) {
+          throw new Error('Delivery checkout requires its original idempotency key.');
+        }
+        const preparedPurchase = await rare.cart.api.checkout.prepare(
+          preparedDelivery === undefined || preparation.idempotencyKey === undefined
+            ? preparation.preparationReference
+            : { ...preparation.intent, delivery: preparedDelivery, idempotencyKey: preparation.idempotencyKey },
+        );
         output({ prepareOnly: true, preparation, preparedPurchase }, () => {
           console.log(`Checkout authorized: ${preparedPurchase.executePurchase.order.orderId}`);
           console.log('No payment was submitted. Any eligibility claims remain reserved until the order expires.');
