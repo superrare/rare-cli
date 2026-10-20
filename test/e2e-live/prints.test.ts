@@ -62,14 +62,16 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
           expect(saved.some(item => item.id === addressId)).toBe(true);
           const loaded = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'list']);
           expect(loaded.some(item => item.id === addressId)).toBe(true);
-          const checkout = await jsonCommand<{ preparation: { paymentAmount: string; intent: { items: { quantity: string }[] }; breakdown: { displayPrice: string; shipping: string; total: string } } }>(fixture.sellerHome, [
+          const checkout = await jsonCommand<{ preparation: { paymentAmount: string; intent: { items: { quantity: string }[] }; breakdown: { displayPrice: string; shipping: string; total: string } }; preparedPurchase: { executePurchase: { lines: { listingDigest: string; quantity: string }[]; platformSignature: string } } }>(fixture.sellerHome, [
             'cart', 'checkout', '--listing', `${listing.listingDigest}=2`, '--payment-currency', 'usdc',
-            '--saved-address-id', addressId, '--chain', fixture.chain, '--preview',
+            '--saved-address-id', addressId, '--chain', fixture.chain, '--prepare-only', '--yes',
           ]);
           expect(checkout.preparation.intent.items[0]?.quantity).toBe('2');
           expect(checkout.preparation.breakdown.displayPrice).toBe('200000000');
           expect(BigInt(checkout.preparation.breakdown.shipping)).toBeGreaterThanOrEqual(0n);
           expect(checkout.preparation.breakdown.total).toBe(checkout.preparation.paymentAmount);
+          expect(checkout.preparedPurchase.executePurchase.lines.find(line => line.listingDigest === listing.listingDigest)?.quantity).toBe('2');
+          expect(checkout.preparedPurchase.executePurchase.platformSignature).not.toBe('0x');
           await expect(jsonCommand(fixture.sellerHome, [
             'cart', 'checkout', '--listing', `${listing.listingDigest}=4`, '--payment-currency', 'usdc',
             '--saved-address-id', addressId, '--chain', fixture.chain, '--preview',
@@ -95,12 +97,12 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
             ]));
             await expect(jsonCommand(fixture.sellerHome, [
               'cart', 'checkout', '--listing', gatedListing.listingDigest, '--payment-currency', 'usdc',
-              '--saved-address-id', addressId, '--chain', fixture.chain, '--preview',
+              '--saved-address-id', addressId, '--chain', fixture.chain, '--prepare-only', '--yes',
             ])).rejects.toThrow(/"Status: 409"/u);
           } finally {
             await jsonCommand(fixture.sellerHome, ['eligibility', 'rules', 'disable', '--rule-id', rule.id]);
           }
-          // Preview only. Do not pay or submit a physical fulfillment order.
+          // Authorization only. Never approve tokens, pay or submit a physical fulfillment order.
         } finally {
           const remaining = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'delete', '--id', addressId]);
           expect(remaining.some(item => item.id === addressId)).toBe(false);

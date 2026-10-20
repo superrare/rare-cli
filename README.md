@@ -597,6 +597,8 @@ CLI amount strings use human-readable units; SDK checkout amounts use `bigint` b
 
 Use generic Cart checkout for prints. For two copies, pass `--listing 0x...listingDigest=2` together with `--saved-address-id` or `--shipping-input`. The API checks the creator's quantity limit and eligibility claims before authorizing payment. `--preview` quotes production and shipping for the selected quantity without paying or submitting a print order.
 
+`--prepare-only --yes` also requests the signed checkout authorization without approving tokens or submitting payment. This reserves any required claims until the order expires. Do not combine it with `--preview`.
+
 ### Batch Listings
 
 Batch listing roots are built from token sets. For create flows, you can pass a CSV file, a JSON token list, a token tree artifact from `rare utils tree build`, or the older root artifact shape that already includes listing config. Running `rare utils tree build` first is optional; use it when you want a reusable artifact or want to inspect/share the root before registering it.
