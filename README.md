@@ -588,6 +588,15 @@ CLI amount strings use human-readable units; SDK checkout amounts use `bigint` b
 
 `--preview` returns the Rare API quote and SDK preparation without signing, approving, publishing, or submitting a transaction. Before purchase, the SDK verifies the API bundle against the requested items, payment currency, recipients, chain, and connected payer. Routing, proofs, authorization, order construction, and platform signing remain internal to the Rare API and SDK.
 
+### Print listing eligibility and quantity
+
+`rare prints listing prepare --input listing.json` and `rare prints listing publish --input listing.json --yes` accept these optional fields in the listing JSON:
+
+- `eligibilityRuleId`: an enabled rule owned by the creator that authorizes the print option's SKU. Publication applies the requirement before the listing becomes available.
+- `maxQuantityPerCheckout`: a decimal string from `"1"` to `"1000"`, defaulting to `"1"`. This limits copies in one checkout, independently of `availableQuantity`, which sets total edition supply.
+
+Use generic Cart checkout for prints. For two copies, pass `--listing 0x...listingDigest=2` together with `--saved-address-id` or `--shipping-input`. The API checks the creator's quantity limit and eligibility claims before authorizing payment. `--preview` quotes production and shipping for the selected quantity without paying or submitting a print order.
+
 ### Batch Listings
 
 Batch listing roots are built from token sets. For create flows, you can pass a CSV file, a JSON token list, a token tree artifact from `rare utils tree build`, or the older root artifact shape that already includes listing config. Running `rare utils tree build` first is optional; use it when you want a reusable artifact or want to inspect/share the root before registering it.
