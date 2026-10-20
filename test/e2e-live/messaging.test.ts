@@ -95,7 +95,7 @@ describe('durable messaging through the built CLI and deployed services', () => 
 });
 
 const publicRoom = z.object({ id: z.string().uuid() });
-const publicMessages = z.object({ messages: z.array(z.object({ id: z.string().uuid(), type: z.enum(['user', 'system']), body: z.string() })) });
+const publicMessages = z.object({ messages: z.array(z.object({ id: z.string().uuid(), type: z.enum(['user', 'system']), body: z.string(), reactions: z.array(z.object({ emoji: z.string(), count: z.number(), reacted: z.boolean() })), collapsed: z.boolean(), reported: z.boolean() })) });
 
 describe('public contextual chats through the built CLI', () => {
   it.each([
@@ -124,6 +124,27 @@ describe('public contextual chats through the built CLI', () => {
         const edited = z.object({ body: z.string() }).parse(parseJsonStdout(await run(['messaging', 'edit', room.id, sent.id, '--body', 'Updated public CLI message'])));
         expect(edited.body).toBe('Updated public CLI message');
         expect(publicMessages.parse(parseJsonStdout(await run(['messaging', 'public', 'history', room.id]))).messages.find(row => row.id === sent.id)?.body).toBe('Updated public CLI message');
+        expect((await run(['messaging', 'react', room.id, sent.id, '❤️'])).code).toBe(0);
+        expect(publicMessages.parse(parseJsonStdout(await run(['messaging', 'public', 'history', room.id]))).messages.find(row => row.id === sent.id)?.reactions).toContainEqual({ emoji: '❤️', count: 1, reacted: false });
+        expect(publicMessages.parse(parseJsonStdout(await run(['messaging', 'public', 'history', room.id, '--authenticated']))).messages.find(row => row.id === sent.id)?.reactions).toContainEqual({ emoji: '❤️', count: 1, reacted: true });
+        expect((await run(['messaging', 'react', room.id, sent.id, '❤️', '--remove'])).code).toBe(0);
+        expect(publicMessages.parse(parseJsonStdout(await run(['messaging', 'public', 'history', room.id]))).messages.find(row => row.id === sent.id)?.reactions.some(reaction => reaction.emoji === '❤️')).toBe(false);
+        await withTempHome(async second => {
+          const reporter = await setup(second, required('RARE_ACCOUNT_TEST_SECOND_PRIVATE_KEY'), url.origin);
+          expect((await reporter(['auth', 'login', '--wallet', '--chain', 'mainnet'])).code).toBe(0);
+          const joined = z.object({ id: z.string().uuid() }).parse(parseJsonStdout(await reporter(['messaging', 'public', 'send', room.id, '--body', 'CLI report-and-hide fixture'])));
+          try {
+            expect((await reporter(['messaging', 'report', room.id, sent.id, '--reason', 'Dedicated CLI integration fixture'])).code).toBe(0);
+            expect(publicMessages.parse(parseJsonStdout(await reporter(['messaging', 'public', 'history', room.id, '--authenticated']))).messages.find(row => row.id === sent.id)).toMatchObject({ reported: true, collapsed: true });
+            expect(publicMessages.parse(parseJsonStdout(await run(['messaging', 'public', 'history', room.id, '--authenticated']))).messages.find(row => row.id === sent.id)).toMatchObject({ reported: false, collapsed: false });
+            expect(publicMessages.parse(parseJsonStdout(await run(['messaging', 'public', 'history', room.id]))).messages.find(row => row.id === sent.id)).toMatchObject({ reported: false, collapsed: false });
+          } finally {
+            expect((await reporter(['messaging', 'delete', room.id, joined.id])).code).toBe(0);
+            expect((await reporter(['messaging', 'leave', room.id])).code).toBe(0);
+            expect((await reporter(['auth', 'logout'])).code).toBe(0);
+          }
+        });
+
         expect((await run(['messaging', 'preferences', room.id, '--notification', 'muted'])).code).toBe(0);
         expect(z.object({ conversations: z.array(z.object({ id: z.string(), notification: z.string() })) }).parse(parseJsonStdout(await run(['messaging', 'inbox']))).conversations.find(row => row.id === room.id)?.notification).toBe('muted');
       } finally {
@@ -134,5 +155,5 @@ describe('public contextual chats through the built CLI', () => {
         expect((await run(['auth', 'logout'])).code).toBe(0);
       }
     });
-  }, 180_000);
+  }, 300_000);
 });

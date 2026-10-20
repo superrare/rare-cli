@@ -82,14 +82,15 @@ export function messagingCommand(): Command {
     const context = publicContext(type, id, options);
     print(await createRareApi({ baseUrl: options.apiUrl }).messaging.resolveRoom(context));
   }));
-  publicMessaging.addCommand(publicCommand('history').argument('<room-id>').option('--before <sequence>').option('--after <sequence>').option('--limit <number>', 'messages to return', '50').action(async (id: string, options: { apiUrl: string; before?: string; after?: string; limit: string }): Promise<void> => {
-    print(await createRareApi({ baseUrl: options.apiUrl }).messaging.history(id, { before: options.before, after: options.after, limit: Number(options.limit) }));
+  publicMessaging.addCommand(accountCommand('history').argument('<room-id>').option('--authenticated', 'include your reaction and report-and-hide state').option('--before <sequence>').option('--after <sequence>').option('--limit <number>', 'messages to return', '50').action(async (id: string, options: AccountCommandOptions & { authenticated?: boolean; before?: string; after?: string; limit: string }): Promise<void> => {
+    const history = options.authenticated ? client(options).historyPublic : createRareApi({ baseUrl: options.apiUrl }).messaging.history;
+    print(await history(id, { before: options.before, after: options.after, limit: Number(options.limit) }));
   }));
-  publicMessaging.addCommand(publicCommand('watch').argument('<room-id>').option('--after <sequence>').option('--interval <milliseconds>', 'polling interval', '3000').action(async (id: string, options: { apiUrl: string; after?: string; interval: string }): Promise<void> => {
+  publicMessaging.addCommand(accountCommand('watch').argument('<room-id>').option('--authenticated', 'include your reaction and report-and-hide state').option('--after <sequence>').option('--interval <milliseconds>', 'polling interval', '3000').action(async (id: string, options: AccountCommandOptions & { authenticated?: boolean; after?: string; interval: string }): Promise<void> => {
     const interval = Number(options.interval);
     if (!Number.isSafeInteger(interval) || interval < 1000) throw new Error('Polling interval must be an integer of at least 1000 milliseconds.');
-    const messaging = createRareApi({ baseUrl: options.apiUrl }).messaging;
-    const initial = await messaging.history(id);
+    const history = options.authenticated ? client(options).historyPublic : createRareApi({ baseUrl: options.apiUrl }).messaging.history;
+    const initial = await history(id);
     print(initial);
     const state = { cursor: options.after ?? initial.room.latestSequence };
     const controller = new AbortController();
@@ -98,7 +99,7 @@ export function messagingCommand(): Command {
     process.once('SIGTERM', stop);
     try {
       while (!controller.signal.aborted) {
-        const page = await messaging.history(id, { after: state.cursor, signal: controller.signal });
+        const page = await history(id, { after: state.cursor, signal: controller.signal });
         if (page.messages.length > 0) print(page);
         // eslint-disable-next-line functional/immutable-data -- The polling shell advances its cursor after each response.
         state.cursor = page.messages.at(-1)?.sequence ?? state.cursor;
