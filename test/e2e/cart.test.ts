@@ -36,6 +36,7 @@ describe('built Cart CLI', () => {
       const checkoutHelp = await runCli(['cart', 'checkout', '--help'], { home });
       expect(checkoutHelp.stdout).toContain('--listing <listing-digest[=quantity]>');
       expect(checkoutHelp.stdout).toContain('--payment-currency <currency>');
+      expect(checkoutHelp.stdout).toContain('--prepare-only');
     });
   });
 
@@ -98,6 +99,35 @@ describe('built Cart CLI', () => {
     }
   });
 
+  it('rejects combining preview with checkout authorization before reading wallet credentials', async () => {
+    const result = await runCli(['--json', 'cart', 'checkout', '--listing', listingDigest,
+      '--payment-currency', 'eth', '--preview', '--prepare-only', '--yes']);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('Use either --preview or --prepare-only, not both.');
+  });
+
+  it('authorizes checkout without submitting payment or requiring a wallet signer', async () => {
+    await withTempHome(async temporary => {
+      const home = await realpath(temporary);
+      await withCartApiFixture(async ({ baseUrl, preparationRequest }) => {
+        const directory = join(home, 'auth');
+        const scope = { apiBaseUrl: baseUrl, authBaseUrl: `${baseUrl}/auth/v2`, clientId: 'rare-cli' };
+        const store = createAuthStore({ ...scope, backend: 'file', directory });
+        await store.withLock(async () => { await store.set({ ...scope, revision: 'cart-prepare-session',
+          accessToken: 'cart-prepare-access', refreshToken: 'cart-prepare-refresh',
+          expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
+        const result = await runCli(['--json', 'cart', 'checkout', '--listing', `${listingDigest}=2`,
+          '--payment-currency', 'eth', '--recipient', recipient, '--prepare-only', '--yes',
+          '--chain', 'sepolia', '--api-url', baseUrl, '--storage', 'file', '--auth-directory', directory], { home });
+        expect(parseJsonStdout(result)).toMatchObject({ prepareOnly: true,
+          preparedPurchase: { executePurchase: { order: { orderId: hash } } } });
+        expect(await preparationRequest).toMatchObject({ pathname: '/v1/cart/checkout/prepare',
+          authorization: 'Bearer cart-prepare-access', body: { preparationReference: 'cart-checkout-fixture' } });
+        expect(result.stdout).not.toContain('txHash');
+      });
+    });
+  });
+
   it('reuses saved account credentials for Listing preparation without another login or wallet signature', async () => {
     await withTempHome(async temporary => {
       const home = await realpath(temporary);
@@ -145,6 +175,7 @@ type CartApiRequest = {
 async function withCartApiFixture<T>(fn: (fixture: {
   baseUrl: string;
   request: Promise<CartApiRequest>;
+  preparationRequest: Promise<CartApiRequest>;
 }) => Promise<T>): Promise<T> {
   const captured = new EventEmitter();
   const server = createServer((request, response) => {
@@ -159,16 +190,18 @@ async function withCartApiFixture<T>(fn: (fixture: {
   const address = server.address();
   if (address === null || typeof address === 'string') throw new Error('Cart API fixture did not bind a TCP port.');
   try {
-    return await fn({ baseUrl: `http://127.0.0.1:${address.port}`, request: waitForCartApiRequest(captured) });
+    return await fn({ baseUrl: `http://127.0.0.1:${address.port}`, request: waitForCartApiRequest(captured),
+      preparationRequest: waitForCartApiRequest(captured, '/v1/cart/checkout/prepare') });
   } finally {
     await new Promise<void>((resolve, reject) => server.close((error) => error === undefined ? resolve() : reject(error)));
   }
 }
 
-async function waitForCartApiRequest(events: EventEmitter): Promise<CartApiRequest> {
+async function waitForCartApiRequest(events: EventEmitter, pathname?: string): Promise<CartApiRequest> {
   const values: unknown[] = await once(events, 'request');
   const value = values[0];
   if (!isCartApiRequest(value)) throw new Error('Cart API fixture captured an invalid request.');
+  if (pathname !== undefined && value.pathname !== pathname) return waitForCartApiRequest(events, pathname);
   return value;
 }
 
@@ -188,6 +221,11 @@ async function handleCartApiRequest(
   const rawBody = await text(request);
   const body = rawBody.length === 0 ? undefined : JSON.parse(rawBody) as unknown;
   capture({ pathname: url.pathname, searchParams: Object.fromEntries(url.searchParams), body, authorization: request.headers.authorization });
+  if (request.method === 'POST' && url.pathname === '/v1/cart/checkout/prepare') {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ data: preparedPurchaseFixture() }));
+    return;
+  }
   if (request.method === 'POST' && url.pathname === '/v1/cart/listings/preview') {
     response.writeHead(400, { 'content-type': 'application/json' });
     response.end(JSON.stringify({ error: 'fixture listing rejected' }));
