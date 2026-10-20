@@ -58,4 +58,27 @@ describe('built print and shipping CLI', () => {
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('not both');
   });
+
+  it('rejects invalid print quantity limits and eligibility rules before authentication', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'rare-print-policy-'));
+    try {
+      const file = join(directory, 'listing.json');
+      const terms = {
+        optionId: '00000000-0000-4000-8000-000000000001', seller: `0x${'1'.repeat(40)}`,
+        listingSalt: `0x${'2'.repeat(64)}`, deadline: '2000000000', availableQuantity: '10', fulfillmentKind: 1,
+      };
+      for (const maxQuantityPerCheckout of ['0', '1001', '01', '-1', '1.5']) {
+        await writeFile(file, JSON.stringify({ ...terms, maxQuantityPerCheckout }));
+        const result = await runCli(['--json', 'prints', 'listing', 'prepare', '--input', file]);
+        expect(result.code).toBe(1);
+        expect(result.stderr).toContain('maxQuantityPerCheckout');
+      }
+      await writeFile(file, JSON.stringify({ ...terms, eligibilityRuleId: 'invalid-rule' }));
+      const result = await runCli(['--json', 'prints', 'listing', 'prepare', '--input', file]);
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain('eligibilityRuleId');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
 });
