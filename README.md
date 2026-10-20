@@ -1212,7 +1212,31 @@ Edits do not require a version number. Use `--expected-version <number>` when ed
 
 Text accepts `--body` or `--body-file`. Repeat `--mention`, `--attachment` or `--invite` for each account or attachment. Direct, group and send commands generate client UUIDs. For retries, supply the original `--client-message-id` or group `--client-operation-id` with the same payload. Run `rare messaging --help` for read markers, invitations, moderation, previews and image commands.
 
-Run `npm run test:messaging:e2e` manually against a deployed non-production API with `RARE_ACCOUNT_TEST_API_URL`, `RARE_ACCOUNT_TEST_PRIVATE_KEY`, and `RARE_ACCOUNT_TEST_SECOND_PRIVATE_KEY` pointing to two existing test accounts. Public tests also require `RARE_MESSAGING_TEST_AUCTION_ID`, `RARE_MESSAGING_TEST_DROP_ID`, `RARE_MESSAGING_TEST_EDITION_ADDRESS`, and `RARE_MESSAGING_TEST_EDITION_CHAIN_ID`. Tests use the built CLI, delete their messages, close private test rooms, leave public rooms and revoke sessions. Closed rooms retain durable records. The suite is not added to CI.
+Run `npm run test:messaging:e2e` manually against a non-production deployment. Set
+`RARE_ACCOUNT_TEST_API_URL` and three distinct existing test-account keys:
+`RARE_ACCOUNT_TEST_PRIVATE_KEY`, `RARE_ACCOUNT_TEST_SECOND_PRIVATE_KEY`, and
+`RARE_ACCOUNT_TEST_THIRD_PRIVATE_KEY`. Keep the first/second pair reserved for
+repeatedly declined direct requests; do not accept the request or follow the first
+account from the second. The first/third pair is used for an accepted conversation.
+Set `RARE_MESSAGING_TEST_PRIVATE_BUCKET` to the deployment's private messaging
+bucket and authenticate `gcloud` for `superrare-dev` to remove attachment fixtures.
+Public tests also require `RARE_MESSAGING_TEST_AUCTION_ID`,
+`RARE_MESSAGING_TEST_DROP_ID`, `RARE_MESSAGING_TEST_EDITION_ADDRESS`, and
+`RARE_MESSAGING_TEST_EDITION_CHAIN_ID`. Set
+`RARE_MESSAGING_TEST_INTERNAL_API_KEY` to the non-production internal producer key
+for system-message fixture setup. This key is never given to CLI commands.
+
+The command runs the existing messaging flow, authorization checks, and public
+notification delivery sequentially. It verifies thread/roster/block-list reads,
+downloaded image bytes, revocation after bans or deletion, real app notifications,
+mentions-only and muted preferences, and trusted system-message deduplication.
+A positive worker control precedes absence assertions for muted notifications.
+System fixtures use a temporary drop room; they do not create synthetic events in
+an existing auction or edition. System messages remain in its unadvertised durable
+history after the drop is deleted. Public messages and transient direct replies
+are deleted; request seed messages and closed group history remain for repeatable
+runs. These tests are not added to CI.
+
 
 Random NFT sampling uses the existing search command:
 

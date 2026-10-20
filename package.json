@@ -81,7 +81,7 @@
     "test:favorites:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/favorites.test.ts --config vitest.config.ts",
     "test:posts:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/posts.test.ts --config vitest.config.ts",
     "test:drops:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/drops.test.ts --config vitest.config.ts",
-    "test:messaging:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/messaging.test.ts --config vitest.config.ts",
+    "test:messaging:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/messaging.test.ts test/e2e-live/messaging-authorization.test.ts test/e2e-live/messaging-public-delivery.test.ts --config vitest.config.ts --no-file-parallelism",
     "test:nfts:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/nft-search.test.ts --config vitest.config.ts",
     "test:notifications:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/notifications.test.ts --config vitest.config.ts"
   },
