@@ -2,7 +2,9 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import type { EligibilityRule } from '@rareprotocol/rare-sdk';
 import { cleanupLiveFixture, createCartLiveFixture, jsonCommand } from './helpers/live-harness.js';
+import { deployErc721Collection } from './helpers/live-erc721.js';
 
 describe('print tooling through the built CLI and deployed Rare API', () => {
   it('uploads a private master, publishes a print and quotes generic checkout with saved shipping', async () => {
@@ -33,20 +35,22 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
         expect(await jsonCommand(fixture.sellerHome, ['prints', 'drops', 'update', '--id', drop.id, '--input', patch]))
           .toMatchObject({ metadata: { name: `${name} updated`, tags: ['test', 'edited'] } });
         expect(await jsonCommand(fixture.sellerHome, ['orders', 'list'])).toMatchObject({ data: expect.any(Array) });
-        const option = await jsonCommand<{ id: string }>(fixture.sellerHome, [
+        const option = await jsonCommand<{ id: string; sku: string }>(fixture.sellerHome, [
           'prints', 'drops', 'configure', '--id', drop.id, '--price-usd-cents', '10000',
         ]);
         const terms = join(fixture.tempDir, 'listing.json');
         await writeFile(terms, JSON.stringify({ optionId: option.id, seller: fixture.sellerAddress,
           listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: String(Math.floor(Date.now() / 1000) + 3600),
-          availableQuantity: '10', fulfillmentKind: 1 }));
+          availableQuantity: '10', fulfillmentKind: 1, maxQuantityPerCheckout: '3' }));
         const publication = await jsonCommand<{ signedArtifact: { entries: { listingDigest: string }[] } }>(fixture.sellerHome, [
           'prints', 'listing', 'publish', '--input', terms, '--chain', fixture.chain, '--yes',
         ]);
         const listing = publication.signedArtifact.entries[0];
         if (listing === undefined) throw new Error('Print publication returned no Listing entry.');
-        const publicDrop = await jsonCommand<{ metadata: Record<string, unknown>; options: { listingDigest: string }[] }>(fixture.sellerHome, ['prints', 'get', '--id', drop.id]);
-        expect(publicDrop.options.some(item => item.listingDigest === listing.listingDigest)).toBe(true);
+        const publicDrop = await jsonCommand<{ metadata: Record<string, unknown>; options: { listingDigest: string; maxQuantityPerCheckout: string; eligibilityRuleId: string | null }[] }>(fixture.sellerHome, ['prints', 'get', '--id', drop.id]);
+        expect(publicDrop.options).toEqual(expect.arrayContaining([
+          expect.objectContaining({ listingDigest: listing.listingDigest, maxQuantityPerCheckout: '3', eligibilityRuleId: null }),
+        ]));
         expect(publicDrop.metadata).not.toHaveProperty('productionUploadKey');
         expect(await jsonCommand(fixture.sellerHome, ['prints', 'activity', '--id', drop.id])).toMatchObject({ events: [] });
         const address = join(fixture.tempDir, 'shipping.json');
@@ -58,12 +62,44 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
           expect(saved.some(item => item.id === addressId)).toBe(true);
           const loaded = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'list']);
           expect(loaded.some(item => item.id === addressId)).toBe(true);
-          const checkout = await jsonCommand<{ preparation: { paymentAmount: string; breakdown: { shipping: string; total: string } } }>(fixture.sellerHome, [
-            'cart', 'checkout', '--listing', listing.listingDigest, '--payment-currency', 'usdc',
+          const checkout = await jsonCommand<{ preparation: { paymentAmount: string; intent: { items: { quantity: string }[] }; breakdown: { displayPrice: string; shipping: string; total: string } } }>(fixture.sellerHome, [
+            'cart', 'checkout', '--listing', `${listing.listingDigest}=2`, '--payment-currency', 'usdc',
             '--saved-address-id', addressId, '--chain', fixture.chain, '--preview',
           ]);
+          expect(checkout.preparation.intent.items[0]?.quantity).toBe('2');
+          expect(checkout.preparation.breakdown.displayPrice).toBe('200000000');
           expect(BigInt(checkout.preparation.breakdown.shipping)).toBeGreaterThanOrEqual(0n);
           expect(checkout.preparation.breakdown.total).toBe(checkout.preparation.paymentAmount);
+          await expect(jsonCommand(fixture.sellerHome, [
+            'cart', 'checkout', '--listing', `${listing.listingDigest}=4`, '--payment-currency', 'usdc',
+            '--saved-address-id', addressId, '--chain', fixture.chain, '--preview',
+          ])).rejects.toThrow(/"Status: 422"/u);
+          const collection = await deployErc721Collection(fixture, '1');
+          const ruleFile = join(fixture.tempDir, 'print-rule.json');
+          await writeFile(ruleFile, JSON.stringify({ definition: { kind: 'EVERY_SALE',
+            source: { chainId: String(fixture.chainId), tokenContract: collection.contract }, targets: [{ sku: option.sku }] } }));
+          const rule = await jsonCommand<EligibilityRule>(fixture.sellerHome, ['eligibility', 'rules', 'create', '--input', ruleFile]);
+          try {
+            const gatedTerms = join(fixture.tempDir, 'gated-print-listing.json');
+            await writeFile(gatedTerms, JSON.stringify({ optionId: option.id, seller: fixture.sellerAddress,
+              listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: String(Math.floor(Date.now() / 1000) + 3600),
+              availableQuantity: '10', fulfillmentKind: 1, eligibilityRuleId: rule.id }));
+            const gated = await jsonCommand<{ signedArtifact: { entries: { listingDigest: string }[] } }>(fixture.sellerHome, [
+              'prints', 'listing', 'publish', '--input', gatedTerms, '--chain', fixture.chain, '--yes',
+            ]);
+            const gatedListing = gated.signedArtifact.entries[0];
+            if (gatedListing === undefined) throw new Error('Gated print publication returned no Listing entry.');
+            const gatedDrop = await jsonCommand<{ options: { listingDigest: string; maxQuantityPerCheckout: string; eligibilityRuleId: string | null }[] }>(fixture.sellerHome, ['prints', 'get', '--id', drop.id]);
+            expect(gatedDrop.options).toEqual(expect.arrayContaining([
+              expect.objectContaining({ listingDigest: gatedListing.listingDigest, maxQuantityPerCheckout: '1', eligibilityRuleId: rule.id }),
+            ]));
+            await expect(jsonCommand(fixture.sellerHome, [
+              'cart', 'checkout', '--listing', gatedListing.listingDigest, '--payment-currency', 'usdc',
+              '--saved-address-id', addressId, '--chain', fixture.chain, '--preview',
+            ])).rejects.toThrow(/"Status: 409"/u);
+          } finally {
+            await jsonCommand(fixture.sellerHome, ['eligibility', 'rules', 'disable', '--rule-id', rule.id]);
+          }
           // Preview only. Do not pay or submit a physical fulfillment order.
         } finally {
           const remaining = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'delete', '--id', addressId]);

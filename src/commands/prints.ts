@@ -67,12 +67,12 @@ export function printsCommand(): Command {
   prints.addCommand(drops);
 
   const listings = new Command('listing').description('Prepare and publish print Listing terms');
-  listings.addCommand(command('prepare').requiredOption('--input <path>', 'JSON listing terms')
+  listings.addCommand(command('prepare').requiredOption('--input <path>', 'JSON listing terms, including optional eligibilityRuleId and maxQuantityPerCheckout')
     .action(async (options: InputOptions): Promise<void> => {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
       print(await client(options).prints.listings.prepare(printListingInput.parse(input)));
     }));
-  listings.addCommand(command('publish').requiredOption('--input <path>', 'JSON listing terms to prepare, sign and publish')
+  listings.addCommand(command('publish').requiredOption('--input <path>', 'JSON listing terms to prepare, sign and publish, including optional eligibilityRuleId and maxQuantityPerCheckout')
     .option('--yes', 'approve NFT contracts if needed and authorize signing and publishing')
     .action(async (options: InputOptions & { yes?: boolean }): Promise<void> => {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
