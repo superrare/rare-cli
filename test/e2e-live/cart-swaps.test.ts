@@ -1,11 +1,13 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { erc721Abi, type Hex } from 'viem';
+import { erc721Abi, parseEventLogs, zeroHash, type Hex } from 'viem';
+import { cartAbi, getCartAddress } from '@rareprotocol/rare-sdk/contracts';
 import { cleanupLiveFixture, createCartLiveFixture, jsonCommand, readTokenBalance, requireBuyerFixture,
   type BuyerLiveFixture } from './helpers/live-harness.js';
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
 import { createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
+import { runCli } from '../helpers/cli.js';
 
 type Preview = { preparation: { paymentAmount: string; lines: Array<{ fulfillmentKind: number; amount: string }> } };
 type Purchase = { txHash: Hex; paymentAmount: string; actionCount: number };
@@ -21,12 +23,13 @@ describe.sequential('live Cart routed swaps through the generic CLI checkout', (
   afterAll(async () => { await cleanupLiveFixture(fixture); });
 
   it.each([
-    ['--input-amount', '0.00001'],
-    ['--output-amount', '0.01'],
-  ])('receives ERC20 tokens using %s', async (amountFlag, amount) => {
+    ['eth', '--input-amount', '0.00001', 10_000_000_000_000n],
+    ['eth', '--output-amount', '0.01', undefined],
+    ['usdc', '--input-amount', '0.01', 10_000n],
+  ])('receives ERC20 tokens paying %s using %s', async (paymentCurrency, amountFlag, amount, inputAmount) => {
     if (fixture === undefined) throw new Error('Live Cart fixture was not initialized.');
     const live = fixture;
-    const args = ['cart', 'swap', '--payment-currency', 'eth', '--output-currency', 'rare',
+    const args = ['cart', 'swap', '--payment-currency', paymentCurrency, '--output-currency', 'rare',
       amountFlag, amount, '--recipient', live.buyerAddress, '--chain', live.chain];
     const preview = await jsonCommand<Preview>(live.buyerHome, [...args, '--preview']);
     const swapLine = preview.preparation.lines.find(line => line.fulfillmentKind === 6);
@@ -36,9 +39,30 @@ describe.sequential('live Cart routed swaps through the generic CLI checkout', (
     const purchase = await jsonCommand<Purchase>(live.buyerHome, [...args, '--yes'], 240_000);
     expect(purchase.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
     expect(purchase.actionCount).toBe(0);
-    expect(await readTokenBalance(live, live.buyerAddress, live.rareAddress)).toBeGreaterThan(before);
-    if (amountFlag === '--output-amount') expect(await readTokenBalance(live, live.buyerAddress, live.rareAddress) - before).toBe(10_000_000_000_000_000n);
-    if (amountFlag === '--input-amount') expect(BigInt(purchase.paymentAmount)).toBe(10_000_000_000_000n);
+    const receipt = await live.publicClient.getTransactionReceipt({ hash: purchase.txHash });
+    const lines = parseEventLogs({ abi: cartAbi, logs: receipt.logs.filter(log => log.address.toLowerCase() === getCartAddress(live.chain).toLowerCase()), eventName: 'OrderLineSettled' });
+    expect(lines).toHaveLength(1);
+    const settled = lines[0];
+    if (settled === undefined) throw new Error('Swap transaction did not settle its output.');
+    expect(settled.args).toMatchObject({ fulfillmentKind: 6, listingDigest: zeroHash,
+      settlementCurrency: live.rareAddress, paymentRecipient: live.buyerAddress });
+    expect(await readTokenBalance(live, live.buyerAddress, live.rareAddress) - before).toBe(settled.args.amount);
+    expect(settled.args.amount).toBeGreaterThan(0n);
+    if (amountFlag === '--output-amount') expect(settled.args.amount).toBe(10_000_000_000_000_000n);
+    if (inputAmount !== undefined) expect(BigInt(purchase.paymentAmount)).toBe(inputAmount);
+  }, 300_000);
+
+  it('rejects an unfunded swap without spending buyer tokens', async () => {
+    if (fixture === undefined) throw new Error('Live Cart fixture was not initialized.');
+    const live = fixture;
+    const before = await readTokenBalance(live, live.buyerAddress, live.usdcAddress);
+    expect(before).toBeLessThan(1_000_000_000_000n);
+    const result = await runCli(['--json', 'cart', 'swap', '--payment-currency', 'usdc',
+      '--output-currency', 'rare', '--input-amount', '1000000', '--recipient', live.buyerAddress,
+      '--chain', live.chain, '--yes'], { home: live.buyerHome, timeoutMs: 240_000 });
+    expect(result.code).not.toBe(0);
+    expect(result.stdout).not.toContain('txHash');
+    expect(await readTokenBalance(live, live.buyerAddress, live.usdcAddress)).toBe(before);
   }, 300_000);
 
   it('combines an NFT listing and token output in one checkout', async () => {

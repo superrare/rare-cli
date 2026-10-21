@@ -4,6 +4,7 @@ import { formatUnits, type Address } from 'viem';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import type { CartCheckoutPreparation, CartListingPreparation } from '@rareprotocol/rare-sdk';
 import { hashCartListingRoot } from '@rareprotocol/rare-sdk/utils';
+import { cartFulfillmentKinds } from '@rareprotocol/rare-sdk';
 import { getActiveChain } from '../config.js';
 import {
   getConfiguredAccountAddress,
@@ -260,10 +261,20 @@ function cartCheckoutCommand(swap = false): Command {
       const preparation = await rare.cart.checkout.prepare(intent);
 
       if (opts.preview === true) {
+        const outputs = await Promise.all(preparation.lines.filter(line => line.fulfillmentKind === cartFulfillmentKinds.currencySwap).map(async line => {
+          const currency = await rare.currency.resolveDecimals(line.settlementCurrency);
+          return `${formatUnits(line.amount, currency.decimals)} ${currency.symbol ?? currency.address} to ${line.paymentRecipient}`;
+        }));
+        const fees = await Promise.all(preparation.fees.map(async fee => {
+          const currency = await rare.currency.resolveDecimals(fee.currency);
+          return `${fee.label}: ${formatUnits(fee.amount, currency.decimals)} ${currency.symbol ?? currency.address}`;
+        }));
         output(
           { preview: true, preparation },
           () => {
             printCheckoutPreparation(preparation, paymentCurrency.symbol ?? paymentCurrency.address, paymentCurrency.decimals);
+            for (const value of outputs) console.log(`  Receive: ${value}`);
+            for (const value of fees) console.log(`  Fee: ${value}`);
           },
         );
         return;
