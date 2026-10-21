@@ -110,7 +110,7 @@ describe('public room delivery and system-message protection through the built C
               expect(await preference()).toBe('all');
               const systemBefore = (await notices(recipient, room.id)).map(row => row.id);
               const system = { sourceId: `integration:${randomUUID()}`, type: 'integration.notice', summary: 'Live CLI system notification fixture', payload: { fixture: true, values: [1, 2] }, occurredAt: new Date().toISOString() };
-              const append = (token?: string, body: unknown = system): Promise<Response> => fetch(`${messagingOrigin()}/v1/messaging/internal/public/rooms/${room.id}/system`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }) }, body: JSON.stringify(body), signal: AbortSignal.timeout(30_000) });
+              const append = (token?: string, body: unknown = system): Promise<Response> => fetch(`${messagingOrigin()}/v1/messaging/internal/public/rooms/${room.id}/system`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Messaging-Request': '1', ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }) }, body: JSON.stringify(body), signal: AbortSignal.timeout(30_000) });
               const session = await fixture.auth.getSession();
               if (!session) throw new Error('Missing ordinary fixture session');
               for (const token of [undefined, 'forged']) expect([401, 404]).toContain((await append(token)).status);
