@@ -96,6 +96,7 @@ describe('durable messaging through the built CLI and deployed services', () => 
 });
 
 const publicRoom = z.object({ id: z.string().uuid() });
+const publicSentMessage = z.object({ id: z.string().uuid(), type: z.literal('user'), createdAt: z.string().datetime() });
 const publicMessages = z.object({ messages: z.array(z.object({ id: z.string().uuid(), type: z.enum(['user', 'system']), body: z.string(), reactions: z.array(z.object({ emoji: z.string(), count: z.number(), reacted: z.boolean() })), collapsed: z.boolean(), reported: z.boolean() })) });
 
 describe('public contextual chats through the built CLI', () => {
@@ -117,15 +118,16 @@ describe('public contextual chats through the built CLI', () => {
       expect((await run(['auth', 'login', '--wallet', '--chain', 'mainnet'])).code).toBe(0);
       const clientId = randomUUID();
       const args = ['messaging', 'public', 'send', room.id, '--body', `CLI public chat ${clientId}`, '--client-message-id', clientId];
-      const sent = z.object({ id: z.string().uuid(), type: z.literal('user') }).parse(parseJsonStdout(await retryPublicSend(run, args)));
+      const sent = publicSentMessage.parse(parseJsonStdout(await retryPublicSend(run, args)));
       try {
         const nextId = randomUUID();
         const nextArgs = ['messaging', 'public', 'send', room.id, '--body', `CLI cooldown retry ${nextId}`, '--client-message-id', nextId];
-        const limited = await run(nextArgs);
-        expect(limited.code).not.toBe(0);
-        expect(JSON.parse(limited.stderr)).toMatchObject({ status: 429, code: 'rate_limited' });
-        const next = z.object({ id: z.string().uuid() }).parse(parseJsonStdout(await retryPublicSend(run, nextArgs)));
+        const attempt = await run(nextArgs);
+        if (attempt.code !== 0) expect(JSON.parse(attempt.stderr)).toMatchObject({ status: 429, code: 'rate_limited' });
+        const next = publicSentMessage.parse(parseJsonStdout(attempt.code === 0 ? attempt : await retryPublicSend(run, nextArgs)));
         try {
+          // CLI startup and network time may naturally outlast the cooldown.
+          expect(Date.parse(next.createdAt) - Date.parse(sent.createdAt)).toBeGreaterThanOrEqual(1000);
           expect(z.object({ id: z.string() }).parse(parseJsonStdout(await retryPublicSend(run, nextArgs))).id).toBe(next.id);
           const thread = publicMessages.parse(parseJsonStdout(await run(['messaging', 'public', 'history', room.id])));
           for (const id of [sent.id, next.id]) expect(thread.messages.filter(row => row.id === id)).toHaveLength(1);
