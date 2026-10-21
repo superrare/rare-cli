@@ -1,3 +1,4 @@
+import { appendSystemFixture } from './helpers/messaging-system-fixture.js';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -8,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { messagingOrigin, required, withMessagingActors, type MessagingActor } from './helpers/messaging-live.js';
 
 const created = z.object({ id: z.string().uuid() });
-const publicThread = z.object({ room: z.object({ latestSequence: z.string() }), messages: z.array(z.object({ id: z.string().uuid(), type: z.enum(['user', 'system']), body: z.string(), author: z.object({ id: z.string() }).nullable(), system: z.object({ sourceId: z.string(), type: z.string(), summary: z.string(), payload: z.record(z.string(), z.unknown()), occurredAt: z.string() }).optional() })) });
+const publicThread = z.object({ room: z.object({ latestSequence: z.string(), context: z.record(z.string(), z.unknown()) }), messages: z.array(z.object({ id: z.string().uuid(), type: z.enum(['user', 'system']), body: z.string(), author: z.object({ id: z.string() }).nullable(), system: z.object({ sourceId: z.string(), type: z.string(), summary: z.string(), payload: z.record(z.string(), z.unknown()), occurredAt: z.string() }).optional() })) });
 const notice = z.object({ id: z.string(), category: z.string(), payload: z.record(z.string(), z.unknown()), readAt: z.string().nullable() });
 const noticePage = z.object({ data: z.array(notice), nextCursor: z.string().nullable() });
 const notices = async (actor: MessagingActor, room: string, cursor?: string, pages = 0): Promise<z.infer<typeof notice>[]> => {
@@ -106,22 +107,18 @@ describe('public room delivery and system-message protection through the built C
               await recipient.json(['messaging', 'preferences', room.id, '--notification', 'all']);
               expect(await preference()).toBe('all');
               const systemBefore = (await notices(recipient, room.id)).map(row => row.id);
-              const system = { sourceId: randomUUID(), type: 'integration.notice', summary: 'Live CLI system notification fixture', payload: { fixture: true, values: [1, 2] }, occurredAt: new Date().toISOString() };
+              const system = { sourceId: `integration:${randomUUID()}`, type: 'integration.notice', summary: 'Live CLI system notification fixture', payload: { fixture: true, values: [1, 2] }, occurredAt: new Date().toISOString() };
               const append = (token?: string, body: unknown = system): Promise<Response> => fetch(`${messagingOrigin()}/v1/messaging/internal/public/rooms/${room.id}/system`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }) }, body: JSON.stringify(body), signal: AbortSignal.timeout(30_000) });
               const session = await fixture.auth.getSession();
               if (!session) throw new Error('Missing ordinary fixture session');
-              for (const token of [undefined, 'forged', session.accessToken]) expect((await append(token)).status).toBe(401);
+              for (const token of [undefined, 'forged']) expect([401, 404]).toContain((await append(token)).status);
+              expect((await append(session.accessToken)).status).toBe(404);
               expect((await thread()).messages.some(row => row.system?.sourceId === system.sourceId)).toBe(false);
-              // The backend producer credential is fixture setup, not a CLI feature.
-              // The CLI must independently observe the stored message afterward.
-              const token = required('RARE_MESSAGING_TEST_INTERNAL_API_KEY');
-              const response = await append(token); expect(response.status).toBe(200);
-              const responseBody: unknown = await response.json();
-              const stored = created.parse(responseBody);
-              const retry = await append(token); expect(retry.status).toBe(200);
-              const retryBody: unknown = await retry.json();
-              expect(created.parse(retryBody).id).toBe(stored.id);
-              expect((await append(token, { ...system, summary: 'Conflicting system fixture' })).status).toBe(409);
+              // Set up through the real Pipelines writer; the CLI independently
+              // verifies persisted history and notification delivery afterward.
+              const stored = await appendSystemFixture((await thread()).room.context, system);
+              expect((await appendSystemFixture((await thread()).room.context, system)).id).toBe(stored.id);
+              await expect(appendSystemFixture((await thread()).room.context, { ...system, summary: 'Conflicting system fixture' })).rejects.toThrow('reused');
               const saved = await thread();
               expect(saved.messages.filter(row => row.id === stored.id)).toHaveLength(1);
               expect(saved.messages.find(row => row.id === stored.id)).toMatchObject({ type: 'system', author: null, body: system.summary, system });

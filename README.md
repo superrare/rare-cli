@@ -1223,8 +1223,10 @@ bucket and authenticate `gcloud` for `superrare-dev` to remove attachment fixtur
 Public tests also require `RARE_MESSAGING_TEST_AUCTION_ID`,
 `RARE_MESSAGING_TEST_DROP_ID`, `RARE_MESSAGING_TEST_EDITION_ADDRESS`, and
 `RARE_MESSAGING_TEST_EDITION_CHAIN_ID`. Set
-`RARE_MESSAGING_TEST_INTERNAL_API_KEY` to the non-production internal producer key
-for system-message fixture setup. This key is never given to CLI commands.
+`RARE_MESSAGING_TEST_PIPELINES_DIR` to the monorepo `services/pipelines` directory
+and `RARE_MESSAGING_TEST_DATABASE_URL` to the matching non-production database.
+System fixtures invoke the production Pipelines writer; CLI commands independently
+verify the saved history and notifications. No internal HTTP producer key is used.
 
 The command runs the existing messaging flow, authorization checks, and public
 notification delivery sequentially. It verifies thread/roster/block-list reads,
