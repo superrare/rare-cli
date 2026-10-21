@@ -509,7 +509,7 @@ the same account storage, or set `RARE_API_URL`, `RARE_AUTH_STORAGE`, and
 `RARE_AUTH_DIRECTORY`. Public checkout previews do not require login. Wallet
 configuration remains separate and controls Listing and transaction signatures.
 
-Cart commands publish API-backed listing roots and purchase one or more listings in a single checkout. Create listings from a JSON intent file such as:
+Cart commands publish API-backed listing roots and purchase listings, token swaps, or both in one checkout. Create listings from a JSON intent file such as:
 
 ```json
 {
@@ -549,13 +549,39 @@ rare cart checkout \
   --recipient 0x...recipient \
   --yes
 
+# Spend an exact ETH budget for RARE, or request an exact RARE output
+rare cart swap --payment-currency eth --output-currency rare --input-amount 0.01 --preview
+rare cart swap --payment-currency eth --output-currency rare --output-amount 100 --yes
+
+# Preview typed items from a JSON document
+rare cart checkout --input ./checkout.json --payment-currency usdc --preview
+
 # Cancel one listing, cancel a whole root, or invalidate the current seller nonce
 rare cart listing cancel --listing-digest 0x... --yes
 rare cart listing cancel-root --root-digest 0x... --yes
 rare cart listing invalidate-nonce --yes
 ```
 
-`--preview` returns the Rare API quote and SDK preparation without signing, approving, publishing, or submitting a transaction. Before purchase, the SDK verifies the API bundle against the requested listing digests, quantities, payment currency, recipient, chain, and connected payer. Routing, proofs, authorization, order construction, and platform signing remain internal to the Rare API and SDK.
+The checkout input contains an `items` array. Each item has one of these forms:
+
+```json
+{
+	"items": [
+		{ "kind": "listing", "listingDigest": "0x...bytes32", "quantity": "1" },
+		{ "kind": "swap", "mode": "exact-output", "outputCurrency": "rare", "outputAmount": "100" }
+	]
+}
+```
+
+For an exact-input swap, use `"mode": "exact-input"` and `"inputAmount": "10"` instead of `outputAmount`.
+Input amounts use the payment currency's units. Output amounts use the output currency's units.
+Every amount is a human-readable decimal string, not an integer in base units.
+Each item can specify a `recipient`; otherwise `--recipient` or the configured account receives the item.
+Use either `--input` or the listing and swap shortcuts, not both.
+
+Both quote directions commit to fixed payment and output amounts when signed. Execution price movement changes the platform spread, not the promised output. A route that cannot deliver the signed output fails.
+
+`--preview` returns the Rare API quote and SDK preparation without signing, approving, publishing, or submitting a transaction. Before purchase, the SDK verifies the API bundle against the requested items, payment currency, recipients, chain, and connected payer. Routing, proofs, authorization, order construction, and platform signing remain internal to the Rare API and SDK.
 
 ### Batch Listings
 

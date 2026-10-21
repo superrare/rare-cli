@@ -201,6 +201,7 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
       ], 240_000));
     expect(preview.preview).toBe(true);
     expect(preview.preparation.intent.items).toEqual(listingDigests.map((listingDigest) => ({
+      kind: 'listing',
       listingDigest,
       quantity: '1',
       recipient: fixture.buyerAddress,

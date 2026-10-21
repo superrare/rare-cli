@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
-import { formatUnits } from 'viem';
+import { formatUnits, type Address } from 'viem';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import type { CartCheckoutPreparation, CartListingPreparation } from '@rareprotocol/rare-sdk';
 import { hashCartListingRoot } from '@rareprotocol/rare-sdk/utils';
@@ -21,6 +21,7 @@ import {
   parseCartCliCurrency,
   parseCartListingFile,
   parseCartListingSelections,
+  parseCartCheckoutFile,
   unwrapCartCliResult,
 } from './cart-core.js';
 
@@ -39,6 +40,10 @@ type CartDigestOptions = ChainOptions & {
 
 type CartCheckoutOptions = ChainOptions & AccountCommandOptions & {
   listing: string[];
+  input?: string;
+  outputCurrency?: string;
+  inputAmount?: string;
+  outputAmount?: string;
   paymentCurrency?: string;
   recipient?: string;
   preview?: boolean;
@@ -51,6 +56,7 @@ export function cartCommand(): Command {
   command.description('Create Cart listings and purchase fixed-price Cart checkouts');
   command.addCommand(cartListingCommand());
   command.addCommand(cartCheckoutCommand());
+  command.addCommand(cartCheckoutCommand(true));
   return command;
 }
 
@@ -193,11 +199,15 @@ function cartListingInvalidateNonceCommand(): Command {
   return command;
 }
 
-function cartCheckoutCommand(): Command {
-  const command = accountCommand('checkout');
+function cartCheckoutCommand(swap = false): Command {
+  const command = accountCommand(swap ? 'swap' : 'checkout');
   command.description('Preview or purchase an API-prepared Cart checkout');
   addChainOptions(command)
-    .requiredOption('--listing <listing-digest[=quantity]>', 'Cart listing and optional quantity (repeatable)', collectValue, [])
+    .option('--input <path>', 'JSON checkout document with typed listing and swap items; amounts are human-readable decimals')
+    .option('--listing <listing-digest[=quantity]>', 'listing shortcut; cannot combine with --input (repeatable)', collectValue, [])
+    .option('--output-currency <currency>', 'swap output token: eth, usdc, rare, or ERC-20 address')
+    .option('--input-amount <amount>', 'exact payment budget for a swap, in payment currency units')
+    .option('--output-amount <amount>', 'exact tokens to receive for a swap, in output currency units')
     .requiredOption('--payment-currency <currency>', 'payment currency: eth, usdc, rare, or ERC-20 address')
     .option('--recipient <address>', 'fulfillment recipient (defaults to the configured wallet)')
     .option('--preview', 'show the API quote and SDK preparation without signing, approving, or submitting')
@@ -205,12 +215,21 @@ function cartCheckoutCommand(): Command {
     .option('--yes', 'approve payment currency if needed and skip transaction confirmation')
     .action(async (opts: CartCheckoutOptions): Promise<void> => {
       if (opts.preview === true && opts.prepareOnly === true) throw new Error('Use either --preview or --prepare-only, not both.');
+      if (opts.input !== undefined && (opts.listing.length > 0 || opts.outputCurrency !== undefined || opts.inputAmount !== undefined || opts.outputAmount !== undefined)) throw new Error('Use --input alone, or listing/swap shortcuts, not both.');
+      const hasSwap = opts.outputCurrency !== undefined || opts.inputAmount !== undefined || opts.outputAmount !== undefined;
+      if ((swap || hasSwap) && (opts.outputCurrency === undefined || (opts.inputAmount === undefined) === (opts.outputAmount === undefined))) throw new Error('A swap requires --output-currency and exactly one of --input-amount or --output-amount.');
       const configuredRecipient = unwrapCartCliResult(parseCartAddress(opts.recipient, '--recipient'));
       const paymentCurrencyInput = unwrapCartCliResult(parseCartCliCurrency(
         opts.paymentCurrency ?? '',
         '--payment-currency',
       ));
-      const selections = unwrapCartCliResult(parseCartListingSelections(opts.listing));
+      const selections = opts.input !== undefined
+        ? unwrapCartCliResult(parseCartCheckoutFile(await readFile(opts.input, 'utf8')))
+        : unwrapCartCliResult(parseCartCheckoutFile(JSON.stringify({ items: [
+          ...(opts.listing.length === 0 ? [] : unwrapCartCliResult(parseCartListingSelections(opts.listing)).map(selection => ({ ...selection, quantity: selection.quantity.toString() }))),
+          ...(hasSwap ? [{ kind: 'swap', mode: opts.inputAmount === undefined ? 'exact-output' : 'exact-input', outputCurrency: opts.outputCurrency,
+            ...(opts.inputAmount === undefined ? { outputAmount: opts.outputAmount } : { inputAmount: opts.inputAmount }) }] : []),
+        ] })));
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const wallet = opts.preview === true || opts.prepareOnly === true ? undefined : getWalletClient(chain);
@@ -226,9 +245,17 @@ function cartCheckoutCommand(): Command {
         ...(wallet === undefined ? {} : { walletClient: wallet.client }),
       });
       const paymentCurrency = await rare.currency.resolveDecimals(paymentCurrencyInput);
+      const items = await Promise.all(selections.map(async selection => {
+        if (selection.kind === 'listing') return { ...selection, recipient: selection.recipient ?? recipient };
+        const outputCurrency = await rare.currency.resolveDecimals(selection.outputCurrency);
+        const common = { kind: selection.kind, outputCurrency: outputCurrency.address, recipient: selection.recipient ?? recipient } satisfies { kind: 'swap'; outputCurrency: Address; recipient: Address };
+        return selection.mode === 'exact-input'
+          ? { ...common, mode: selection.mode, inputAmount: unwrapCartCliResult(parseCartAmount(selection.inputAmount, paymentCurrency.decimals, 'inputAmount')) }
+          : { ...common, mode: selection.mode, outputAmount: unwrapCartCliResult(parseCartAmount(selection.outputAmount, outputCurrency.decimals, 'outputAmount')) };
+      }));
       const intent = {
         paymentCurrency: paymentCurrency.address,
-        items: selections.map((selection) => ({ ...selection, recipient })),
+        items,
       };
       const preparation = await rare.cart.checkout.prepare(intent);
 
@@ -251,11 +278,11 @@ function cartCheckoutCommand(): Command {
         return;
       }
 
-      log(`Purchasing ${intent.items.length} Cart listing(s) on ${chain}...`);
+      log(`Purchasing ${intent.items.length} Cart item(s) on ${chain}...`);
       const purchase = async (): ReturnType<typeof rare.cart.checkout.purchase> =>
         rare.cart.checkout.purchase({ preparation, autoApprove: opts.yes === true });
       const result = await runWithPaymentApprovalConsent({
-        commandName: 'rare cart checkout',
+        commandName: swap ? 'rare cart swap' : 'rare cart checkout',
         approvalMessage: 'ERC20 approval is required before purchasing this Cart checkout.',
         runWithoutApproval: purchase,
         runWithApproval: async (): ReturnType<typeof rare.cart.checkout.purchase> =>
@@ -343,7 +370,7 @@ function getListingRootDigest(preparation: CartListingPreparation): `0x${string}
 
 function printCheckoutPreparation(preparation: CartCheckoutPreparation, symbol: string, decimals: number): void {
   console.log('Cart checkout preview:');
-  console.log(`  Listings: ${preparation.intent.items.length}`);
+  console.log(`  Items: ${preparation.intent.items.length}`);
   console.log(`  Payment: ${formatUnits(preparation.paymentAmount, decimals)} ${symbol}`);
   console.log(`  Fees: ${preparation.fees.length}`);
   console.log(`  Settlements: ${preparation.settlements.length}`);
