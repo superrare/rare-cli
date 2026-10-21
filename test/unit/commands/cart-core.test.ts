@@ -4,6 +4,7 @@ import {
   parseCartListingFile,
   parseCartListingSelections,
   parseCartSellerFulfillmentKind,
+  parseCartCheckoutFile,
 } from '../../../src/commands/cart-core.js';
 
 const sku = `0x${'11'.repeat(32)}`;
@@ -94,10 +95,23 @@ describe('Cart CLI input planning', () => {
     expect(parseCartListingSelections([listingA, `${listingB}=2`])).toEqual({
       isValid: true,
       value: [
-        { listingDigest: listingA, quantity: 1n },
-        { listingDigest: listingB, quantity: 2n },
+        { kind: 'listing', listingDigest: listingA, quantity: 1n },
+        { kind: 'listing', listingDigest: listingB, quantity: 2n },
       ],
     });
+  });
+
+  it('validates typed checkout items and rejects ambiguous swap amounts', () => {
+    expect(parseCartCheckoutFile(JSON.stringify({ items: [
+      { kind: 'listing', listingDigest: listingA },
+      { kind: 'swap', mode: 'exact-output', outputCurrency: 'USDC', outputAmount: '12.5' },
+    ] }))).toEqual({ isValid: true, value: [
+      { kind: 'listing', listingDigest: listingA, quantity: 1n },
+      { kind: 'swap', mode: 'exact-output', outputCurrency: 'usdc', outputAmount: '12.5' },
+    ] });
+    expect(parseCartCheckoutFile(JSON.stringify({ items: [{ kind: 'swap', mode: 'exact-input',
+      outputCurrency: 'rare', inputAmount: '1', outputAmount: '2' }] })).isValid).toBe(false);
+    expect(parseCartCheckoutFile(JSON.stringify({ items: [] })).isValid).toBe(false);
   });
 
   it('rejects duplicate listings and unsafe quantities', () => {

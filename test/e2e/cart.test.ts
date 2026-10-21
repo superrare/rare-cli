@@ -24,6 +24,7 @@ describe('built Cart CLI', () => {
       expect(help.code).toBe(0);
       expect(help.stdout).toContain('listing');
       expect(help.stdout).toContain('checkout');
+      expect(help.stdout).toContain('swap');
 
       const listingHelp = await runCli(['cart', 'listing', 'create', '--help'], { home });
       expect(listingHelp.stdout).toContain('--input <path>');
@@ -37,6 +38,7 @@ describe('built Cart CLI', () => {
       expect(checkoutHelp.stdout).toContain('--listing <listing-digest[=quantity]>');
       expect(checkoutHelp.stdout).toContain('--payment-currency <currency>');
       expect(checkoutHelp.stdout).toContain('--prepare-only');
+      expect(checkoutHelp.stdout).toContain('--input <path>');
     });
   });
 
@@ -62,14 +64,14 @@ describe('built Cart CLI', () => {
       expect(body.preparation.paymentAmount).toBe('200');
       expect(body.preparation.intent).toEqual({
         paymentCurrency: zeroAddress,
-        items: [{ listingDigest, quantity: '2', recipient }],
+        items: [{ kind: 'listing', listingDigest, quantity: '2', recipient }],
       });
       const captured = await request;
       expect(captured).toMatchObject({
         pathname: '/v1/cart/checkout/preview',
         body: {
           paymentCurrency: zeroAddress,
-          items: [{ listingDigest, quantity: '2', recipient }],
+          items: [{ kind: 'listing', listingDigest, quantity: '2', recipient }],
         },
       });
       expect(captured.searchParams).toMatchObject({
@@ -77,6 +79,53 @@ describe('built Cart CLI', () => {
         cartAddress: getCartAddress('sepolia'),
       });
     });
+  });
+
+  it.each([
+    ['--input-amount', '0.01', 'exact-input', 'inputAmount', '10000000000000000'],
+    ['--output-amount', '2', 'exact-output', 'outputAmount', '2000000000000000000'],
+  ])('wires cart swap %s into generic checkout without a listing', async (flag, amount, mode, amountField, units) => {
+    await withCartApiFixture(async ({ baseUrl, request }) => {
+      const result = await runCli(['--json', 'cart', 'swap', '--payment-currency', 'eth',
+        '--output-currency', 'rare', flag, amount, '--recipient', recipient, '--preview', '--chain', 'sepolia'],
+      { env: { RARE_API_URL: baseUrl } });
+      expect(result.code).toBe(0);
+      expect(await request).toMatchObject({ pathname: '/v1/cart/checkout/preview', body: {
+        paymentCurrency: zeroAddress,
+        items: [{ kind: 'swap', mode, outputCurrency: expect.stringMatching(/^0x/), [amountField]: units, recipient }],
+      } });
+      expect(result.stdout).not.toContain('txHash');
+    });
+  });
+
+  it('sends mixed typed items from JSON and preserves each recipient', async () => {
+    await withTempHome(async home => {
+      const input = join(home, 'checkout.json');
+      await writeFile(input, JSON.stringify({ items: [
+        { kind: 'listing', listingDigest, quantity: '2', recipient: seller },
+        { kind: 'swap', mode: 'exact-input', outputCurrency: 'rare', inputAmount: '0.01' },
+      ] }));
+      await withCartApiFixture(async ({ baseUrl, request }) => {
+        const result = await runCli(['--json', 'cart', 'checkout', '--input', input,
+          '--payment-currency', 'eth', '--recipient', recipient, '--preview', '--chain', 'sepolia'],
+        { home, env: { RARE_API_URL: baseUrl } });
+        expect(result.code).toBe(0);
+        expect(await request).toMatchObject({ body: { items: [
+          { kind: 'listing', listingDigest, quantity: '2', recipient: seller },
+          { kind: 'swap', mode: 'exact-input', inputAmount: '10000000000000000', recipient },
+        ] } });
+      });
+    });
+  });
+
+  it.each([
+    ['--output-currency', 'rare'],
+    ['--output-currency', 'rare', '--input-amount', '1', '--output-amount', '2'],
+    ['--output-currency', 'rare', '--input-amount', '0'],
+  ])('rejects invalid swap shortcuts before wallet/network work: %j', async (...args) => {
+    const result = await runCli(['--json', 'cart', 'swap', '--payment-currency', 'eth', ...args, '--preview']);
+    expect(result.code).toBe(1);
+    expect(result.stderr).toMatch(/swap requires|positive decimal/);
   });
 
   it('rejects malformed local inputs before wallet or network work', async () => {

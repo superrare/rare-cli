@@ -20,6 +20,7 @@ export type CartListingFile = {
 };
 
 export type CartListingSelection = {
+  kind: 'listing';
   listingDigest: Hex;
   quantity: bigint;
 };
@@ -209,7 +210,53 @@ function parseSelection(value: string, index: number): CartCliResult<CartListing
       issues: [...(digest.isValid ? [] : digest.issues), ...(quantity.isValid ? [] : quantity.issues)],
     };
   }
-  return { isValid: true, value: { listingDigest: digest.value, quantity: quantity.value } };
+  return { isValid: true, value: { kind: 'listing', listingDigest: digest.value, quantity: quantity.value } };
+}
+
+export type CartCheckoutFileItem =
+  | (CartListingSelection & { recipient?: Address })
+  | { kind: 'swap'; mode: 'exact-input'; outputCurrency: CartCliCurrency; inputAmount: string; recipient?: Address }
+  | { kind: 'swap'; mode: 'exact-output'; outputCurrency: CartCliCurrency; outputAmount: string; recipient?: Address };
+
+export function parseCartCheckoutFile(content: string): CartCliResult<CartCheckoutFileItem[]> {
+  const document = parseJsonDocument(content);
+  if (!document.isValid) return document;
+  if (!isRecord(document.value) || Object.keys(document.value).some(key => key !== 'items') ||
+      !Array.isArray(document.value.items) || document.value.items.length === 0) {
+    return invalid('checkout input must contain only a non-empty items array.');
+  }
+  const items = document.value.items.map((value: unknown, index: number): CartCliResult<CartCheckoutFileItem> => {
+    const field = `items[${index}]`;
+    if (!isRecord(value)) return invalid(`${field} must be an object.`);
+    const recipient = typeof value.recipient === 'string' || value.recipient === undefined
+      ? parseCartAddress(value.recipient, `${field}.recipient`)
+      : invalid<Address | undefined>(`${field}.recipient must be an address string.`);
+    if (!recipient.isValid) return recipient;
+    if (value.kind === 'listing') {
+      if (Object.keys(value).some(key => !['kind', 'listingDigest', 'quantity', 'recipient'].includes(key))) return invalid(`${field} contains unsupported fields.`);
+      const digest = parseCartBytes32(value.listingDigest, `${field}.listingDigest`);
+      const quantity = parsePositiveInteger(value.quantity ?? '1', `${field}.quantity`);
+      if (!digest.isValid) return digest;
+      if (!quantity.isValid) return quantity;
+      return { isValid: true, value: { kind: 'listing', listingDigest: digest.value, quantity: quantity.value,
+        ...(recipient.value === undefined ? {} : { recipient: recipient.value }) } };
+    }
+    if (value.kind !== 'swap' || (value.mode !== 'exact-input' && value.mode !== 'exact-output')) return invalid(`${field} must be a listing or an exact-input/exact-output swap.`);
+    const amountField = value.mode === 'exact-input' ? 'inputAmount' : 'outputAmount';
+    if (Object.keys(value).some(key => !['kind', 'mode', 'outputCurrency', amountField, 'recipient'].includes(key))) return invalid(`${field} contains unsupported fields.`);
+    const amount = value[amountField];
+    if (typeof amount !== 'string' || !/^\d+(?:\.\d+)?$/.test(amount) || !/[1-9]/.test(amount)) return invalid(`${field}.${amountField} must be a positive decimal amount string.`);
+    const currency = typeof value.outputCurrency === 'string' ? parseCartCliCurrency(value.outputCurrency, `${field}.outputCurrency`) : invalid<CartCliCurrency>(`${field}.outputCurrency must be a string.`);
+    if (!currency.isValid) return currency;
+    const common = { kind: 'swap', outputCurrency: currency.value, ...(recipient.value === undefined ? {} : { recipient: recipient.value }) } satisfies { kind: 'swap'; outputCurrency: CartCliCurrency; recipient?: Address };
+    return { isValid: true, value: value.mode === 'exact-input' ? { ...common, mode: 'exact-input', inputAmount: amount } : { ...common, mode: 'exact-output', outputAmount: amount } };
+  });
+  const issues = items.flatMap(item => item.isValid ? [] : item.issues);
+  if (issues.length > 0) return { isValid: false, issues };
+  return { isValid: true, value: items.map(item => {
+    if (!item.isValid) throw new Error('unreachable: invalid checkout item survived validation.');
+    return item.value;
+  }) };
 }
 
 function parseDeadline(value: unknown): CartCliResult<bigint> {
