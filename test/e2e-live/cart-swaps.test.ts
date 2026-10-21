@@ -36,6 +36,7 @@ describe.sequential('live Cart routed swaps through the generic CLI checkout', (
     expect(swapLine).toBeDefined();
     if (swapLine === undefined) throw new Error('Swap quote did not contain a currency-swap line.');
     const before = await readTokenBalance(live, live.buyerAddress, live.rareAddress);
+    const paymentBalanceBefore = paymentCurrency === 'usdc' ? await readTokenBalance(live, live.buyerAddress, live.usdcAddress) : undefined;
     const purchase = await jsonCommand<Purchase>(live.buyerHome, [...args, '--yes'], 240_000);
     expect(purchase.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
     expect(purchase.actionCount).toBe(0);
@@ -50,6 +51,7 @@ describe.sequential('live Cart routed swaps through the generic CLI checkout', (
     expect(settled.args.amount).toBeGreaterThan(0n);
     if (amountFlag === '--output-amount') expect(settled.args.amount).toBe(10_000_000_000_000_000n);
     if (inputAmount !== undefined) expect(BigInt(purchase.paymentAmount)).toBe(inputAmount);
+    if (paymentBalanceBefore !== undefined) expect(paymentBalanceBefore - await readTokenBalance(live, live.buyerAddress, live.usdcAddress)).toBe(BigInt(purchase.paymentAmount));
   }, 300_000);
 
   it('rejects an unfunded swap without spending buyer tokens', async () => {
