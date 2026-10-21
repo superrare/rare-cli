@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -53,3 +54,13 @@ export const withMessagingActors = async (operation: (owner: MessagingActor, mem
       } finally { await member.json(['auth', 'logout']); }
     } finally { await owner.json(['auth', 'logout']); }
   })));
+
+/** Only explicit public-sender cooldown errors are retried, with the same arguments. */
+export const retryPublicSend = async (run: (args: string[]) => Promise<CliResult>, args: string[], retries = 2): Promise<CliResult> => {
+  const result = await run(args);
+  if (result.code === 0) return result;
+  const failure: unknown = JSON.parse(result.stderr);
+  if (!z.object({ status: z.literal(429), code: z.literal('rate_limited') }).safeParse(failure).success || retries === 0) return result;
+  await delay(1100);
+  return retryPublicSend(run, args, retries - 1);
+};

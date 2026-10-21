@@ -139,6 +139,7 @@ export function printError(error: unknown): never {
     const json: Record<string, unknown> = {
       error: true,
       message,
+      ...(error instanceof RareAuthError ? { status: error.status } : {}),
       ...(error instanceof RareAuthError || error instanceof AuthStorageError ? { code: error.code } : error instanceof RareApiError && getStringProperty(error, 'code') !== undefined ? { code: getStringProperty(error, 'code') } : {}),
       ...(details.length > 0 ? { details } : {}),
       ...(causes.length > 0 ? { causes } : {}),

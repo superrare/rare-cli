@@ -1,3 +1,5 @@
+import { parseJsonStdout } from '../helpers/cli.js';
+import { retryPublicSend } from './helpers/messaging-live.js';
 import { appendSystemFixture } from './helpers/messaging-system-fixture.js';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -56,7 +58,7 @@ describe('public room delivery and system-message protection through the built C
           const send = async (actor: MessagingActor, body: string, mentions: string[] = []): Promise<{ message: { id: string }; args: string[]; body: string }> => {
             const clientId = randomUUID();
             const args = ['messaging', 'public', 'send', room.id, '--body', body, '--client-message-id', clientId, ...mentions.flatMap(id => ['--mention', id])];
-            const message = created.parse(await actor.json(args));
+            const message = created.parse(parseJsonStdout(await retryPublicSend(actor.run, args)));
             // eslint-disable-next-line functional/immutable-data
             sent.push({ actor, id: message.id });
             expect((await thread()).messages.find(row => row.id === message.id)).toMatchObject({ type: 'user', body, author: { id: actor.user.id } });
@@ -74,7 +76,7 @@ describe('public room delivery and system-message protection through the built C
             await recipient.json(['messaging', 'read', room.id, (await thread()).room.latestSequence]);
             const before = (await notices(recipient, room.id)).map(row => row.id);
             const ordinary = await send(owner, `CLI public notification ${randomUUID()}`);
-            await owner.json(ordinary.args);
+            parseJsonStdout(await retryPublicSend(owner.run, ordinary.args));
             const notification = await delivered(recipient, room.id, before);
             expect(notification.readAt).toBeNull();
             expect((await notices(recipient, room.id)).filter(row => !before.includes(row.id))).toHaveLength(1);

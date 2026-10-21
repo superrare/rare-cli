@@ -1,3 +1,4 @@
+import { retryPublicSend } from './helpers/messaging-live.js';
 import { randomUUID } from 'node:crypto';
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -116,9 +117,20 @@ describe('public contextual chats through the built CLI', () => {
       expect((await run(['auth', 'login', '--wallet', '--chain', 'mainnet'])).code).toBe(0);
       const clientId = randomUUID();
       const args = ['messaging', 'public', 'send', room.id, '--body', `CLI public chat ${clientId}`, '--client-message-id', clientId];
-      const sent = z.object({ id: z.string().uuid(), type: z.literal('user') }).parse(parseJsonStdout(await run(args)));
+      const sent = z.object({ id: z.string().uuid(), type: z.literal('user') }).parse(parseJsonStdout(await retryPublicSend(run, args)));
       try {
-        expect(z.object({ id: z.string() }).parse(parseJsonStdout(await run(args))).id).toBe(sent.id);
+        const nextId = randomUUID();
+        const nextArgs = ['messaging', 'public', 'send', room.id, '--body', `CLI cooldown retry ${nextId}`, '--client-message-id', nextId];
+        const limited = await run(nextArgs);
+        expect(limited.code).not.toBe(0);
+        expect(JSON.parse(limited.stderr)).toMatchObject({ status: 429, code: 'rate_limited' });
+        const next = z.object({ id: z.string().uuid() }).parse(parseJsonStdout(await retryPublicSend(run, nextArgs)));
+        try {
+          expect(z.object({ id: z.string() }).parse(parseJsonStdout(await retryPublicSend(run, nextArgs))).id).toBe(next.id);
+          const thread = publicMessages.parse(parseJsonStdout(await run(['messaging', 'public', 'history', room.id])));
+          for (const id of [sent.id, next.id]) expect(thread.messages.filter(row => row.id === id)).toHaveLength(1);
+        } finally { parseJsonStdout(await run(['messaging', 'delete', room.id, next.id])); }
+        expect(z.object({ id: z.string() }).parse(parseJsonStdout(await retryPublicSend(run, args))).id).toBe(sent.id);
         const page = publicMessages.parse(parseJsonStdout(await run(['messaging', 'public', 'history', room.id])));
         expect(page.messages.filter(row => row.id === sent.id)).toHaveLength(1);
         const edited = z.object({ body: z.string() }).parse(parseJsonStdout(await run(['messaging', 'edit', room.id, sent.id, '--body', 'Updated public CLI message'])));
