@@ -83,6 +83,7 @@ describe('confirmation policy', () => {
     expect(requiresExplicitConfirmation(['rare', 'cart', 'listing', 'cancel-root'])).toBe(true);
     expect(requiresExplicitConfirmation(['rare', 'cart', 'listing', 'invalidate-nonce'])).toBe(true);
     expect(requiresExplicitConfirmation(['rare', 'cart', 'checkout'])).toBe(true);
+    expect(requiresExplicitConfirmation(['rare', 'cart', 'swap'])).toBe(true);
     expect(requiresExplicitConfirmation(['rare', 'collection', 'deploy', 'erc721'])).toBe(false);
     expect(requiresExplicitConfirmation(['rare', 'listing', 'cancel'])).toBe(false);
   });

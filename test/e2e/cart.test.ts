@@ -211,6 +211,10 @@ describe('built Cart CLI', () => {
     ]);
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('rare cart listing cancel requires --yes when --json is enabled.');
+    const swap = await runCli(['--json', 'cart', 'swap', '--payment-currency', 'eth',
+      '--output-currency', 'rare', '--output-amount', '1', '--chain', 'sepolia']);
+    expect(swap.code).toBe(1);
+    expect(swap.stderr).toContain('rare cart swap requires --yes when --json is enabled.');
   });
 });
 

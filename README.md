@@ -580,6 +580,9 @@ Each item can specify a `recipient`; otherwise `--recipient` or the configured a
 Use either `--input` or the listing and swap shortcuts, not both.
 
 Both quote directions commit to fixed payment and output amounts when signed. Execution price movement changes the platform spread, not the promised output. A route that cannot deliver the signed output fails.
+Standalone swaps use this routing spread, not the default 3% listing checkout fee.
+The API currently supports ETH, USDC, and RARE as checkout currencies. An ERC-20 address does not bypass that policy.
+CLI amount strings use human-readable units; SDK checkout amounts use `bigint` base units.
 
 `--preview` returns the Rare API quote and SDK preparation without signing, approving, publishing, or submitting a transaction. Before purchase, the SDK verifies the API bundle against the requested items, payment currency, recipients, chain, and connected payer. Routing, proofs, authorization, order construction, and platform signing remain internal to the Rare API and SDK.
 
