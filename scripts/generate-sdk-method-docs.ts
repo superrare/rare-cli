@@ -10,22 +10,32 @@ const TYPE_NAME = 'RareClient';
 const CLIENT_NAME = 'rare';
 const MAX_DEPTH = 8;
 const CLIENT_NAMESPACE_NAMES = new Set([
+  'auth',
   'auction',
   'bridge',
   'collection',
   'currency',
+  'drops',
+  'favorites',
+  'following',
   'import',
   'ipfs',
   'liquidEdition',
   'listing',
   'media',
+  'messaging',
   'nft',
   'offer',
+  'notifications',
+  'postFavorites',
+  'posts',
+  'profile',
   'search',
   'swap',
   'token',
   'user',
   'utils',
+  'uploads',
 ]);
 const NON_TRAVERSABLE_SYMBOL_NAMES = new Set([
   'Array',

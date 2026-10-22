@@ -1,6 +1,6 @@
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createRareAccountClient, type RareUpload } from '@rareprotocol/rare-sdk';
+import { createRareClient, type RareUpload } from '@rareprotocol/rare-sdk';
 import { isPrivateKeyString } from '@rareprotocol/rare-sdk/validation';
 import { privateKeyToAccount } from 'viem/accounts';
 import { z } from 'zod';
@@ -25,7 +25,7 @@ describe('drops through the built CLI and deployed services', () => {
     expect(wallet.address.toLowerCase()).not.toBe(privateKeyToAccount(secondKey).address.toLowerCase());
     // The generic uploader has no CLI command. Seed a real image through the SDK;
     // every announcement action and account login below uses the built CLI.
-    const fixtureClient = createRareAccountClient({ apiBaseUrl: url.origin });
+    const fixtureClient = createRareClient({ apiBaseUrl: url.origin });
     const image = await (async (): Promise<Extract<RareUpload, { url: string }>> => {
       try {
         await fixtureClient.auth.loginWithWallet({ address: wallet.address, chainId: 11155111, signMessage: message => wallet.signMessage({ message }) });

@@ -735,6 +735,26 @@ npm install @rareprotocol/rare-cli viem
 
 ### Create a client
 
+`createRareClient` supports public API reads and account features without a
+blockchain client. For example, device login uses the same client as profiles
+and messaging:
+
+```ts
+import { createRareClient } from '@rareprotocol/rare-cli/client';
+
+const rare = createRareClient();
+const authorization = await rare.auth.startDeviceAuthorization();
+console.log(authorization.verificationUriComplete ?? authorization.verificationUri);
+console.log(authorization.userCode);
+// Approve in the browser before continuing.
+await rare.auth.waitForDeviceAuthorization(authorization);
+const profile = await rare.profile.get();
+const inbox = await rare.messaging.inbox();
+```
+
+Configure `publicClient` to add chain-bound methods, and `walletClient` for
+blockchain transactions. The existing chain configuration remains supported:
+
 ```ts
 import { createPublicClient, createWalletClient, http } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -768,7 +788,11 @@ Use `@rareprotocol/rare-cli/client` for app-level SDK workflows, `@rareprotocol/
 
 ### Search
 
-`RareClient` is bound to the chain on its `publicClient`. Client methods use that chain automatically; create a separate client with a different viem chain to query or write another network.
+When configured with `publicClient`, `RareClient` binds blockchain and NFT search
+methods to that chain. Create another configured client to use another network.
+Without `publicClient`, public search methods accept explicit chain filters and
+NFT lookups require `chain` or `chainId`. Account sessions are independent of
+the blockchain client configuration.
 
 ```ts
 const nfts = await rare.search.nfts({ query: 'portrait', perPage: 10 });

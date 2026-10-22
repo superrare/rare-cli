@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createRareAccountClient } from '@rareprotocol/rare-sdk';
+import { createRareClient } from '@rareprotocol/rare-sdk';
 import { isPrivateKeyString } from '@rareprotocol/rare-sdk/validation';
 import { privateKeyToAccount } from 'viem/accounts';
 import { describe, expect, it } from 'vitest';
@@ -22,7 +22,7 @@ describe('authenticated artwork favorites through the built CLI and deployed ser
     const key = required('RARE_ACCOUNT_TEST_PRIVATE_KEY');
     if (!isPrivateKeyString(key)) throw new Error('Use a dedicated test wallet key');
     const owner = privateKeyToAccount(key);
-    const account = createRareAccountClient({ apiBaseUrl: url.origin });
+    const account = createRareClient({ apiBaseUrl: url.origin });
     await withTempHome(async temporary => {
       const home = await realpath(temporary);
       const directory = join(home, '.rare');

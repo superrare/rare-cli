@@ -4,7 +4,7 @@ import { appendSystemFixture } from './helpers/messaging-system-fixture.js';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { privateKeyToAccount } from 'viem/accounts';
-import { createRareAccountClient } from '@rareprotocol/rare-sdk';
+import { createRareClient } from '@rareprotocol/rare-sdk';
 import { isPrivateKeyString } from '@rareprotocol/rare-sdk/validation';
 import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
@@ -40,7 +40,7 @@ describe('public room delivery and system-message protection through the built C
       const key = required('RARE_ACCOUNT_TEST_PRIVATE_KEY');
       if (!isPrivateKeyString(key)) throw new Error('Invalid fixture wallet');
       const wallet = privateKeyToAccount(key);
-      const fixture = createRareAccountClient({ apiBaseUrl: messagingOrigin() });
+      const fixture = createRareClient({ apiBaseUrl: messagingOrigin() });
       try {
         // SDK use here only prepares the shared image and an ordinary user token.
         // All chat actions and all result verification below use the built CLI.

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 import { Command, Option } from 'commander';
-import { createRareAccountClient, RareAuthError, type RareAccountClient, type RareDeviceAuthorization, type RareAccountSession } from '@rareprotocol/rare-sdk';
+import { createRareClient, RareAuthError, type RareApiClient, type RareDeviceAuthorization, type RareAccountSession } from '@rareprotocol/rare-sdk';
 import { DEFAULT_RARE_API_BASE_URL } from '@rareprotocol/rare-sdk/data-access/base-url';
 import { AuthStorageError, createAuthStore, type AuthStorageOptions } from './auth-storage.js';
 import { deriveAccountStorageScope } from './auth-storage-core.js';
@@ -32,9 +32,9 @@ export function storageOptions(options: AccountCommandOptions): AuthStorageOptio
     ...(options.authDirectory === undefined ? {} : { directory: options.authDirectory }) };
 }
 
-export function accountClient(options: AuthStorageOptions): RareAccountClient {
+export function accountClient(options: AuthStorageOptions): RareApiClient {
   const sessionStore = createAuthStore(options);
-  return createRareAccountClient({ apiBaseUrl: options.apiBaseUrl, clientId: 'rare-cli', sessionStore });
+  return createRareClient({ apiBaseUrl: options.apiBaseUrl, clientId: 'rare-cli', sessionStore });
 }
 
 /** Verify writes using a disposable record before issuing durable server credentials. */
@@ -61,7 +61,7 @@ export function printDeviceRequest(requestId: string, authorization: RareDeviceA
   });
 }
 
-export async function continueDeviceLogin(client: RareAccountClient, options: AuthStorageOptions, requestId: string, wait: boolean, signal: AbortSignal): Promise<void> {
+export async function continueDeviceLogin(client: RareApiClient, options: AuthStorageOptions, requestId: string, wait: boolean, signal: AbortSignal): Promise<void> {
   const pending = createAuthStore({ ...options, pendingRequestId: requestId, signal });
   await pending.withLock(async () => {
     for (;;) {

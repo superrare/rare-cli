@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 import { Command, Option } from 'commander';
-import { createRareApi } from '@rareprotocol/rare-sdk';
+import { createRareClient } from '@rareprotocol/rare-sdk';
 import { DEFAULT_RARE_API_BASE_URL } from '@rareprotocol/rare-sdk/data-access/base-url';
 import { accountClient, accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
 import { output } from '../output.js';
@@ -80,16 +80,16 @@ export function messagingCommand(): Command {
   const publicMessaging = new Command('public').description('Public auction, liquid edition and drop announcement rooms');
   publicMessaging.addCommand(publicCommand('resolve').argument('<type>', 'auction, liquid-edition or drop-announcement').argument('[resource-id]', 'auction or drop announcement ID').option('--chain-id <number>', 'liquid edition chain ID').option('--contract-address <address>', 'liquid edition contract address').action(async (type: string, id: string | undefined, options: { apiUrl: string; chainId?: string; contractAddress?: string }): Promise<void> => {
     const context = publicContext(type, id, options);
-    print(await createRareApi({ baseUrl: options.apiUrl }).messaging.resolveRoom(context));
+    print(await createRareClient({ apiBaseUrl: options.apiUrl }).messaging.public.resolveRoom(context));
   }));
   publicMessaging.addCommand(accountCommand('history').argument('<room-id>').option('--authenticated', 'include your reaction and report-and-hide state').option('--before <sequence>').option('--after <sequence>').option('--limit <number>', 'messages to return', '50').action(async (id: string, options: AccountCommandOptions & { authenticated?: boolean; before?: string; after?: string; limit: string }): Promise<void> => {
-    const history = options.authenticated ? client(options).historyPublic : createRareApi({ baseUrl: options.apiUrl }).messaging.history;
+    const history = options.authenticated ? client(options).historyPublic : createRareClient({ apiBaseUrl: options.apiUrl }).messaging.public.history;
     print(await history(id, { before: options.before, after: options.after, limit: Number(options.limit) }));
   }));
   publicMessaging.addCommand(accountCommand('watch').argument('<room-id>').option('--authenticated', 'include your reaction and report-and-hide state').option('--after <sequence>').option('--interval <milliseconds>', 'polling interval', '3000').action(async (id: string, options: AccountCommandOptions & { authenticated?: boolean; after?: string; interval: string }): Promise<void> => {
     const interval = Number(options.interval);
     if (!Number.isSafeInteger(interval) || interval < 1000) throw new Error('Polling interval must be an integer of at least 1000 milliseconds.');
-    const history = options.authenticated ? client(options).historyPublic : createRareApi({ baseUrl: options.apiUrl }).messaging.history;
+    const history = options.authenticated ? client(options).historyPublic : createRareClient({ apiBaseUrl: options.apiUrl }).messaging.public.history;
     const initial = await history(id);
     print(initial);
     const state = { cursor: options.after ?? initial.room.latestSequence };

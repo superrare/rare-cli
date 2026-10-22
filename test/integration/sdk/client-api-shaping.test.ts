@@ -1,3 +1,4 @@
+import type { RareClient } from '@rareprotocol/rare-sdk';
 /* eslint-disable functional/immutable-data */
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { text } from 'node:stream/consumers';
@@ -227,7 +228,7 @@ describe('Rare SDK client API request shaping', () => {
   });
 });
 
-function createTestClient(baseUrl: string, configuredAccount?: typeof account): ReturnType<typeof createRareClient> {
+function createTestClient(baseUrl: string, configuredAccount?: typeof account): RareClient {
   return createRareClient({
     publicClient: createPublicClient({
       chain: mainnet,

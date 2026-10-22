@@ -1,5 +1,3 @@
-import { getActiveChain } from '../config.js';
-import { getPublicClient } from '../client.js';
 import { readFile } from 'node:fs/promises';
 import { Command, Option } from 'commander';
 import { createRareClient } from '@rareprotocol/rare-sdk';
@@ -11,7 +9,7 @@ import { selectUser, type UserOptions } from './user-core.js';
 type PageOptions = { page: string; perPage: string };
 type ThreadOptions = { parentCommentId?: string; afterCommentId?: string };
 type BodyOptions = { body?: string; bodyFile?: string };
-const publicPosts = (apiUrl: string): ReturnType<typeof createRareClient>['posts'] => createRareClient({ publicClient: getPublicClient(getActiveChain()), apiBaseUrl: apiUrl }).posts;
+const publicPosts = (apiUrl: string): ReturnType<typeof createRareClient>['posts'] => createRareClient({ apiBaseUrl: apiUrl }).posts;
 const publicCommand = (name: string): Command => new Command(name).addOption(new Option('--api-url <url>', 'Rare API base URL').default(DEFAULT_RARE_API_BASE_URL).env('RARE_API_URL'));
 const pageOptions = (command: Command): Command => command.option('--page <number>', 'page number', '1').option('--per-page <number>', 'items per page, up to 100', '20');
 const bodyOptions = (command: Command): Command => command.addOption(new Option('--body <text>', 'Markdown text').conflicts('bodyFile')).addOption(new Option('--body-file <path>', 'read Markdown from a UTF-8 file').conflicts('body'));

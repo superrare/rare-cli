@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { createRareAccountClient } from '@rareprotocol/rare-sdk';
+import { createRareClient } from '@rareprotocol/rare-sdk';
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isPrivateKeyString } from '@rareprotocol/rare-sdk/validation';
@@ -103,7 +103,7 @@ describe('uploaded post images through the built CLI', () => {
     const privateKey = required('RARE_ACCOUNT_TEST_PRIVATE_KEY');
     if (!isPrivateKeyString(privateKey)) throw new Error('Invalid test wallet');
     const signer = privateKeyToAccount(privateKey);
-    const fixture = createRareAccountClient({ apiBaseUrl: apiUrl.origin });
+    const fixture = createRareClient({ apiBaseUrl: apiUrl.origin });
     const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
     const comment = Buffer.from(randomBytes(16).toString('hex'));
     const bytes = Buffer.concat([gif.subarray(0, -1), Buffer.from([0x21, 0xfe, comment.length]), comment, Buffer.from([0, 0x3b])]);

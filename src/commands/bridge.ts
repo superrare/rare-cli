@@ -1,3 +1,4 @@
+import type { RareClient } from '@rareprotocol/rare-sdk';
 import { Command } from 'commander';
 import { formatEther } from 'viem';
 import { getActiveChain } from '../config.js';
@@ -185,7 +186,7 @@ function parseDestinationChain(value: string): SupportedChain {
   return value;
 }
 
-function printBridgeQuote(quote: Awaited<ReturnType<ReturnType<typeof createRareClient>['bridge']['quote']>>): void {
+function printBridgeQuote(quote: Awaited<ReturnType<RareClient['bridge']['quote']>>): void {
   console.log(`\nRARE bridge quote: ${quote.sourceChain} -> ${quote.destinationChain}`);
   console.log(`  Amount:             ${formatEther(quote.amount)} RARE`);
   console.log(`  Recipient:          ${quote.recipient}`);

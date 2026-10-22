@@ -1,8 +1,6 @@
 import { Command, Option } from 'commander';
-import { createRareClient, type DropType, type UpdateDropInput, type RareClient } from '@rareprotocol/rare-sdk';
+import { createRareClient, type DropType, type UpdateDropInput, type RareApiClient } from '@rareprotocol/rare-sdk';
 import { DEFAULT_RARE_API_BASE_URL } from '@rareprotocol/rare-sdk/data-access/base-url';
-import { getActiveChain } from '../config.js';
-import { getPublicClient } from '../client.js';
 import { accountClient, accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
 import { output } from '../output.js';
 import { selectUser, type UserOptions } from './user-core.js';
@@ -10,7 +8,7 @@ import { selectUser, type UserOptions } from './user-core.js';
 type DropOptions = { type?: DropType; startsAt?: string; headline?: string; description?: string; destinationUrl?: string; imageUrl?: string };
 const types = ['NONE', 'SINGLE_ARTWORK', 'EDITION', 'RELEASE', 'LIQUID_EDITION'];
 const publicCommand = (name: string): Command => new Command(name).addOption(new Option('--api-url <url>', 'Rare API base URL').default(DEFAULT_RARE_API_BASE_URL).env('RARE_API_URL'));
-const publicDrops = (apiUrl: string): RareClient['drops'] => createRareClient({ publicClient: getPublicClient(getActiveChain()), apiBaseUrl: apiUrl }).drops;
+const publicDrops = (apiUrl: string): RareApiClient['drops'] => createRareClient({ apiBaseUrl: apiUrl }).drops;
 const print = (value: unknown): void => { output(value, () => { console.log(JSON.stringify(value, null, 2)); }); };
 const fields = (command: Command): Command => command.addOption(new Option('--type <type>', 'announcement type').choices(types))
   .option('--starts-at <timestamp>', 'ISO 8601 launch time, within the next 30 days')
