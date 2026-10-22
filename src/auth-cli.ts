@@ -26,7 +26,7 @@ export function accountCommand(name: string): Command {
 export function storageOptions(options: AccountCommandOptions): AuthStorageOptions {
   const apiUrl = URL.parse(options.apiUrl ?? DEFAULT_RARE_API_BASE_URL);
   if (apiUrl === null) throw new AuthStorageError('storage_invalid', 'Rare API base URL is invalid.');
-  const result = deriveAccountStorageScope(apiUrl, 'rare-cli');
+  const result = deriveAccountStorageScope(apiUrl, 'rare-sdk');
   if (!result.ok) throw new AuthStorageError('storage_invalid', result.message);
   return { ...result.scope, backend: options.storage,
     ...(options.authDirectory === undefined ? {} : { directory: options.authDirectory }) };
@@ -34,7 +34,7 @@ export function storageOptions(options: AccountCommandOptions): AuthStorageOptio
 
 export function accountClient(options: AuthStorageOptions): RareApiClient {
   const sessionStore = createAuthStore(options);
-  return createRareClient({ apiBaseUrl: options.apiBaseUrl, clientId: 'rare-cli', sessionStore });
+  return createRareClient({ apiBaseUrl: options.apiBaseUrl, sessionStore });
 }
 
 /** Verify writes using a disposable record before issuing durable server credentials. */

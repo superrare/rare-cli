@@ -47,7 +47,7 @@ class AuthService {
       send({ device_code: deviceSecret, user_code: 'USER-CODE', verification_uri: `${this.base}/device`, expires_in: 600, interval: 1 });
     } else if (request.url === '/auth/v2/token') {
       const body = new URLSearchParams(await text(request));
-      expect(body.get('client_id')).toBe('rare-cli');
+      expect(body.get('client_id')).toBe('rare-sdk');
       const grant = body.get('grant_type');
       if (grant === 'refresh_token') {
         this.refreshes += 1;
@@ -128,7 +128,7 @@ describe.skipIf(process.platform === 'win32')('built CLI account command contrac
     await withTempHome(async temporary => {
       const home = await realpath(temporary);
       const directory = join(home, 'production-auth');
-      const scope = { apiBaseUrl: 'https://api.superrare.com', authBaseUrl: 'https://api.superrare.com/auth/v2', clientId: 'rare-cli' };
+      const scope = { apiBaseUrl: 'https://api.superrare.com', authBaseUrl: 'https://api.superrare.com/auth/v2', clientId: 'rare-sdk' };
       const store = createAuthStore({ ...scope, backend: 'file', directory });
       await store.withLock(async () => { await store.set({ ...scope, revision: 'test-production', accessToken: accessSecret,
         refreshToken: refreshSecret, expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
@@ -153,7 +153,7 @@ describe.skipIf(process.platform === 'win32')('built CLI account command contrac
       const env = { RARE_API_URL: 'https://unused-api.example', RARE_AUTH_STORAGE: 'file', RARE_AUTH_DIRECTORY: directory };
       const run = async (args: string[]): Promise<CliResult> => runCli(['--json', ...args, '--api-url', `${service.base}/`], { home, env });
       const requestId = await start(run);
-      const pending = createAuthStore({ apiBaseUrl: service.base, authBaseUrl: `${service.base}/auth/v2`, clientId: 'rare-cli', backend: 'file', directory, pendingRequestId: requestId });
+      const pending = createAuthStore({ apiBaseUrl: service.base, authBaseUrl: `${service.base}/auth/v2`, clientId: 'rare-sdk', backend: 'file', directory, pendingRequestId: requestId });
       await pending.withLock(async () => { expect(await pending.get()).toMatchObject({ apiBaseUrl: service.base, authBaseUrl: `${service.base}/auth/v2` }); });
       expect(parseJsonStdout(await run(['auth', 'login', '--resume', requestId]))).toMatchObject({ status: 'authorized' });
       expect(parseJsonStdout(await run(['profile', 'get']))).toEqual(profile);
@@ -162,7 +162,7 @@ describe.skipIf(process.platform === 'win32')('built CLI account command contrac
 
   it('does not load or migrate sessions and pending grants from a direct auth-service scope', async () => {
     await fixture(async (service, home, run) => {
-      const scope = { apiBaseUrl: service.base, authBaseUrl: 'https://previous-auth.example/auth/v2', clientId: 'rare-cli' };
+      const scope = { apiBaseUrl: service.base, authBaseUrl: 'https://previous-auth.example/auth/v2', clientId: 'rare-sdk' };
       const storage = { ...scope, backend: 'file' as const, directory: join(home, '.rare/auth') };
       const legacy = createAuthStore(storage);
       const session = { ...scope, revision: 'legacy', accessToken: accessSecret, refreshToken: refreshSecret,
@@ -201,7 +201,7 @@ describe.skipIf(process.platform === 'win32')('built CLI account command contrac
       expect(parseJsonStdout(await run(['auth', 'login', '--resume', requestId]))).toMatchObject({ status: 'authorized' });
       expect(parseJsonStdout(await run(['auth', 'status']))).toMatchObject({ status: 'present', verified: false });
       expect(parseJsonStdout(await run(['auth', 'status', '--verify']))).toMatchObject({ status: 'authenticated', accountId: '123' });
-      const store = createAuthStore({ authBaseUrl: `${service.base}/auth/v2`, apiBaseUrl: service.base, clientId: 'rare-cli', backend: 'file', directory: join(home, '.rare/auth') });
+      const store = createAuthStore({ authBaseUrl: `${service.base}/auth/v2`, apiBaseUrl: service.base, clientId: 'rare-sdk', backend: 'file', directory: join(home, '.rare/auth') });
       await store.withLock(async () => {
         const session = await store.get();
         if (typeof session !== 'object' || session === null) throw new Error('Missing saved session');

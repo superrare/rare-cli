@@ -16,9 +16,10 @@ describe('published package subpath exports', () => {
       'Erc1155CheckoutAllItemsSkippedError',
       'NftApprovalRequiredError',
       'PaymentApprovalRequiredError',
+      'RareApiError',
       'RareAuthError',
+      'createBrowserAccountSessionStore',
       'createMemoryAccountSessionStore',
-      'createRareAccountClient',
       'createRareApi',
       'createRareClient',
     ]);

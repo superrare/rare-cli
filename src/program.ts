@@ -1,3 +1,4 @@
+import { uploadsCommand } from './commands/uploads.js';
 import { notificationsCommand } from './commands/notifications.js';
 import { messagingCommand } from './commands/messaging.js';
 import { dropsCommand } from './commands/drops.js';
@@ -79,6 +80,7 @@ export function createRareProgram(): Command {
   program.addCommand(mcpCommand());
   program.addCommand(authCommand());
   program.addCommand(profileCommand());
+  program.addCommand(uploadsCommand());
 
   return program;
 }

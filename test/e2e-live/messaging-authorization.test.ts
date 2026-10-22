@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
-import { conversation, history, participants, messagingOrigin, required, withMessagingActors } from './helpers/messaging-live.js';
+import { conversation, history, participants, messagingOrigin, withMessagingActors } from './helpers/messaging-live.js';
 const created = z.object({ id: z.string().uuid() });
 
 describe('messaging authorization through the built CLI and deployed services', () => {
@@ -94,17 +94,20 @@ describe('messaging authorization through the built CLI and deployed services', 
   }, 300_000);
 
   it('verifies uploaded image bytes and denies attachment reuse, outsiders and revoked members', async () => {
-    const bucket = required('RARE_MESSAGING_TEST_PRIVATE_BUCKET');
+    const bucket = 'rare-api-private-upload-dev';
     if (bucket.includes('prod') || !/^[a-z0-9-]+$/.test(bucket)) throw new Error('Use the non-production messaging bucket');
     execFileSync('gcloud', ['--project=superrare-dev', 'storage', 'buckets', 'describe', `gs://${bucket}`, '--format=value(name)'], { stdio: 'pipe' });
     await withMessagingActors(async (owner, member, outsider) => {
       const room = created.parse(await owner.json(['messaging', 'group', '--title', `CLI images ${randomUUID()}`]));
       const otherRoom = created.parse(await owner.json(['messaging', 'group', '--title', `CLI other images ${randomUUID()}`]));
-      const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9uQAAAAASUVORK5CYII=', 'base64');
-      const file = join(owner.directory, 'private.png');
+      const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+      const marker = Buffer.from(randomUUID());
+      // A valid GIF comment makes this test's content-addressed object unique.
+      const bytes = Buffer.concat([gif.subarray(0, -1), Buffer.from([0x21, 0xfe, marker.length]), marker, Buffer.from([0, 0x3b])]);
+      const file = join(owner.directory, 'private.gif');
       await writeFile(file, bytes);
       const uploadId = randomUUID();
-      const object = `gs://${bucket}/messaging/${room.id}/${uploadId}/${createHash('sha256').update(bytes).digest('hex')}`;
+      const object = `gs://${bucket}/${createHash('sha256').update(bytes).digest('hex')}`;
       const download = async (actor: typeof owner, id: string): Promise<Buffer> => {
         const output = join(actor.directory, `download-${randomUUID()}.png`);
         await actor.json(['messaging', 'download-image', id, '--output', output]);
@@ -113,7 +116,11 @@ describe('messaging authorization through the built CLI and deployed services', 
       try {
         await owner.json(['messaging', 'invite', room.id, member.user.id]);
         await member.json(['messaging', 'accept', room.id]);
-        const image = created.parse(await owner.json(['messaging', 'upload-image', room.id, file, '--content-type', 'image/png', '--width', '1', '--height', '1', '--upload-id', uploadId]));
+        const upload = z.object({ uploadId: z.string().uuid(), access: z.literal('private') }).parse(await owner.json(['uploads', 'upload', file, '--access', 'private', '--content-type', 'image/gif']));
+        const image = created.parse(await owner.json(['messaging', 'attach-image', room.id, upload.uploadId, '--width', '1', '--height', '1', '--attachment-id', uploadId]));
+        expect((await member.run(['messaging', 'attach-image', room.id, upload.uploadId, '--width', '1', '--height', '1'])).code).not.toBe(0);
+        const secondImage = created.parse(await owner.json(['messaging', 'attach-image', otherRoom.id, upload.uploadId, '--width', '1', '--height', '1', '--attachment-id', randomUUID()]));
+        expect(await download(owner, secondImage.id)).toEqual(bytes);
         expect(await download(owner, image.id)).toEqual(bytes);
         expect((await member.run(['messaging', 'download-image', image.id, '--output', join(member.directory, 'denied.png')])).code).not.toBe(0);
         await expect(readFile(join(member.directory, 'denied.png'))).rejects.toMatchObject({ code: 'ENOENT' });
@@ -131,6 +138,7 @@ describe('messaging authorization through the built CLI and deployed services', 
         await owner.json(['messaging', 'delete', room.id, sent.id]);
         expect(history.parse(await owner.json(['messaging', 'history', room.id])).messages.find(row => row.id === sent.id)).toMatchObject({ deleted: true, attachments: [] });
         expect((await owner.run(['messaging', 'download-image', image.id, '--output', join(owner.directory, 'deleted.png')])).code).not.toBe(0);
+        expect(await download(owner, secondImage.id)).toEqual(bytes);
         await expect(readFile(join(owner.directory, 'deleted.png'))).rejects.toMatchObject({ code: 'ENOENT' });
       } finally {
         await owner.json(['messaging', 'close', room.id]);

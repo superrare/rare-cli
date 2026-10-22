@@ -68,7 +68,7 @@ async function approveThroughConnect(connect: string, code: string, wallet: Retu
     return schema.parse(responseBody);
   };
   const review = await request({ action: 'review', userCode: code }, z.object({ client_id: z.string(), user_code: z.string() }));
-  expect(review).toMatchObject({ client_id: 'rare-cli', user_code: code });
+  expect(review).toMatchObject({ client_id: 'rare-sdk', user_code: code });
   if (decision === 'deny') {
     expect(await request({ action: 'deny' }, z.object({ status: z.string() }))).toMatchObject({ status: 'denied' });
     return;

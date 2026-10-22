@@ -1277,3 +1277,17 @@ nonrandom sort to page through a complete result set.
 
 Run the built-command live check with
 `RARE_ACCOUNT_TEST_API_URL=https://your-feature-api npm run test:nfts:e2e`.
+
+
+Shared application files use one upload command:
+
+```sh
+rare uploads upload ./image.png --access private --content-type image/png
+rare messaging attach-image CONVERSATION_ID UPLOAD_ID --width 100 --height 100
+```
+
+The first command returns a private `uploadId`; the second associates it with a
+conversation and returns an attachment ID for `messaging send --attachment`.
+Attach within 24 hours of upload completion. Subsequent reads use messaging
+permissions. The SDK browser client persists managed login across reloads; the CLI
+continues using its protected persistent credential store.
