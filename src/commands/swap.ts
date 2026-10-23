@@ -124,6 +124,7 @@ function swapTokensCommand(): Command {
         inputs,
         recipient,
         deadline: opts.deadline,
+        autoApprove: true,
       });
 
       output(
@@ -400,6 +401,7 @@ function swapSellTokenCommand(): Command {
           inputs,
           recipient: explicitRecipient,
           deadline: opts.deadline,
+          autoApprove: true,
         });
 
         output(
@@ -492,6 +494,7 @@ function swapSellTokenCommand(): Command {
         recipient,
         deadline: opts.deadline,
         route,
+        autoApprove: true,
       });
 
       output(
