@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { createRareAccountClient, createRareClient } from '@rareprotocol/rare-sdk';
+import { createRareClient, type RareClient } from '@rareprotocol/rare-sdk';
 import { isHex, zeroAddress, type Address, type Hex } from 'viem';
 import { z } from 'zod';
 import { createAuthStore } from '../../../src/auth-storage.js';
@@ -68,12 +68,12 @@ export async function createCreatorMintVariantSku(live: LiveFixture, contract: A
 }
 
 function createCreatorVariantApi(live: LiveFixture): {
-  rare: ReturnType<typeof createRareClient>;
+  rare: RareClient;
   post: (path: string, body: unknown) => Promise<unknown>;
 } {
   const apiBaseUrl = live.accountApiBaseUrl;
   if (apiBaseUrl === undefined) throw new Error('Cart creator fixture requires an authenticated API deployment.');
-  const accountClient = createRareAccountClient({ apiBaseUrl, clientId: 'rare-cli',
+  const accountClient = createRareClient({ apiBaseUrl,
     sessionStore: createAuthStore({ apiBaseUrl, authBaseUrl: `${apiBaseUrl}/auth/v2`,
       clientId: 'rare-cli', backend: 'file', directory: join(live.sellerHome, 'auth') }),
   });
