@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { privateKeyToAccount } from 'viem/accounts';
 import { createRareClient } from '@rareprotocol/rare-sdk';
-import { isPrivateKeyString } from '@rareprotocol/rare-sdk/validation';
+import { isPrivateKeyString } from '../../src/input-core.js';
 import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
 import { messagingOrigin, required, withMessagingActors, type MessagingActor } from './helpers/messaging-live.js';

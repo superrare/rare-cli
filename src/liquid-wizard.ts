@@ -1,11 +1,7 @@
 import { createInterface } from 'node:readline/promises';
 import type { Readable, Writable } from 'node:stream';
-import {
-  getCurvePresetDefinition,
-  type CurvePresetKey,
-  type LiquidCurvePreview,
-  type LiquidCurveSegment,
-} from '@rareprotocol/rare-sdk/liquid/curve-config';
+import { getCurvePresetDefinition } from '@rareprotocol/rare-sdk/utils';
+import type { CurvePresetKey, LiquidCurvePreview, LiquidCurveSegment } from '@rareprotocol/rare-sdk';
 
 const PRESETS: CurvePresetKey[] = ['low-demand', 'medium-demand', 'high-demand'];
 

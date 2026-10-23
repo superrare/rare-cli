@@ -4,7 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { promisify } from 'node:util';
 import { Command, Option } from 'commander';
 import { createRareClient, RareAuthError, type RareApiClient, type RareDeviceAuthorization, type RareAccountSession } from '@rareprotocol/rare-sdk';
-import { DEFAULT_RARE_API_BASE_URL } from '@rareprotocol/rare-sdk/data-access/base-url';
+import { DEFAULT_RARE_API_BASE_URL } from '@rareprotocol/rare-sdk/data-access';
 import { AuthStorageError, createAuthStore, type AuthStorageOptions } from './auth-storage.js';
 import { deriveAccountStorageScope } from './auth-storage-core.js';
 import { parsePendingAuthorization } from './commands/auth-core.js';

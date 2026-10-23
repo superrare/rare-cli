@@ -11,7 +11,7 @@ import {
   shapeMcpToolAnnotations,
   shapeMcpTransactionResult,
   resolveMcpChain,
-} from '../../../src/mcp/core.js';
+} from '../../src/mcp/core.js';
 
 const privateKey = '0x1111111111111111111111111111111111111111111111111111111111111111';
 

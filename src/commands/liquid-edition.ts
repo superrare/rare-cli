@@ -3,10 +3,10 @@ import { formatUnits } from 'viem';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import { parseAddress } from '@rareprotocol/rare-sdk/validation';
+import { parseAddress } from '../input-core.js';
 import { log, output } from '../output.js';
 import type { RareClient } from '@rareprotocol/rare-sdk/client';
-import type { LiquidEditionPoolKey } from '@rareprotocol/rare-sdk/liquid';
+import type { LiquidEditionPoolKey } from '@rareprotocol/rare-sdk';
 import { deployLiquidEditionCommand } from './deploy.js';
 
 type ChainOptions = {

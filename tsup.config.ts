@@ -13,15 +13,35 @@ export default defineConfig([
     splitting: false,
   },
   {
-    entry: {
-      client: 'src/exports/client.ts',
-      contracts: 'src/exports/contracts.ts',
-      utils: 'src/exports/utils.ts',
-    },
+    entry: { client: 'src/exports/client.ts' },
     format: ['esm'],
     target: 'node22',
     clean: false,
-    dts: true,
+    dts: {
+      banner: '/** @deprecated Import from `@rareprotocol/rare-sdk/client` instead. */',
+    },
+    sourcemap: false,
+    splitting: false,
+  },
+  {
+    entry: { contracts: 'src/exports/contracts.ts' },
+    format: ['esm'],
+    target: 'node22',
+    clean: false,
+    dts: {
+      banner: '/** @deprecated Import from `@rareprotocol/rare-sdk/contracts` instead. */',
+    },
+    sourcemap: false,
+    splitting: false,
+  },
+  {
+    entry: { utils: 'src/exports/utils.ts' },
+    format: ['esm'],
+    target: 'node22',
+    clean: false,
+    dts: {
+      banner: '/** @deprecated Import from `@rareprotocol/rare-sdk/utils` instead. */',
+    },
     sourcemap: false,
     splitting: false,
   },
