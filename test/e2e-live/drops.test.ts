@@ -29,7 +29,7 @@ describe('drops through the built CLI and deployed services', () => {
     const image = await (async (): Promise<Extract<RareUpload, { url: string }>> => {
       try {
         await fixtureClient.auth.loginWithWallet({ address: wallet.address, chainId: 11155111, signMessage: message => wallet.signMessage({ message }) });
-        return await fixtureClient.uploads.upload(Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'), 'drop.gif', { contentType: 'image/gif' });
+        return await fixtureClient.upload(Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'), 'drop.gif', { contentType: 'image/gif' });
       } finally { await fixtureClient.auth.logout(); }
     })();
     const startsAt = new Date(Date.now() + 86400000).toISOString();

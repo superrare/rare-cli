@@ -109,7 +109,7 @@ describe('uploaded post images through the built CLI', () => {
     const bytes = Buffer.concat([gif.subarray(0, -1), Buffer.from([0x21, 0xfe, comment.length]), comment, Buffer.from([0, 0x3b])]);
     execFileSync('gcloud', ['--project=superrare-dev', 'storage', 'buckets', 'describe', 'gs://rare-api-public-upload-dev', '--format=value(name)'], { stdio: 'pipe' });
     await fixture.auth.loginWithWallet({ address: signer.address, chainId: 1, signMessage: message => signer.signMessage({ message }) });
-    const image = await fixture.uploads.upload(bytes, 'cli-post.gif', { contentType: 'image/gif' }).finally(() => fixture.auth.logout());
+    const image = await fixture.upload(bytes, 'cli-post.gif', { contentType: 'image/gif' }).finally(() => fixture.auth.logout());
     try {
       await withTempHome(async first => withTempHome(async second => {
         const owner = await setup(first, privateKey, apiUrl.origin);

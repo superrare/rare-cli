@@ -46,7 +46,7 @@ describe('public room delivery and system-message protection through the built C
         // All chat actions and all result verification below use the built CLI.
         const drop = type === 'drop-announcement' ? await (async (): Promise<{ id: string }> => {
           await fixture.auth.loginWithWallet({ address: wallet.address, chainId: 11155111, signMessage: message => wallet.signMessage({ message }) });
-          const image = await fixture.uploads.upload(Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'), 'cli-public-delivery.gif', { contentType: 'image/gif' });
+          const image = await fixture.upload(Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'), 'cli-public-delivery.gif', { contentType: 'image/gif' });
           await owner.json(['auth', 'login', '--wallet', '--chain', 'sepolia']);
           return z.object({ id: z.string() }).parse(await owner.json(['drops', 'create', '--headline', `CLI public delivery ${randomUUID()}`, '--description', 'Temporary live delivery fixture', '--starts-at', new Date(Date.now() + 86400000).toISOString(), '--image-url', image.url]));
         })() : null;

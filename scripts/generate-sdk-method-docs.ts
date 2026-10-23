@@ -35,7 +35,7 @@ const CLIENT_NAMESPACE_NAMES = new Set([
   'token',
   'user',
   'utils',
-  'uploads',
+  'upload',
 ]);
 const NON_TRAVERSABLE_SYMBOL_NAMES = new Set([
   'Array',

@@ -10,7 +10,7 @@ export function uploadsCommand(): Command {
     .addOption(new Option('--access <access>', 'public URL or private feature attachment').choices(['public', 'private']).default('public'))
     .option('--content-type <type>', 'MIME type, defaults to application/octet-stream')
     .action(async (file: string, options: AccountCommandOptions & { access: 'public' | 'private'; contentType?: string }): Promise<void> => {
-      const result = await accountClient(storageOptions(options)).uploads.upload(await readFile(file), basename(file), { access: options.access, contentType: options.contentType });
+      const result = await accountClient(storageOptions(options)).upload(await readFile(file), basename(file), { access: options.access, contentType: options.contentType });
       output(result, () => { console.log(JSON.stringify(result, null, 2)); });
     }));
   return command;
