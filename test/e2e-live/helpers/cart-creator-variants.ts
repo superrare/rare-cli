@@ -75,7 +75,7 @@ function createCreatorVariantApi(live: LiveFixture): {
   if (apiBaseUrl === undefined) throw new Error('Cart creator fixture requires an authenticated API deployment.');
   const accountClient = createRareClient({ apiBaseUrl,
     sessionStore: createAuthStore({ apiBaseUrl, authBaseUrl: `${apiBaseUrl}/auth/v2`,
-      clientId: 'rare-cli', backend: 'file', directory: join(live.sellerHome, 'auth') }),
+      clientId: 'rare-sdk', backend: 'file', directory: join(live.sellerHome, 'auth') }),
   });
   const rare = createRareClient({ publicClient: live.publicClient, apiBaseUrl, accountClient });
   const post = async (path: string, body: unknown): Promise<unknown> => {

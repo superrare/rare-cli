@@ -160,7 +160,7 @@ describe('built Cart CLI', () => {
       const home = await realpath(temporary);
       await withCartApiFixture(async ({ baseUrl, preparationRequest }) => {
         const directory = join(home, 'auth');
-        const scope = { apiBaseUrl: baseUrl, authBaseUrl: `${baseUrl}/auth/v2`, clientId: 'rare-cli' };
+        const scope = { apiBaseUrl: baseUrl, authBaseUrl: `${baseUrl}/auth/v2`, clientId: 'rare-sdk' };
         const store = createAuthStore({ ...scope, backend: 'file', directory });
         await store.withLock(async () => { await store.set({ ...scope, revision: 'cart-prepare-session',
           accessToken: 'cart-prepare-access', refreshToken: 'cart-prepare-refresh',
@@ -182,7 +182,7 @@ describe('built Cart CLI', () => {
       const home = await realpath(temporary);
       await withCartApiFixture(async ({ baseUrl, request }) => {
         const directory = join(home, 'auth');
-        const scope = { apiBaseUrl: baseUrl, authBaseUrl: `${baseUrl}/auth/v2`, clientId: 'rare-cli' };
+        const scope = { apiBaseUrl: baseUrl, authBaseUrl: `${baseUrl}/auth/v2`, clientId: 'rare-sdk' };
         const store = createAuthStore({ ...scope, backend: 'file', directory });
         await store.withLock(async () => { await store.set({ ...scope, revision: 'cart-session',
           accessToken: 'cart-access-secret', refreshToken: 'cart-refresh-secret',
