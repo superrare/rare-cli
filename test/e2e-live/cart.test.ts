@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createRareClient } from '@rareprotocol/rare-sdk';
+import { createRareClient, type RareClient } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress, resolveCurrency, viemChains } from '@rareprotocol/rare-sdk/contracts';
 import { createWalletClient, erc20Abi, erc721Abi, getAddress, http, parseEther, parseEventLogs, parseUnits, zeroAddress, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -589,7 +589,7 @@ describeLive('live secondary-sale Cart royalties', () => {
 });
 
 async function pollForPublishedListings(
-  rare: ReturnType<typeof createRareClient>,
+  rare: RareClient,
   seller: Address,
   listingDigests: readonly Hex[],
 ): Promise<void> {
@@ -606,7 +606,7 @@ async function pollForPublishedListings(
 
 async function publishSingleCartListing(params: {
   fixture: LiveFixture;
-  rare: ReturnType<typeof createRareClient>;
+  rare: RareClient;
   tokenContract: Address;
   sku: Hex;
   settlementCurrency: 'eth' | 'rare';
