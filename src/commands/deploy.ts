@@ -1,3 +1,4 @@
+import type { RareClient } from '@rareprotocol/rare-sdk';
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { createInterface } from 'node:readline/promises';
@@ -33,7 +34,7 @@ export {
 } from './deploy-core.js';
 
 async function resolveTokenUri(
-  rare: ReturnType<typeof createRareClient>,
+  rare: RareClient,
   tokenName: string,
   opts: {
     tokenUri?: string;
@@ -75,9 +76,9 @@ async function resolveTokenUri(
 }
 
 async function uploadVideoMedia(
-  rare: ReturnType<typeof createRareClient>,
+  rare: RareClient,
   videoPath: string,
-): Promise<Awaited<ReturnType<ReturnType<typeof createRareClient>['media']['upload']>>> {
+): Promise<Awaited<ReturnType<RareClient['media']['upload']>>> {
   const videoBuffer = await readMetadataFile(videoPath, 'video');
   log(`Uploading video: ${basename(videoPath)} (${videoBuffer.byteLength} bytes)`);
   const videoMedia = await rare.media.upload(new Uint8Array(videoBuffer), basename(videoPath));
@@ -159,9 +160,9 @@ async function confirmLiquidEditionDeploy(chain: string, yes?: boolean): Promise
 }
 
 function resolveFactoryConfigForSupplyOrThrow(
-  factoryConfig: Awaited<ReturnType<ReturnType<typeof createRareClient>['liquidEdition']['getFactoryConfig']>>,
+  factoryConfig: Awaited<ReturnType<RareClient['liquidEdition']['getFactoryConfig']>>,
   totalSupply?: string,
-): Awaited<ReturnType<ReturnType<typeof createRareClient>['liquidEdition']['getFactoryConfig']>> {
+): Awaited<ReturnType<RareClient['liquidEdition']['getFactoryConfig']>> {
   const result = resolveLiquidFactoryConfigForSupply(factoryConfig, totalSupply);
   if (!result.isValid) {
     throw new Error(result.errorMessage);
@@ -178,7 +179,7 @@ async function resolveCurves(
     yes?: boolean;
     targetChain?: string;
   },
-  rare: ReturnType<typeof createRareClient>,
+  rare: RareClient,
 ): Promise<{
   source: string;
   curves: LiquidCurveSegment[];

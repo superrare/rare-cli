@@ -173,6 +173,11 @@ export function printUser(user: UserProfile): void {
   console.log(`\n${user.username}`);
   console.log(`  Address:   ${user.address}`);
   if (user.fullName) console.log(`  Name:      ${user.fullName}`);
+  for (const [label, value] of [
+    ['Bio', user.bio], ['Avatar', user.avatar], ['Website', user.website],
+    ['Twitter/X', user.twitterlink], ['Discord', user.discordlink], ['Instagram', user.instagramlink],
+    ['YouTube', user.youtubelink], ['Masthead', user.masthead_universal_token_id],
+  ]) if (value) console.log(`  ${label}: ${value}`);
   console.log(`  Created:   ${user.stats.created}`);
   console.log(`  Owned:     ${user.stats.owned}`);
   console.log(`  Followers: ${user.stats.followerCount}`);

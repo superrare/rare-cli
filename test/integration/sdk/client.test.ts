@@ -76,8 +76,8 @@ describe('Rare SDK client API integration', () => {
     expect(rare.listing.release.limits).toBeDefined();
     expect('batch' in rare).toBe(false);
     expect('batchListing' in rare).toBe(false);
-    expect('events' in rare.nft).toBe(false);
-    expect('events' in rare.collection).toBe(false);
+    expect(rare.nft.events).toBeTypeOf('function');
+    expect(rare.collection.events).toBeTypeOf('function');
   });
 
   it('rejects per-call chain overrides on the bound SDK client', async () => {
