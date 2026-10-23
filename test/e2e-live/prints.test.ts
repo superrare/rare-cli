@@ -3,8 +3,10 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { EligibilityRule } from '@rareprotocol/rare-sdk';
-import { cleanupLiveFixture, createCartLiveFixture, jsonCommand } from './helpers/live-harness.js';
-import { deployErc721Collection } from './helpers/live-erc721.js';
+import type { Address, Hex } from 'viem';
+import { cleanupLiveFixture, createCartLiveFixture, E2E_TOKEN_URI, jsonCommand } from './helpers/live-harness.js';
+import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
+import { createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
 
 describe('print tooling through the built CLI and deployed Rare API', () => {
   it('uploads a private master, publishes a print and quotes generic checkout with saved shipping', async () => {
@@ -72,6 +74,50 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
           expect(checkout.preparation.breakdown.total).toBe(checkout.preparation.paymentAmount);
           expect(checkout.preparedPurchase.executePurchase.lines.find(line => line.listingDigest === listing.listingDigest)?.quantity).toBe('2');
           expect(checkout.preparedPurchase.executePurchase.platformSignature).not.toBe('0x');
+          const mixedNft = await deployErc721Collection(fixture, '1');
+          const nft = await mintToken(fixture, mixedNft.contract);
+          const mixedEdition = await jsonCommand<{ contract: Address }>(fixture.sellerHome, [
+            'collection', 'deploy', 'erc1155', `Mixed print ${randomUUID()}`, 'MIX', '--base-uri', E2E_TOKEN_URI, '--chain', fixture.chain,
+          ], 240_000);
+          const edition = await jsonCommand<{ tokenId: string }>(fixture.sellerHome, [
+            'collection', 'erc1155', 'create-token', '--contract', mixedEdition.contract, '--max-supply', '10',
+            '--token-uri', E2E_TOKEN_URI, '--chain', fixture.chain,
+          ], 240_000);
+          await jsonCommand(fixture.sellerHome, ['collection', 'erc1155', 'mint', '--contract', mixedEdition.contract,
+            '--token-id', edition.tokenId, '--quantity', '2', '--chain', fixture.chain], 240_000);
+          const skus = await createCreatorVariantSkus(fixture, [nft,
+            { contract: mixedEdition.contract, tokenId: edition.tokenId, fulfillmentKind: 3 }]);
+          const mixedTerms = join(fixture.tempDir, 'mixed-listings.json');
+          await writeFile(mixedTerms, JSON.stringify({ deadline: String(Math.floor(Date.now() / 1000) + 3600),
+            listings: skus.map((sku, index) => ({ sku, settlementCurrency: 'eth', unitPrice: '0.000001',
+              quantity: index === 0 ? '1' : '2', fulfillmentKind: index === 0 ? 'ERC721_TRANSFER' : 'ERC1155_TRANSFER' })) }));
+          const mixedListings = await jsonCommand<{ listingDigests: Hex[] }>(fixture.sellerHome, [
+            'cart', 'listing', 'create', '--input', mixedTerms, '--chain', fixture.chain, '--yes',
+          ], 300_000);
+          const [nftDigest, editionDigest] = mixedListings.listingDigests;
+          if (!nftDigest || !editionDigest) throw new Error('Mixed delivery requires both NFT Listings.');
+          const mixed = await jsonCommand<{ preparation: { intent: { items: unknown[] }; idempotencyKey: string };
+            preparedPurchase: { executePurchase: { order: { orderId: string }; lines: { listingDigest: string; quantity: string; fulfillmentKind: number; amount: string }[];
+              actions: { lineIndex: string; quantity: string }[] } } }>(fixture.sellerHome, [
+            'cart', 'checkout', '--listing', nftDigest, '--listing', `${listing.listingDigest}=2`, '--listing', `${editionDigest}=2`,
+            '--output-currency', 'rare', '--output-amount', '0.01', '--payment-currency', 'usdc',
+            '--saved-address-id', addressId, '--chain', fixture.chain, '--prepare-only', '--yes',
+          ], 300_000);
+          expect(mixed.preparation.intent.items).toHaveLength(4);
+          const mixedLines = mixed.preparedPurchase.executePurchase.lines;
+          expect(mixedLines.find(line => line.listingDigest === nftDigest)).toMatchObject({ quantity: '1', fulfillmentKind: 2 });
+          expect(mixedLines.find(line => line.listingDigest === editionDigest)).toMatchObject({ quantity: '2', fulfillmentKind: 3 });
+          expect(mixedLines.find(line => line.listingDigest === listing.listingDigest)).toMatchObject({ quantity: '2', fulfillmentKind: 1 });
+          expect(mixedLines.find(line => line.fulfillmentKind === 6)).toMatchObject({ amount: '10000000000000000' });
+          expect(mixed.preparedPurchase.executePurchase.actions.map(action => ({ quantity: action.quantity,
+            kind: mixedLines[Number(action.lineIndex)]?.fulfillmentKind }))).toEqual(expect.arrayContaining([
+            { quantity: '1', kind: 2 }, { quantity: '2', kind: 3 },
+          ]));
+          const mixedOrder = await jsonCommand<{ fulfillments: { orderLineIndex: number }[] }>(fixture.sellerHome, [
+            'orders', 'get', '--id', mixed.preparedPurchase.executePurchase.order.orderId,
+          ]);
+          expect(mixedOrder.fulfillments).toHaveLength(1);
+          expect(mixedOrder.fulfillments[0]?.orderLineIndex).toBe(mixedLines.findIndex(line => line.listingDigest === listing.listingDigest));
           await expect(jsonCommand(fixture.sellerHome, [
             'cart', 'checkout', '--listing', `${listing.listingDigest}=4`, '--payment-currency', 'usdc',
             '--saved-address-id', addressId, '--chain', fixture.chain, '--preview',
@@ -113,5 +159,5 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
     } finally {
       await cleanupLiveFixture(fixture);
     }
-  }, 240_000);
+  }, 900_000);
 });
