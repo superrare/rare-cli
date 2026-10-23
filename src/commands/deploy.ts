@@ -227,8 +227,8 @@ async function resolveCurves(
   };
 }
 
-type SupplyAwareLiquidEdition = ReturnType<typeof createRareClient>['liquidEdition'] & {
-  getFactoryConfig: (params?: { totalSupply?: string }) => Promise<Awaited<ReturnType<ReturnType<typeof createRareClient>['liquidEdition']['getFactoryConfig']>>>;
+type SupplyAwareLiquidEdition = RareClient['liquidEdition'] & {
+  getFactoryConfig: (params?: { totalSupply?: string }) => Promise<Awaited<ReturnType<RareClient['liquidEdition']['getFactoryConfig']>>>;
 };
 
 function supportsSupplyAwareFactoryConfig(value: unknown): value is SupplyAwareLiquidEdition {
