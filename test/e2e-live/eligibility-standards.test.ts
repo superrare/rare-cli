@@ -12,14 +12,14 @@ import { createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
 type Source = { contract: Address; tokenId: string; quantity: number; fulfillmentKind: 2 | 3 };
 const kinds: EligibilityRuleDefinition['kind'][] = ['PRIMARY_SALE', 'EVERY_SALE', 'CURRENT_HOLDER'];
 const standards = ['ERC721', 'ERC1155'] as const;
-const available = (claims: EligibilityClaim[]) => claims.filter(claim => claim.status === 'AVAILABLE');
-const consumed = (claims: EligibilityClaim[]) => claims.filter(claim => claim.status === 'CONSUMED');
+const available = (claims: EligibilityClaim[]): EligibilityClaim[] => claims.filter(claim => claim.status === 'AVAILABLE');
+const consumed = (claims: EligibilityClaim[]): EligibilityClaim[] => claims.filter(claim => claim.status === 'CONSUMED');
 
 describe.sequential('CLI per-copy eligibility for both NFT standards', () => {
   let fixture: BuyerLiveFixture;
   let reward: Source;
   let fileSequence = 0;
-  const file = async (body: unknown) => {
+  const file = async (body: unknown): Promise<string> => {
     const path = join(fixture.tempDir, `eligibility-${fileSequence++}.json`);
     await writeFile(path, JSON.stringify(body));
     return path;
@@ -51,14 +51,14 @@ describe.sequential('CLI per-copy eligibility for both NFT standards', () => {
     if (!digest) throw new Error('Published Listing has no digest.');
     return { digest, sku };
   };
-  const checkout = async (digest: Hex, quantity: number) => {
+  const checkout = async (digest: Hex, quantity: number): Promise<void> => {
     const args = ['cart', 'checkout', '--listing', `${digest}=${quantity}`, '--payment-currency', 'eth', '--chain', fixture.chain];
     const quote = await jsonCommand<{ preparation: { paymentAmount: string } }>(fixture.buyerHome, [...args, '--preview']);
     expect(BigInt(quote.preparation.paymentAmount)).toBeLessThanOrEqual(1_000_000_000_000_000n);
     const purchase = await jsonCommand<TxResult>(fixture.buyerHome, args, 300_000);
     expectTx(purchase);
   };
-  const transfer = async (source: Source, quantity: number, back: boolean) => {
+  const transfer = async (source: Source, quantity: number, back: boolean): Promise<void> => {
     const lease = back ? fixture.sellerWallet : fixture.buyerWallet;
     if (!lease) throw new Error('Eligibility transfers require the reserved buyer wallet.');
     const account = privateKeyToAccount(lease.privateKey);
@@ -81,10 +81,9 @@ describe.sequential('CLI per-copy eligibility for both NFT standards', () => {
   }, 600_000);
   afterAll(async () => cleanupLiveFixture(fixture));
 
-  for (const standard of standards) {
-    for (const kind of kinds) {
-      it(`${standard} ${kind} grants per copy and preserves consumed rights across transfers`, async () => {
-        const source: Source = standard === 'ERC1155' ? await edition(5) : await (async () => {
+  it.each(standards.flatMap(standard => kinds.map(kind => ({ standard, kind }))))(
+    '$standard $kind grants per copy and preserves consumed rights across transfers', async ({ standard, kind }) => {
+        const source: Source = standard === 'ERC1155' ? await edition(5) : await (async (): Promise<Source> => {
           const collection = await deployErc721Collection(fixture, '1');
           const token = await mintToken(fixture, collection.contract);
           return { contract: collection.contract, tokenId: token.tokenId, quantity: 1, fulfillmentKind: 2 };
@@ -95,7 +94,7 @@ describe.sequential('CLI per-copy eligibility for both NFT standards', () => {
         const rule = await jsonCommand<EligibilityRule>(fixture.sellerHome, ['eligibility', 'rules', 'create', '--input', input, '--chain', fixture.chain]);
         try {
           await jsonCommand(fixture.sellerHome, ['eligibility', 'listings', 'require', '--listing-digest', target.digest, '--rule-id', rule.id, '--chain', fixture.chain]);
-          const claims = (home = fixture.buyerHome) => jsonCommand<EligibilityClaim[]>(home, ['eligibility', 'claims', 'list', '--rule-id', rule.id]);
+          const claims = (home = fixture.buyerHome): Promise<EligibilityClaim[]> => jsonCommand<EligibilityClaim[]>(home, ['eligibility', 'claims', 'list', '--rule-id', rule.id]);
           const listing = await publish(source);
           await checkout(listing.digest, source.quantity);
           await expect.poll(async () => available(await claims()).length, { timeout: 180_000, interval: 2_000 }).toBe(source.quantity);
@@ -125,7 +124,5 @@ describe.sequential('CLI per-copy eligibility for both NFT standards', () => {
         } finally {
           await jsonCommand(fixture.sellerHome, ['eligibility', 'rules', 'disable', '--rule-id', rule.id]);
         }
-      }, 900_000);
-    }
-  }
+    }, 900_000);
 });
