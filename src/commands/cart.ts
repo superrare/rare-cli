@@ -2,7 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { formatUnits, type Address } from 'viem';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import type { CartCheckoutPreparation, CartListingPreparation } from '@rareprotocol/rare-sdk';
+import type { CartCheckoutPreparation, CartListingPreparation, RareClient } from '@rareprotocol/rare-sdk';
 import { hashCartListingRoot } from '@rareprotocol/rare-sdk/utils';
 import { cartFulfillmentKinds } from '@rareprotocol/rare-sdk';
 import { getActiveChain } from '../config.js';
@@ -327,7 +327,7 @@ function cartCheckoutCommand(swap = false): Command {
 async function runSimpleCartWrite(
   opts: ChainOptions,
   message: string,
-  run: (rare: ReturnType<typeof createRareClient>) => Promise<{ txHash: `0x${string}`; receipt: { blockNumber: bigint } }>,
+  run: (rare: RareClient) => Promise<{ txHash: `0x${string}`; receipt: { blockNumber: bigint } }>,
 ): Promise<void> {
   const chain = getActiveChain(opts.chain, opts.chainId);
   const publicClient = getPublicClient(chain);
