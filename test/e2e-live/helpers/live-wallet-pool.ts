@@ -20,6 +20,8 @@ export type LiveWalletPairLease = {
   buyerWallet: LiveWalletLease;
 };
 
+export type LiveWalletLeaseFilter = (lease: LiveWalletLease) => Promise<boolean>;
+
 export async function reserveLiveWallet(role: LiveWalletRole, chain: SupportedChain): Promise<LiveWalletLease> {
   const candidates = livePrivateKeys(role);
   const start = Date.now();
@@ -51,7 +53,10 @@ export async function reserveLiveWallet(role: LiveWalletRole, chain: SupportedCh
   }
 }
 
-export async function reserveLiveWalletPair(chain: SupportedChain): Promise<LiveWalletPairLease> {
+export async function reserveLiveWalletPair(
+  chain: SupportedChain,
+  options: { buyerFilter?: LiveWalletLeaseFilter } = {},
+): Promise<LiveWalletPairLease> {
   const sellerCandidates = livePrivateKeys('seller');
   const buyerCandidates = livePrivateKeys('buyer');
   const start = Date.now();
@@ -69,7 +74,11 @@ export async function reserveLiveWalletPair(chain: SupportedChain): Promise<Live
         for (const buyerPrivateKey of buyerCandidates) {
           buyerWallet = await tryReserveLiveWallet('buyer', chain, buyerPrivateKey);
           if (buyerWallet !== undefined) {
-            return { sellerWallet, buyerWallet };
+            if (options.buyerFilter === undefined || await options.buyerFilter(buyerWallet)) {
+              return { sellerWallet, buyerWallet };
+            }
+            await buyerWallet.release();
+            buyerWallet = undefined;
           }
         }
       } finally {
