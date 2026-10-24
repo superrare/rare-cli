@@ -72,6 +72,7 @@
     "test:typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "npm run build && npm run test:typecheck && vitest run test/unit test/integration test/contract test/e2e --config vitest.config.ts",
     "test:auth:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/auth.test.ts --config vitest.config.ts",
+    "test:eligibility:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/eligibility.test.ts test/e2e-live/eligibility-standards.test.ts --config vitest.config.ts --no-file-parallelism",
     "test:live": "npm run build && npm run test:typecheck && vitest run test/unit test/integration test/contract test/e2e test/e2e-live --config vitest.config.ts",
     "test:clear-locks": "node scripts/clear-locks.mjs",
     "test:coverage": "npm run build && npm run test:typecheck && vitest run test/unit test/integration test/contract test/e2e --coverage --config vitest.config.ts",
@@ -88,7 +89,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@napi-rs/keyring": "2.1.0",
-    "@rareprotocol/rare-sdk": "git+https://github.com/superrare/rare-sdk.git#a3788fede6371ce17e33a33ad8f96798e09fca7b",
+    "@rareprotocol/rare-sdk": "git+https://github.com/superrare/rare-sdk.git#94f19a3ae884e9b59575020e30c9e15ef8d05ac0",
     "commander": "12.1.0",
     "viem": "2.54.6",
     "zod": "^4.4.3"
