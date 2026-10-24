@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { cartFulfillmentKinds } from '@rareprotocol/rare-sdk';
+import { cartFulfillmentKinds, createRareClient } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress, rareErc1155Abi, tokenAbi } from '@rareprotocol/rare-sdk/contracts';
 import { parseEventLogs, type Address, type Hex } from 'viem';
 import { createCreatorMintVariantSku, createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
@@ -23,8 +23,8 @@ const missingCartEnv = [...missingEnv, ...(process.env.RARE_API_BASE_URL ? [] : 
 const describeLive = missingCartEnv.length === 0 ? describe.sequential : describe.skip;
 const contractSettlementDelayMs = 15_000;
 const protocolMaxCartOrderLines = 20;
-const maxCartListingItems = 9;
-const expectedMaxCheckoutOrderLines = 19;
+const maxCartListingItems = 18;
+const expectedMaxCheckoutOrderLines = 20;
 
 type FulfillmentFixture = {
   live: BuyerLiveFixture;
@@ -137,10 +137,14 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
 
   it('executes the maximum listing items permitted by the 20-order-line cap', async () => {
     const { live, erc1155 } = liveRef.value;
-    expect(erc1155.maxLineListings).toHaveLength(maxCartListingItems);
+    expect(erc1155.maxLineListings).toHaveLength(maxCartListingItems + 1);
     const sellerBefore = await balance1155(live, erc1155.contract, erc1155.tokenId, live.sellerAddress);
     const buyerBefore = await balance1155(live, erc1155.contract, erc1155.tokenId, live.buyerAddress);
-    const listingArgs = erc1155.maxLineListings.flatMap((listing) => ['--listing', listing]);
+    const listingArgs = erc1155.maxLineListings.slice(0, maxCartListingItems).flatMap((listing) => ['--listing', listing]);
+    await expect(jsonCommand(live.buyerHome, [
+      'cart', 'checkout', ...erc1155.maxLineListings.flatMap(listing => ['--listing', listing]),
+      '--payment-currency', 'eth', '--preview', '--chain', live.chain,
+    ], 360_000)).rejects.toThrow(/more than 20 order lines/u);
     const preview = await jsonCommand<CheckoutPreview>(live.buyerHome, [
       'cart', 'checkout', ...listingArgs, '--payment-currency', 'eth', '--preview', '--chain', live.chain,
     ], 360_000);
@@ -170,6 +174,22 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
     expect(settled.every((event) => event.args.orderId === purchase.orderId)).toBe(true);
     expect(fulfilled.every((event) =>
       event.args.fulfillmentKind === cartFulfillmentKinds.erc1155Transfer)).toBe(true);
+    expect(settled.filter(event => event.args.fulfillmentKind === cartFulfillmentKinds.none)).toHaveLength(2);
+    const rare = createRareClient({ publicClient: live.publicClient, apiBaseUrl: live.accountApiBaseUrl });
+    await expect.poll(() => rare.cart.api.checkout.receipt(purchase.orderId), {
+      timeout: 180_000, interval: 2_000,
+    }).toMatchObject({ status: 'indexed', issues: [] });
+    const saved = await rare.cart.api.checkout.receipt(purchase.orderId);
+    const allocations = saved.feeAllocations?.allocations;
+    if (allocations === undefined) throw new Error('Cart receipt lost its immutable refund allocations.');
+    const sellerAllocations = allocations.filter(allocation => allocation.bearer === 'SELLER');
+    expect(sellerAllocations).toHaveLength(maxCartListingItems);
+    expect(new Set(sellerAllocations.map(allocation => allocation.sourceLineIndex)).size).toBe(maxCartListingItems);
+    expect(new Set(sellerAllocations.map(allocation => allocation.finalLineIndex)).size).toBe(1);
+    for (const line of saved.lines.filter(line => line.fulfillmentKind === cartFulfillmentKinds.none)) {
+      expect(allocations.filter(allocation => allocation.finalLineIndex === Number(line.lineIndex))
+        .reduce((sum, allocation) => sum + BigInt(allocation.amount), 0n)).toBe(BigInt(line.amount));
+    }
   }, 600_000);
 
   it('executes ERC721_MINT_TO (kind 4)', async () => {
@@ -269,7 +289,7 @@ async function publishMaxLineListings(live: BuyerLiveFixture, sku: Hex): Promise
   const input = join(live.tempDir, 'max-line-listings.json');
   await writeFile(input, JSON.stringify({
     deadline: String(Math.floor(Date.now() / 1_000) + 3_600),
-    listings: Array.from({ length: maxCartListingItems }, () => ({
+    listings: Array.from({ length: maxCartListingItems + 1 }, () => ({
       sku,
       settlementCurrency: 'eth',
       unitPrice: '0.000001',
@@ -281,8 +301,8 @@ async function publishMaxLineListings(live: BuyerLiveFixture, sku: Hex): Promise
   const result = await jsonCommand<{ listingDigests: Hex[]; approvalTxHashes: Hex[] }>(live.sellerHome, [
     'cart', 'listing', 'create', '--input', input, '--chain', live.chain,
   ], 360_000);
-  expect(result.listingDigests).toHaveLength(maxCartListingItems);
-  expect(new Set(result.listingDigests).size).toBe(maxCartListingItems);
+  expect(result.listingDigests).toHaveLength(maxCartListingItems + 1);
+  expect(new Set(result.listingDigests).size).toBe(maxCartListingItems + 1);
   expect(result.approvalTxHashes).toHaveLength(0);
   return result.listingDigests;
 }
