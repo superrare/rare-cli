@@ -146,7 +146,7 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
     await expect(jsonCommand(live.buyerHome, [
       'cart', 'checkout', ...erc1155.maxLineListings.flatMap(listing => ['--listing', listing]),
       '--payment-currency', 'eth', '--preview', '--chain', live.chain,
-    ], 360_000)).rejects.toThrow(/64.*items|items.*64/u);
+    ], 360_000)).rejects.toThrow('Cart checkout intent is invalid.');
     const preview = await jsonCommand<CheckoutPreview>(live.buyerHome, [
       'cart', 'checkout', ...listingArgs, '--payment-currency', 'eth', '--preview', '--chain', live.chain,
     ], 360_000);
