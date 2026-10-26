@@ -8,14 +8,14 @@ export function favoritesCommand(): Command {
     .option('--page <number>', 'page number', '1').option('--per-page <number>', 'artworks per page, up to 100', '20')
     .action(async (options: AccountCommandOptions & { page: string; perPage: string }): Promise<void> => {
       const account = accountClient(storageOptions(options));
-      const result = await account.favorites.list({ page: Number(options.page), perPage: Number(options.perPage) });
+      const result = await account.artworkFavorites.list({ page: Number(options.page), perPage: Number(options.perPage) });
       output(result, () => { console.log(JSON.stringify(result, null, 2)); });
     }));
   for (const name of ['add', 'remove', 'status']) {
     command.addCommand(accountCommand(name).description(name === 'status' ? 'Check whether an artwork is in your favorites' : `${name} an artwork in your favorites`)
       .argument('<universal-token-id>', 'chainId-contractAddress-tokenId')
       .action(async (id: string, options: AccountCommandOptions): Promise<void> => {
-        const favorites = accountClient(storageOptions(options)).favorites;
+        const favorites = accountClient(storageOptions(options)).artworkFavorites;
         if (name === 'status') {
           const favorited = await favorites.has(id);
           output({ favorited }, () => { console.log(favorited ? 'Artwork is in your favorites.' : 'Artwork is not in your favorites.'); });

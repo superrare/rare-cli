@@ -16,7 +16,7 @@ const CLIENT_NAMESPACE_NAMES = new Set([
   'collection',
   'currency',
   'drops',
-  'favorites',
+  'artworkFavorites',
   'following',
   'import',
   'ipfs',

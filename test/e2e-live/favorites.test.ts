@@ -46,17 +46,17 @@ describe('authenticated artwork favorites through the built CLI and deployed ser
       expect(parseJsonStdout(await run(['auth', 'login', '--wallet', '--chain', 'mainnet']))).toMatchObject({ status: 'authorized' });
       await account.auth.loginWithWallet({ address: owner.address, chainId: 1, signMessage: message => owner.signMessage({ message }) });
       try {
-        expect(await account.favorites.has(id)).toBe(false);
-        const before = await account.favorites.list();
+        expect(await account.artworkFavorites.has(id)).toBe(false);
+        const before = await account.artworkFavorites.list();
         try {
           expect(parseJsonStdout(await run(['favorites', 'add', id]))).toEqual({ favorited: true });
           expect(parseJsonStdout(await run(['favorites', 'add', id]))).toEqual({ favorited: true });
-          expect(await account.favorites.has(id)).toBe(true);
+          expect(await account.artworkFavorites.has(id)).toBe(true);
           expect(parseJsonStdout(await run(['favorites', 'status', id]))).toEqual({ favorited: true });
           const list = await run(['favorites', 'list', '--per-page', '1']);
           expect(list.code).toBe(0);
           expect(list.stdout).toContain(id);
-          const visible = await account.favorites.list({ perPage: 100 });
+          const visible = await account.artworkFavorites.list({ perPage: 100 });
           expect(parseJsonStdout(await run(['favorites', 'list', '--per-page', '100']))).toEqual(visible);
           const beyond = parseJsonStdout(await run(['favorites', 'list', '--page', String(visible.pagination.totalPages + 1), '--per-page', '100']));
           expect(beyond).toMatchObject({ data: [], pagination: { totalCount: visible.pagination.totalCount } });
@@ -64,7 +64,7 @@ describe('authenticated artwork favorites through the built CLI and deployed ser
           expect((await run(['favorites', 'list', '--per-page', '101'])).code).not.toBe(0);
           expect(parseJsonStdout(await run(['favorites', 'remove', id]))).toEqual({ favorited: false });
           expect(parseJsonStdout(await run(['favorites', 'status', id]))).toEqual({ favorited: false });
-          expect(await account.favorites.list()).toEqual(before);
+          expect(await account.artworkFavorites.list()).toEqual(before);
           expect(await waitPublicCount()).toEqual(publicCount);
         } finally {
           expect((await run(['favorites', 'remove', id])).code).toBe(0);
