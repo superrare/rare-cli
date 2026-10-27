@@ -3,9 +3,10 @@ import { Command } from 'commander';
 import { z } from 'zod';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import type { RareClient } from '@rareprotocol/rare-sdk';
-import { accountClient, accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
+import { accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
+import { createAuthStore } from '../auth-storage.js';
 import { outputJson } from '../output.js';
 import { addChainOptions, type ChainOptions } from './options.js';
 import { parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, printListingInput } from './print-input-core.js';
@@ -95,7 +96,7 @@ function client(options: PrintOptions, signing = false): RareClient {
   const chain = getActiveChain(options.chain, options.chainId);
   const wallet = signing ? getWalletClient(chain) : undefined;
   return createRareClient({ publicClient: getPublicClient(chain), apiBaseUrl: options.apiUrl,
-    accountClient: accountClient(storageOptions(options)),
+    sessionStore: createAuthStore(storageOptions(options)),
     ...(wallet === undefined ? {} : { walletClient: wallet.client, account: wallet.account.address }),
   });
 }
