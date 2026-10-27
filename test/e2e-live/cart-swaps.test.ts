@@ -1,3 +1,4 @@
+import type { CartOrder } from '@rareprotocol/rare-sdk';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -49,10 +50,12 @@ describe.sequential('live Cart routed swaps through the generic CLI checkout', (
     const purchase = await jsonCommand<Purchase>(live.buyerHome, [...args, '--yes'], 240_000);
     expect(purchase.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
     expect(purchase.actionCount).toBe(0);
-    const history = await jsonCommand<{ id: string; items: { lineIndex: number }[]; fulfillments: unknown[] }>(live.buyerHome,
+    await expect.poll(async () => (await jsonCommand<CartOrder>(live.buyerHome,
+      ['cart', 'orders', 'get', '--id', purchase.orderId])).status, { timeout: 180_000, interval: 2_000 }).toBe('FULFILLED');
+    const history = await jsonCommand<CartOrder>(live.buyerHome,
       ['cart', 'orders', 'get', '--id', purchase.orderId]);
     expect(history.id).toBe(purchase.orderId);
-    expect(history.items).toEqual([expect.objectContaining({ lineIndex: 0 })]);
+    expect(history.items).toEqual([expect.objectContaining({ lineIndex: 0, fulfillmentStatus: 'FULFILLED' })]);
     expect(history.fulfillments).toEqual([]);
 
     const receipt = await live.publicClient.getTransactionReceipt({ hash: purchase.txHash });
