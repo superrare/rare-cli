@@ -2,7 +2,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { EligibilityRule } from '@rareprotocol/rare-sdk';
+import type { CartOrder, EligibilityRule } from '@rareprotocol/rare-sdk';
 import type { Address, Hex } from 'viem';
 import { cleanupLiveFixture, createCartLiveFixture, E2E_TOKEN_URI, jsonCommand } from './helpers/live-harness.js';
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
@@ -113,10 +113,12 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
             kind: mixedLines[Number(action.lineIndex)]?.fulfillmentKind }))).toEqual(expect.arrayContaining([
             { quantity: '1', kind: 2 }, { quantity: '2', kind: 3 },
           ]));
-          const mixedOrder = await jsonCommand<{ items: { lineIndex: number }[]; fulfillments: { orderLineIndex: number }[] }>(fixture.sellerHome, [
+          const mixedOrder = await jsonCommand<CartOrder>(fixture.sellerHome, [
             'cart', 'orders', 'get', '--id', mixed.preparedPurchase.executePurchase.order.orderId,
           ]);
-          expect(mixedOrder.items.map(item => item.lineIndex)).toEqual(mixedLines.flatMap((line, index) => line.fulfillmentKind === 0 ? [] : [index]));
+          expect(mixedOrder.items?.map(item => item.lineIndex)).toEqual(mixedLines.flatMap((line, index) => line.fulfillmentKind === 0 ? [] : [index]));
+          expect(mixedOrder.status).toBe('PENDING');
+          expect(mixedOrder.items?.every(item => item.fulfillmentStatus === 'PENDING')).toBe(true);
           expect(mixedOrder.fulfillments).toHaveLength(1);
           expect(mixedOrder.fulfillments[0]?.orderLineIndex).toBe(mixedLines.findIndex(line => line.listingDigest === listing.listingDigest));
           await expect(jsonCommand(fixture.sellerHome, [
