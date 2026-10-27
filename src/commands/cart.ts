@@ -6,13 +6,14 @@ import type { CartCheckoutPreparation, CartListingPreparation, RareClient } from
 import { hashCartListingRoot } from '@rareprotocol/rare-sdk/utils';
 import { cartFulfillmentKinds } from '@rareprotocol/rare-sdk';
 import { getActiveChain } from '../config.js';
+import { createAuthStore } from '../auth-storage.js';
 import {
   getConfiguredAccountAddress,
   getPublicClient,
   getWalletClient,
 } from '../client.js';
 import { log, output } from '../output.js';
-import { accountClient, accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
+import { accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { addChainOptions, type ChainOptions } from './options.js';
 import {
@@ -91,7 +92,7 @@ function cartListingCreateCommand(): Command {
       const rare = createRareClient({
         publicClient,
         apiBaseUrl: opts.apiUrl,
-        accountClient: accountClient(storageOptions(opts)),
+        sessionStore: createAuthStore(storageOptions(opts)),
         account: seller,
         ...(wallet === undefined ? {} : { walletClient: wallet.client }),
       });
@@ -241,7 +242,7 @@ function cartCheckoutCommand(swap = false): Command {
       const rare = createRareClient({
         publicClient,
         apiBaseUrl: opts.apiUrl,
-        accountClient: accountClient(storageOptions(opts)),
+        sessionStore: createAuthStore(storageOptions(opts)),
         account: wallet?.account.address ?? getConfiguredAccountAddress(chain),
         ...(wallet === undefined ? {} : { walletClient: wallet.client }),
       });
