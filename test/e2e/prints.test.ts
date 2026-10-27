@@ -13,13 +13,14 @@ describe('built print and shipping CLI', () => {
         ['prints', 'drops', 'archive'], ['prints', 'drops', 'configure'], ['prints', 'drops', 'update'],
         ['prints', 'listing', 'prepare'], ['prints', 'listing', 'publish'],
         ['shipping', 'list'], ['shipping', 'save'], ['shipping', 'delete'], ['uploads', 'upload'], ['cart', 'card'],
-        ['orders', 'list'], ['orders', 'get'],
+        ['cart', 'orders', 'list'], ['cart', 'orders', 'get'],
       ]) {
         const result = await runCli([...path, '--help'], { home });
         expect(result.code).toBe(0);
         expect(result.stdout).toContain('--api-url');
         expect(result.stdout).toContain('--storage');
       }
+      expect((await runCli(['orders', 'list'], { home })).code).not.toBe(0);
       const upload = await runCli(['uploads', 'upload', '--help'], { home });
       expect(upload.stdout).toContain('default: "public"');
     });

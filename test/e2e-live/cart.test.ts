@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRareClient, type RareClient } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress, resolveCurrency, viemChains } from '@rareprotocol/rare-sdk/contracts';
-import { createWalletClient, erc20Abi, erc721Abi, getAddress, http, parseEther, parseEventLogs, parseUnits, zeroAddress, type Address, type Hex } from 'viem';
+import { createWalletClient, erc20Abi, erc721Abi, getAddress, http, toHex, parseEther, parseEventLogs, parseUnits, zeroAddress, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   cleanupLiveFixture,
@@ -227,6 +227,15 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
       await expect(fixture.publicClient.getTransactionReceipt({ hash: purchase.approvalTxHash })).resolves.toMatchObject({ status: 'success' });
     }
     expect(purchase.orderId).toMatch(/^0x[0-9a-fA-F]{64}$/);
+    const history = await jsonCommand<{ id: string; items: unknown[]; fulfillments: unknown[] }>(fixture.buyerHome,
+      ['cart', 'orders', 'get', '--id', purchase.orderId]);
+    expect(history.id).toBe(purchase.orderId);
+    expect(history.items).toHaveLength(2);
+    expect(history.fulfillments).toEqual([]);
+    const page = await jsonCommand<{ data: { id: string }[] }>(fixture.buyerHome,
+      ['cart', 'orders', 'list', '--after', toHex(BigInt(purchase.orderId) - 1n, { size: 32 }), '--take', '1']);
+    expect(page.data[0]?.id).toBe(purchase.orderId);
+
     expect(purchase.payer.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
     expect(purchase.paymentCurrency.toLowerCase()).toBe(fixture.rareAddress.toLowerCase());
     expect(purchase.lineCount).toBeGreaterThanOrEqual(2);

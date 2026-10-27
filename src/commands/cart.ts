@@ -1,4 +1,4 @@
-import {cartFeesCommand} from './cart-fees.js';
+import { ordersCommand } from './orders.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { purchaseEligibilityCommand } from './eligibility.js';
@@ -73,6 +73,7 @@ export function cartCommand(): Command {
   command.addCommand(cartCheckoutCommand());
   command.addCommand(cartCheckoutCommand(true));
   command.addCommand(cartCardCommand());
+  command.addCommand(ordersCommand());
   return command;
 }
 

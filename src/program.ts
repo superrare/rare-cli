@@ -29,7 +29,6 @@ import { profileCommand } from './commands/profile.js';
 import { cartCommand } from './commands/cart.js';
 import { printsCommand } from './commands/prints.js';
 import { shippingCommand } from './commands/shipping.js';
-import { ordersCommand } from './commands/orders.js';
 import { getConfirmationDecision, type ConfirmationOptions } from './confirmation.js';
 import pkg from '../package.json' with { type: 'json' };
 
@@ -88,7 +87,6 @@ export function createRareProgram(): Command {
   program.addCommand(cartCommand());
   program.addCommand(printsCommand());
   program.addCommand(shippingCommand());
-  program.addCommand(ordersCommand());
 
   return program;
 }
