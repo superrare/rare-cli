@@ -626,6 +626,14 @@ Use generic Cart checkout for prints. For two copies, pass `--listing 0x...listi
 
 `--prepare-only --yes` also requests the signed checkout authorization without approving tokens or submitting payment. This reserves any required claims until the order expires. Do not combine it with `--preview`.
 
+### Sandbox print fulfillment E2E
+
+`npm run test:prints:e2e` runs print authoring/quote coverage and a paid Cart-to-Prodigi sandbox flow. The fulfillment case uses registered Sepolia seller and buyer accounts, creates a physical variant, checks buyer-funded charges, pays through Cart, waits for indexed fulfillment, and independently retrieves the resulting order from Prodigi. It checks provider acceptance, the provider ID, fulfillment reference, product and copy count, not shipment completion. Successful runs print public transaction and order identifiers for dashboard lookup.
+
+Set `RARE_API_BASE_URL` and `RARE_ACCOUNT_TEST_API_URL` to the deployed feature API and `PRODIGI_SANDBOX_API_KEY` to that deployment's v4 sandbox key. Rare API and Pipelines must both use `https://api.sandbox.prodigi.com/v4.0` with the same sandbox credentials. The Cart contract must be registered and indexing active. The selected test buyer needs Sepolia ETH and USDC. Credentials remain environment variables; never commit them.
+
+This test makes a Sepolia payment and leaves a visible sandbox order. It never targets Prodigi's live API. Missing prerequisites fail rather than skip. To run only the full fulfillment case after building, use `npx vitest run test/e2e-live/print-fulfillment.test.ts`.
+
 ### Batch Listings
 
 Batch listing roots are built from token sets. For create flows, you can pass a CSV file, a JSON token list, a token tree artifact from `rare utils tree build`, or the older root artifact shape that already includes listing config. Running `rare utils tree build` first is optional; use it when you want a reusable artifact or want to inspect/share the root before registering it.

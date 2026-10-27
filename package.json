@@ -73,7 +73,7 @@
     "test": "npm run build && npm run test:typecheck && vitest run test/unit test/integration test/contract test/e2e --config vitest.config.ts",
     "test:auth:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/auth.test.ts --config vitest.config.ts",
     "test:eligibility:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/eligibility.test.ts test/e2e-live/eligibility-standards.test.ts --config vitest.config.ts --no-file-parallelism",
-    "test:prints:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/prints.test.ts --config vitest.config.ts",
+    "test:prints:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/prints.test.ts test/e2e-live/print-fulfillment.test.ts --no-file-parallelism --config vitest.config.ts",
     "test:live": "npm run build && npm run test:typecheck && vitest run test/unit test/integration test/contract test/e2e test/e2e-live --config vitest.config.ts",
     "test:clear-locks": "node scripts/clear-locks.mjs",
     "test:coverage": "npm run build && npm run test:typecheck && vitest run test/unit test/integration test/contract test/e2e --coverage --config vitest.config.ts",
