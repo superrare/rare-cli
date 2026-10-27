@@ -2,9 +2,10 @@ import { readFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import type { RareClient } from '@rareprotocol/rare-sdk';
-import { accountClient, accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
+import { accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
 import { getPublicClient } from '../client.js';
 import { getActiveChain } from '../config.js';
+import { createAuthStore } from '../auth-storage.js';
 import { output } from '../output.js';
 import { addChainOptions, type ChainOptions } from './options.js';
 import { parseCartBytes32, unwrapCartCliResult } from './cart-core.js';
@@ -89,7 +90,7 @@ export function eligibilityCommand(): Command {
 function rareClient(options: EligibilityOptions): RareClient {
   const chain = getActiveChain(options.chain, options.chainId);
   return createRareClient({ publicClient: getPublicClient(chain), apiBaseUrl: options.apiUrl,
-    accountClient: accountClient(storageOptions(options)) });
+    sessionStore: createAuthStore(storageOptions(options)) });
 }
 
 function print(value: unknown): void {
