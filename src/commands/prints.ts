@@ -10,7 +10,6 @@ import { createAuthStore } from '../auth-storage.js';
 import { outputJson } from '../output.js';
 import { addChainOptions, type ChainOptions } from './options.js';
 import { parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, printListingInput } from './print-input-core.js';
-import { runWithNftApprovalConsent } from './approval-consent.js';
 
 type PrintOptions = AccountCommandOptions & ChainOptions;
 type IdentityOptions = PrintOptions & { id: string };
@@ -38,7 +37,7 @@ export function printsCommand(): Command {
     }));
 
   const drops = new Command('drops').description('Manage your creator print drafts');
-  drops.addCommand(command('create').requiredOption('--input <path>', 'JSON draft with private productionUploadKey and public images')
+  drops.addCommand(command('create').requiredOption('--input <path>', 'JSON draft with chainId and print details: private productionUploadKey, public images and specificationId')
     .action(async (options: InputOptions): Promise<void> => {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
       print(await client(options).prints.drops.create(printDropInput.parse(input)));
@@ -74,19 +73,13 @@ export function printsCommand(): Command {
       print(await client(options).prints.listings.prepare(printListingInput.parse(input)));
     }));
   listings.addCommand(command('publish').requiredOption('--input <path>', 'JSON listing terms to prepare, sign and publish, including optional eligibilityRuleId and maxQuantityPerCheckout')
-    .option('--yes', 'approve NFT contracts if needed and authorize signing and publishing')
-    .action(async (options: InputOptions & { yes?: boolean }): Promise<void> => {
+    .option('--yes', 'authorize signing and publishing')
+    .action(async (options: InputOptions): Promise<void> => {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
       const parsed = printListingInput.parse(input);
       const rare = client(options, true);
       const preparation = await rare.prints.listings.prepare(parsed);
-      const result = await runWithNftApprovalConsent({
-        commandName: 'rare prints listing publish',
-        approvalMessage: 'Cart requires NFT contract approval before publishing this print Listing.',
-        runWithoutApproval: async () => rare.prints.listings.signAndPublish(preparation, { autoApprove: options.yes === true }),
-        runWithApproval: async () => rare.prints.listings.signAndPublish(preparation, { autoApprove: true }),
-      });
-      if (result !== undefined) print(result);
+      print(await rare.prints.listings.signAndPublish(preparation));
     }));
   prints.addCommand(listings);
   return prints;

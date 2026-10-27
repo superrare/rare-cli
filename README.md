@@ -588,6 +588,33 @@ CLI amount strings use human-readable units; SDK checkout amounts use `bigint` b
 
 `--preview` returns the Rare API quote and SDK preparation without signing, approving, publishing, or submitting a transaction. Before purchase, the SDK verifies the API bundle against the requested items, payment currency, recipients, chain, and connected payer. Routing, proofs, authorization, order construction, and platform signing remain internal to the Rare API and SDK.
 
+### Print drafts
+
+Upload the production file with `rare uploads upload master.png --access private`
+and display photos with `--access public`. Create a draft with
+`rare prints drops create --input print.json`:
+
+```json
+{
+  "idempotencyKey": "00000000-0000-4000-8000-000000000001",
+  "chainId": "11155111",
+  "name": "Print edition",
+  "print": {
+    "name": "Print edition",
+    "description": "An archival print",
+    "tags": [],
+    "productionUploadKey": "<private upload key>",
+    "images": ["<public upload URL>"],
+    "specificationId": "<supported specification ID>"
+  }
+}
+```
+
+Get supported specifications with `rare prints specifications`. Set optional
+`print.sourceUniversalTokenId` to attribute a creator-owned NFT. The production
+file and specification are required for every print draft. NFT attribution does
+not transfer the NFT or configure an eligibility rule or receipt.
+
 ### Print listing eligibility and quantity
 
 `rare prints listing prepare --input listing.json` and `rare prints listing publish --input listing.json --yes` accept these optional fields in the listing JSON:
