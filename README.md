@@ -632,6 +632,8 @@ Use generic Cart checkout for prints. For two copies, pass `--listing 0x...listi
 
 Set `RARE_API_BASE_URL` and `RARE_ACCOUNT_TEST_API_URL` to the deployed feature API and `PRODIGI_SANDBOX_API_KEY` to that deployment's v4 sandbox key. Rare API and Pipelines must both use `https://api.sandbox.prodigi.com/v4.0` with the same sandbox credentials. The Cart contract must be registered and indexing active. The selected test buyer needs Sepolia ETH and USDC. Credentials remain environment variables; never commit them.
 
+The suite covers a print-only checkout and two product journeys. Each product journey deploys and mints its own ERC-721, creates its NFT SKU, uploads a private print master and public photo, configures the print SKU, groups both variants into one published Product, and publishes separate Listings. The mixed journey buys both Listings in one Cart. The primary-sale journey first denies print checkout, purchases the NFT, waits for claim issuance, redeems the print and verifies consumption and denial of reuse while print inventory remains. Both verify NFT ownership, item-level fees, settlement events, seller proceeds and the resulting Prodigi order.
+
 This test makes a Sepolia payment and leaves a visible sandbox order. It never targets Prodigi's live API. Missing prerequisites fail rather than skip. To run only the full fulfillment case after building, use `npx vitest run test/e2e-live/print-fulfillment.test.ts`.
 
 ### Batch Listings
