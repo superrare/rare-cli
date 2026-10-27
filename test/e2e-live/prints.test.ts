@@ -64,13 +64,16 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
           expect(saved.some(item => item.id === addressId)).toBe(true);
           const loaded = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'list']);
           expect(loaded.some(item => item.id === addressId)).toBe(true);
-          const checkout = await jsonCommand<{ preparation: { paymentAmount: string; intent: { items: { quantity: string }[] }; breakdown: { displayPrice: string; shipping: string; total: string } }; preparedPurchase: { executePurchase: { lines: { listingDigest: string; quantity: string }[]; platformSignature: string } } }>(fixture.sellerHome, [
+          const checkout = await jsonCommand<{ preparation: { paymentAmount: string; intent: { items: { quantity: string }[] }; breakdown: { displayPrice: string; production: string; shipping: string; networkFee: string; total: string } }; preparedPurchase: { executePurchase: { lines: { listingDigest: string; quantity: string }[]; platformSignature: string } } }>(fixture.sellerHome, [
             'cart', 'checkout', '--listing', `${listing.listingDigest}=2`, '--payment-currency', 'usdc',
             '--saved-address-id', addressId, '--chain', fixture.chain, '--prepare-only', '--yes',
           ]);
           expect(checkout.preparation.intent.items[0]?.quantity).toBe('2');
           expect(checkout.preparation.breakdown.displayPrice).toBe('200000000');
+          expect(BigInt(checkout.preparation.breakdown.production)).toBeGreaterThan(0n);
           expect(BigInt(checkout.preparation.breakdown.shipping)).toBeGreaterThanOrEqual(0n);
+          const costs = checkout.preparation.breakdown;
+          expect(BigInt(costs.total)).toBe(BigInt(costs.displayPrice) + BigInt(costs.production) + BigInt(costs.shipping) + BigInt(costs.networkFee));
           expect(checkout.preparation.breakdown.total).toBe(checkout.preparation.paymentAmount);
           expect(checkout.preparedPurchase.executePurchase.lines.find(line => line.listingDigest === listing.listingDigest)?.quantity).toBe('2');
           expect(checkout.preparedPurchase.executePurchase.platformSignature).not.toBe('0x');
