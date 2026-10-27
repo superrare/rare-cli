@@ -44,6 +44,22 @@ describe('built print and shipping CLI', () => {
     }
   });
 
+  it('rejects NFT-only print creation before authentication', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'rare-print-legacy-'));
+    try {
+      const file = join(directory, 'draft.json');
+      await writeFile(file, JSON.stringify({ idempotencyKey: '00000000-0000-4000-8000-000000000001',
+        name: 'Retired NFT-only draft', universalTokenId: `11155111-0x${'1'.repeat(40)}-1` }));
+      const result = await runCli(['--json', 'prints', 'drops', 'create', '--input', file]);
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain('chainId');
+      expect(result.stderr).toContain('print');
+      expect(result.stderr).toContain('universalTokenId');
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it('requires explicit consent before signing and publishing a Listing', async () => {
     const result = await runCli(['--json', 'prints', 'listing', 'publish', '--input', 'unused.json'], {
       env: { RARE_SKIP_CONFIRMATION: '0' },

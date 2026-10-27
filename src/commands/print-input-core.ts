@@ -25,17 +25,17 @@ export const savedShippingInput = z.object({
 
 export const printDropInput = z.object({
   idempotencyKey: uuid, name: z.string(), description: z.string().optional(),
-  universalTokenId: z.string().optional(), chainId: z.literal('11155111').optional(),
+  chainId: z.literal('11155111'),
   print: z.object({
     name: z.string(), description: z.string(), tags: z.array(z.string()),
     productionUploadKey: z.string().regex(/^[0-9a-f]{64}$/u), images: z.array(z.url()).min(1).max(4),
-    specificationId: z.string(),
-  }).strict().optional(),
+    specificationId: z.string(), sourceUniversalTokenId: z.string().optional(),
+  }).strict(),
 }).strict();
 
 export const printListingInput = z.object({
   optionId: uuid, seller: address, listingSalt: bytes32, deadline: uint, availableQuantity: uint,
-  fulfillmentKind: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(5)]),
+  fulfillmentKind: z.union([z.literal(1), z.literal(5)]).optional(),
   eligibilityRuleId: uuid.optional(),
   maxQuantityPerCheckout: z.string().regex(/^[1-9][0-9]*$/u)
     .pipe(z.string().refine(value => BigInt(value) <= 1000n, 'Print checkouts support at most 1000 copies')).optional(),
