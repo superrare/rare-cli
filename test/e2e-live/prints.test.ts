@@ -43,7 +43,7 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
         const terms = join(fixture.tempDir, 'listing.json');
         await writeFile(terms, JSON.stringify({ optionId: option.id, seller: fixture.sellerAddress,
           listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: String(Math.floor(Date.now() / 1000) + 3600),
-          availableQuantity: '10', fulfillmentKind: 1, maxQuantityPerCheckout: '3' }));
+          availableQuantity: '10', maxQuantityPerCheckout: '3' }));
         const publication = await jsonCommand<{ signedArtifact: { entries: { listingDigest: string }[] } }>(fixture.sellerHome, [
           'prints', 'listing', 'publish', '--input', terms, '--chain', fixture.chain, '--yes',
         ]);
@@ -134,7 +134,7 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
             const gatedTerms = join(fixture.tempDir, 'gated-print-listing.json');
             await writeFile(gatedTerms, JSON.stringify({ optionId: option.id, seller: fixture.sellerAddress,
               listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: String(Math.floor(Date.now() / 1000) + 3600),
-              availableQuantity: '10', fulfillmentKind: 1, eligibilityRuleId: rule.id }));
+              availableQuantity: '10', eligibilityRuleId: rule.id }));
             const gated = await jsonCommand<{ signedArtifact: { entries: { listingDigest: string }[] } }>(fixture.sellerHome, [
               'prints', 'listing', 'publish', '--input', gatedTerms, '--chain', fixture.chain, '--yes',
             ]);

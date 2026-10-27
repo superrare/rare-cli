@@ -35,10 +35,12 @@ describe('print listing input', () => {
   const terms = { optionId: '00000000-0000-4000-8000-000000000001', seller: `0x${'1'.repeat(40)}`,
     listingSalt: `0x${'2'.repeat(64)}`, deadline: '2000000000', availableQuantity: '10' };
 
-  it('allows server-derived physical or receipt fulfillment and rejects NFT transfer kinds', () => {
-    const inputs: unknown[] = [terms, { ...terms, fulfillmentKind: 1 }, { ...terms, fulfillmentKind: 5 }];
-    for (const input of inputs) expect(printListingInput.safeParse(input).success).toBe(true);
-    const transfers: unknown[] = [{ ...terms, fulfillmentKind: 2 }, { ...terms, fulfillmentKind: 3 }];
-    for (const input of transfers) expect(printListingInput.safeParse(input).success).toBe(false);
+  it('uses physical print fulfillment without a caller-selected NFT kind', () => {
+    const input: unknown = terms;
+    expect(printListingInput.parse(input)).toEqual(terms);
+    for (const fulfillmentKind of [1, 2, 3, 4, 5, 6]) {
+      const candidate: unknown = { ...terms, fulfillmentKind };
+      expect(printListingInput.safeParse(candidate).success).toBe(false);
+    }
   });
 });

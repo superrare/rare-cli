@@ -35,7 +35,6 @@ export const printDropInput = z.object({
 
 export const printListingInput = z.object({
   optionId: uuid, seller: address, listingSalt: bytes32, deadline: uint, availableQuantity: uint,
-  fulfillmentKind: z.union([z.literal(1), z.literal(5)]).optional(),
   eligibilityRuleId: uuid.optional(),
   maxQuantityPerCheckout: z.string().regex(/^[1-9][0-9]*$/u)
     .pipe(z.string().refine(value => BigInt(value) <= 1000n, 'Print checkouts support at most 1000 copies')).optional(),
