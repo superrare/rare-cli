@@ -36,7 +36,7 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
         await writeFile(patch, JSON.stringify({ name: `${name} updated`, tags: ['test', 'edited'] }));
         expect(await jsonCommand(fixture.sellerHome, ['prints', 'drops', 'update', '--id', drop.id, '--input', patch]))
           .toMatchObject({ metadata: { name: `${name} updated`, tags: ['test', 'edited'] } });
-        expect(await jsonCommand(fixture.sellerHome, ['orders', 'list'])).toMatchObject({ data: expect.any(Array) });
+        expect(await jsonCommand(fixture.sellerHome, ['cart', 'orders', 'list'])).toMatchObject({ data: expect.any(Array) });
         const option = await jsonCommand<{ id: string; sku: string }>(fixture.sellerHome, [
           'prints', 'drops', 'configure', '--id', drop.id, '--price-usd-cents', '10000',
         ]);
@@ -113,9 +113,10 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
             kind: mixedLines[Number(action.lineIndex)]?.fulfillmentKind }))).toEqual(expect.arrayContaining([
             { quantity: '1', kind: 2 }, { quantity: '2', kind: 3 },
           ]));
-          const mixedOrder = await jsonCommand<{ fulfillments: { orderLineIndex: number }[] }>(fixture.sellerHome, [
-            'orders', 'get', '--id', mixed.preparedPurchase.executePurchase.order.orderId,
+          const mixedOrder = await jsonCommand<{ items: { lineIndex: number }[]; fulfillments: { orderLineIndex: number }[] }>(fixture.sellerHome, [
+            'cart', 'orders', 'get', '--id', mixed.preparedPurchase.executePurchase.order.orderId,
           ]);
+          expect(mixedOrder.items.map(item => item.lineIndex)).toEqual(mixedLines.flatMap((line, index) => line.fulfillmentKind === 0 ? [] : [index]));
           expect(mixedOrder.fulfillments).toHaveLength(1);
           expect(mixedOrder.fulfillments[0]?.orderLineIndex).toBe(mixedLines.findIndex(line => line.listingDigest === listing.listingDigest));
           await expect(jsonCommand(fixture.sellerHome, [

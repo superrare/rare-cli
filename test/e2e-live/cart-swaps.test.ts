@@ -10,7 +10,7 @@ import { createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
 import { runCli } from '../helpers/cli.js';
 
 type Preview = { preparation: { paymentAmount: string; lines: Array<{ fulfillmentKind: number; amount: string }> } };
-type Purchase = { txHash: Hex; paymentAmount: string; actionCount: number };
+type Purchase = { orderId: Hex; txHash: Hex; paymentAmount: string; actionCount: number };
 
 describe.sequential('live Cart routed swaps through the generic CLI checkout', () => {
   let fixture: BuyerLiveFixture | undefined;
@@ -49,6 +49,12 @@ describe.sequential('live Cart routed swaps through the generic CLI checkout', (
     const purchase = await jsonCommand<Purchase>(live.buyerHome, [...args, '--yes'], 240_000);
     expect(purchase.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
     expect(purchase.actionCount).toBe(0);
+    const history = await jsonCommand<{ id: string; items: { lineIndex: number }[]; fulfillments: unknown[] }>(live.buyerHome,
+      ['cart', 'orders', 'get', '--id', purchase.orderId]);
+    expect(history.id).toBe(purchase.orderId);
+    expect(history.items).toEqual([expect.objectContaining({ lineIndex: 0 })]);
+    expect(history.fulfillments).toEqual([]);
+
     const receipt = await live.publicClient.getTransactionReceipt({ hash: purchase.txHash });
     const lines = parseEventLogs({ abi: cartAbi, logs: receipt.logs.filter(log => log.address.toLowerCase() === getCartAddress(live.chain).toLowerCase()), eventName: 'OrderLineSettled' });
     expect(lines).toHaveLength(1);
