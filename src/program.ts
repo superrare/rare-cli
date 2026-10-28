@@ -27,7 +27,6 @@ import { mcpCommand } from './commands/mcp.js';
 import { authCommand } from './commands/auth.js';
 import { profileCommand } from './commands/profile.js';
 import { cartCommand } from './commands/cart.js';
-import { eligibilityCommand } from './commands/eligibility.js';
 import { getConfirmationDecision, type ConfirmationOptions } from './confirmation.js';
 import pkg from '../package.json' with { type: 'json' };
 
@@ -84,7 +83,6 @@ export function createRareProgram(): Command {
   program.addCommand(profileCommand());
   program.addCommand(uploadsCommand());
   program.addCommand(cartCommand());
-  program.addCommand(eligibilityCommand());
 
   return program;
 }
