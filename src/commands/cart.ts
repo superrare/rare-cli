@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
+import { purchaseEligibilityCommand } from './eligibility.js';
 import { cartCatalogCommand } from './cart-catalog.js';
 import { formatUnits, type Address } from 'viem';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
@@ -60,6 +61,7 @@ export function cartCommand(): Command {
   const command = new Command('cart');
   command.addCommand(cartAdjustmentsCommand());
   command.addCommand(cartCatalogCommand());
+  command.addCommand(purchaseEligibilityCommand());
   command.description('Create Cart listings and purchase fixed-price Cart checkouts');
   command.addCommand(cartListingCommand());
   command.addCommand(cartCheckoutCommand());
