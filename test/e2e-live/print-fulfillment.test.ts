@@ -12,7 +12,7 @@ import { cleanupLiveFixture, createCartLiveFixture, jsonCommand } from './helper
 
 // Verify against the provider independently of our persisted status. Never target the live API.
 const sandboxOrderSchema = z.object({ outcome: z.literal('Ok'), order: z.object({
-  id: z.string(), merchantReference: z.string(), metadata: z.object({ fulfillmentId: z.string() }),
+  id: z.string(), lastUpdated: z.string(), shipments: z.array(z.object({ id: z.string() })).default([]), merchantReference: z.string(), metadata: z.object({ fulfillmentId: z.string() }),
   items: z.array(z.object({ sku: z.string(), copies: z.number() })),
 }) });
 
@@ -120,9 +120,8 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
         await expect(jsonCommand(buyerHome, [...printCheckout, '--prepare-only', '--yes'])).rejects.toThrow(/Status: 409/u);
       }
       const readOrder = (): Promise<CartOrder> => jsonCommand<CartOrder>(buyerHome, ['cart', 'orders', 'get', '--id', purchase.orderId]);
-      await expect.poll(async () => (await readOrder()).fulfillments[0], { timeout: 240_000, interval: 3_000 }).toMatchObject({
-        status: 'SUBMITTED', providerOrderId: expect.stringMatching(/^ord_/u),
-      });
+      await expect.poll(async () => (await readOrder()).fulfillments[0]?.providerOrderId, { timeout: 240_000, interval: 3_000 }).toMatch(/^ord_/u);
+      await expect.poll(async () => (await readOrder()).fulfillments[0]?.progress ?? null, { timeout: 240_000, interval: 5_000 }).not.toBeNull();
       const order = await readOrder();
       const fulfillment = order.fulfillments[0];
       if (!fulfillment?.providerOrderId) throw new Error('Provider order ID is missing after submission.');
@@ -136,6 +135,18 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
       const body: unknown = await response.json();
       const provider = sandboxOrderSchema.parse(body).order;
       expect(provider.id).toBe(fulfillment.providerOrderId);
+      const progress = fulfillment.progress;
+      if (!progress) throw new Error('Backend did not reconcile provider progress.');
+      expect(['SUBMITTED', 'IN_PRODUCTION', 'PARTIALLY_SHIPPED', 'SHIPPED', 'CANCELLED']).toContain(progress.stage);
+      expect(Date.parse(progress.providerUpdatedAt)).toBeLessThanOrEqual(Date.parse(provider.lastUpdated));
+      expect(progress).not.toHaveProperty('recipient');
+      expect(progress).not.toHaveProperty('items');
+      for (const shipment of progress.shipments) {
+        expect(provider.shipments.some(candidate => candidate.id === shipment.id)).toBe(true);
+        if (shipment.trackingUrl !== null) expect(new URL(shipment.trackingUrl).protocol).toBe('https:');
+        expect(shipment).not.toHaveProperty('deliveredAt');
+      }
+
       expect(provider.metadata.fulfillmentId).toBe(fulfillment.id);
       expect(provider.merchantReference).toBe(createHash('sha256').update(`superrare:cart:fulfillment:${fulfillment.id}`).digest('hex'));
       expect(provider.items).toEqual([{ sku: specification.id, copies: 1 }]);
