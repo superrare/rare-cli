@@ -13,12 +13,12 @@ import { messagingOrigin, required, withMessagingActors, type MessagingActor } f
 const created = z.object({ id: z.string().uuid() });
 const publicThread = z.object({ room: z.object({ latestSequence: z.string(), context: z.record(z.string(), z.unknown()) }), messages: z.array(z.object({ id: z.string().uuid(), type: z.enum(['user', 'system']), body: z.string(), author: z.object({ id: z.string() }).nullable(), system: z.object({ sourceId: z.string(), type: z.string(), summary: z.string(), payload: z.record(z.string(), z.unknown()), occurredAt: z.string() }).optional() })) });
 const notice = z.object({ id: z.string(), category: z.string(), payload: z.record(z.string(), z.unknown()), readAt: z.string().nullable() });
-const noticePage = z.object({ data: z.array(notice), nextCursor: z.string().nullable() });
-const notices = async (actor: MessagingActor, room: string, cursor?: string, pages = 0): Promise<z.infer<typeof notice>[]> => {
-  if (pages >= 100) throw new Error('Notification traversal exceeded 100 pages');
-  const page = noticePage.parse(await actor.json(['notifications', 'list', '--limit', '50', ...(cursor === undefined ? [] : ['--cursor', cursor])]));
+const noticePage = z.object({ data: z.array(notice), pagination: z.object({ page: z.number(), perPage: z.number(), totalCount: z.number(), totalPages: z.number() }) });
+const notices = async (actor: MessagingActor, room: string, pageNumber = 1): Promise<z.infer<typeof notice>[]> => {
+  if (pageNumber > 100) throw new Error('Notification traversal exceeded 100 pages');
+  const page = noticePage.parse(await actor.json(['notifications', 'list', '--per-page', '50', '--page', String(pageNumber)]));
   const matches = page.data.filter(row => row.category === 'messagingActivity' && row.payload.conversationId === room);
-  return page.nextCursor === null ? matches : [...matches, ...await notices(actor, room, page.nextCursor, pages + 1)];
+  return page.pagination.page >= page.pagination.totalPages ? matches : [...matches, ...await notices(actor, room, pageNumber + 1)];
 };
 const delivered = async (actor: MessagingActor, room: string, excluded: readonly string[], deadline = Date.now() + 90_000): Promise<z.infer<typeof notice>> => {
   const match = (await notices(actor, room)).find(row => !excluded.includes(row.id));
