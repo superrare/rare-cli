@@ -13,7 +13,7 @@ describe('eligibility through the built CLI and deployed Rare API', () => {
     if (!process.env.RARE_API_BASE_URL) throw new Error('Set RARE_API_BASE_URL to a deployed eligibility API.');
     const fixture = await createCartLiveFixture();
     try {
-      await jsonCommand<EligibilityRule[]>(fixture.sellerHome, ['eligibility', 'rules', 'list']);
+      await jsonCommand<{ data: EligibilityRule[] }>(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'list']).then(page => page.data);
       const collection = await deployErc721Collection(fixture, '1');
       const token = await mintToken(fixture, collection.contract);
       const [sku] = await createCreatorVariantSkus(fixture, [token]);
@@ -25,7 +25,7 @@ describe('eligibility through the built CLI and deployed Rare API', () => {
         targets: [{ sku }],
       } }), 'utf8');
       const rule = await jsonCommand<EligibilityRule>(fixture.sellerHome, [
-        'eligibility', 'rules', 'create', '--input', file, '--chain', fixture.chain,
+        'cart', 'purchase-eligibility', 'rules', 'create', '--input', file, '--chain', fixture.chain,
       ]);
       try {
         expect(rule.definition.kind).toBe('EVERY_SALE');
@@ -36,14 +36,14 @@ describe('eligibility through the built CLI and deployed Rare API', () => {
           'cart', 'listing', 'create', '--input', listingFile, '--eligibility-rule-id', rule.id, '--chain', fixture.chain,
         ]);
         expect(published.listingDigests).toHaveLength(1);
-        const rules = await jsonCommand<EligibilityRule[]>(fixture.sellerHome, ['eligibility', 'rules', 'list']);
+        const rules = await jsonCommand<{ data: EligibilityRule[] }>(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'list']).then(page => page.data);
         expect(rules.some(candidate => candidate.id === rule.id)).toBe(true);
-        const claims = await jsonCommand<EligibilityClaim[]>(fixture.sellerHome, [
-          'eligibility', 'claims', 'list', '--rule-id', rule.id,
-        ]);
+        const claims = await jsonCommand<{ data: EligibilityClaim[] }>(fixture.sellerHome, [
+          'cart', 'purchase-eligibility', 'claims', 'list', '--rule-id', rule.id,
+        ]).then(page => page.data);
         expect(claims).toEqual([]);
       } finally {
-        expect(await jsonCommand(fixture.sellerHome, ['eligibility', 'rules', 'disable', '--rule-id', rule.id]))
+        expect(await jsonCommand(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'disable', '--rule-id', rule.id]))
           .toEqual({ ruleId: rule.id, disabled: true });
       }
     } finally {
@@ -56,8 +56,8 @@ describe('eligibility through the built CLI and deployed Rare API', () => {
     try {
       if (fixture.chain !== 'sepolia') throw new Error('Eligibility lifecycle E2E requires Sepolia.');
       // Fail before deploying assets when the eligibility API or buyer account is unavailable.
-      await jsonCommand<EligibilityRule[]>(fixture.sellerHome, ['eligibility', 'rules', 'list']);
-      await jsonCommand<EligibilityClaim[]>(fixture.buyerHome, ['eligibility', 'claims', 'list']);
+      await jsonCommand<{ data: EligibilityRule[] }>(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'list']).then(page => page.data);
+      await jsonCommand<{ data: EligibilityClaim[] }>(fixture.buyerHome, ['cart', 'purchase-eligibility', 'claims', 'list']).then(page => page.data);
       const collection = await deployErc721Collection(fixture, '3');
       const source = await mintToken(fixture, collection.contract);
       const reward = await mintToken(fixture, collection.contract);
@@ -71,7 +71,7 @@ describe('eligibility through the built CLI and deployed Rare API', () => {
         targets: [{ sku: rewardSku }, { sku: alternativeSku }],
       } }), 'utf8');
       const rule = await jsonCommand<EligibilityRule>(fixture.sellerHome, [
-        'eligibility', 'rules', 'create', '--input', file, '--chain', fixture.chain,
+        'cart', 'purchase-eligibility', 'rules', 'create', '--input', file, '--chain', fixture.chain,
       ]);
       try {
         const publish = async (sku: Hex, gated: boolean): Promise<Hex> => {
@@ -90,9 +90,9 @@ describe('eligibility through the built CLI and deployed Rare API', () => {
         const sourceListing = await publish(sourceSku, false);
         const rewardListing = await publish(rewardSku, true);
         const alternativeListing = await publish(alternativeSku, true);
-        const claims = (): Promise<EligibilityClaim[]> => jsonCommand<EligibilityClaim[]>(fixture.buyerHome, [
-          'eligibility', 'claims', 'list', '--rule-id', rule.id,
-        ]);
+        const claims = (): Promise<EligibilityClaim[]> => jsonCommand<{ data: EligibilityClaim[] }>(fixture.buyerHome, [
+          'cart', 'purchase-eligibility', 'claims', 'list', '--rule-id', rule.id,
+        ]).then(page => page.data);
         const checkout = async (listingDigest: Hex): Promise<TxResult & { txHash: Hex; orderId: Hex }> => {
           const args = ['cart', 'checkout', '--listing', listingDigest, '--payment-currency', 'eth', '--chain', fixture.chain];
           const quote = await jsonCommand<{ preparation: { paymentAmount: string } }>(fixture.buyerHome, [...args, '--preview']);
@@ -124,7 +124,7 @@ describe('eligibility through the built CLI and deployed Rare API', () => {
         await expect(checkout(alternativeListing)).rejects.toThrow(/Insufficient unreserved claims/u);
         expect(await claims()).toMatchObject([{ id: issued.id, status: 'CONSUMED' }]);
       } finally {
-        await jsonCommand(fixture.sellerHome, ['eligibility', 'rules', 'disable', '--rule-id', rule.id]);
+        await jsonCommand(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'disable', '--rule-id', rule.id]);
       }
     } finally {
       await cleanupLiveFixture(fixture);

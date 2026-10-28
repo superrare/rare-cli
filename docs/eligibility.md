@@ -24,18 +24,18 @@ All three kinds support ERC-721 and ERC-1155 sources. Each qualifying copy grant
 Issuance supports at most 100 rights per source event. Initial holder snapshots also support at most 100 rights. Larger operations fail atomically instead of issuing partial rights. A wallet can receive rights from multiple events, so this is not a lifetime wallet limit.
 
 ```sh
-rare eligibility rules create --input ./rule.json --chain sepolia --json
-rare eligibility rules list --take 20 --skip 0 --json
+rare cart purchase-eligibility rules create --input ./rule.json --chain sepolia --json
+rare cart purchase-eligibility rules list --page 1 --per-page 20 --json
 rare cart listing create --input ./cart-listings.json --eligibility-rule-id <id> --chain sepolia --yes
-rare eligibility listings require --listing-digest 0x... --rule-id <id> --chain sepolia
-rare eligibility claims list --rule-id <id> --json
-rare eligibility listings clear --listing-digest 0x... --chain sepolia
-rare eligibility rules disable --rule-id <id>
+rare cart purchase-eligibility listing-requirements set --listing-digest 0x... --rule-id <id> --chain sepolia
+rare cart purchase-eligibility claims list --rule-id <id> --json
+rare cart purchase-eligibility listing-requirements clear --listing-digest 0x... --chain sepolia
+rare cart purchase-eligibility rules disable --rule-id <id>
 ```
 
 Listing requirements affect new checkout authorizations. Disabling a rule does not cancel an already-signed Order. Reservation and consumption happen through the normal Cart checkout commands, not separate claim mutation commands.
 
-Use `cart listing create --eligibility-rule-id` for a newly gated Listing. The API attaches its requirement atomically during publication. The separate `eligibility listings require` command changes an existing Listing and cannot cancel an Order already signed while it was open.
+Use `cart listing create --eligibility-rule-id` for a newly gated Listing. The API attaches its requirement atomically during publication. The separate `cart purchase-eligibility listing-requirements set` command changes an existing Listing and cannot cancel an Order already signed while it was open.
 
 For existing holders, include `definition.source.tokenIds` with a `CURRENT_HOLDER` rule. The API initializes those holders at a confirmed block. Collection-wide rules without token IDs apply to future events. Historical purchase backfills are not included.
 
