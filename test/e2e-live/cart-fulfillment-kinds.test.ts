@@ -176,10 +176,10 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
       event.args.fulfillmentKind === cartFulfillmentKinds.erc1155Transfer)).toBe(true);
     expect(settled.filter(event => event.args.fulfillmentKind === cartFulfillmentKinds.none)).toHaveLength(2);
     const rare = createRareClient({ publicClient: live.publicClient, apiBaseUrl: live.accountApiBaseUrl });
-    await expect.poll(() => rare.cart.api.checkout.receipt(purchase.orderId), {
+    await expect.poll(() => rare.cart.checkout.receipt(purchase.orderId), {
       timeout: 180_000, interval: 2_000,
     }).toMatchObject({ status: 'indexed', issues: [] });
-    const saved = await rare.cart.api.checkout.receipt(purchase.orderId);
+    const saved = await rare.cart.checkout.receipt(purchase.orderId);
     const allocations = saved.feeAllocations?.allocations;
     if (allocations === undefined) throw new Error('Cart receipt lost its immutable refund allocations.');
     const sellerAllocations = allocations.filter(allocation => allocation.bearer === 'SELLER');

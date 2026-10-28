@@ -25,6 +25,12 @@ describe('built Cart CLI', () => {
       expect(help.stdout).toContain('listing');
       expect(help.stdout).toContain('checkout');
       expect(help.stdout).toContain('swap');
+      expect(help.stdout).toContain('catalog');
+      for (const path of [['products', 'create'], ['products', 'attach-sku'], ['products', 'publish'], ['variants', 'add']]) {
+        const catalogHelp = await runCli(['cart', 'catalog', ...path, '--help'], { home });
+        expect(catalogHelp.code).toBe(0);
+        expect(catalogHelp.stdout).toContain('--api-url <url>');
+      }
 
       const listingHelp = await runCli(['cart', 'listing', 'create', '--help'], { home });
       expect(listingHelp.stdout).toContain('--input <path>');

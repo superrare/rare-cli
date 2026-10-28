@@ -596,7 +596,7 @@ async function pollForPublishedListings(
   const expected = new Set(listingDigests.map((digest) => digest.toLowerCase()));
   const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
-    const result = await rare.cart.api.listing.search({ seller, perPage: 100 });
+    const result = await rare.cart.listing.search({ seller, perPage: 100 });
     const published = new Set(result.data.map((listing) => listing.listingDigest.toLowerCase()));
     if ([...expected].every((digest) => published.has(digest))) return;
     await new Promise((resolve) => setTimeout(resolve, 1_000));

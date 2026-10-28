@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
+import { cartCatalogCommand } from './cart-catalog.js';
 import { formatUnits, type Address } from 'viem';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import type { CartCheckoutPreparation, CartListingPreparation, RareClient } from '@rareprotocol/rare-sdk';
@@ -55,6 +56,7 @@ type CartCheckoutOptions = ChainOptions & AccountCommandOptions & {
 
 export function cartCommand(): Command {
   const command = new Command('cart');
+  command.addCommand(cartCatalogCommand());
   command.description('Create Cart listings and purchase fixed-price Cart checkouts');
   command.addCommand(cartListingCommand());
   command.addCommand(cartCheckoutCommand());
@@ -282,7 +284,7 @@ function cartCheckoutCommand(swap = false): Command {
       }
 
       if (opts.prepareOnly === true) {
-        const preparedPurchase = await rare.cart.api.checkout.prepare(preparation.preparationReference);
+        const preparedPurchase = await rare.cart.checkout.authorize(preparation);
         output({ prepareOnly: true, preparation, preparedPurchase }, () => {
           console.log(`Checkout authorized: ${preparedPurchase.executePurchase.order.orderId}`);
           console.log('No payment was submitted. Any eligibility claims remain reserved until the order expires.');
