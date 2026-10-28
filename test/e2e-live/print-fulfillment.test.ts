@@ -70,7 +70,7 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
         const file = join(fixture.tempDir, 'eligibility.json');
         await writeFile(file, JSON.stringify({ definition: { kind: 'PRIMARY_SALE',
           source: { chainId: String(fixture.chainId), tokenContract: source.contract, tokenIds: [source.tokenId] }, targets: [{ sku: option.sku }] } }));
-        const rule = await jsonCommand<EligibilityRule>(fixture.sellerHome, ['eligibility', 'rules', 'create', '--input', file]);
+        const rule = await jsonCommand<EligibilityRule>(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'create', '--input', file]);
         ruleId = rule.id;
       }
       const terms = join(fixture.tempDir, 'listing.json');
@@ -87,7 +87,7 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
         expect(publicPrint.options).toContainEqual(expect.objectContaining({ listingDigest: entry.listingDigest, eligibilityRuleId: ruleId }));
       }
       const printCheckout = ['cart', 'checkout', '--listing', entry.listingDigest, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', fixture.chain];
-      const claims = (): Promise<EligibilityClaim[]> => jsonCommand(buyerHome, ['eligibility', 'claims', 'list', '--rule-id', ruleId ?? '']);
+      const claims = (): Promise<EligibilityClaim[]> => jsonCommand<{ data: EligibilityClaim[] }>(buyerHome, ['cart', 'purchase-eligibility', 'claims', 'list', '--rule-id', ruleId ?? '', '--per-page', '100']).then(page => page.data);
       if (journey === 'claim' && source) {
         expect(await claims()).toEqual([]);
         await expect(jsonCommand(buyerHome, [...printCheckout, '--prepare-only', '--yes'])).rejects.toThrow(/Status: 409/u);
@@ -153,7 +153,7 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
       // Only public identifiers, never recipient details, private URLs or credentials.
       console.info('Prodigi sandbox order verified', { transactionHash: purchase.txHash, orderId: purchase.orderId, providerOrderId: provider.id });
     } finally {
-      if (ruleId) await jsonCommand(fixture.sellerHome, ['eligibility', 'rules', 'disable', '--rule-id', ruleId]);
+      if (ruleId) await jsonCommand(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'disable', '--rule-id', ruleId]);
       if (productId) await createCreatorVariantClient(fixture).cart.catalog.products.archive(productId);
       if (dropId) await jsonCommand(fixture.sellerHome, ['prints', 'drops', 'archive', '--id', dropId]);
       await cleanupLiveFixture(fixture);
@@ -168,9 +168,9 @@ async function verifySettlement(
   preview: CartCheckoutPreparation,
   physical: boolean,
 ): Promise<CartCheckoutReceipt> {
-  await expect.poll(async () => (await rare.cart.api.checkout.receipt(purchase.orderId)).status,
+  await expect.poll(async () => (await rare.cart.checkout.receipt(purchase.orderId)).status,
     { timeout: 180_000, interval: 2_000 }).toBe('indexed');
-  const receipt = await rare.cart.api.checkout.receipt(purchase.orderId);
+  const receipt = await rare.cart.checkout.receipt(purchase.orderId);
   expect(BigInt(receipt.paymentAmount ?? '-1')).toBe(BigInt(preview.paymentAmount));
   expect(receipt.lines.reduce((sum, line) => sum + BigInt(line.amount), 0n)).toBe(BigInt(preview.paymentAmount));
   const transaction = await fixture.publicClient.getTransactionReceipt({ hash: purchase.txHash });

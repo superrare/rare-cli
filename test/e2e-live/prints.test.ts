@@ -54,14 +54,14 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
           expect.objectContaining({ listingDigest: listing.listingDigest, maxQuantityPerCheckout: '3', eligibilityRuleId: null }),
         ]));
         expect(publicDrop.metadata).not.toHaveProperty('productionUploadKey');
-        expect(await jsonCommand(fixture.sellerHome, ['prints', 'activity', '--id', drop.id])).toMatchObject({ events: [] });
+        expect(await jsonCommand(fixture.sellerHome, ['prints', 'activity', '--id', drop.id])).toMatchObject({ data: [], pagination: expect.objectContaining({ page: 1, perPage: 20 }) });
         const address = join(fixture.tempDir, 'shipping.json');
         await writeFile(address, JSON.stringify({ id: addressId, label: 'CLI test', makeDefault: false,
           details: { name: 'CLI test', email: 'cli-test@example.com', phoneNumber: '+12025550123',
             addressLine1: '123 Test Street', townOrCity: 'New York', stateOrCounty: 'NY', postalOrZipCode: '10001', countryCode: 'US' } }));
-        const saved = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'save', '--input', address]);
+        const saved = await jsonCommand<{ id: string }>(fixture.sellerHome, ['shipping', 'save', '--input', address]);
         try {
-          expect(saved.some(item => item.id === addressId)).toBe(true);
+          expect(saved.id).toBe(addressId);
           const loaded = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'list']);
           expect(loaded.some(item => item.id === addressId)).toBe(true);
           const checkout = await jsonCommand<{ preparation: { paymentAmount: string; intent: { items: { quantity: string }[] }; breakdown: { displayPrice: string; production: string; shipping: string; networkFee: string; total: string } }; preparedPurchase: { executePurchase: { lines: { listingDigest: string; quantity: string }[]; platformSignature: string } } }>(fixture.sellerHome, [
@@ -132,7 +132,7 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
           const ruleFile = join(fixture.tempDir, 'print-rule.json');
           await writeFile(ruleFile, JSON.stringify({ definition: { kind: 'EVERY_SALE',
             source: { chainId: String(fixture.chainId), tokenContract: collection.contract }, targets: [{ sku: option.sku }] } }));
-          const rule = await jsonCommand<EligibilityRule>(fixture.sellerHome, ['eligibility', 'rules', 'create', '--input', ruleFile]);
+          const rule = await jsonCommand<EligibilityRule>(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'create', '--input', ruleFile]);
           try {
             const gatedTerms = join(fixture.tempDir, 'gated-print-listing.json');
             await writeFile(gatedTerms, JSON.stringify({ optionId: option.id, seller: fixture.sellerAddress,
@@ -152,11 +152,13 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
               '--saved-address-id', addressId, '--chain', fixture.chain, '--prepare-only', '--yes',
             ])).rejects.toThrow(/"Status: 409"/u);
           } finally {
-            await jsonCommand(fixture.sellerHome, ['eligibility', 'rules', 'disable', '--rule-id', rule.id]);
+            await jsonCommand(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'disable', '--rule-id', rule.id]);
           }
           // Authorization only. Never approve tokens, pay or submit a physical fulfillment order.
         } finally {
-          const remaining = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'delete', '--id', addressId]);
+          const removed = await jsonCommand(fixture.sellerHome, ['shipping', 'delete', '--id', addressId]);
+          expect(removed).toEqual({ id: addressId, deleted: true });
+          const remaining = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'list']);
           expect(remaining.some(item => item.id === addressId)).toBe(false);
         }
       } finally {

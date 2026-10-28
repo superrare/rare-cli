@@ -20,7 +20,8 @@ export function shippingCommand(): Command {
   command.addCommand(accountCommand('delete').requiredOption('--id <uuid>', 'saved address ID')
     .action(async (options: AccountCommandOptions & { id: string }): Promise<void> => {
       const id = parseCommerceUuid(options.id);
-      print(await accountClient(storageOptions(options)).shippingAddresses.delete(id));
+      await accountClient(storageOptions(options)).shippingAddresses.delete(id);
+      print({ id, deleted: true });
     }));
   return command;
 }
