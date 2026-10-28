@@ -53,6 +53,10 @@ export function cartCatalogCommand(): Command {
     .action(async (options: CatalogOptions & { productId: string }) => { print(await client(options).cart.catalog.products.publish(options.productId)); }));
   products.addCommand(command('get').requiredOption('--product-id <id>', 'published product ID')
     .action(async (options: CatalogOptions & { productId: string }) => { print(await client(options).cart.catalog.products.get(options.productId)); }));
+  products.addCommand(command('get-mine').requiredOption('--product-id <id>', 'owned product ID, including drafts')
+    .action(async (options: CatalogOptions & { productId: string }) => { print(await client(options).cart.catalog.products.getMine(options.productId)); }));
+  products.addCommand(command('archive').requiredOption('--product-id <id>', 'owned product ID')
+    .action(async (options: CatalogOptions & { productId: string }) => { print(await client(options).cart.catalog.products.archive(options.productId)); }));
   products.addCommand(command('search').option('--query <text>').option('--id <id>').option('--slug <slug>')
     .option('--creator-user-id <id>').option('--page <number>', 'page starting at 1', pageNumber)
     .option('--per-page <number>', 'results per page, up to 100', pageNumber)

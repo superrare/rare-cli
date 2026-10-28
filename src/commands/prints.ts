@@ -27,9 +27,10 @@ export function printsCommand(): Command {
     .requiredOption('--id <uuid>', 'print drop ID')
     .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.drops.get(parseCommerceUuid(options.id))); }));
   prints.addCommand(command('activity').requiredOption('--id <uuid>', 'print drop ID')
-    .option('--after <id>', 'activity pagination cursor')
-    .action(async (options: IdentityOptions & { after?: string }): Promise<void> => {
-      print(await client(options).prints.drops.activity(parseCommerceUuid(options.id), { after: options.after }));
+    .option('--page <number>', 'page number, starting at 1', (value: unknown) => z.coerce.number().int().positive().parse(value))
+    .option('--per-page <number>', 'maximum records per page', (value: unknown) => z.coerce.number().int().min(1).max(100).parse(value))
+    .action(async (options: IdentityOptions & { page?: number; perPage?: number }): Promise<void> => {
+      print(await client(options).prints.drops.activity(parseCommerceUuid(options.id), { page: options.page, perPage: options.perPage }));
     }));
   prints.addCommand(command('releases').requiredOption('--universal-token-id <id>', 'linked NFT universal token ID')
     .action(async (options: PrintOptions & { universalTokenId: string }): Promise<void> => {
@@ -49,10 +50,10 @@ export function printsCommand(): Command {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
       print(await client(options).prints.drops.update(id, printDraftPatch.parse(input)));
     }));
-  drops.addCommand(command('list').option('--after <uuid>', 'pagination cursor')
-    .option('--take <number>', 'maximum records', (value: unknown) => z.coerce.number().int().min(1).max(100).parse(value))
-    .action(async (options: PrintOptions & { after?: string; take?: number }): Promise<void> => {
-      print(await client(options).prints.drops.listMine({ after: options.after, take: options.take }));
+  drops.addCommand(command('list').option('--page <number>', 'page number, starting at 1', (value: unknown) => z.coerce.number().int().positive().parse(value))
+    .option('--per-page <number>', 'maximum records per page', (value: unknown) => z.coerce.number().int().min(1).max(100).parse(value))
+    .action(async (options: PrintOptions & { page?: number; perPage?: number }): Promise<void> => {
+      print(await client(options).prints.drops.listMine({ page: options.page, perPage: options.perPage }));
     }));
   drops.addCommand(command('get').requiredOption('--id <uuid>', 'owned drop ID')
     .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.drops.getMine(parseCommerceUuid(options.id))); }));
