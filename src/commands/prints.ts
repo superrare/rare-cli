@@ -64,7 +64,7 @@ export function printsCommand(): Command {
     .requiredOption('--price-usd-cents <amount>', 'collector price, in integer USD cents; Listings settle in USDC')
     .action(async (options: IdentityOptions & { priceUsdCents: string }): Promise<void> => {
       const displayPriceUsdCents = parsePrintPrice(options.priceUsdCents);
-      print(await client(options).prints.options.configure(parseCommerceUuid(options.id), { displayPriceUsdCents }));
+      print(await client(options).prints.options.configure({ dropId: parseCommerceUuid(options.id), input: { displayPriceUsdCents } }));
     }));
   prints.addCommand(drops);
 
@@ -81,7 +81,7 @@ export function printsCommand(): Command {
       const parsed = printListingInput.parse(input);
       const rare = client(options, true);
       const preparation = await rare.prints.listings.prepare(parsed);
-      print(await rare.prints.listings.publish(preparation));
+      print(await rare.prints.listings.publish({ preparation }));
     }));
   prints.addCommand(listings);
   return prints;
