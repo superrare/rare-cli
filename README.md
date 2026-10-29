@@ -615,6 +615,13 @@ Get supported specifications with `rare prints specifications`. Set optional
 file and specification are required for every print draft. NFT attribution does
 not transfer the NFT or configure an eligibility rule or receipt.
 
+Replace a production master on a configured or published print by uploading the
+replacement privately, then running `rare prints drops update --id <drop-id>
+--input replacement.json` with `{ "productionUploadKey": "<new private upload key>" }`.
+New orders use the replacement. Existing authorized and paid orders keep their
+saved production snapshots. Specification edits still require an unconfigured
+draft or a replacement print draft.
+
 ### Print listing eligibility and quantity
 
 `rare prints listing prepare --input listing.json` and `rare prints listing publish --input listing.json --yes` accept these optional fields in the listing JSON:
