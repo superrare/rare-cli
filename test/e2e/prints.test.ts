@@ -1,8 +1,9 @@
+import { createServer } from 'node:http';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { runCli, withTempHome } from '../helpers/cli.js';
+import { parseJsonStdout, runCli, withTempHome } from '../helpers/cli.js';
 
 describe('built print and shipping CLI', () => {
   it('exposes creator print, private upload and address-book commands', async () => {
@@ -24,6 +25,27 @@ describe('built print and shipping CLI', () => {
       const upload = await runCli(['uploads', 'upload', '--help'], { home });
       expect(upload.stdout).toContain('default: "public"');
     });
+  });
+
+  it('provides human-readable print specifications and stable JSON output', async () => {
+    const specifications = [{ id: 'matte-12-16', paper: 'Matte', size: '12 × 16 in', widthInches: 12, heightInches: 16 }];
+    const server = createServer((request, response) => {
+      expect(request.url).toBe('/v1/prints/specifications');
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ data: specifications }));
+    });
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error('Missing fixture address');
+    try {
+      const args = ['prints', 'specifications', '--api-url', `http://127.0.0.1:${address.port}`, '--chain', 'sepolia'];
+      const human = await runCli(args);
+      expect(human.code).toBe(0);
+      expect(human.stdout).toContain('Paper: Matte');
+      expect(human.stdout).toContain('Width inches: 12');
+      expect(human.stdout).not.toContain('"paper"');
+      expect(parseJsonStdout(await runCli(['--json', ...args]))).toEqual(specifications);
+    } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
   });
 
   it('rejects public production URLs and malformed shipping input before authentication', async () => {
@@ -66,6 +88,12 @@ describe('built print and shipping CLI', () => {
     });
     expect(result.code).toBe(1);
     expect(result.stderr).toContain('requires --yes');
+    const consent = await runCli(['--json', 'prints', 'listing', 'publish', '--input', 'unused.json', '--yes'], {
+      env: { RARE_SKIP_CONFIRMATION: '0' },
+    });
+    expect(consent.code).toBe(1);
+    expect(consent.stderr).toContain('ENOENT');
+    expect(consent.stderr).not.toContain('requires --yes');
   });
 
   it('rejects conflicting shipping sources before any quote request', async () => {
