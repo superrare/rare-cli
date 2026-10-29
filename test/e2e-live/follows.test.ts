@@ -27,7 +27,7 @@ describe('user follows through the built CLI and deployed services', () => {
     const profile = await api.get({ address: target.address });
     const own = await api.get({ address: owner.address });
     if (profile.userId === undefined || own.userId === undefined) throw new Error('Deploy user selectors and follow routes first');
-    const before = await api.followers({ userId: profile.userId }, { perPage: 100 });
+    const before = await api.followers.list({ userId: profile.userId }, { perPage: 100 });
     expect(before.data.some(user => user.userId === own.userId)).toBe(false);
     await withTempHome(async temporary => {
       const home = await realpath(temporary);
@@ -44,14 +44,14 @@ describe('user follows through the built CLI and deployed services', () => {
       expect(parseJsonStdout(await run(['auth', 'login', '--wallet', '--chain', 'mainnet']))).toMatchObject({ status: 'authorized' });
       try {
         expect(parseJsonStdout(await run(['user', 'follow', '--username', profile.username]))).toEqual({ following: true });
-        expect((await api.followers({ address: target.address })).data.some(user => user.userId === own.userId)).toBe(true);
+        expect((await api.followers.list({ address: target.address })).data.some(user => user.userId === own.userId)).toBe(true);
         const following = await run(['user', 'following', '--user-id', String(own.userId)]);
         expect(following.code).toBe(0);
         expect(following.stdout).toContain(profile.username);
         expect((await run(['user', 'follow', '--user-id', String(own.userId)])).code).not.toBe(0);
         expect((await run(['user', 'get', '--username', profile.username, '--user-id', String(profile.userId)])).code).not.toBe(0);
         expect(parseJsonStdout(await run(['user', 'unfollow', '--user-id', String(profile.userId)]))).toEqual({ following: false });
-        expect(await api.followers({ address: target.address }, { perPage: 100 })).toEqual(before);
+        expect(await api.followers.list({ address: target.address }, { perPage: 100 })).toEqual(before);
       } finally {
         expect((await run(['user', 'unfollow', '--address', target.address])).code).toBe(0);
         expect((await run(['auth', 'logout'])).code).toBe(0);

@@ -38,7 +38,7 @@ export function postsCommand(): Command {
       print(await accountClient(storageOptions(options)).posts.create({ title: options.title, body, imageUrls: options.imageUrl }));
     }));
   command.addCommand(bodyOptions(accountCommand('comment')).description('Comment on a public post or reply to a top-level comment').argument('<post-id>').option('--parent-comment-id <id>', 'reply to this top-level comment')
-    .action(async (postId: string, options: AccountCommandOptions & BodyOptions & ThreadOptions): Promise<void> => { const body = await bodyText(options); print(await accountClient(storageOptions(options)).posts.comment(postId, body, { parentCommentId: options.parentCommentId })); }));
+    .action(async (postId: string, options: AccountCommandOptions & BodyOptions & ThreadOptions): Promise<void> => { const body = await bodyText(options); print(await accountClient(storageOptions(options)).posts.comment(postId, { body, parentCommentId: options.parentCommentId })); }));
   command.addCommand(accountCommand('delete').description('Delete your own post').argument('<post-id>')
     .action(async (postId: string, options: AccountCommandOptions): Promise<void> => { await accountClient(storageOptions(options)).posts.delete(postId); print({ deleted: true }); }));
   command.addCommand(accountCommand('delete-comment').description('Delete your own comment').argument('<post-id>').argument('<comment-id>')

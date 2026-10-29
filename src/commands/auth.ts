@@ -30,7 +30,7 @@ export function authCommand(): Command {
           const chain = getActiveChain(opts.chain, opts.chainId);
           const account = getConfiguredWalletAccount(chain);
           await preflightStorage(config);
-          const session = await client.auth.loginWithWallet({ address: account.address, chainId: chainIds[chain], signMessage: async message => account.signMessage({ message }), signal });
+          const session = await client.auth.loginWithWallet({ address: account.address, chainId: chainIds[chain], signMessage: async message => account.signMessage({ message }) }, { signal });
           printAuthorized(session);
         } else if (plan.value.mode === 'continue') {
           await continueDeviceLogin(client, config, plan.value.requestId, plan.value.wait, signal);

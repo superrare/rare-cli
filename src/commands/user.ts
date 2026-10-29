@@ -31,7 +31,7 @@ export function userCommand(): Command {
         const api = publicUser(options.apiUrl);
         const selector: UserSelector = selectUser(address, options);
         const pagination = { page: Number(options.page), perPage: Number(options.perPage) };
-        const result = await (direction === 'followers' ? api.followers(selector, pagination) : api.following(selector, pagination));
+        const result = await (direction === 'followers' ? api.followers.list(selector, pagination) : api.following.list(selector, pagination));
         output(result, () => { console.log(JSON.stringify(result, null, 2)); });
       }));
   }
@@ -39,8 +39,8 @@ export function userCommand(): Command {
     command.addCommand(selectorOptions(accountCommand(name)).description(`${name} another user with your signed-in account`)
       .action(async (address: string | undefined, options: AccountCommandOptions & UserOptions): Promise<void> => {
         const selector = selectUser(address, options);
-        const following = accountClient(storageOptions(options)).following;
-        await (name === 'follow' ? following.follow(selector) : following.unfollow(selector));
+        const following = accountClient(storageOptions(options)).user.following;
+        await (name === 'follow' ? following.add(selector) : following.delete(selector));
         output({ following: name === 'follow' }, () => { console.log(name === 'follow' ? 'Following user.' : 'Unfollowed user.'); });
       }));
   }
