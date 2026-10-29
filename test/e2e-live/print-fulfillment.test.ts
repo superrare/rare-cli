@@ -56,9 +56,9 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
         if (!digest) throw new Error('NFT Listing was not published.');
         return { ...token, sku: variant.sku, listingDigest: digest, productId: product.id };
       })();
-      const specifications = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['prints', 'specifications']);
-      const specification = specifications[0];
-      if (!specification) throw new Error('No supported print specification.');
+      const products = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['prints', 'products', 'list']);
+      const product = products.find(item => item.id === 'GLOBAL-FAP-8X12');
+      if (!product) throw new Error('No supported print specification.');
       const image = join(fixture.tempDir, 'sandbox-print.jpg');
       await writeFile(image, await downloadTestImage());
       const master = await jsonCommand<{ key: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'private', '--content-type', 'image/jpeg']);
@@ -66,7 +66,7 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
       const input = join(fixture.tempDir, 'print.json');
       const name = `Cart sandbox fulfillment ${randomUUID()}`;
       await writeFile(input, JSON.stringify({ idempotencyKey: randomUUID(), chainId: '11155111', name,
-        print: { name, description: 'Sandbox fulfillment test', tags: ['test'], productionUploadKey: master.key, images: [photo.url], specificationId: specification.id } }));
+        print: { name, description: 'Sandbox fulfillment test', tags: ['test'], productionUploadKey: master.key, images: [photo.url], specificationId: product.id } }));
       const drop = await jsonCommand<{ id: string }>(fixture.sellerHome, ['prints', 'drops', 'create', '--input', input]);
       dropId = drop.id;
       const option = await jsonCommand<{ id: string; sku: Hex }>(fixture.sellerHome, ['prints', 'drops', 'configure', '--id', drop.id, '--price-usd-cents', '100']);
@@ -159,7 +159,7 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
 
       expect(provider.metadata.fulfillmentId).toBe(fulfillment.id);
       expect(provider.merchantReference).toBe(createHash('sha256').update(`superrare:cart:fulfillment:${fulfillment.id}`).digest('hex'));
-      expect(provider.items).toEqual([{ sku: specification.id, copies: 1 }]);
+      expect(provider.items).toEqual([{ sku: product.id, copies: 1 }]);
       // Only public identifiers, never recipient details, private URLs or credentials.
       console.info('Prodigi sandbox order verified', { transactionHash: purchase.txHash, orderId: purchase.orderId, providerOrderId: provider.id });
     } finally {
