@@ -56,8 +56,8 @@ const profilePatchSchema = z.object({
   email: z.string().optional(),
   profile: z.object({
     fullName: z.string().optional(), bio: z.string().optional(), avatar: z.string().optional(),
-    website: z.string().optional(), twitterlink: z.string().optional(), discordlink: z.string().optional(),
-    instagramlink: z.string().optional(), youtubelink: z.string().optional(), masthead_universal_token_id: z.string().optional(),
+    website: z.string().optional(), twitterLink: z.string().optional(), discordLink: z.string().optional(),
+    instagramLink: z.string().optional(), youtubeLink: z.string().optional(), mastheadUniversalTokenId: z.string().optional(),
   }).strict().optional(),
 }).strict();
 
@@ -77,10 +77,10 @@ type ProfileInputPlan = { source: 'stdin' } | { source: 'file'; path: string } |
 export function planProfileUpdate(options: ProfileUpdateOptions): Result<ProfileInputPlan> {
   const fields: [string, string | undefined][] = [
     ['fullName', options.fullName], ['bio', options.bio], ['website', options.website],
-    ['twitterlink', options.twitter], ['discordlink', options.discord], ['instagramlink', options.instagram],
-    ['youtubelink', options.youtube],
+    ['twitterLink', options.twitter], ['discordLink', options.discord], ['instagramLink', options.instagram],
+    ['youtubeLink', options.youtube],
     ['avatar', options.clearAvatar === true ? '' : options.avatar],
-    ['masthead_universal_token_id', options.clearMasthead === true ? '' : options.masthead],
+    ['mastheadUniversalTokenId', options.clearMasthead === true ? '' : options.masthead],
   ];
   const profile: Record<string, string | undefined> = Object.fromEntries(fields.filter(([, value]) => value !== undefined));
   const hasFlags = options.username !== undefined || options.email !== undefined || Object.keys(profile).length > 0;

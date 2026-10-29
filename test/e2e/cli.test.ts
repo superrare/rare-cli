@@ -2147,6 +2147,10 @@ describe('built CLI deterministic behavior', () => {
       expect(userHelp.stdout).not.toContain('--chain <chain>');
       expect(userHelp.stdout).not.toContain('--chain-id <id>');
 
+      const removedUserResolveCommand = await runCli(['user', 'resolve'], { home });
+      expect(removedUserResolveCommand.code).toBe(1);
+      expect(removedUserResolveCommand.stderr).toContain("unknown command 'resolve'");
+
       const removedUserLookupCommand = await runCli(['user', 'lookup'], { home });
       expect(removedUserLookupCommand.code).toBe(1);
       expect(removedUserLookupCommand.stderr).toContain("unknown command 'lookup'");

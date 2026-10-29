@@ -17,15 +17,13 @@ const publicUser = (apiUrl: string): ReturnType<typeof createRareClient>['user']
 
 export function userCommand(): Command {
   const command = new Command('user').description('Public user profiles and follows');
-  for (const name of ['get', 'resolve']) {
-    command.addCommand(publicCommand(name).description('Get a public profile by username, address or user ID')
+  command.addCommand(publicCommand('get').description('Get a public profile by username, address or user ID')
       .action(async (address: string | undefined, options: UserOptions & { apiUrl: string }): Promise<void> => {
         const selector = selectUser(address, options);
         const user = publicUser(options.apiUrl);
-        const result = await (address === undefined ? user.resolve(selector) : user.get(address));
+        const result = await user.get(selector);
         output(result, () => { printUser(result); });
       }));
-  }
   for (const direction of ['followers', 'following']) {
     command.addCommand(publicCommand(direction).description(`List public ${direction}`)
       .option('--page <number>', 'page number', '1').option('--per-page <number>', 'profiles per page, up to 100', '20')

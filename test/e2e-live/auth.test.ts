@@ -146,7 +146,7 @@ describe('built CLI against deployed account services', () => {
       const env = { RARE_API_URL: api, RARE_AUTH_STORAGE: 'file', RARE_AUTH_DIRECTORY: authDirectory };
       const run = (args: string[], input?: string): Promise<CliResult> => runRateLimitedCli(['--json', ...args], { home, env, input, timeoutMs: 45_000 });
       const waitForPublicProfile = async (expected: Record<string, string>, deadline = Date.now() + 30_000): Promise<void> => {
-        const profile = z.record(z.string(), z.unknown()).parse(parseJsonStdout(await run(['user', 'resolve', '--address', wallet.address])));
+        const profile = z.record(z.string(), z.unknown()).parse(parseJsonStdout(await run(['user', 'get', '--address', wallet.address])));
         if (Object.entries(expected).every(([field, value]) => profile[field] === value)) return;
         if (Date.now() >= deadline) throw new Error('Public profile index did not reflect the CLI update within 30 seconds');
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -179,16 +179,16 @@ describe('built CLI against deployed account services', () => {
         ]) expect((await run(args)).code).not.toBe(0);
         expect((await run(['profile', 'update', '--stdin'], JSON.stringify({ accountId: '999', profile: { bio: 'unauthorized' } }))).code).not.toBe(0);
         const email = `cli-${marker}@example.com`;
-        const socials = parseJsonStdout<{ email: string; profile: { website: string; twitterlink: string } }>(await run([
+        const socials = parseJsonStdout<{ email: string; profile: { website: string; twitterLink: string } }>(await run([
           'profile', 'update', '--email', email, '--website', profileWebsite, '--twitter', profileTwitter,
         ]));
         expect(socials.email).toBe(email);
         expect(socials.profile.website).toBe(profileWebsite);
-        expect(socials.profile.twitterlink).toBe(profileTwitter);
-        expect(parseJsonStdout(await run(['profile', 'get']))).toMatchObject({ email, profile: { website: profileWebsite, twitterlink: profileTwitter } });
+        expect(socials.profile.twitterLink).toBe(profileTwitter);
+        expect(parseJsonStdout(await run(['profile', 'get']))).toMatchObject({ email, profile: { website: profileWebsite, twitterLink: profileTwitter } });
         await waitForPublicProfile({ bio: profileBio, website: profileWebsite, twitterlink: profileTwitter });
         const own = parseJsonStdout<{ username: string }>(await run(['profile', 'get']));
-        const publicProfile = parseJsonStdout(await run(['user', 'resolve', '--username', own.username]));
+        const publicProfile = parseJsonStdout(await run(['user', 'get', '--username', own.username]));
         expect(publicProfile.username).toBe(own.username);
         expect(JSON.stringify(publicProfile)).not.toContain(email);
         const avatarFile = join(directory, 'avatar.png');
@@ -204,16 +204,16 @@ describe('built CLI against deployed account services', () => {
         expect((await run(['profile', 'avatar', 'upload', '--file', join(directory, 'invalid.png')])).code).not.toBe(0);
 
         const patchFile = join(directory, 'profile-patch.json');
-        await writeFile(patchFile, JSON.stringify({ profile: { fullName: profileName, masthead_universal_token_id: required('RARE_ACCOUNT_TEST_ARTWORK_ID') } }));
+        await writeFile(patchFile, JSON.stringify({ profile: { fullName: profileName, mastheadUniversalTokenId: required('RARE_ACCOUNT_TEST_ARTWORK_ID') } }));
         expect(parseJsonStdout(await run(['profile', 'update', '--file', patchFile]))).toMatchObject({
-          email, profile: { fullName: profileName, bio: profileBio, masthead_universal_token_id: required('RARE_ACCOUNT_TEST_ARTWORK_ID') },
+          email, profile: { fullName: profileName, bio: profileBio, mastheadUniversalTokenId: required('RARE_ACCOUNT_TEST_ARTWORK_ID') },
         });
-        expect(parseJsonStdout(await run(['profile', 'get']))).toMatchObject({ email, profile: { fullName: profileName, bio: profileBio, masthead_universal_token_id: required('RARE_ACCOUNT_TEST_ARTWORK_ID') } });
+        expect(parseJsonStdout(await run(['profile', 'get']))).toMatchObject({ email, profile: { fullName: profileName, bio: profileBio, mastheadUniversalTokenId: required('RARE_ACCOUNT_TEST_ARTWORK_ID') } });
         expect(parseJsonStdout(await run(['profile', 'update', '--clear-avatar', '--clear-masthead']))).toMatchObject({
-          profile: { avatar: '', masthead_universal_token_id: '' },
+          profile: { avatar: '', mastheadUniversalTokenId: '' },
         });
 
-        expect(parseJsonStdout(await run(['profile', 'get']))).toMatchObject({ accountId: walletStatus.accountId, email, profile: { fullName: profileName, bio: profileBio, avatar: '', masthead_universal_token_id: '' } });
+        expect(parseJsonStdout(await run(['profile', 'get']))).toMatchObject({ accountId: walletStatus.accountId, email, profile: { fullName: profileName, bio: profileBio, avatar: '', mastheadUniversalTokenId: '' } });
         await waitForPublicProfile({ avatar: '', masthead_universal_token_id: '' });
         expect(parseJsonStdout(await run(['auth', 'logout']))).toMatchObject({ status: 'signed_out' });
 

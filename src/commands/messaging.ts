@@ -83,14 +83,14 @@ export function messagingCommand(): Command {
     print(await createRareClient({ apiBaseUrl: options.apiUrl }).messaging.public.resolveRoom(context));
   }));
   publicMessaging.addCommand(accountCommand('history').argument('<room-id>').option('--authenticated', 'include your reaction and report-and-hide state').option('--before <sequence>').option('--after <sequence>').option('--limit <number>', 'messages to return', '50').action(async (id: string, options: AccountCommandOptions & { authenticated?: boolean; before?: string; after?: string; limit: string }): Promise<void> => {
-    const history = options.authenticated ? client(options).historyPublic : createRareClient({ apiBaseUrl: options.apiUrl }).messaging.public.history;
-    print(await history(id, { before: options.before, after: options.after, limit: Number(options.limit) }));
+    const history = options.authenticated ? client(options).public.history : createRareClient({ apiBaseUrl: options.apiUrl }).messaging.public.history;
+    print(await history(id, { before: options.before, after: options.after, limit: Number(options.limit), authenticated: options.authenticated === true }));
   }));
   publicMessaging.addCommand(accountCommand('watch').argument('<room-id>').option('--authenticated', 'include your reaction and report-and-hide state').option('--after <sequence>').option('--interval <milliseconds>', 'polling interval', '3000').action(async (id: string, options: AccountCommandOptions & { authenticated?: boolean; after?: string; interval: string }): Promise<void> => {
     const interval = Number(options.interval);
     if (!Number.isSafeInteger(interval) || interval < 1000) throw new Error('Polling interval must be an integer of at least 1000 milliseconds.');
-    const history = options.authenticated ? client(options).historyPublic : createRareClient({ apiBaseUrl: options.apiUrl }).messaging.public.history;
-    const initial = await history(id);
+    const history = options.authenticated ? client(options).public.history : createRareClient({ apiBaseUrl: options.apiUrl }).messaging.public.history;
+    const initial = await history(id, { authenticated: options.authenticated === true });
     print(initial);
     const state = { cursor: options.after ?? initial.room.latestSequence };
     const controller = new AbortController();
@@ -99,7 +99,7 @@ export function messagingCommand(): Command {
     process.once('SIGTERM', stop);
     try {
       while (!controller.signal.aborted) {
-        const page = await history(id, { after: state.cursor, signal: controller.signal });
+        const page = await history(id, { after: state.cursor, signal: controller.signal, authenticated: options.authenticated === true });
         if (page.messages.length > 0) print(page);
         // eslint-disable-next-line functional/immutable-data -- The polling shell advances its cursor after each response.
         state.cursor = page.messages.at(-1)?.sequence ?? state.cursor;
@@ -109,7 +109,7 @@ export function messagingCommand(): Command {
     finally { process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop); }
   }));
   publicMessaging.addCommand(bodyOptions(accountCommand('send')).argument('<room-id>').option('--client-message-id <uuid>', 'reuse for retries').option('--reply-to <message-id>').option('--mention <user-id>', 'repeat for mentioned accounts', repeat, []).action(async (id: string, options: AccountCommandOptions & BodyOptions & { clientMessageId?: string; replyTo?: string; mention: string[] }): Promise<void> => {
-    print(await client(options).sendPublic(id, { clientMessageId: options.clientMessageId ?? randomUUID(), body: await bodyText(options), replyToId: options.replyTo, mentionUserIds: options.mention }));
+    print(await client(options).public.send(id, { clientMessageId: options.clientMessageId ?? randomUUID(), body: await bodyText(options), replyToId: options.replyTo, mentionUserIds: options.mention }));
   }));
   command.addCommand(publicMessaging);
   return command;

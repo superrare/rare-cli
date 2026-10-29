@@ -118,7 +118,7 @@ rare profile update --bio 'hackin' --full-name 'My name' --json
 rare profile update --website https://example.com --twitter https://x.com/myname
 rare profile update --clear-avatar --clear-masthead
 rare profile avatar upload --file ./avatar.png
-rare user resolve --username myname
+rare user get --username myname
 rare profile update --file ./profile-patch.json --json
 rare auth logout
 ```

@@ -209,9 +209,9 @@ describe.skipIf(process.platform === 'win32')('built CLI account command contrac
       });
       expect(parseJsonStdout(await run(['profile', 'get']))).toEqual(profile);
       expect(service.refreshes).toBe(1);
-      const patch = { profile: { bio: 'Updated biography' } };
+      const patch = { profile: { bio: 'Updated biography', twitterLink: 'https://example.com/tester', mastheadUniversalTokenId: '11155111-0x0000000000000000000000000000000000000001-1' } };
       expect(parseJsonStdout(await run(['profile', 'update', '--stdin'], JSON.stringify(patch)))).toEqual(profile);
-      expect(service.lastPatch).toEqual(patch);
+      expect(service.lastPatch).toEqual({ profile: { bio: 'Updated biography', twitterlink: 'https://example.com/tester', masthead_universal_token_id: '11155111-0x0000000000000000000000000000000000000001-1' } });
       service.configure({ revokeFails: true });
       expect((await run(['auth', 'logout'])).code).toBe(1);
       expect(parseJsonStdout(await run(['auth', 'status']))).toMatchObject({ status: 'present' });
