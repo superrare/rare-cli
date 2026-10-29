@@ -67,9 +67,7 @@ export function purchaseEligibilityCommand(): Command {
     .action(async (options: ListingOptions & { ruleId: string }) => {
       const listingDigest = unwrapCartCliResult(parseCartBytes32(options.listingDigest, '--listing-digest'));
       const rare = rareClient(options);
-      if (rare.contracts.cart === undefined) throw new Error('Cart is not deployed on this chain.');
-      await rare.cart.purchaseEligibility.listingRequirements.set({ listingDigest, chainId: String(rare.chainId),
-        cartAddress: rare.contracts.cart, ruleId: options.ruleId });
+      await rare.cart.purchaseEligibility.listingRequirements.set({ listingDigest, ruleId: options.ruleId });
       print({ listingDigest, ruleId: options.ruleId });
     }));
   listings.addCommand(addChainOptions(accountCommand('clear'))
@@ -78,9 +76,7 @@ export function purchaseEligibilityCommand(): Command {
     .action(async (options: ListingOptions) => {
       const listingDigest = unwrapCartCliResult(parseCartBytes32(options.listingDigest, '--listing-digest'));
       const rare = rareClient(options);
-      if (rare.contracts.cart === undefined) throw new Error('Cart is not deployed on this chain.');
-      await rare.cart.purchaseEligibility.listingRequirements.clear({ listingDigest, chainId: String(rare.chainId),
-        cartAddress: rare.contracts.cart });
+      await rare.cart.purchaseEligibility.listingRequirements.clear({ listingDigest });
       print({ listingDigest, removed: true });
     }));
   command.addCommand(listings);
