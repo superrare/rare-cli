@@ -1443,3 +1443,22 @@ Attach within 24 hours of upload completion. Subsequent reads use messaging
 permissions. The SDK browser client persists managed login across reloads; the CLI
 continues using its protected persistent credential store.
 
+### Platform adjustments
+
+Internal team members can manage reusable charge definitions and their scoped assignments:
+
+```sh
+rare cart adjustments list --api-url "$RARE_API_BASE_URL" --json
+rare cart adjustments create --input charge.json --yes --api-url "$RARE_API_BASE_URL"
+rare cart adjustments assignments create --input assignment.json --yes --api-url "$RARE_API_BASE_URL"
+rare cart adjustments assignments list --adjustment-id ID --api-url "$RARE_API_BASE_URL" --json
+rare cart adjustments assignments disable --id ASSIGNMENT_ID --yes --api-url "$RARE_API_BASE_URL"
+```
+
+Sign in with an account whose user ID is in the Rare API deployment’s `CART_ADMIN_USER_IDS`.
+
+A definition requires `effect: "CHARGE"`, `phase`, `code`, `calculation` and `recipient`. An assignment requires `adjustmentId`, `priority` and a `scope`. Reuse a definition across multiple drops. Fixed amounts and NFT token IDs in JSON files use decimal strings; chain IDs use numbers. A 0% calculation waives the corresponding charge. Discounts are not supported.
+
+Highest priority replaces lower priorities for the same code. Assign seller-side overrides before preparing and signing listings; existing signed terms remain unchanged. Disabling one assignment preserves the reusable definition and other assignments.
+
+Live image fixtures use [Picsum](https://picsum.photos/) photographs downloaded during setup and uploaded through the ordinary SDK or CLI paths. The shared `downloadTestImage` helper accepts a seed and dimensions; omitting the seed selects a new photograph. Each download includes a unique JPEG comment so content-addressed cleanup cannot delete another run’s upload. Selected live tests fail if Picsum is unavailable. Local validation and corrupt-file fixtures stay offline.

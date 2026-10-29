@@ -1,3 +1,4 @@
+import { downloadTestImage } from './helpers/test-image.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -49,10 +50,10 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
       const specifications = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['prints', 'specifications']);
       const specification = specifications[0];
       if (!specification) throw new Error('No supported print specification.');
-      const image = join(fixture.tempDir, 'sandbox-print.png');
-      await writeFile(image, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9uQAAAAASUVORK5CYII=', 'base64'));
-      const master = await jsonCommand<{ key: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'private', '--content-type', 'image/png']);
-      const photo = await jsonCommand<{ url: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'public', '--content-type', 'image/png']);
+      const image = join(fixture.tempDir, 'sandbox-print.jpg');
+      await writeFile(image, await downloadTestImage());
+      const master = await jsonCommand<{ key: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'private', '--content-type', 'image/jpeg']);
+      const photo = await jsonCommand<{ url: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'public', '--content-type', 'image/jpeg']);
       const input = join(fixture.tempDir, 'print.json');
       const name = `Cart sandbox fulfillment ${randomUUID()}`;
       await writeFile(input, JSON.stringify({ idempotencyKey: randomUUID(), chainId: '11155111', name,
