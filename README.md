@@ -605,12 +605,17 @@ and display photos with `--access public`. Create a draft with
     "tags": [],
     "productionUploadKey": "<private upload key>",
     "images": ["<public upload URL>"],
-    "specificationId": "<supported specification ID>"
+    "specificationId": "GLOBAL-FAP-8X12"
   }
 }
 ```
 
-Get supported specifications with `rare prints specifications`. Set optional
+Get supported print products with `rare prints products list`. Read provider recommended
+artwork dimensions with `rare prints products get --id GLOBAL-FAP-8X12`. Both
+commands support `--json` and work without signing in. Products support automatic
+orientation. `fileRequirements` reports accepted file types and maximum bytes.
+Recommended pixel dimensions are guidance, not upload minimums.
+Use the selected product ID in the existing `specificationId` draft field. Set optional
 `print.sourceUniversalTokenId` to attribute a creator-owned NFT. The production
 file and specification are required for every print draft. NFT attribution does
 not transfer the NFT or configure an eligibility rule or receipt.
@@ -621,6 +626,10 @@ replacement privately, then running `rare prints drops update --id <drop-id>
 New orders use the replacement. Existing authorized and paid orders keep their
 saved production snapshots. Specification edits still require an unconfigured
 draft or a replacement print draft.
+
+Run `npm run test:print-products:e2e` with `RARE_API_BASE_URL` for a public catalog
+check against a deployment containing the product endpoints. This check requires
+no wallet and creates no drafts or orders.
 
 ### Print listing eligibility and quantity
 

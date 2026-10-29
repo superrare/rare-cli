@@ -22,8 +22,13 @@ function command(name: string): Command {
 
 export function printsCommand(): Command {
   const prints = new Command('prints').description('Create and publish print editions through Rare API');
-  prints.addCommand(command('specifications').description('List supported creator-facing paper and size choices')
-    .action(async (options: PrintOptions): Promise<void> => { print(await client(options).prints.specifications.list()); }));
+  const products = new Command('products').description('Read supported print products and recommended artwork dimensions');
+  products.addCommand(command('list').description('List available paper and size presets')
+    .action(async (options: PrintOptions): Promise<void> => { print(await client(options).prints.products.list()); }));
+  products.addCommand(command('get').description('Read a print product')
+    .requiredOption('--id <productId>', 'canonical print product ID, such as GLOBAL-FAP-8X12')
+    .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.products.get(options.id)); }));
+  prints.addCommand(products);
   prints.addCommand(command('get').description('Read a public print edition')
     .requiredOption('--id <uuid>', 'print drop ID')
     .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.drops.get(parseCommerceUuid(options.id))); }));
