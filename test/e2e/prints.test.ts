@@ -1,8 +1,10 @@
 import { createServer } from 'node:http';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { text } from 'node:stream/consumers';
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { createAuthStore } from '../../src/auth-storage.js';
 import { parseJsonStdout, runCli, withTempHome } from '../helpers/cli.js';
 
 describe('built print and shipping CLI', () => {
@@ -45,6 +47,38 @@ describe('built print and shipping CLI', () => {
       expect(human.stdout).toContain('Width inches: 12');
       expect(human.stdout).not.toContain('"paper"');
       expect(parseJsonStdout(await runCli(['--json', ...args]))).toEqual(specifications);
+    } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
+  });
+
+  it('configures a print through the scalar operation object without changing its HTTP body', async () => {
+    const dropId = '00000000-0000-4000-8000-000000000001';
+    const received: { path?: string; authorization?: string; body: unknown }[] = [];
+    const server = createServer((request, response) => {
+      void text(request).then(body => {
+        // eslint-disable-next-line functional/immutable-data -- Capture real HTTP input for the built-command assertion.
+        received.push({ path: request.url, authorization: request.headers.authorization, body: JSON.parse(body) });
+        response.writeHead(200, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ data: { id: 'configured-option' } }));
+      });
+    });
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error('Missing fixture address');
+    try {
+      await withTempHome(async temporary => {
+        const home = await realpath(temporary);
+        const apiBaseUrl = `http://127.0.0.1:${address.port}`;
+        const directory = join(home, 'auth');
+        const scope = { apiBaseUrl, authBaseUrl: `${apiBaseUrl}/auth/v2`, clientId: 'rare-sdk' };
+        const store = createAuthStore({ ...scope, backend: 'file', directory });
+        await store.withLock(async () => { await store.set({ ...scope, revision: 'print-options-session',
+          accessToken: 'print-options-access', refreshToken: 'print-options-refresh',
+          expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
+        const result = await runCli(['--json', 'prints', 'drops', 'configure', '--id', dropId, '--price-usd-cents', '2500',
+          '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory], { home });
+        expect(parseJsonStdout(result)).toEqual({ id: 'configured-option' });
+        expect(received).toEqual([{ path: `/v1/prints/drops/${dropId}/options/standard`, authorization: 'Bearer print-options-access', body: { displayPriceUsdCents: '2500' } }]);
+      });
     } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
   });
 
