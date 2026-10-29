@@ -24,8 +24,8 @@ describe('user follows through the built CLI and deployed services', () => {
     const target = privateKeyToAccount(secondKey);
     expect(owner.address.toLowerCase()).not.toBe(target.address.toLowerCase());
     const api = createRareClient({ publicClient: createPublicClient({ chain: mainnet, transport: http() }), apiBaseUrl: url.origin }).user;
-    const profile = await api.resolve({ address: target.address });
-    const own = await api.resolve({ address: owner.address });
+    const profile = await api.get({ address: target.address });
+    const own = await api.get({ address: owner.address });
     if (profile.userId === undefined || own.userId === undefined) throw new Error('Deploy user selectors and follow routes first');
     const before = await api.followers({ userId: profile.userId }, { perPage: 100 });
     expect(before.data.some(user => user.userId === own.userId)).toBe(false);
