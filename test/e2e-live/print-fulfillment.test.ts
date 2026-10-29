@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { CartCheckoutPreparation, CartCheckoutReceipt, CartOrder, EligibilityClaim, EligibilityRule } from '@rareprotocol/rare-sdk';
-import { erc20Abi, erc721Abi, getAddress, parseEventLogs, type Address, type Hex } from 'viem';
-import { cartAbi } from '@rareprotocol/rare-sdk/contracts';
+import { erc20Abi, erc721Abi, getAddress, parseEventLogs, parseUnits, type Address, type Hex } from 'viem';
+import { cartAbi, resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
 import { createCreatorVariantClient } from './helpers/cart-creator-variants.js';
 import { cleanupLiveFixture, createCartLiveFixture, jsonCommand } from './helpers/live-harness.js';
@@ -21,7 +21,16 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
   it.each(['print-only', 'mixed', 'claim'])('purchases %s through Cart and verifies fees and Prodigi acceptance', async (journey) => {
     const sandboxKey = process.env.PRODIGI_SANDBOX_API_KEY;
     if (!sandboxKey?.startsWith('test_')) throw new Error('Set PRODIGI_SANDBOX_API_KEY to a v4 sandbox key. Deploy Rare API and Pipelines with the same sandbox configuration.');
-    const fixture = await createCartLiveFixture({ buyer: true });
+    const fixture = await createCartLiveFixture({ buyer: true,
+      buyerWalletFilter: async (wallet, { chain, publicClient }) => {
+        const currency = resolveCurrency('usdc', chain);
+        const [balance, decimals] = await Promise.all([
+          publicClient.readContract({ address: currency, abi: erc20Abi, functionName: 'balanceOf', args: [wallet.address] }),
+          publicClient.readContract({ address: currency, abi: erc20Abi, functionName: 'decimals' }),
+        ]);
+        return balance >= parseUnits('50', decimals);
+      },
+    });
     let dropId: string | undefined;
     let productId: string | undefined;
     let ruleId: string | undefined;
