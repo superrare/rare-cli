@@ -88,7 +88,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@napi-rs/keyring": "2.1.0",
-    "@rareprotocol/rare-sdk": "git+https://github.com/superrare/rare-sdk.git#26d90af2ba882c46eeeb3fa70247b4483a3ec2f5",
+    "@rareprotocol/rare-sdk": "git+https://github.com/superrare/rare-sdk.git#f8b9976eb5bc2fa3127e2d9c777aa44504d2316f",
     "commander": "12.1.0",
     "viem": "2.54.6",
     "zod": "^4.4.3"
