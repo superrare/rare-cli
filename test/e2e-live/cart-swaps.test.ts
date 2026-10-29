@@ -1,8 +1,8 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { erc721Abi, parseEventLogs, zeroHash, type Hex } from 'viem';
-import { cartAbi, getCartAddress } from '@rareprotocol/rare-sdk/contracts';
+import { erc20Abi, erc721Abi, parseUnits, parseEventLogs, zeroHash, type Hex } from 'viem';
+import { cartAbi, getCartAddress, resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 import { cleanupLiveFixture, createCartLiveFixture, jsonCommand, readTokenBalance, requireBuyerFixture,
   type BuyerLiveFixture } from './helpers/live-harness.js';
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
@@ -16,7 +16,16 @@ describe.sequential('live Cart routed swaps through the generic CLI checkout', (
   let fixture: BuyerLiveFixture | undefined;
   beforeAll(async () => {
     if (process.env.RARE_API_BASE_URL === undefined) throw new Error('Cart swap live tests require RARE_API_BASE_URL.');
-    const created = requireBuyerFixture(await createCartLiveFixture({ buyer: true }));
+    const created = requireBuyerFixture(await createCartLiveFixture({ buyer: true,
+      buyerWalletFilter: async (wallet, { chain, publicClient }) => {
+        const currency = resolveCurrency('usdc', chain);
+        const [balance, decimals] = await Promise.all([
+          publicClient.readContract({ address: currency, abi: erc20Abi, functionName: 'balanceOf', args: [wallet.address] }),
+          publicClient.readContract({ address: currency, abi: erc20Abi, functionName: 'decimals' }),
+        ]);
+        return balance >= parseUnits('1', decimals);
+      },
+    }));
     fixture = created;
     if (created.chain !== 'sepolia') throw new Error('Cart swap live writes require Sepolia.');
   }, 240_000);
