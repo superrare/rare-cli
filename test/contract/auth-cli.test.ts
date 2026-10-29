@@ -78,6 +78,14 @@ class AuthService {
       this.revocations += 1;
       if (this.revokeFails) send({ error: 'temporarily_unavailable', error_description: refreshSecret }, 503);
       else { response.writeHead(200); response.end(); }
+    } else if (request.url?.startsWith('/v1/me/following?')) {
+      expect(request.headers.authorization).toBe(`Bearer ${accessSecret}`);
+      expect(new URL(request.url, this.base).searchParams.get('userId')).toBe('456');
+      expect(['POST', 'DELETE']).toContain(request.method);
+      send({ data: { following: request.method === 'POST' } });
+    } else if (request.url?.startsWith('/v1/users/followers?') || request.url?.startsWith('/v1/users/following?')) {
+      expect(new URL(request.url, this.base).searchParams.get('userId')).toBe('456');
+      send({ data: [], pagination: { page: 1, perPage: 20, total: 0, totalPages: 0 } });
     } else if (request.url === '/v1/me') {
       expect(request.headers.authorization).toBe(`Bearer ${accessSecret}`);
       if (request.method === 'PATCH') this.lastPatch = JSON.parse(await text(request));
@@ -247,6 +255,18 @@ describe.skipIf(process.platform === 'win32')('built CLI account command contrac
       await run(['auth', 'logout', '--local-only']);
       expect(service.revocations).toBe(0);
       expect(await readFile(join(home, '.rare/config.json'), 'utf8')).toBe(config);
+    });
+  });
+
+  it('uses nested SDK follow resources through the existing user commands', async () => {
+    await fixture(async (_service, _home, run) => {
+      const requestId = await start(run);
+      expect(parseJsonStdout(await run(['auth', 'login', '--resume', requestId]))).toMatchObject({ status: 'authorized' });
+      expect(parseJsonStdout(await run(['user', 'follow', '--user-id', '456']))).toEqual({ following: true });
+      for (const direction of ['followers', 'following']) {
+        expect(parseJsonStdout(await run(['user', direction, '--user-id', '456']))).toMatchObject({ data: [], pagination: { page: 1, perPage: 20 } });
+      }
+      expect(parseJsonStdout(await run(['user', 'unfollow', '--user-id', '456']))).toEqual({ following: false });
     });
   });
 
