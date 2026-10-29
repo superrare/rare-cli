@@ -624,7 +624,7 @@ not transfer the NFT or configure an eligibility rule or receipt.
 
 Use generic Cart checkout for prints. For two copies, pass `--listing 0x...listingDigest=2` together with `--saved-address-id` or `--shipping-input`. The API checks the creator's quantity limit and eligibility claims before authorizing payment. `--preview` quotes production and shipping for the selected quantity without paying or submitting a print order. These are buyer-funded charges added on top of the artwork price. Listing preparation does not call Prodigi or subtract production from seller proceeds.
 
-`--prepare-only --yes` also requests the signed checkout authorization without approving tokens or submitting payment. This reserves any required claims until the order expires. Do not combine it with `--preview`.
+`--authorize-only --yes` also requests the signed checkout authorization without approving tokens or submitting payment. This reserves any required claims until the order expires. Do not combine it with `--preview`.
 
 ### Sandbox print fulfillment E2E
 
