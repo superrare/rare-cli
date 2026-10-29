@@ -1,3 +1,4 @@
+import { downloadTestImage } from './helpers/test-image.js';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -100,11 +101,8 @@ describe('messaging authorization through the built CLI and deployed services', 
     await withMessagingActors(async (owner, member, outsider) => {
       const room = created.parse(await owner.json(['messaging', 'group', '--title', `CLI images ${randomUUID()}`]));
       const otherRoom = created.parse(await owner.json(['messaging', 'group', '--title', `CLI other images ${randomUUID()}`]));
-      const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
-      const marker = Buffer.from(randomUUID());
-      // A valid GIF comment makes this test's content-addressed object unique.
-      const bytes = Buffer.concat([gif.subarray(0, -1), Buffer.from([0x21, 0xfe, marker.length]), marker, Buffer.from([0, 0x3b])]);
-      const file = join(owner.directory, 'private.gif');
+      const bytes = await downloadTestImage();
+      const file = join(owner.directory, 'private.jpg');
       await writeFile(file, bytes);
       const uploadId = randomUUID();
       const object = `gs://${bucket}/${createHash('sha256').update(bytes).digest('hex')}`;
@@ -116,10 +114,10 @@ describe('messaging authorization through the built CLI and deployed services', 
       try {
         await owner.json(['messaging', 'invite', room.id, member.user.id]);
         await member.json(['messaging', 'accept', room.id]);
-        const upload = z.object({ uploadId: z.string().uuid(), access: z.literal('private') }).parse(await owner.json(['uploads', 'upload', file, '--access', 'private', '--content-type', 'image/gif']));
-        const image = created.parse(await owner.json(['messaging', 'attach-image', room.id, upload.uploadId, '--width', '1', '--height', '1', '--attachment-id', uploadId]));
-        expect((await member.run(['messaging', 'attach-image', room.id, upload.uploadId, '--width', '1', '--height', '1'])).code).not.toBe(0);
-        const secondImage = created.parse(await owner.json(['messaging', 'attach-image', otherRoom.id, upload.uploadId, '--width', '1', '--height', '1', '--attachment-id', randomUUID()]));
+        const upload = z.object({ uploadId: z.string().uuid(), access: z.literal('private') }).parse(await owner.json(['uploads', 'upload', file, '--access', 'private', '--content-type', 'image/jpeg']));
+        const image = created.parse(await owner.json(['messaging', 'attach-image', room.id, upload.uploadId, '--width', '1200', '--height', '1600', '--attachment-id', uploadId]));
+        expect((await member.run(['messaging', 'attach-image', room.id, upload.uploadId, '--width', '1200', '--height', '1600'])).code).not.toBe(0);
+        const secondImage = created.parse(await owner.json(['messaging', 'attach-image', otherRoom.id, upload.uploadId, '--width', '1200', '--height', '1600', '--attachment-id', randomUUID()]));
         expect(await download(owner, secondImage.id)).toEqual(bytes);
         expect(await download(owner, image.id)).toEqual(bytes);
         expect((await member.run(['messaging', 'download-image', image.id, '--output', join(member.directory, 'denied.png')])).code).not.toBe(0);

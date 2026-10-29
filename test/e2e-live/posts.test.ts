@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { downloadTestImage } from './helpers/test-image.js';
 import { execFileSync } from 'node:child_process';
 import { createRareClient } from '@rareprotocol/rare-sdk';
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
@@ -104,12 +104,10 @@ describe('uploaded post images through the built CLI', () => {
     if (!isPrivateKeyString(privateKey)) throw new Error('Invalid test wallet');
     const signer = privateKeyToAccount(privateKey);
     const fixture = createRareClient({ apiBaseUrl: apiUrl.origin });
-    const gif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
-    const comment = Buffer.from(randomBytes(16).toString('hex'));
-    const bytes = Buffer.concat([gif.subarray(0, -1), Buffer.from([0x21, 0xfe, comment.length]), comment, Buffer.from([0, 0x3b])]);
+    const bytes = await downloadTestImage();
     execFileSync('gcloud', ['--project=superrare-dev', 'storage', 'buckets', 'describe', 'gs://rare-api-public-upload-dev', '--format=value(name)'], { stdio: 'pipe' });
     await fixture.auth.loginWithWallet({ address: signer.address, chainId: 1, signMessage: message => signer.signMessage({ message }) });
-    const image = await fixture.upload(bytes, 'cli-post.gif', { contentType: 'image/gif' }).finally(() => fixture.auth.logout());
+    const image = await fixture.upload(bytes, 'cli-post.jpg', { contentType: 'image/jpeg' }).finally(() => fixture.auth.logout());
     try {
       await withTempHome(async first => withTempHome(async second => {
         const owner = await setup(first, privateKey, apiUrl.origin);

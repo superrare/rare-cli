@@ -1,3 +1,4 @@
+import { downloadTestImage } from './helpers/test-image.js';
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -191,8 +192,8 @@ describe('built CLI against deployed account services', () => {
         const publicProfile = parseJsonStdout(await run(['user', 'get', '--username', own.username]));
         expect(publicProfile.username).toBe(own.username);
         expect(JSON.stringify(publicProfile)).not.toContain(email);
-        const avatarFile = join(directory, 'avatar.png');
-        await writeFile(avatarFile, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9uQAAAAASUVORK5CYII=', 'base64'));
+        const avatarFile = join(directory, 'avatar.jpg');
+        await writeFile(avatarFile, await downloadTestImage({ width: 512, height: 512 }));
         const avatar = parseJsonStdout<{ profile: { avatar: string } }>(await run(['profile', 'avatar', 'upload', '--file', avatarFile]));
         expect(avatar.profile.avatar).toMatch(/^https:\/\//u);
         expect(parseJsonStdout(await run(['profile', 'get']))).toMatchObject({ profile: { avatar: avatar.profile.avatar } });
