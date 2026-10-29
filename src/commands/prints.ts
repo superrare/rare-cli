@@ -7,7 +7,8 @@ import { accountCommand, storageOptions, type AccountCommandOptions } from '../a
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
 import { createAuthStore } from '../auth-storage.js';
-import { outputJson } from '../output.js';
+import { output } from '../output.js';
+import { formatPrintOutput } from './print-output-core.js';
 import { addChainOptions, type ChainOptions } from './options.js';
 import { parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, printListingInput } from './print-input-core.js';
 
@@ -74,13 +75,13 @@ export function printsCommand(): Command {
       print(await client(options).prints.listings.prepare(printListingInput.parse(input)));
     }));
   listings.addCommand(command('publish').requiredOption('--input <path>', 'JSON listing terms to prepare, sign and publish, including optional eligibilityRuleId and maxQuantityPerCheckout')
-    .option('--yes', 'authorize signing and publishing')
+    .option('--yes', 'proceed through all required signing and publication steps')
     .action(async (options: InputOptions): Promise<void> => {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
       const parsed = printListingInput.parse(input);
       const rare = client(options, true);
       const preparation = await rare.prints.listings.prepare(parsed);
-      print(await rare.prints.listings.signAndPublish(preparation));
+      print(await rare.prints.listings.publish(preparation));
     }));
   prints.addCommand(listings);
   return prints;
@@ -96,5 +97,7 @@ function client(options: PrintOptions, signing = false): RareClient {
 }
 
 function print(value: unknown): void {
-  outputJson(value);
+  output(value, () => {
+    for (const line of formatPrintOutput(value)) console.log(line);
+  });
 }

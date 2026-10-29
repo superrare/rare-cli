@@ -90,7 +90,7 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
       const claims = (): Promise<EligibilityClaim[]> => jsonCommand<{ data: EligibilityClaim[] }>(buyerHome, ['cart', 'purchase-eligibility', 'claims', 'list', '--rule-id', ruleId ?? '', '--per-page', '100']).then(page => page.data);
       if (journey === 'claim' && source) {
         expect(await claims()).toEqual([]);
-        await expect(jsonCommand(buyerHome, [...printCheckout, '--prepare-only', '--yes'])).rejects.toThrow(/Status: 409/u);
+        await expect(jsonCommand(buyerHome, [...printCheckout, '--authorize-only', '--yes'])).rejects.toThrow(/Status: 409/u);
         const nftCheckout = ['cart', 'checkout', '--listing', source.listingDigest, '--payment-currency', 'usdc', '--chain', fixture.chain];
         const nftPreview = await jsonCommand<{ preparation: CartCheckoutPreparation }>(buyerHome, [...nftCheckout, '--preview']);
         const nftPurchase = await jsonCommand<{ txHash: Hex; orderId: Hex }>(buyerHome, [...nftCheckout, '--yes'], 300_000);
@@ -117,7 +117,7 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
       if (journey === 'claim') {
         await expect.poll(claims, { timeout: 180_000, interval: 2_000 }).toMatchObject([{ status: 'CONSUMED' }]);
         expect(await claims()).toHaveLength(1);
-        await expect(jsonCommand(buyerHome, [...printCheckout, '--prepare-only', '--yes'])).rejects.toThrow(/Status: 409/u);
+        await expect(jsonCommand(buyerHome, [...printCheckout, '--authorize-only', '--yes'])).rejects.toThrow(/Status: 409/u);
       }
       const readOrder = (): Promise<CartOrder> => jsonCommand<CartOrder>(buyerHome, ['cart', 'orders', 'get', '--id', purchase.orderId]);
       await expect.poll(async () => (await readOrder()).fulfillments[0]?.providerOrderId, { timeout: 240_000, interval: 3_000 }).toMatch(/^ord_/u);

@@ -66,7 +66,7 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
           expect(loaded.some(item => item.id === addressId)).toBe(true);
           const checkout = await jsonCommand<{ preparation: { paymentAmount: string; intent: { items: { quantity: string }[] }; breakdown: { displayPrice: string; production: string; shipping: string; networkFee: string; total: string } }; preparedPurchase: { executePurchase: { lines: { listingDigest: string; quantity: string }[]; platformSignature: string } } }>(fixture.sellerHome, [
             'cart', 'checkout', '--listing', `${listing.listingDigest}=2`, '--payment-currency', 'usdc',
-            '--saved-address-id', addressId, '--chain', fixture.chain, '--prepare-only', '--yes',
+            '--saved-address-id', addressId, '--chain', fixture.chain, '--authorize-only', '--yes',
           ]);
           expect(checkout.preparation.intent.items[0]?.quantity).toBe('2');
           expect(checkout.preparation.breakdown.displayPrice).toBe('200000000');
@@ -104,7 +104,7 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
               actions: { lineIndex: string; quantity: string }[] } } }>(fixture.sellerHome, [
             'cart', 'checkout', '--listing', nftDigest, '--listing', `${listing.listingDigest}=2`, '--listing', `${editionDigest}=2`,
             '--output-currency', 'rare', '--output-amount', '0.01', '--payment-currency', 'usdc',
-            '--saved-address-id', addressId, '--chain', fixture.chain, '--prepare-only', '--yes',
+            '--saved-address-id', addressId, '--chain', fixture.chain, '--authorize-only', '--yes',
           ], 300_000);
           expect(mixed.preparation.intent.items).toHaveLength(4);
           const mixedLines = mixed.preparedPurchase.executePurchase.lines;
@@ -149,7 +149,7 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
             ]));
             await expect(jsonCommand(fixture.sellerHome, [
               'cart', 'checkout', '--listing', gatedListing.listingDigest, '--payment-currency', 'usdc',
-              '--saved-address-id', addressId, '--chain', fixture.chain, '--prepare-only', '--yes',
+              '--saved-address-id', addressId, '--chain', fixture.chain, '--authorize-only', '--yes',
             ])).rejects.toThrow(/"Status: 409"/u);
           } finally {
             await jsonCommand(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'disable', '--rule-id', rule.id]);
