@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { cartFulfillmentKinds, createRareClient } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress, rareErc1155Abi, tokenAbi } from '@rareprotocol/rare-sdk/contracts';
-import { parseEventLogs, type Address, type Hex } from 'viem';
+import { erc721Abi, parseEventLogs, type Address, type Hex } from 'viem';
 import { createCreatorMintVariantSku, createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
 import {
   cleanupLiveFixture,
@@ -217,6 +217,9 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
     expect(purchase.approvalTxHash).toBeNull();
     const event = await expectFulfillmentKind(live, purchase, cartFulfillmentKinds.erc721MintTo);
     expect(event.tokenId).toBe(1n);
+    await expect(live.publicClient.readContract({
+      address: erc721.contract, abi: erc721Abi, functionName: 'tokenURI', args: [event.tokenId],
+    })).resolves.toBe(`ipfs://${nftFixtureManifest.metadataCid}/lazy/${event.tokenId}.json`);
     await expect(live.publicClient.readContract({
       address: erc721.contract, abi: tokenAbi, functionName: 'ownerOf', args: [event.tokenId],
     })).resolves.toBe(live.buyerAddress);
