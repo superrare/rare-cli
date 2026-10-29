@@ -15,9 +15,9 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
     const addressId = randomUUID();
     try {
       if (fixture.chain !== 'sepolia') throw new Error('Print tooling live E2E requires Sepolia.');
-      const specifications = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['prints', 'specifications']);
-      const specification = specifications[0];
-      if (specification === undefined) throw new Error('Print tooling requires at least one supported specification.');
+      const products = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['prints', 'products', 'list']);
+      const product = products.find(item => item.id === 'GLOBAL-FAP-8X12');
+      if (product === undefined) throw new Error('Print tooling requires at least one supported print product.');
       const image = join(fixture.tempDir, 'print.jpg');
       await writeFile(image, await downloadTestImage());
       const master = await jsonCommand<{ access: string; key: string; url?: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'private', '--content-type', 'image/jpeg']);
@@ -29,7 +29,7 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
       const file = join(fixture.tempDir, 'print.json');
       await writeFile(file, JSON.stringify({ idempotencyKey: randomUUID(), chainId: '11155111', name,
         print: { name, description: 'CLI live draft', tags: ['test'], productionUploadKey: master.key,
-          images: [media.url], specificationId: specification.id } }));
+          images: [media.url], specificationId: product.id } }));
       const drop = await jsonCommand<{ id: string }>(fixture.sellerHome, ['prints', 'drops', 'create', '--input', file]);
       try {
         expect(await jsonCommand(fixture.sellerHome, ['prints', 'drops', 'get', '--id', drop.id])).toMatchObject({ id: drop.id });

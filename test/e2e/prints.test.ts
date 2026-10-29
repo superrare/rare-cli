@@ -11,7 +11,7 @@ describe('built print and shipping CLI', () => {
   it('exposes creator print, private upload and address-book commands', async () => {
     await withTempHome(async home => {
       for (const path of [
-        ['prints', 'specifications'], ['prints', 'get'], ['prints', 'activity'], ['prints', 'releases'],
+        ['prints', 'products', 'list'], ['prints', 'products', 'get'], ['prints', 'get'], ['prints', 'activity'], ['prints', 'releases'],
         ['prints', 'drops', 'create'], ['prints', 'drops', 'list'], ['prints', 'drops', 'get'],
         ['prints', 'drops', 'archive'], ['prints', 'drops', 'configure'], ['prints', 'drops', 'update'],
         ['prints', 'listing', 'prepare'], ['prints', 'listing', 'publish'],
@@ -29,24 +29,46 @@ describe('built print and shipping CLI', () => {
     });
   });
 
-  it('provides human-readable print specifications and stable JSON output', async () => {
-    const specifications = [{ id: 'matte-12-16', paper: 'Matte', size: '12 × 16 in', widthInches: 12, heightInches: 16 }];
+  it('lists and gets public products in human and JSON output without signing in', async () => {
+    const product = { id: 'GLOBAL-FAP-8X12', description: 'Enhanced matte art print', paper: 'Enhanced matte art paper · 200gsm',
+      size: '8 × 12 in', widthInches: 8, heightInches: 12, sizeCategory: 'small', format: 'rectangular', automaticOrientation: true,
+      printAreas: [{ name: 'default', required: true, recommendedWidthPixels: 2400, recommendedHeightPixels: 3600 }],
+      fileRequirements: { acceptedContentTypes: ['image/jpeg', 'image/png'], maximumBytes: 250 * 1024 * 1024 } };
+    const requests: { path?: string; authorization?: string }[] = [];
     const server = createServer((request, response) => {
-      expect(request.url).toBe('/v1/prints/specifications');
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ data: specifications }));
+      // eslint-disable-next-line functional/immutable-data -- Record real built CLI HTTP requests.
+      requests.push({ path: request.url, authorization: request.headers.authorization });
+      response.setHeader('Content-Type', 'application/json');
+      if (request.url === '/v1/prints/products') response.end(JSON.stringify({ data: [product] }));
+      else if (request.url === `/v1/prints/products/${product.id}`) response.end(JSON.stringify({ data: product }));
+      else { response.writeHead(404); response.end(JSON.stringify({ error: 'not_found', message: 'Unsupported print product' })); }
     });
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
     const address = server.address();
     if (address === null || typeof address === 'string') throw new Error('Missing fixture address');
     try {
-      const args = ['prints', 'specifications', '--api-url', `http://127.0.0.1:${address.port}`, '--chain', 'sepolia'];
-      const human = await runCli(args);
-      expect(human.code).toBe(0);
-      expect(human.stdout).toContain('Paper: Matte');
-      expect(human.stdout).toContain('Width inches: 12');
-      expect(human.stdout).not.toContain('"paper"');
-      expect(parseJsonStdout(await runCli(['--json', ...args]))).toEqual(specifications);
+      await withTempHome(async home => {
+        const options = ['--api-url', `http://127.0.0.1:${address.port}`, '--chain', 'sepolia'];
+        for (const command of [['list'], ['get', '--id', product.id]]) {
+          const args = ['prints', 'products', ...command, ...options];
+          const human = await runCli(args, { home });
+          expect(human.code).toBe(0);
+          expect(human.stdout).toContain('Paper: Enhanced matte art paper');
+          expect(human.stdout).toContain('Recommended width pixels: 2400');
+          expect(human.stdout).toContain('Maximum bytes: 262144000');
+          expect(human.stdout).not.toContain('"paper"');
+          expect(parseJsonStdout(await runCli(['--json', ...args], { home }))).toEqual(command[0] === 'list' ? [product] : product);
+        }
+        const missing = await runCli(['--json', 'prints', 'products', 'get', '--id', 'unsupported', ...options], { home });
+        expect(missing.code).toBe(1);
+        expect(missing.stderr).toContain('404');
+        const old = await runCli(['prints', 'specifications'], { home });
+        expect(old.code).not.toBe(0);
+        expect(requests.map(request => request.path)).toEqual([
+          '/v1/prints/products', '/v1/prints/products', `/v1/prints/products/${product.id}`, `/v1/prints/products/${product.id}`, '/v1/prints/products/unsupported',
+        ]);
+        expect(requests.every(request => request.authorization === undefined)).toBe(true);
+      });
     } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
   });
 

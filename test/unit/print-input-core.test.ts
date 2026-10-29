@@ -4,7 +4,7 @@ import { printDropInput, printListingInput } from '../../src/commands/print-inpu
 const draft = {
   idempotencyKey: '00000000-0000-4000-8000-000000000001', chainId: '11155111', name: 'Print edition',
   print: { name: 'Print edition', description: 'Archival print', tags: [],
-    productionUploadKey: 'a'.repeat(64), images: ['https://example.com/preview.png'], specificationId: 'archival-a4' },
+    productionUploadKey: 'a'.repeat(64), images: ['https://example.com/preview.png'], specificationId: 'GLOBAL-FAP-8X12' },
 };
 
 describe('print draft input', () => {
