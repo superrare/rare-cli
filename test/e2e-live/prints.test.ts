@@ -64,7 +64,7 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
           expect(saved.id).toBe(addressId);
           const loaded = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['shipping', 'list']);
           expect(loaded.some(item => item.id === addressId)).toBe(true);
-          const checkout = await jsonCommand<{ preparation: { paymentAmount: string; intent: { items: { quantity: string }[] }; breakdown: { displayPrice: string; production: string; shipping: string; networkFee: string; total: string } }; preparedPurchase: { executePurchase: { lines: { listingDigest: string; quantity: string }[]; platformSignature: string } } }>(fixture.sellerHome, [
+          const checkout = await jsonCommand<{ preparation: { paymentAmount: string; intent: { items: { quantity: string }[] }; breakdown: { displayPrice: string; production: string; shipping: string; networkFee: string; total: string } }; preparedPurchase: { executePurchase: { order: { orderId: string }; lines: { listingDigest: string; quantity: string }[]; platformSignature: string } } }>(fixture.sellerHome, [
             'cart', 'checkout', '--listing', `${listing.listingDigest}=2`, '--payment-currency', 'usdc',
             '--saved-address-id', addressId, '--chain', fixture.chain, '--authorize-only', '--yes',
           ]);
@@ -77,6 +77,30 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
           expect(checkout.preparation.breakdown.total).toBe(checkout.preparation.paymentAmount);
           expect(checkout.preparedPurchase.executePurchase.lines.find(line => line.listingDigest === listing.listingDigest)?.quantity).toBe('2');
           expect(checkout.preparedPurchase.executePurchase.platformSignature).not.toBe('0x');
+          const existingOrderId = checkout.preparedPurchase.executePurchase.order.orderId;
+          const existingOrder = await jsonCommand<CartOrder>(fixture.sellerHome, ['cart', 'orders', 'get', '--id', existingOrderId]);
+          const replacementImage = join(fixture.tempDir, 'replacement-production.png');
+          await writeFile(replacementImage, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jio8AAAAASUVORK5CYII=', 'base64'));
+          const replacement = await jsonCommand<{ access: string; key: string }>(fixture.sellerHome,
+            ['uploads', 'upload', replacementImage, '--access', 'private', '--content-type', 'image/png']);
+          expect(replacement.key).not.toBe(master.key);
+          const replacementPatch = join(fixture.tempDir, 'replacement-master.json');
+          await writeFile(replacementPatch, JSON.stringify({ productionUploadKey: replacement.key }));
+          expect(await jsonCommand(fixture.sellerHome, ['prints', 'drops', 'update', '--id', drop.id, '--input', replacementPatch]))
+            .toMatchObject({ id: drop.id, status: 'PUBLISHED', metadata: { productionUploadKey: replacement.key } });
+          expect(await jsonCommand(fixture.sellerHome, ['prints', 'drops', 'get', '--id', drop.id]))
+            .toMatchObject({ metadata: { productionUploadKey: replacement.key } });
+          const publicAfterReplacement = await jsonCommand<{ metadata: Record<string, unknown> }>(fixture.sellerHome,
+            ['prints', 'get', '--id', drop.id]);
+          expect(publicAfterReplacement.metadata).not.toHaveProperty('productionUploadKey');
+          const futureCheckout = await jsonCommand<{ preparedPurchase: { executePurchase: { order: { orderId: string } } } }>(fixture.sellerHome,
+            ['cart', 'checkout', '--listing', listing.listingDigest, '--payment-currency', 'usdc', '--saved-address-id', addressId,
+              '--chain', fixture.chain, '--authorize-only', '--yes']);
+          expect(futureCheckout.preparedPurchase.executePurchase.order.orderId).not.toBe(existingOrderId);
+          // Production-file references stay private; backend DB coverage asserts old/new snapshots.
+          expect(await jsonCommand<CartOrder>(fixture.sellerHome, ['cart', 'orders', 'get', '--id', existingOrderId]))
+            .toMatchObject({ status: existingOrder.status, items: existingOrder.items });
+
           const mixedNft = await deployErc721Collection(fixture, '1');
           const nft = await mintToken(fixture, mixedNft.contract);
           const mixedEdition = await jsonCommand<{ contract: Address }>(fixture.sellerHome, [

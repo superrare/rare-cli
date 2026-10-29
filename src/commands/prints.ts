@@ -45,7 +45,7 @@ export function printsCommand(): Command {
       print(await client(options).prints.drops.create(printDropInput.parse(input)));
     }));
   drops.addCommand(command('update').requiredOption('--id <uuid>', 'owned drop ID')
-    .requiredOption('--input <path>', 'JSON patch; published production changes require a new draft')
+    .requiredOption('--input <path>', 'JSON patch; replace productionUploadKey even after publication; specification changes require an unconfigured draft')
     .action(async (options: InputOptions & { id: string }): Promise<void> => {
       const id = parseCommerceUuid(options.id);
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));

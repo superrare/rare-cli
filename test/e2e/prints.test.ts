@@ -82,6 +82,40 @@ describe('built print and shipping CLI', () => {
     } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
   });
 
+  it('passes an authenticated replacement master update through the built CLI', async () => {
+    const dropId = '00000000-0000-4000-8000-000000000001';
+    const replacementKey = 'b'.repeat(64);
+    const received: { method?: string; path?: string; authorization?: string; body: unknown }[] = [];
+    const server = createServer((request, response) => {
+      void text(request).then(body => {
+        // eslint-disable-next-line functional/immutable-data -- Record actual HTTP input for the built-command contract.
+        received.push({ method: request.method, path: request.url, authorization: request.headers.authorization, body: JSON.parse(body) });
+        response.writeHead(200, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ data: { id: dropId, status: 'PUBLISHED', metadata: { productionUploadKey: replacementKey } } }));
+      });
+    });
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error('Missing fixture address');
+    try {
+      await withTempHome(async temporary => {
+        const home = await realpath(temporary);
+        const apiBaseUrl = `http://127.0.0.1:${address.port}`;
+        const directory = join(home, 'auth');
+        const scope = { apiBaseUrl, authBaseUrl: `${apiBaseUrl}/auth/v2`, clientId: 'rare-sdk' };
+        const store = createAuthStore({ ...scope, backend: 'file', directory });
+        await store.withLock(async () => { await store.set({ ...scope, revision: 'replace-master-session', accessToken: 'replace-master-access',
+          refreshToken: 'replace-master-refresh', expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
+        const patch = join(home, 'replacement.json');
+        await writeFile(patch, JSON.stringify({ productionUploadKey: replacementKey }));
+        const result = await runCli(['--json', 'prints', 'drops', 'update', '--id', dropId, '--input', patch,
+          '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory], { home });
+        expect(parseJsonStdout(result)).toEqual({ id: dropId, status: 'PUBLISHED', metadata: { productionUploadKey: replacementKey } });
+        expect(received).toEqual([{ method: 'PATCH', path: `/v1/prints/drops/${dropId}`, authorization: 'Bearer replace-master-access', body: { productionUploadKey: replacementKey } }]);
+      });
+    } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
+  });
+
   it('rejects public production URLs and malformed shipping input before authentication', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'rare-print-input-'));
     try {
