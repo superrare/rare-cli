@@ -43,7 +43,7 @@ describe('built Cart CLI', () => {
       const checkoutHelp = await runCli(['cart', 'checkout', '--help'], { home });
       expect(checkoutHelp.stdout).toContain('--listing <listing-digest[=quantity]>');
       expect(checkoutHelp.stdout).toContain('--payment-currency <currency>');
-      expect(checkoutHelp.stdout).toContain('--prepare-only');
+      expect(checkoutHelp.stdout).toContain('--authorize-only');
       expect(checkoutHelp.stdout).toContain('--input <path>');
     });
   });
@@ -156,9 +156,9 @@ describe('built Cart CLI', () => {
 
   it('rejects combining preview with checkout authorization before reading wallet credentials', async () => {
     const result = await runCli(['--json', 'cart', 'checkout', '--listing', listingDigest,
-      '--payment-currency', 'eth', '--preview', '--prepare-only', '--yes']);
+      '--payment-currency', 'eth', '--preview', '--authorize-only', '--yes']);
     expect(result.code).toBe(1);
-    expect(result.stderr).toContain('Use either --preview or --prepare-only, not both.');
+    expect(result.stderr).toContain('Use either --preview or --authorize-only, not both.');
   });
 
   it('authorizes checkout without submitting payment or requiring a wallet signer', async () => {
@@ -172,9 +172,9 @@ describe('built Cart CLI', () => {
           accessToken: 'cart-prepare-access', refreshToken: 'cart-prepare-refresh',
           expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
         const result = await runCli(['--json', 'cart', 'checkout', '--listing', `${listingDigest}=2`,
-          '--payment-currency', 'eth', '--recipient', recipient, '--prepare-only', '--yes',
+          '--payment-currency', 'eth', '--recipient', recipient, '--authorize-only', '--yes',
           '--chain', 'sepolia', '--api-url', baseUrl, '--storage', 'file', '--auth-directory', directory], { home });
-        expect(parseJsonStdout(result)).toMatchObject({ prepareOnly: true,
+        expect(parseJsonStdout(result)).toMatchObject({ authorizeOnly: true,
           preparedPurchase: { executePurchase: { order: { orderId: hash } } } });
         expect(await preparationRequest).toMatchObject({ pathname: '/v1/cart/checkout/prepare',
           authorization: 'Bearer cart-prepare-access', body: { preparationReference: 'cart-checkout-fixture' } });

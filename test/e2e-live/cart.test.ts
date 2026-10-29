@@ -164,7 +164,7 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
       expect(created.publishedRoot.seller.toLowerCase()).toBe(fixture.sellerAddress.toLowerCase());
       expect(created.signedArtifact.signature).toMatch(/^0x[0-9a-fA-F]+$/);
       expect(created.signedArtifact.entries).toHaveLength(3);
-      await expect(rare.cart.approval.status(collection.contract, fixture.sellerAddress)).resolves.toBe(true);
+      await expect(rare.cart.approval.status({ contract: collection.contract, owner: fixture.sellerAddress })).resolves.toBe(true);
       await pollForPublishedListings(rare, fixture.sellerAddress, created.listingDigests);
       const nonceBeforeInvalidation = await fixture.publicClient.readContract({
         address: getCartAddress(fixture.chain),
@@ -498,15 +498,15 @@ describeLive('live secondary-sale Cart royalties', () => {
       })).resolves.toBe(secondarySeller.sellerAddress);
 
       const approval = await step('approve Cart for secondary royalty listing', () =>
-        secondarySellerRare.cart.approval.approve(collection.contract));
+        secondarySellerRare.cart.approval.approve({ contract: collection.contract }));
       if (approval.txHash !== undefined) expectTx({
         txHash: approval.txHash,
         blockNumber: approval.receipt!.blockNumber.toString(),
       });
-      await expect(secondarySellerRare.cart.approval.status(
-        collection.contract,
-        secondarySeller.sellerAddress,
-      )).resolves.toBe(true);
+      await expect(secondarySellerRare.cart.approval.status({
+        contract: collection.contract,
+        owner: secondarySeller.sellerAddress,
+      })).resolves.toBe(true);
       const listingDigest = await publishSingleCartListing({
         fixture: secondarySeller,
         rare: secondarySellerRare,
@@ -628,10 +628,10 @@ async function publishSingleCartListing(params: {
       'cart', 'listing', 'create', '--input', inputPath, '--chain', params.fixture.chain,
     ], 240_000));
   expect(created.listingDigests).toHaveLength(1);
-  await expect(params.rare.cart.approval.status(
-    params.tokenContract,
-    params.fixture.sellerAddress,
-  )).resolves.toBe(true);
+  await expect(params.rare.cart.approval.status({
+    contract: params.tokenContract,
+    owner: params.fixture.sellerAddress,
+  })).resolves.toBe(true);
   await pollForPublishedListings(params.rare, params.fixture.sellerAddress, created.listingDigests);
   return created.listingDigests[0]!;
 }

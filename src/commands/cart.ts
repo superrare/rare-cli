@@ -50,7 +50,7 @@ type CartCheckoutOptions = ChainOptions & AccountCommandOptions & {
   paymentCurrency?: string;
   recipient?: string;
   preview?: boolean;
-  prepareOnly?: boolean;
+  authorizeOnly?: boolean;
   yes?: boolean;
 };
 
@@ -215,10 +215,10 @@ function cartCheckoutCommand(swap = false): Command {
     .requiredOption('--payment-currency <currency>', 'payment currency: eth, usdc, rare, or ERC-20 address')
     .option('--recipient <address>', 'fulfillment recipient (defaults to the configured wallet)')
     .option('--preview', 'show the API quote and SDK preparation without signing, approving, or submitting')
-    .option('--prepare-only', 'reserve and authorize checkout without approving tokens or submitting payment; claims remain reserved until expiry')
+    .option('--authorize-only', 'reserve and authorize checkout without approving tokens or submitting payment; claims remain reserved until expiry')
     .option('--yes', 'approve payment currency if needed and skip transaction confirmation')
     .action(async (opts: CartCheckoutOptions): Promise<void> => {
-      if (opts.preview === true && opts.prepareOnly === true) throw new Error('Use either --preview or --prepare-only, not both.');
+      if (opts.preview === true && opts.authorizeOnly === true) throw new Error('Use either --preview or --authorize-only, not both.');
       if (opts.input !== undefined && (opts.listing.length > 0 || opts.outputCurrency !== undefined || opts.inputAmount !== undefined || opts.outputAmount !== undefined)) throw new Error('Use --input alone, or listing/swap shortcuts, not both.');
       const hasSwap = opts.outputCurrency !== undefined || opts.inputAmount !== undefined || opts.outputAmount !== undefined;
       if ((swap || hasSwap) && (opts.outputCurrency === undefined || (opts.inputAmount === undefined) === (opts.outputAmount === undefined))) throw new Error('A swap requires --output-currency and exactly one of --input-amount or --output-amount.');
@@ -236,7 +236,7 @@ function cartCheckoutCommand(swap = false): Command {
         ] })));
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
-      const wallet = opts.preview === true || opts.prepareOnly === true ? undefined : getWalletClient(chain);
+      const wallet = opts.preview === true || opts.authorizeOnly === true ? undefined : getWalletClient(chain);
       const recipient = configuredRecipient ?? wallet?.account.address ?? getConfiguredAccountAddress(chain);
       if (recipient === undefined) {
         throw new Error(`rare cart checkout requires --recipient or a configured account for "${chain}".`);
@@ -283,9 +283,9 @@ function cartCheckoutCommand(swap = false): Command {
         return;
       }
 
-      if (opts.prepareOnly === true) {
+      if (opts.authorizeOnly === true) {
         const preparedPurchase = await rare.cart.checkout.authorize(preparation);
-        output({ prepareOnly: true, preparation, preparedPurchase }, () => {
+        output({ authorizeOnly: true, preparation, preparedPurchase }, () => {
           console.log(`Checkout authorized: ${preparedPurchase.executePurchase.order.orderId}`);
           console.log('No payment was submitted. Any eligibility claims remain reserved until the order expires.');
         });
