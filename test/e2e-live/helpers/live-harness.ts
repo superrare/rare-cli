@@ -1,3 +1,4 @@
+import { nftFixtureManifest } from './nft-fixture-manifest.js';
 import { expect } from 'vitest';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -33,7 +34,7 @@ import {
 loadDotEnv();
 
 export const missingEnv = missingLiveEnv();
-export const E2E_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/metadata.json';
+export const E2E_TOKEN_URI = `ipfs://${nftFixtureManifest.metadataCid}/metadata.json`;
 export const LIQUID_CURVES = [
   {
     tickLower: -60_000,
