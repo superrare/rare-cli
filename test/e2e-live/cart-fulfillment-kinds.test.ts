@@ -1,3 +1,4 @@
+import { nftFixtureManifest } from './helpers/nft-fixture-manifest.js';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -197,7 +198,7 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
     const cart = getCartAddress(live.chain);
     const prepared = await step('prepare lazy ERC-721 Cart inventory', () =>
       jsonCommand<{ minter: Address; tokenCount: string } & TxResult>(live.sellerHome, [
-        'collection', 'prepare-lazy-mint', '--contract', erc721.contract, '--base-uri', E2E_TOKEN_URI,
+        'collection', 'prepare-lazy-mint', '--contract', erc721.contract, '--base-uri', `ipfs://${nftFixtureManifest.metadataCid}/lazy`,
         '--amount', '1', '--minter', cart, '--chain', live.chain,
       ], 300_000));
     expectTx(prepared);
