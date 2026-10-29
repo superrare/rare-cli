@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createRareClient, type CartOrder, type RareClient } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress, resolveCurrency, viemChains } from '@rareprotocol/rare-sdk/contracts';
-import { createWalletClient, erc20Abi, erc721Abi, getAddress, http, toHex, parseEther, parseEventLogs, parseUnits, zeroAddress, type Address, type Hex } from 'viem';
+import { createWalletClient, erc20Abi, erc721Abi, getAddress, http, parseEther, parseEventLogs, parseUnits, zeroAddress, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import {
   cleanupLiveFixture,
@@ -236,7 +236,7 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
     expect(history.items?.every(item => item.fulfillmentStatus === 'FULFILLED')).toBe(true);
     expect(history.fulfillments).toEqual([]);
     const page = await jsonCommand<{ data: { id: string }[] }>(fixture.buyerHome,
-      ['cart', 'orders', 'list', '--after', toHex(BigInt(purchase.orderId) - 1n, { size: 32 }), '--take', '1']);
+      ['cart', 'orders', 'list', '--page', '1', '--per-page', '1']);
     expect(page.data[0]?.id).toBe(purchase.orderId);
 
     expect(purchase.payer.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
