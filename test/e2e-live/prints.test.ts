@@ -1,3 +1,4 @@
+import { downloadTestImage } from './helpers/test-image.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -17,12 +18,12 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
       const specifications = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['prints', 'specifications']);
       const specification = specifications[0];
       if (specification === undefined) throw new Error('Print tooling requires at least one supported specification.');
-      const image = join(fixture.tempDir, 'print.png');
-      await writeFile(image, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9uQAAAAASUVORK5CYII=', 'base64'));
-      const master = await jsonCommand<{ access: string; key: string; url?: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'private', '--content-type', 'image/png']);
+      const image = join(fixture.tempDir, 'print.jpg');
+      await writeFile(image, await downloadTestImage());
+      const master = await jsonCommand<{ access: string; key: string; url?: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'private', '--content-type', 'image/jpeg']);
       expect(master.access).toBe('private');
       expect(master.url).toBeUndefined();
-      const media = await jsonCommand<{ access: string; url: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'public', '--content-type', 'image/png']);
+      const media = await jsonCommand<{ access: string; url: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'public', '--content-type', 'image/jpeg']);
       expect(media.access).toBe('public');
       const name = `CLI print ${randomUUID()}`;
       const file = join(fixture.tempDir, 'print.json');
@@ -79,10 +80,10 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
           expect(checkout.preparedPurchase.executePurchase.platformSignature).not.toBe('0x');
           const existingOrderId = checkout.preparedPurchase.executePurchase.order.orderId;
           const existingOrder = await jsonCommand<CartOrder>(fixture.sellerHome, ['cart', 'orders', 'get', '--id', existingOrderId]);
-          const replacementImage = join(fixture.tempDir, 'replacement-production.png');
-          await writeFile(replacementImage, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jio8AAAAASUVORK5CYII=', 'base64'));
+          const replacementImage = join(fixture.tempDir, 'replacement-production.jpg');
+          await writeFile(replacementImage, await downloadTestImage());
           const replacement = await jsonCommand<{ access: string; key: string }>(fixture.sellerHome,
-            ['uploads', 'upload', replacementImage, '--access', 'private', '--content-type', 'image/png']);
+            ['uploads', 'upload', replacementImage, '--access', 'private', '--content-type', 'image/jpeg']);
           expect(replacement.key).not.toBe(master.key);
           const replacementPatch = join(fixture.tempDir, 'replacement-master.json');
           await writeFile(replacementPatch, JSON.stringify({ productionUploadKey: replacement.key }));

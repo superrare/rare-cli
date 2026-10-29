@@ -1442,3 +1442,5 @@ conversation and returns an attachment ID for `messaging send --attachment`.
 Attach within 24 hours of upload completion. Subsequent reads use messaging
 permissions. The SDK browser client persists managed login across reloads; the CLI
 continues using its protected persistent credential store.
+
+Live image fixtures use [Picsum](https://picsum.photos/) photographs downloaded during setup and uploaded through the ordinary SDK or CLI paths. The shared `downloadTestImage` helper accepts a seed and dimensions; omitting the seed selects a new photograph. Each download includes a unique JPEG comment so content-addressed cleanup cannot delete another run’s upload. Selected live tests fail if Picsum is unavailable. Local validation and corrupt-file fixtures stay offline.
