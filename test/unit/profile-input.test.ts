@@ -4,10 +4,10 @@ import { parseProfileInput, planProfileUpdate } from '../../src/commands/auth-co
 describe('profile input planning', () => {
   it('maps friendly flags to existing profile fields without supplying omitted values', () => {
     expect(planProfileUpdate({ bio: 'hackin', twitter: 'https://x.com/name', email: 'me@example.com' })).toEqual({
-      ok: true, value: { source: 'flags', patch: { email: 'me@example.com', profile: { bio: 'hackin', twitterlink: 'https://x.com/name' } } },
+      ok: true, value: { source: 'flags', patch: { email: 'me@example.com', profile: { bio: 'hackin', twitterLink: 'https://x.com/name' } } },
     });
     expect(planProfileUpdate({ clearAvatar: true, clearMasthead: true })).toEqual({
-      ok: true, value: { source: 'flags', patch: { profile: { avatar: '', masthead_universal_token_id: '' } } },
+      ok: true, value: { source: 'flags', patch: { profile: { avatar: '', mastheadUniversalTokenId: '' } } },
     });
   });
 
