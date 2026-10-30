@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createWalletClient, erc1155Abi, erc721Abi, http, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { sepolia } from 'viem/chains';
-import type { EligibilityClaim, EligibilityRule, EligibilityRuleDefinition } from '@rareprotocol/rare-sdk';
+import type { CartOrder, EligibilityClaim, EligibilityRule, EligibilityRuleDefinition } from '@rareprotocol/rare-sdk';
 import { cleanupLiveFixture, createCartLiveFixture, E2E_TOKEN_URI, expectTx, jsonCommand, requireBuyerFixture, type BuyerLiveFixture, type TxResult } from './helpers/live-harness.js';
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
 import { createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
@@ -55,8 +55,11 @@ describe.sequential('CLI per-copy eligibility for both NFT standards', () => {
     const args = ['cart', 'checkout', '--listing', `${digest}=${quantity}`, '--payment-currency', 'eth', '--chain', fixture.chain];
     const quote = await jsonCommand<{ preparation: { paymentAmount: string } }>(fixture.buyerHome, [...args, '--preview']);
     expect(BigInt(quote.preparation.paymentAmount)).toBeLessThanOrEqual(1_000_000_000_000_000n);
-    const purchase = await jsonCommand<TxResult>(fixture.buyerHome, args, 300_000);
+    const purchase = await jsonCommand<TxResult & { orderId: Hex }>(fixture.buyerHome, args, 300_000);
     expectTx(purchase);
+    await expect.poll(async () => (await jsonCommand<CartOrder>(fixture.buyerHome,
+      ['cart', 'orders', 'get', '--id', purchase.orderId])).status,
+    { timeout: 180_000, interval: 2_000 }).toBe('FULFILLED');
   };
   const transfer = async (source: Source, quantity: number, back: boolean): Promise<void> => {
     const lease = back ? fixture.sellerWallet : fixture.buyerWallet;
