@@ -1,3 +1,4 @@
+import { nftFixtureManifest } from './nft-fixture-manifest.js';
 import { expect } from 'vitest';
 import type { Address, PublicClient } from 'viem';
 import { auctionAbi } from '@rareprotocol/rare-sdk/contracts/abis/auction';
@@ -14,10 +15,10 @@ import {
 } from '../live-helpers.js';
 import { releaseLiveWallets, reserveLiveWalletPair, type LiveWalletLease } from './live-wallet-pool.js';
 
-export const E2E_TOKEN_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/metadata.json';
-export const E2E_BATCH_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/batch';
-export const E2E_LAZY_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy';
-export const E2E_LAZY_UPDATED_BASE_URI = 'ipfs://bafybeidznwopf6bnfakqbertnhohgh65usqlo7bhnehycurg4xmc5ebnm4/lazy-updated';
+export const E2E_TOKEN_URI = `ipfs://${nftFixtureManifest.metadataCid}/metadata.json`;
+export const E2E_BATCH_BASE_URI = `ipfs://${nftFixtureManifest.metadataCid}/batch`;
+export const E2E_LAZY_BASE_URI = `ipfs://${nftFixtureManifest.metadataCid}/lazy`;
+export const E2E_LAZY_UPDATED_BASE_URI = `ipfs://${nftFixtureManifest.metadataCid}/lazy-updated`;
 export const E2E_LAZY_TOKEN_URI = E2E_TOKEN_URI;
 
 export type DeployResult = {

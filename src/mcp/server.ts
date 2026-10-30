@@ -1,3 +1,4 @@
+import type { RareClient } from '@rareprotocol/rare-sdk';
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/promise-function-async, local/only-parse-unknown, no-restricted-syntax */
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
@@ -45,6 +46,7 @@ const nftSearchSortByValues = [
   'recentActivity',
   'bidAsc',
   'bidDesc',
+  'random',
 ] as const;
 const listingTypeValues = ['SALE_PRICE', 'BATCH_SALE_PRICE'] as const;
 const auctionStateValues = ['PENDING', 'RUNNING', 'UNSETTLED'] as const;
@@ -928,19 +930,19 @@ const toolHandlers: Record<string, ToolHandler> = {
 
 async function callRead(
   chain: unknown,
-  call: (rare: ReturnType<typeof createRareClient>) => unknown,
+  call: (rare: RareClient) => unknown,
 ): Promise<ToolResult> {
   return toolResult(await call(readRare(chain)));
 }
 
 async function callWrite(
   chain: unknown,
-  call: (rare: ReturnType<typeof createRareClient>) => Promise<ToolResult> | ToolResult,
+  call: (rare: RareClient) => Promise<ToolResult> | ToolResult,
 ): Promise<ToolResult> {
   return call(writeRare(chain));
 }
 
-function readRare(chain: unknown): ReturnType<typeof createRareClient> {
+function readRare(chain: unknown): RareClient {
   const selected = resolveChain(chain);
   return createRareClient({
     publicClient: getPublicClient(selected),
@@ -949,7 +951,7 @@ function readRare(chain: unknown): ReturnType<typeof createRareClient> {
   });
 }
 
-function writeRare(chain: unknown): ReturnType<typeof createRareClient> {
+function writeRare(chain: unknown): RareClient {
   const selected = resolveChain(chain);
   const wallet = tryGetWalletClient(selected);
   if (wallet === null) {

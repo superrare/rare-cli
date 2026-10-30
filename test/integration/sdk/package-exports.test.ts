@@ -12,9 +12,15 @@ describe('published package subpath exports', () => {
 
     expect(Object.keys(client).sort()).toEqual([
       'ApprovalSideEffectError',
+      'AvatarProfileUpdateError',
       'Erc1155CheckoutAllItemsSkippedError',
       'NftApprovalRequiredError',
       'PaymentApprovalRequiredError',
+      'RareApiError',
+      'RareAuthError',
+      'createBrowserAccountSessionStore',
+      'createMemoryAccountSessionStore',
+      'createRareApi',
       'createRareClient',
     ]);
     expect(contracts).toHaveProperty('getContractAddresses');

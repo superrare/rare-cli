@@ -1,3 +1,4 @@
+import type { RareClient } from '@rareprotocol/rare-sdk';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { extname } from 'node:path';
 import { Command } from 'commander';
@@ -1185,7 +1186,7 @@ async function getLimit(opts: LimitGetOptions, kind: 'mint' | 'tx'): Promise<voi
   });
 }
 
-function writeRare(chain: ReturnType<typeof getActiveChain>): ReturnType<typeof createRareClient> {
+function writeRare(chain: ReturnType<typeof getActiveChain>): RareClient {
   const { client } = getWalletClient(chain);
   return createRareClient({ publicClient: getPublicClient(chain), walletClient: client });
 }

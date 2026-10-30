@@ -1,3 +1,4 @@
+import type { RareClient } from '@rareprotocol/rare-sdk';
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient } from '../client.js';
@@ -220,7 +221,7 @@ export function createAuctionListCommand(): Command {
 
 function createReadClient(opts: { chain?: string; chainId?: string }): {
   chain: ReturnType<typeof getActiveChain>;
-  rare: ReturnType<typeof createRareClient>;
+  rare: RareClient;
 } {
   const chain = getActiveChain(opts.chain, opts.chainId);
   const publicClient = getPublicClient(chain);
