@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { getBridgeInfo } from '@rareprotocol/rare-sdk/bridge-core';
+import { getRareBridgeAddress } from '@rareprotocol/rare-sdk/contracts';
 import {
   approveToken,
   cleanupLiveFixture,
@@ -54,17 +54,17 @@ describeLive('live RARE bridge CLI write flow', () => {
 
     const amount = liveBridgeRareAmount();
     const amountWei = await parseTokenAmount(fixture, fixture.rareAddress, amount);
-    const bridgeInfo = getBridgeInfo('sepolia');
+    const sourceBridgeAddress = getRareBridgeAddress('sepolia');
 
     await expectTokenBalanceAtLeast(fixture, fixture.sellerAddress, fixture.rareAddress, amount);
     await step('set bridge RARE allowance below transfer amount', () =>
-      approveToken(fixture, fixture.rareAddress, bridgeInfo.rareBridgeAddress, 0n, 'seller'),
+      approveToken(fixture, fixture.rareAddress, sourceBridgeAddress, 0n, 'seller'),
     );
     expect(await readTokenAllowance(
       fixture,
       fixture.rareAddress,
       fixture.sellerAddress,
-      bridgeInfo.rareBridgeAddress,
+      sourceBridgeAddress,
     )).toBe(0n);
 
     const result = await step('bridge RARE from Sepolia to Base Sepolia', () =>
@@ -94,14 +94,14 @@ describeLive('live RARE bridge CLI write flow', () => {
     expect(result.sourceChainId).toBe(11155111);
     expect(result.destinationChain).toBe('base-sepolia');
     expect(result.destinationChainId).toBe(84532);
-    expect(result.sourceBridgeAddress).toBe(bridgeInfo.rareBridgeAddress);
-    expect(result.destinationBridgeAddress).toBe(getBridgeInfo('base-sepolia').rareBridgeAddress);
+    expect(result.sourceBridgeAddress).toBe(sourceBridgeAddress);
+    expect(result.destinationBridgeAddress).toBe(getRareBridgeAddress('base-sepolia'));
     expect(BigInt(result.nativeFee)).toBeGreaterThan(0n);
     expect(await readTokenAllowance(
       fixture,
       fixture.rareAddress,
       fixture.sellerAddress,
-      bridgeInfo.rareBridgeAddress,
+      sourceBridgeAddress,
     )).toBeGreaterThan(amountWei);
   }, 360_000);
 });

@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { Command, Option } from 'commander';
 import { createRareClient } from '@rareprotocol/rare-sdk';
-import { DEFAULT_RARE_API_BASE_URL } from '@rareprotocol/rare-sdk/data-access/base-url';
+import { DEFAULT_RARE_API_BASE_URL } from '@rareprotocol/rare-sdk/data-access';
 import { accountClient, accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
 import { output } from '../output.js';
 import { selectUser, type UserOptions } from './user-core.js';

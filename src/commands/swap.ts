@@ -5,7 +5,6 @@ import { formatEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getConfiguredAccountAddress, getConfiguredUniswapApiKey, getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import { planTokenTradeLocalInputs } from '@rareprotocol/rare-sdk/swap/trade-core';
 import { output, log, isJsonMode } from '../output.js';
 import {
   ensureHex,
@@ -16,6 +15,8 @@ import {
   parseInputsJson,
   parseOptionalAddress,
   parseTokenTradeExecutionRoute,
+  validatePositiveRawSwapAmount,
+  validateTokenTradeInputs,
 } from './swap-core.js';
 
 export {
@@ -92,12 +93,13 @@ function swapTokensCommand(): Command {
     }) => {
       const minAmountOut = opts.minAmountOut;
       if (minAmountOut === undefined) throw new Error('swap swap requires --min-amount-out.');
+      validatePositiveRawSwapAmount(opts.amountIn, 'amountIn');
+      validatePositiveRawSwapAmount(minAmountOut, 'minAmountOut');
       const inputs = await readInputsFile(opts.inputsFile);
       const commands = ensureHex(opts.commands, 'commands');
       const tokenIn = parseAddress(opts.tokenIn, 'token-in');
       const tokenOut = parseAddress(opts.tokenOut, 'token-out');
       const recipient = parseOptionalAddress(opts.recipient, 'recipient');
-      planTokenTradeLocalInputs({ amountIn: opts.amountIn, minAmountOut });
       const chain = getActiveChain(opts.chain, opts.chainId);
       if (opts.yes !== true) {
         await confirmQuotedSwapExecution('rare swap tokens');
@@ -175,11 +177,7 @@ function swapBuyTokenCommand(): Command {
       if (amountIn === undefined) throw new Error('swap buy-token requires --amount-in.');
       const token = parseAddress(opts.token, 'token');
       const explicitRecipient = parseOptionalAddress(opts.recipient, 'recipient');
-      planTokenTradeLocalInputs({
-        amountIn,
-        minAmountOut: opts.minAmountOut,
-        slippageBps: opts.slippageBps,
-      });
+      validateTokenTradeInputs({ amountIn, minAmountOut: opts.minAmountOut, slippageBps: opts.slippageBps });
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       if (route === 'raw') {
@@ -195,6 +193,8 @@ function swapBuyTokenCommand(): Command {
         if (opts.inputsFile === undefined) {
           throw new Error('swap buy-token --route raw requires --inputs-file.');
         }
+        validatePositiveRawSwapAmount(amountIn, 'amountIn');
+        validatePositiveRawSwapAmount(opts.minAmountOut, 'minAmountOut');
         const commands = ensureHex(opts.commands, 'commands');
         const inputs = await readInputsFile(opts.inputsFile);
         if (opts.yes !== true) {
@@ -366,11 +366,7 @@ function swapSellTokenCommand(): Command {
       if (amountIn === undefined) throw new Error('swap sell-token requires --amount-in.');
       const token = parseAddress(opts.token, 'token');
       const explicitRecipient = parseOptionalAddress(opts.recipient, 'recipient');
-      planTokenTradeLocalInputs({
-        amountIn,
-        minAmountOut: opts.minAmountOut,
-        slippageBps: opts.slippageBps,
-      });
+      validateTokenTradeInputs({ amountIn, minAmountOut: opts.minAmountOut, slippageBps: opts.slippageBps });
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       if (route === 'raw') {
@@ -386,6 +382,8 @@ function swapSellTokenCommand(): Command {
         if (opts.inputsFile === undefined) {
           throw new Error('swap sell-token --route raw requires --inputs-file.');
         }
+        validatePositiveRawSwapAmount(amountIn, 'amountIn');
+        validatePositiveRawSwapAmount(opts.minAmountOut, 'minAmountOut');
         const commands = ensureHex(opts.commands, 'commands');
         const inputs = await readInputsFile(opts.inputsFile);
         if (opts.yes !== true) {
