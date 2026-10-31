@@ -1,3 +1,4 @@
+import {cartFeesCommand} from './cart-fees.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { cartCatalogCommand } from './cart-catalog.js';
@@ -56,6 +57,7 @@ type CartCheckoutOptions = ChainOptions & AccountCommandOptions & {
 
 export function cartCommand(): Command {
   const command = new Command('cart');
+  command.addCommand(cartFeesCommand());
   command.addCommand(cartCatalogCommand());
   command.description('Create Cart listings and purchase fixed-price Cart checkouts');
   command.addCommand(cartListingCommand());
