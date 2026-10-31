@@ -59,7 +59,7 @@ export async function createCreatorMintVariantSku(live: LiveFixture, contract: A
   return variant.sku;
 }
 
-function createCreatorVariantClient(live: LiveFixture): RareClient {
+export function createCreatorVariantClient(live: LiveFixture): RareClient {
   const apiBaseUrl = live.accountApiBaseUrl;
   if (apiBaseUrl === undefined) throw new Error('Cart creator fixture requires an authenticated API deployment.');
   return createRareClient({ publicClient: live.publicClient, apiBaseUrl,

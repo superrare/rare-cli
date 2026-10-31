@@ -23,9 +23,10 @@ import {
 const missingCartEnv = [...missingEnv, ...(process.env.RARE_API_BASE_URL ? [] : ['RARE_API_BASE_URL'])];
 const describeLive = missingCartEnv.length === 0 ? describe.sequential : describe.skip;
 const contractSettlementDelayMs = 15_000;
-const protocolMaxCartOrderLines = 20;
-const maxCartListingItems = 18;
-const expectedMaxCheckoutOrderLines = 20;
+const maxCartListingItems = 64;
+const expectedMaxCheckoutOrderLines = 66;
+const executionListingItems = 18;
+const expectedExecutedOrderLines = 20;
 
 type FulfillmentFixture = {
   live: BuyerLiveFixture;
@@ -75,10 +76,10 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
       const token = await step('create ERC-1155 Cart token', () =>
         jsonCommand<{ tokenId: string } & TxResult>(live.sellerHome, [
           'collection', 'erc1155', 'create-token', '--contract', erc1155,
-          '--max-supply', '100', '--token-uri', E2E_TOKEN_URI, '--chain', live.chain,
+          '--max-supply', '1000', '--token-uri', E2E_TOKEN_URI, '--chain', live.chain,
         ], 240_000));
       expectTx(token);
-      await mintErc1155(live, erc1155, token.tokenId, '23', live.sellerAddress);
+      await mintErc1155(live, erc1155, token.tokenId, '100', live.sellerAddress);
       await mintErc1155(live, erc1155, token.tokenId, '1', live.buyerAddress);
       await setMinter(live, erc1155, cart);
       const [erc1155Sku] = await createCreatorVariantSkus(live, [{ contract: erc1155, tokenId: token.tokenId, fulfillmentKind: 3 }]);
@@ -136,7 +137,7 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
     await expectFulfillmentKind(live, purchase, cartFulfillmentKinds.erc1155MintTo);
   }, 360_000);
 
-  it('executes the maximum listing items permitted by the 20-order-line cap', async () => {
+  it('accepts 64 selections, rejects 65, and executes a fee-consolidated checkout', async () => {
     const { live, erc1155 } = liveRef.value;
     expect(erc1155.maxLineListings).toHaveLength(maxCartListingItems + 1);
     const sellerBefore = await balance1155(live, erc1155.contract, erc1155.tokenId, live.sellerAddress);
@@ -145,33 +146,36 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
     await expect(jsonCommand(live.buyerHome, [
       'cart', 'checkout', ...erc1155.maxLineListings.flatMap(listing => ['--listing', listing]),
       '--payment-currency', 'eth', '--preview', '--chain', live.chain,
-    ], 360_000)).rejects.toThrow(/more than 20 order lines/u);
+    ], 360_000)).rejects.toThrow('Cart checkout intent is invalid.');
     const preview = await jsonCommand<CheckoutPreview>(live.buyerHome, [
       'cart', 'checkout', ...listingArgs, '--payment-currency', 'eth', '--preview', '--chain', live.chain,
     ], 360_000);
     expect(preview.preparation.lines).toHaveLength(expectedMaxCheckoutOrderLines);
-    expect(preview.preparation.lines.length).toBeLessThanOrEqual(protocolMaxCartOrderLines);
     expect(preview.preparation.lines.filter((line) =>
       line.fulfillmentKind === cartFulfillmentKinds.erc1155Transfer)).toHaveLength(maxCartListingItems);
 
+    // Selection capacity and execution cost are separate policies. Keep the
+    // settlement/refund regression on a known low-gas workload.
     const purchase = await jsonCommand<CheckoutResult>(live.buyerHome, [
-      'cart', 'checkout', ...listingArgs, '--payment-currency', 'eth', '--chain', live.chain,
+      'cart', 'checkout', ...erc1155.maxLineListings.slice(0, executionListingItems).flatMap(listing => ['--listing', listing]),
+      '--payment-currency', 'eth', '--chain', live.chain,
     ], 480_000);
     expectTx(purchase);
-    expect(purchase.lineCount).toBe(expectedMaxCheckoutOrderLines);
-    expect(purchase.actionCount).toBe(maxCartListingItems);
+    expect(purchase.lineCount).toBe(expectedExecutedOrderLines);
+    expect(purchase.actionCount).toBe(executionListingItems);
     await expect(balance1155(live, erc1155.contract, erc1155.tokenId, live.sellerAddress))
-      .resolves.toBe(sellerBefore - BigInt(maxCartListingItems));
+      .resolves.toBe(sellerBefore - BigInt(executionListingItems));
     await expect(balance1155(live, erc1155.contract, erc1155.tokenId, live.buyerAddress))
-      .resolves.toBe(buyerBefore + BigInt(maxCartListingItems));
+      .resolves.toBe(buyerBefore + BigInt(executionListingItems));
 
     const receipt = await live.publicClient.getTransactionReceipt({ hash: purchase.txHash });
     const settled = parseEventLogs({ abi: cartAbi, logs: receipt.logs, eventName: 'OrderLineSettled' });
     const fulfilled = parseEventLogs({ abi: cartAbi, logs: receipt.logs, eventName: 'FulfillmentActionExecuted' });
-    expect(settled).toHaveLength(expectedMaxCheckoutOrderLines);
-    expect(fulfilled).toHaveLength(maxCartListingItems);
-    expect(new Set(settled.map((event) => event.args.lineIndex)).size).toBe(expectedMaxCheckoutOrderLines);
-    expect(new Set(fulfilled.map((event) => event.args.lineIndex)).size).toBe(maxCartListingItems);
+    expect(settled).toHaveLength(expectedExecutedOrderLines);
+    expect(fulfilled).toHaveLength(executionListingItems);
+    expect(new Set(settled.map((event) => event.args.lineIndex)).size).toBe(expectedExecutedOrderLines);
+    expect(new Set(fulfilled.map((event) => event.args.lineIndex)).size).toBe(executionListingItems);
+    expect(receipt.gasUsed).toBeLessThanOrEqual(12_000_000n);
     expect(settled.every((event) => event.args.orderId === purchase.orderId)).toBe(true);
     expect(fulfilled.every((event) =>
       event.args.fulfillmentKind === cartFulfillmentKinds.erc1155Transfer)).toBe(true);
@@ -184,8 +188,8 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
     const allocations = saved.feeAllocations?.allocations;
     if (allocations === undefined) throw new Error('Cart receipt lost its immutable refund allocations.');
     const sellerAllocations = allocations.filter(allocation => allocation.bearer === 'SELLER');
-    expect(sellerAllocations).toHaveLength(maxCartListingItems);
-    expect(new Set(sellerAllocations.map(allocation => allocation.sourceLineIndex)).size).toBe(maxCartListingItems);
+    expect(sellerAllocations).toHaveLength(executionListingItems);
+    expect(new Set(sellerAllocations.map(allocation => allocation.sourceLineIndex)).size).toBe(executionListingItems);
     expect(new Set(sellerAllocations.map(allocation => allocation.finalLineIndex)).size).toBe(1);
     for (const line of saved.lines.filter(line => line.fulfillmentKind === cartFulfillmentKinds.none)) {
       expect(allocations.filter(allocation => allocation.finalLineIndex === Number(line.lineIndex))

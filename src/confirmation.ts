@@ -15,6 +15,7 @@ const confirmationRequiredCommands = new Set([
   'rare cart listing invalidate-nonce',
   'rare cart checkout',
   'rare cart swap',
+  'rare prints listing publish',
 ]);
 
 export function getConfirmationDecision(params: {
