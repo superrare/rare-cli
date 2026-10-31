@@ -1,3 +1,4 @@
+import {cartFeesCommand} from './cart-fees.js';
 import { ordersCommand } from './orders.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
