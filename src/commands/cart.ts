@@ -1,6 +1,7 @@
 import {cartFeesCommand} from './cart-fees.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
+import { purchaseEligibilityCommand } from './eligibility.js';
 import { cartCatalogCommand } from './cart-catalog.js';
 import { formatUnits, type Address } from 'viem';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
@@ -18,6 +19,7 @@ import { log, output } from '../output.js';
 import { accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { addChainOptions, type ChainOptions } from './options.js';
+import { parseEligibilityRuleId } from './eligibility-core.js';
 import {
   parseCartAddress,
   parseCartAmount,
@@ -34,6 +36,7 @@ type CartListingCreateOptions = ChainOptions & AccountCommandOptions & {
   output?: string;
   preview?: boolean;
   yes?: boolean;
+  eligibilityRuleId?: string;
 };
 
 type CartDigestOptions = ChainOptions & {
@@ -59,6 +62,7 @@ export function cartCommand(): Command {
   const command = new Command('cart');
   command.addCommand(cartFeesCommand());
   command.addCommand(cartCatalogCommand());
+  command.addCommand(purchaseEligibilityCommand());
   command.description('Create Cart listings and purchase fixed-price Cart checkouts');
   command.addCommand(cartListingCommand());
   command.addCommand(cartCheckoutCommand());
@@ -84,8 +88,10 @@ function cartListingCreateCommand(): Command {
     .option('--output <path>', 'write the prepared or signed Listing Root artifact to a JSON file')
     .option('--preview', 'show the prepared Listing Root and required approvals without signing or publishing')
     .option('--yes', 'approve NFT contracts if needed and skip transaction confirmation')
+    .option('--eligibility-rule-id <id>', 'require an owned eligibility rule atomically when publishing these Listings')
     .action(async (opts: CartListingCreateOptions): Promise<void> => {
       const file = unwrapCartCliResult(parseCartListingFile(await readFile(opts.input, 'utf8')));
+      const eligibilityRuleId = opts.eligibilityRuleId === undefined ? undefined : parseEligibilityRuleId(opts.eligibilityRuleId);
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const wallet = opts.preview === true ? undefined : getWalletClient(chain);
@@ -120,6 +126,7 @@ function cartListingCreateCommand(): Command {
         seller,
         listings,
         deadline: file.deadline,
+        ...(eligibilityRuleId === undefined ? {} : { eligibilityRuleId }),
       });
 
       if (opts.preview === true) {
