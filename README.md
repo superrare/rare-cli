@@ -526,7 +526,7 @@ Cart commands publish API-backed listing roots and purchase listings, token swap
 }
 ```
 
-`quantity` defaults to `"1"`, and `paymentRecipient` defaults to the seller. Amounts and quantities are strings so they remain exact. Named currencies (`eth`, `usdc`, and `rare`) and ERC-20 addresses are supported.
+`quantity` defaults to `"1"`, and `paymentRecipient` defaults to the seller. Amounts and quantities are strings so they remain exact. Named currencies (`eth`, `usdc`, and `rare`) and ERC-20 addresses are supported. Each listing can include `splits: [{"recipient": "0x...", "basisPoints": 7000}, {"recipient": "0x...", "basisPoints": 3000}]`. Omit splits or use `[]` for a single recipient. Nonempty schedules allow at most 16 unique nonzero recipients, must total 10,000 basis points, and must start with `paymentRecipient`. The seller signs each listing's schedule. Secondary shares round down per merchandise line; the first recipient receives the remainder. Fees and currency-swap outputs do not inherit these splits.
 
 ```bash
 # Inspect the root, listing digests, and required NFT approvals without writing

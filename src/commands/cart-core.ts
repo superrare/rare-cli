@@ -1,5 +1,5 @@
-import { cartFulfillmentKinds, type CartSellerFulfillmentKind } from '@rareprotocol/rare-sdk';
-import { getAddress, isAddress, isHex, parseUnits, type Address, type Hex } from 'viem';
+import { cartFulfillmentKinds, type CartSellerFulfillmentKind, type CartSplit } from '@rareprotocol/rare-sdk';
+import { getAddress, isAddress, isAddressEqual, isHex, parseUnits, zeroAddress, type Address, type Hex } from 'viem';
 
 export type CartCliResult<T> =
   | { isValid: true; value: T }
@@ -16,6 +16,7 @@ export type CartListingFile = {
     quantity: bigint;
     fulfillmentKind?: CartSellerFulfillmentKind;
     paymentRecipient?: Address;
+    splits?: CartSplit[];
   }>;
 };
 
@@ -131,6 +132,7 @@ function parseListing(value: unknown, index: number): CartCliResult<CartListingF
     'quantity',
     'fulfillmentKind',
     'paymentRecipient',
+    'splits',
   ]);
   const extraFields = Object.keys(value).filter((key) => !allowedFields.has(key));
   if (extraFields.length > 0) {
@@ -149,7 +151,13 @@ function parseListing(value: unknown, index: number): CartCliResult<CartListingF
   const paymentRecipient = typeof value.paymentRecipient === 'string' || value.paymentRecipient === undefined
     ? parseCartAddress(value.paymentRecipient, `${field}.paymentRecipient`)
     : invalid<Address | undefined>(`${field}.paymentRecipient must be an address string.`);
+  const splits = parseListingSplits(value.splits, `${field}.splits`);
+  const firstSplit = splits.isValid ? splits.value?.[0] : undefined;
   const issues = [
+    ...(firstSplit !== undefined && paymentRecipient.isValid && paymentRecipient.value !== undefined &&
+      !isAddressEqual(firstSplit.recipient, paymentRecipient.value)
+      ? [`${field}.splits must start with paymentRecipient.`] : []),
+    ...(splits.isValid ? [] : splits.issues),
     ...(sku.isValid ? [] : sku.issues),
     ...(currency.isValid ? [] : currency.issues),
     ...(unitPrice === undefined ? [`${field}.unitPrice must be a non-negative decimal amount string.`] : []),
@@ -158,7 +166,7 @@ function parseListing(value: unknown, index: number): CartCliResult<CartListingF
     ...(paymentRecipient.isValid ? [] : paymentRecipient.issues),
   ];
   if (issues.length > 0 || !sku.isValid || !currency.isValid || unitPrice === undefined ||
-    !quantity.isValid || !fulfillmentKind.isValid || !paymentRecipient.isValid) {
+    !quantity.isValid || !fulfillmentKind.isValid || !paymentRecipient.isValid || !splits.isValid) {
     return { isValid: false, issues };
   }
 
@@ -171,8 +179,36 @@ function parseListing(value: unknown, index: number): CartCliResult<CartListingF
       quantity: quantity.value,
       ...(fulfillmentKind.value === undefined ? {} : { fulfillmentKind: fulfillmentKind.value }),
       ...(paymentRecipient.value === undefined ? {} : { paymentRecipient: paymentRecipient.value }),
+      ...(splits.value === undefined ? {} : { splits: splits.value }),
     },
   };
+}
+
+function parseListingSplits(value: unknown, field: string): CartCliResult<CartSplit[] | undefined> {
+  if (value === undefined) return { isValid: true, value: undefined };
+  if (!Array.isArray(value) || value.length > 16) return invalid(`${field} must be an array of at most 16 recipients.`);
+  const splits = value.map((entry: unknown, index): CartCliResult<CartSplit> => {
+    const path = `${field}[${index}]`;
+    if (!isRecord(entry) || Object.keys(entry).some(key => key !== 'recipient' && key !== 'basisPoints')) {
+      return invalid(`${path} must contain only recipient and basisPoints.`);
+    }
+    if (typeof entry.recipient !== 'string' || !isAddress(entry.recipient) || getAddress(entry.recipient) === zeroAddress) {
+      return invalid(`${path}.recipient must be a nonzero EVM address.`);
+    }
+    if (typeof entry.basisPoints !== 'number' || !Number.isInteger(entry.basisPoints) || entry.basisPoints <= 0 || entry.basisPoints > 10000) {
+      return invalid(`${path}.basisPoints must be an integer between 1 and 10000.`);
+    }
+    return { isValid: true, value: { recipient: getAddress(entry.recipient), basisPoints: entry.basisPoints } };
+  });
+  const issues = splits.flatMap(split => split.isValid ? [] : split.issues);
+  if (issues.length > 0) return { isValid: false, issues };
+  const parsed = splits.map(split => {
+    if (!split.isValid) throw new Error('unreachable: invalid Cart split survived validation.');
+    return split.value;
+  });
+  if (new Set(parsed.map(split => split.recipient.toLowerCase())).size !== parsed.length) return invalid(`${field} recipients must be unique.`);
+  if (parsed.length > 0 && parsed.reduce((sum, split) => sum + split.basisPoints, 0) !== 10000) return invalid(`${field} basisPoints must sum to 10000.`);
+  return { isValid: true, value: parsed };
 }
 
 export function parseCartSellerFulfillmentKind(

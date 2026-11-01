@@ -114,6 +114,7 @@ function cartListingCreateCommand(): Command {
           quantity: listing.quantity,
           ...(listing.fulfillmentKind === undefined ? {} : { fulfillmentKind: listing.fulfillmentKind }),
           ...(listing.paymentRecipient === undefined ? {} : { paymentRecipient: listing.paymentRecipient }),
+          ...(listing.splits === undefined ? {} : { splits: listing.splits }),
         };
       }));
       const preparation = await rare.cart.listing.prepare({
@@ -372,6 +373,10 @@ function printListingPreparation(preparation: CartListingPreparation, outputPath
   console.log(`  Deadline: ${formatUnixTimestamp(preparation.artifact.root.deadline)}`);
   console.log(`  Required NFT approvals: ${preparation.requiredApprovals.length}`);
   for (const contract of preparation.requiredApprovals) console.log(`    ${contract}`);
+  for (const entry of preparation.artifact.entries.filter(candidate => candidate.listing.splits.length > 0)) {
+    console.log(`  Payout splits for ${entry.listingDigest}:`);
+    for (const split of entry.listing.splits) console.log(`    ${split.recipient}: ${split.basisPoints} basis points`);
+  }
   if (outputPath !== undefined) console.log(`Wrote prepared artifact: ${outputPath}`);
 }
 

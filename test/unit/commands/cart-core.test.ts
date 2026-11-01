@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { zeroAddress } from 'viem';
 import {
   parseCartAmount,
   parseCartListingFile,
@@ -30,6 +31,45 @@ describe('Cart CLI input planning', () => {
         }],
       },
     });
+  });
+
+  it('preserves per-listing basis-point splits without applying marketplace percentage conventions', () => {
+    const splits = [
+      { recipient: '0x0000000000000000000000000000000000000001', basisPoints: 6667 },
+      { recipient: '0x0000000000000000000000000000000000000002', basisPoints: 3333 },
+    ];
+    const result = parseCartListingFile(JSON.stringify({ deadline: '2030-01-01T00:00:00.000Z',
+      listings: [{ sku, settlementCurrency: 'eth', unitPrice: '1', splits },
+        { sku: listingB, settlementCurrency: 'rare', unitPrice: '2', splits: [] }] }));
+    expect(result.isValid).toBe(true);
+    if (!result.isValid) throw new Error(result.issues.join(' '));
+    expect(result.value.listings[0]?.splits).toEqual(splits);
+    expect(result.value.listings[1]?.splits).toEqual([]);
+  });
+
+  it.each([
+    null,
+    [{ recipient: zeroAddress, basisPoints: 10000 }],
+    [{ recipient: 'not-an-address', basisPoints: 10000 }],
+    [{ recipient: '0x0000000000000000000000000000000000000001', basisPoints: 0 }],
+    [{ recipient: '0x0000000000000000000000000000000000000001', basisPoints: 10000.1 }],
+    [{ recipient: '0x0000000000000000000000000000000000000001', basisPoints: 65536 }],
+    [{ recipient: '0x0000000000000000000000000000000000000001', basisPoints: 9999 }],
+    [{ recipient: '0x0000000000000000000000000000000000000001', basisPoints: 5000 },
+      { recipient: '0x0000000000000000000000000000000000000001', basisPoints: 5000 }],
+    [{ recipient: '0x0000000000000000000000000000000000000001', basisPoints: 10000, unexpected: true }],
+    Array.from({ length: 17 }, (_, index) => ({ recipient: `0x${(index + 1).toString(16).padStart(40, '0')}`, basisPoints: 1000 })),
+  ].map(splits => ({ splits })))('rejects malformed Cart split allocations before I/O: %j', ({ splits }) => {
+    expect(parseCartListingFile(JSON.stringify({ deadline: '2030-01-01T00:00:00.000Z',
+      listings: [{ sku, settlementCurrency: 'eth', unitPrice: '1', splits }] })).isValid).toBe(false);
+  });
+
+  it('rejects an explicit paymentRecipient that is not first in its split schedule', () => {
+    const result = parseCartListingFile(JSON.stringify({ deadline: '2030-01-01T00:00:00.000Z',
+      listings: [{ sku, settlementCurrency: 'eth', unitPrice: '1',
+        paymentRecipient: '0x0000000000000000000000000000000000000002',
+        splits: [{ recipient: '0x0000000000000000000000000000000000000001', basisPoints: 10000 }] }] }));
+    expect(result).toEqual({ isValid: false, issues: ['listings[0].splits must start with paymentRecipient.'] });
   });
 
   it('reports invalid listing fields without performing I/O', () => {

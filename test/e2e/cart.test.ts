@@ -198,7 +198,8 @@ describe('built Cart CLI', () => {
         expect(configured.code).toBe(0);
         const input = join(home, 'listing.json');
         await writeFile(input, JSON.stringify({ deadline: '9999999999', listings: [{ sku,
-          settlementCurrency: 'eth', unitPrice: '1', quantity: '1' }] }));
+          settlementCurrency: 'eth', unitPrice: '1', quantity: '1', paymentRecipient: seller,
+            splits: [{ recipient: seller, basisPoints: 6667 }, { recipient, basisPoints: 3333 }] }] }));
         const result = await runCli(['--json', 'cart', 'listing', 'create', '--preview', '--chain', 'sepolia',
           '--input', input, '--api-url', baseUrl, '--storage', 'file', '--auth-directory', directory],
         { home, env: { RARE_API_URL: 'https://unused-api.example' } });
@@ -206,7 +207,10 @@ describe('built Cart CLI', () => {
         expect(result.stderr).toContain('fixture listing rejected');
         expect(result.stdout + result.stderr).not.toContain('cart-access-secret');
         expect(result.stdout + result.stderr).not.toContain('cart-refresh-secret');
-        expect(await request).toMatchObject({ pathname: '/v1/cart/listings/preview', authorization: 'Bearer cart-access-secret' });
+        expect(await request).toMatchObject({ pathname: '/v1/cart/listings/preview', authorization: 'Bearer cart-access-secret',
+          body: { listings: [{ paymentRecipient: seller, splits: [
+            { recipient: seller, basisPoints: 6667 }, { recipient, basisPoints: 3333 },
+          ] }] } });
       });
     });
   });
@@ -317,6 +321,7 @@ function preparedPurchaseFixture(): Record<string, unknown> {
         paymentCurrency: zeroAddress,
         deadline: '1893456000',
         paymentAmount: '200',
+        spreadRecipient: recipient,
         orderLinesHash: hash,
         payoutRouteHash: hash,
         fulfillmentActionsHash: hash,
@@ -341,6 +346,7 @@ function preparedPurchaseFixture(): Record<string, unknown> {
         minimumUnitPrice: '100',
         availableQuantity: '2',
         paymentRecipient: seller,
+        splits: [],
       }],
       authorization: {
         listingRoots: [],
