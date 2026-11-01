@@ -49,7 +49,7 @@ export const printListingInput = z.object({
   optionId: uuid, seller: address, listingSalt: bytes32, deadline: uint, availableQuantity: uint,
   eligibilityRuleId: uuid.optional(),
   mintSource: z.object({ chainId: z.string().regex(/^[1-9][0-9]*$/u), contract: address,
-    productIds: z.array(uuid).min(1).max(100),
+    productIds: z.array(uuid).min(1).max(1000),
   }).strict().optional(),
   splits: printListingSplits.optional(),
   maxQuantityPerCheckout: z.string().regex(/^[1-9][0-9]*$/u)
