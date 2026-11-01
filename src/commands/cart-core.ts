@@ -1,3 +1,4 @@
+import { z } from 'zod';
 import { cartFulfillmentKinds, type CartSellerFulfillmentKind, type CartSplit } from '@rareprotocol/rare-sdk';
 import { getAddress, isAddress, isAddressEqual, isHex, parseUnits, zeroAddress, type Address, type Hex } from 'viem';
 
@@ -254,13 +255,27 @@ export type CartCheckoutFileItem =
   | { kind: 'swap'; mode: 'exact-input'; outputCurrency: CartCliCurrency; inputAmount: string; recipient?: Address }
   | { kind: 'swap'; mode: 'exact-output'; outputCurrency: CartCliCurrency; outputAmount: string; recipient?: Address };
 
-export function parseCartCheckoutFile(content: string): CartCliResult<CartCheckoutFileItem[]> {
+const mintSelectionSchema = z.object({
+  preparationId: z.uuid(),
+  listingDigest: z.templateLiteral(['0x', z.string()]).refine(value => /^0x[0-9a-fA-F]{64}$/u.test(value)),
+  unitIndexes: z.array(z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)).min(1)
+    .refine(indexes => new Set(indexes).size === indexes.length, 'Mint unit indexes must be unique'),
+}).strict();
+
+export type CartCheckoutFile = {
+  items: CartCheckoutFileItem[];
+  mintSelections?: z.infer<typeof mintSelectionSchema>[];
+};
+
+export function parseCartCheckoutFile(content: string): CartCliResult<CartCheckoutFile> {
   const document = parseJsonDocument(content);
   if (!document.isValid) return document;
-  if (!isRecord(document.value) || Object.keys(document.value).some(key => key !== 'items') ||
+  if (!isRecord(document.value) || Object.keys(document.value).some(key => !['items', 'mintSelections'].includes(key)) ||
       !Array.isArray(document.value.items) || document.value.items.length === 0) {
-    return invalid('checkout input must contain only a non-empty items array.');
+    return invalid('checkout input must contain a non-empty items array and optional mintSelections.');
   }
+  const mintSelections = z.array(mintSelectionSchema).min(1).optional().safeParse(document.value.mintSelections);
+  if (!mintSelections.success) return invalid(`Invalid mintSelections: ${mintSelections.error.message}`);
   const items = document.value.items.map((value: unknown, index: number): CartCliResult<CartCheckoutFileItem> => {
     const field = `items[${index}]`;
     if (!isRecord(value)) return invalid(`${field} must be an object.`);
@@ -289,10 +304,10 @@ export function parseCartCheckoutFile(content: string): CartCliResult<CartChecko
   });
   const issues = items.flatMap(item => item.isValid ? [] : item.issues);
   if (issues.length > 0) return { isValid: false, issues };
-  return { isValid: true, value: items.map(item => {
+  return { isValid: true, value: { items: items.map(item => {
     if (!item.isValid) throw new Error('unreachable: invalid checkout item survived validation.');
     return item.value;
-  }) };
+  }), ...(mintSelections.data === undefined ? {} : { mintSelections: mintSelections.data }) } };
 }
 
 function parseDeadline(value: unknown): CartCliResult<bigint> {

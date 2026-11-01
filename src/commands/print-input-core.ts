@@ -25,7 +25,7 @@ export const savedShippingInput = z.object({
 }).strict();
 
 export const printDropInput = z.object({
-  idempotencyKey: uuid, name: z.string(), description: z.string().optional(),
+  idempotencyKey: uuid, productId: uuid.optional(), name: z.string(), description: z.string().optional(),
   chainId: z.literal('11155111'),
   print: z.object({
     name: z.string(), description: z.string(), tags: z.array(z.string()),
@@ -48,6 +48,9 @@ const printListingSplits = z.array(printListingSplit).max(16)
 export const printListingInput = z.object({
   optionId: uuid, seller: address, listingSalt: bytes32, deadline: uint, availableQuantity: uint,
   eligibilityRuleId: uuid.optional(),
+  mintSource: z.object({ chainId: z.string().regex(/^[1-9][0-9]*$/u), contract: address,
+    productIds: z.array(uuid).min(1).max(100),
+  }).strict().optional(),
   splits: printListingSplits.optional(),
   maxQuantityPerCheckout: z.string().regex(/^[1-9][0-9]*$/u)
     .pipe(z.string().refine(value => BigInt(value) <= 1000n, 'Print checkouts support at most 1000 copies')).optional(),
@@ -60,4 +63,9 @@ export const printDraftPatch = z.object({
   name: z.string().optional(), description: z.string().optional(), tags: z.array(z.string()).optional(),
   images: z.array(z.url()).min(1).max(4).optional(), productionUploadKey: z.string().regex(/^[0-9a-f]{64}$/u).optional(),
   specificationId: z.string().optional(),
+}).strict();
+
+export const printQuoteInput = z.object({
+  specificationId: z.string().min(1), copies: z.number().int().positive().optional(),
+  destinationCountryCode: z.string().regex(/^[A-Z]{2}$/u), shippingMethod: z.literal('Standard').optional(),
 }).strict();

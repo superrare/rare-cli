@@ -11,7 +11,7 @@ describe('built print and shipping CLI', () => {
   it('exposes creator print, private upload and address-book commands', async () => {
     await withTempHome(async home => {
       for (const path of [
-        ['prints', 'products', 'list'], ['prints', 'products', 'get'], ['prints', 'get'], ['prints', 'activity'], ['prints', 'releases'],
+        ['prints', 'quote'], ['prints', 'products', 'list'], ['prints', 'products', 'get'], ['prints', 'get'], ['prints', 'activity'], ['prints', 'releases'],
         ['prints', 'drops', 'create'], ['prints', 'drops', 'list'], ['prints', 'drops', 'get'],
         ['prints', 'drops', 'archive'], ['prints', 'drops', 'configure'], ['prints', 'drops', 'update'],
         ['prints', 'listing', 'prepare'], ['prints', 'listing', 'publish'],
@@ -72,7 +72,7 @@ describe('built print and shipping CLI', () => {
     } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
   });
 
-  it('configures a print through the scalar operation object without changing its HTTP body', async () => {
+  it('routes scalar and multiple print formats and read-only quotes through the official SDK', async () => {
     const dropId = '00000000-0000-4000-8000-000000000001';
     const received: { path?: string; authorization?: string; body: unknown }[] = [];
     const server = createServer((request, response) => {
@@ -80,7 +80,15 @@ describe('built print and shipping CLI', () => {
         // eslint-disable-next-line functional/immutable-data -- Capture real HTTP input for the built-command assertion.
         received.push({ path: request.url, authorization: request.headers.authorization, body: JSON.parse(body) });
         response.writeHead(200, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify({ data: { id: 'configured-option' } }));
+        const data = request.url === '/v1/prints/estimates'
+          ? { currency: 'USD', productionCostUsdCents: '1200', shippingCostUsdCents: '500',
+            quotedAt: '2026-11-01T12:00:00.000Z', expiresAt: '2026-11-01T12:05:00.000Z',
+            assumptions: { specificationId: 'GLOBAL-FAP-8X12', destinationCountryCode: 'US', copies: 2, shippingMethod: 'Standard' },
+            warnings: ['estimate_only'] }
+          : request.url?.endsWith('/options')
+            ? { options: [{ id: 'configured-option' }], listingOptionId: 'configured-option' }
+            : { id: 'configured-option' };
+        response.end(JSON.stringify({ data }));
       });
     });
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
@@ -100,6 +108,20 @@ describe('built print and shipping CLI', () => {
           '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory], { home });
         expect(parseJsonStdout(result)).toEqual({ id: 'configured-option' });
         expect(received).toEqual([{ path: `/v1/prints/drops/${dropId}/options/standard`, authorization: 'Bearer print-options-access', body: { displayPriceUsdCents: '2500' } }]);
+        const formats = await runCli(['--json', 'prints', 'drops', 'configure', '--id', dropId, '--price-usd-cents', '2500',
+          '--specification-id', 'GLOBAL-FAP-8X12', '--specification-id', 'GLOBAL-FAP-12X18',
+          '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory], { home });
+        expect(formats.code).toBe(0);
+        expect(received[1]).toEqual({ path: `/v1/prints/drops/${dropId}/options`, authorization: 'Bearer print-options-access',
+          body: { displayPriceUsdCents: '2500', specificationIds: ['GLOBAL-FAP-8X12', 'GLOBAL-FAP-12X18'] } });
+        const quoteInput = join(home, 'quote.json');
+        await writeFile(quoteInput, JSON.stringify({ specificationId: 'GLOBAL-FAP-8X12', destinationCountryCode: 'US', copies: 2 }));
+        const quote = await runCli(['--json', 'prints', 'quote', '--input', quoteInput, '--chain', 'sepolia',
+          '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory], { home });
+        expect(parseJsonStdout(quote)).toMatchObject({ currency: 'USD', productionCostUsdCents: '1200', shippingCostUsdCents: '500' });
+        expect(received[2]).toMatchObject({ path: '/v1/prints/estimates', authorization: 'Bearer print-options-access',
+          body: { specificationId: 'GLOBAL-FAP-8X12', destinationCountryCode: 'US', copies: 2 } });
+
       });
     } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
   });
@@ -134,6 +156,42 @@ describe('built print and shipping CLI', () => {
           '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory], { home });
         expect(parseJsonStdout(result)).toEqual({ id: dropId, status: 'PUBLISHED', metadata: { productionUploadKey: replacementKey } });
         expect(received).toEqual([{ method: 'PATCH', path: `/v1/prints/drops/${dropId}`, authorization: 'Bearer replace-master-access', body: { productionUploadKey: replacementKey } }]);
+      });
+    } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
+  });
+
+  it('forwards mint unit associations with authenticated delivery checkout', async () => {
+    let received: unknown;
+    const server = createServer((request, response) => {
+      void text(request).then(body => {
+        received = { path: request.url, body: JSON.parse(body) };
+        response.writeHead(409, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ error: 'fixture_capture', message: 'Checkout captured' }));
+      });
+    });
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error('Missing fixture address');
+    try {
+      await withTempHome(async temporary => {
+        const home = await realpath(temporary);
+        const apiBaseUrl = `http://127.0.0.1:${address.port}`;
+        const directory = join(home, 'auth');
+        const scope = { apiBaseUrl, authBaseUrl: `${apiBaseUrl}/auth/v2`, clientId: 'rare-sdk' };
+        const store = createAuthStore({ ...scope, backend: 'file', directory });
+        await store.withLock(async () => { await store.set({ ...scope, revision: 'mint-print-session', accessToken: 'mint-print-access',
+          refreshToken: 'mint-print-refresh', expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
+        const listingDigest = `0x${'1'.repeat(64)}`;
+        const mintSelections = [{ preparationId: '00000000-0000-4000-8000-000000000001', listingDigest, unitIndexes: [0] }];
+        const input = join(home, 'checkout.json');
+        await writeFile(input, JSON.stringify({ items: [{ kind: 'listing', listingDigest, quantity: '1' }], mintSelections }));
+        const savedAddressId = '00000000-0000-4000-8000-000000000002';
+        const result = await runCli(['--json', 'cart', 'checkout', '--input', input, '--payment-currency', 'eth',
+          '--recipient', `0x${'2'.repeat(40)}`, '--saved-address-id', savedAddressId, '--preview', '--chain', 'sepolia',
+          '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory], { home });
+        expect(result.code).toBe(1);
+        expect(result.stderr).toContain('fixture_capture');
+        expect(received).toMatchObject({ body: { delivery: { savedAddressId, mintSelections } } });
       });
     } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
   });
