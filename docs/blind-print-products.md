@@ -13,6 +13,9 @@ The creator setup performs these operations through the CLI:
 3. Upload a different private production file and public photo for each artwork. Create the print draft with that existing `productId`, configure its price, and publish the Product.
 4. Publish the collection's ERC-721 mint Listing. This Listing represents minting the next token, not a promise to mint a specific token ID.
 5. Publish a physical Listing with `mintSource: {chainId, contract, productIds}` identifying the prepared artwork Products. All candidates use the same print specification and sale price.
+6. Attach the physical offer SKU to the mint-offering Product with public membership metadata `{printDropId}`. Buyers can discover both Listings through that Product; the physical Listing already supplies its preparation ID.
+
+Product IDs are positive decimal strings, distinct from print draft and preparation UUIDs. Planned NFT memberships remain `isHidden: true` until the actual mint is indexed.
 
 The buyer first purchases an NFT without a print, consuming token 1. The next checkout buys an NFT and optional print with this additional field in its `--input` JSON document:
 

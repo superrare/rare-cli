@@ -9,6 +9,14 @@ const draft = {
 };
 
 describe('print draft input', () => {
+  it('accepts canonical decimal Product IDs and rejects unrelated identities', () => {
+    const input: unknown = { ...draft, productId: '12345678901234567890' };
+    expect(printDropInput.parse(input).productId).toBe('12345678901234567890');
+    for (const productId of ['0', '-1', '1.5', '01', draft.idempotencyKey]) {
+      const candidate: unknown = { ...draft, productId };
+      expect(printDropInput.safeParse(candidate).success).toBe(false);
+    }
+  });
   it('accepts a private production file and optional NFT source attribution', () => {
     const input: unknown = draft;
     expect(printDropInput.parse(input)).toEqual(draft);
@@ -35,6 +43,16 @@ describe('print draft input', () => {
 describe('print listing input', () => {
   const terms = { optionId: '00000000-0000-4000-8000-000000000001', seller: `0x${'1'.repeat(40)}`,
     listingSalt: `0x${'2'.repeat(64)}`, deadline: '2000000000', availableQuantity: '10' };
+
+  it('uses the same canonical Product IDs for ordered mint mappings', () => {
+    const mintSource = { chainId: '11155111', contract: terms.seller, productIds: ['1', '2345678901234567890'] };
+    const input: unknown = { ...terms, mintSource };
+    expect(printListingInput.parse(input).mintSource).toEqual(mintSource);
+    for (const productIds of [[], ['0'], [terms.optionId]]) {
+      const candidate: unknown = { ...terms, mintSource: { ...mintSource, productIds } };
+      expect(printListingInput.safeParse(candidate).success).toBe(false);
+    }
+  });
 
   it('accepts optional seller-signed splits using basis points', () => {
     const input: unknown = { ...terms, splits: [
