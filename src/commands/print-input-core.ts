@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { isAddress, isAddressEqual, zeroAddress } from 'viem';
 
 const uuid = z.uuid();
+const productId = z.string().regex(/^[1-9][0-9]*$/u);
 const uint = z.string().regex(/^(0|[1-9][0-9]*)$/u);
 const address = z.templateLiteral(['0x', z.string()]).refine(value => /^0x[0-9a-fA-F]{40}$/u.test(value));
 const bytes32 = z.templateLiteral(['0x', z.string()]).refine(value => /^0x[0-9a-fA-F]{64}$/u.test(value));
@@ -25,7 +26,7 @@ export const savedShippingInput = z.object({
 }).strict();
 
 export const printDropInput = z.object({
-  idempotencyKey: uuid, productId: uuid.optional(), name: z.string(), description: z.string().optional(),
+  idempotencyKey: uuid, productId: productId.optional(), name: z.string(), description: z.string().optional(),
   chainId: z.literal('11155111'),
   print: z.object({
     name: z.string(), description: z.string(), tags: z.array(z.string()),
@@ -49,7 +50,7 @@ export const printListingInput = z.object({
   optionId: uuid, seller: address, listingSalt: bytes32, deadline: uint, availableQuantity: uint,
   eligibilityRuleId: uuid.optional(),
   mintSource: z.object({ chainId: z.string().regex(/^[1-9][0-9]*$/u), contract: address,
-    productIds: z.array(uuid).min(1).max(1000),
+    productIds: z.array(productId).min(1).max(1000),
   }).strict().optional(),
   splits: printListingSplits.optional(),
   maxQuantityPerCheckout: z.string().regex(/^[1-9][0-9]*$/u)

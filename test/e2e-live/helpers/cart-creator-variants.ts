@@ -42,6 +42,10 @@ export async function createCreatorVariantSkus(
 
 /** A mint SKU describes new inventory, not an existing or indexed NFT. */
 export async function createCreatorMintVariantSku(live: LiveFixture, contract: Address): Promise<Hex> {
+  return (await createCreatorMintProduct(live, contract)).sku;
+}
+
+export async function createCreatorMintProduct(live: LiveFixture, contract: Address): Promise<{ productId: string; sku: Hex }> {
   const runId = randomUUID();
   const product = await catalog<CartApiProduct>(live, ['products', 'create'], {
     slug: `cli-cart-mint-${runId}`, metadata: { title: 'CLI Cart mint E2E', source: 'rare-cli', runId },
@@ -56,7 +60,7 @@ export async function createCreatorMintVariantSku(live: LiveFixture, contract: A
   const variant = created.variants[0];
   if (created.variants.length !== 1 || variant === undefined || variant.universalTokenId !== null) throw new Error('Creator fixture did not return an unattached mint SKU.');
   await catalog(live, ['products', 'publish', '--product-id', product.id]);
-  return variant.sku;
+  return { productId: product.id, sku: variant.sku };
 }
 
 export function createCreatorVariantClient(live: LiveFixture): RareClient {

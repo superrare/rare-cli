@@ -6,7 +6,7 @@ import { z } from 'zod';
 import type { CartApiProduct, CartCheckoutReceipt, CartOrder, PrintPublication } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress, resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 import { erc20Abi, erc721Abi, getAddress, parseEventLogs, parseUnits, type Address, type Hex } from 'viem';
-import { createCreatorVariantClient, createCreatorMintVariantSku } from './helpers/cart-creator-variants.js';
+import { createCreatorVariantClient, createCreatorMintProduct } from './helpers/cart-creator-variants.js';
 import { cleanupLiveFixture, createCartLiveFixture, jsonCommand, requireBuyerFixture, type BuyerLiveFixture } from './helpers/live-harness.js';
 import { nftFixtureManifest } from './helpers/nft-fixture-manifest.js';
 import { downloadTestImage } from './helpers/test-image.js';
@@ -35,6 +35,7 @@ describe('ordered blind mint and its physical Product variant', () => {
       },
     }));
     let prepared: PreparedArtwork[] = [];
+    let offeringProductId: string | undefined;
     try {
       if (live.chain !== 'sepolia') throw new Error('Blind print Product E2E requires Sepolia.');
       const collection = await jsonCommand<{ contract: Address }>(live.sellerHome, [
@@ -55,9 +56,11 @@ describe('ordered blind mint and its physical Product variant', () => {
       for (const artwork of prepared) {
         const visible = await jsonCommand<CartApiProduct>(live.sellerHome,
           ['cart', 'catalog', 'products', 'get', '--product-id', artwork.productId, '--chain', live.chain]);
-        expect(visible.variants.some(variant => variant.sku === artwork.nftSku)).toBe(false);
+        expect(visible.variants.find(variant => variant.sku === artwork.nftSku)).toMatchObject({ isHidden: true });
       }
-      const mintSku = await createCreatorMintVariantSku(live, collection.contract);
+      const mintProduct = await createCreatorMintProduct(live, collection.contract);
+      offeringProductId = mintProduct.productId;
+      const mintSku = mintProduct.sku;
       const mintTerms = await jsonFile(live, 'mint-listing', { deadline: deadline(), listings: [{
         sku: mintSku, settlementCurrency: 'usdc', unitPrice: '1', quantity: '2', fulfillmentKind: 'ERC721_MINT_TO',
       }] });
@@ -74,6 +77,20 @@ describe('ordered blind mint and its physical Product variant', () => {
       const printListing = printPublication.signedArtifact.entries[0]?.listingDigest;
       if (!printListing) throw new Error('Physical release Listing is missing.');
       const creator = createCreatorVariantClient(live);
+      const companion = await jsonFile(live, 'companion-membership', {
+        sku: first.printSku, position: 1, metadata: { printDropId: first.dropId },
+      });
+      await jsonCommand(live.sellerHome, ['cart', 'catalog', 'products', 'attach-sku',
+        '--product-id', mintProduct.productId, '--input', companion, '--chain', live.chain]);
+      const offering = await creator.cart.catalog.products.get(mintProduct.productId);
+      expect(offering.variants.map(variant => variant.sku)).toEqual(expect.arrayContaining([mintSku, first.printSku]));
+      expect(offering.variants.find(variant => variant.sku === first.printSku)?.metadata)
+        .toMatchObject({ printDropId: first.dropId });
+      await expect.poll(async () => {
+        const discovery = await creator.cart.listing.search({ seller: live.sellerAddress, fulfillmentKind: 4, productId: mintProduct.productId });
+        return discovery.data.find(listing => listing.listingDigest === mintListing)?.productIds ?? [];
+      }, { timeout: 180_000, interval: 2_000 }).toContain(mintProduct.productId);
+      expect((await creator.cart.listing.get(printListing)).metadata.fulfillmentPreparationId).toBe(printPublication.preparation.id);
       for (const artwork of prepared) {
         const grouped = await jsonCommand<CartApiProduct>(live.sellerHome,
           ['cart', 'catalog', 'products', 'get-mine', '--product-id', artwork.productId, '--chain', live.chain]);
@@ -100,15 +117,11 @@ describe('ordered blind mint and its physical Product variant', () => {
       expect(BigInt(preview.preparation.paymentAmount)).toBeLessThanOrEqual(50_000_000n);
       const purchase = await jsonCommand<Purchase>(live.buyerHome, [...checkout, '--yes'], 300_000);
       await assertMint(live, purchase, collection.contract, 2n);
+      console.info('Blind mint Cart payment confirmed', { transactionHash: purchase.txHash, orderId: purchase.orderId, collection: collection.contract, productId: second.productId });
       await expect.poll(async () => (await creator.cart.checkout.receipt(purchase.orderId)).status,
         { timeout: 180_000, interval: 2_000 }).toBe('indexed');
       const receipt = await creator.cart.checkout.receipt(purchase.orderId);
       assertFees(receipt, preview.preparation.paymentAmount);
-      await expect.poll(async () => {
-        const product = await jsonCommand<CartApiProduct>(live.sellerHome,
-          ['cart', 'catalog', 'products', 'get', '--product-id', second.productId, '--chain', live.chain]);
-        return product.variants.filter(variant => variant.universalTokenId === `${live.chainId}-${collection.contract.toLowerCase()}-2`).map(variant => variant.sku);
-      }, { timeout: 180_000, interval: 2_000 }).toEqual([second.nftSku]);
       expect(receipt.actions.some(action => action.target.toLowerCase() === collection.contract.toLowerCase() && action.tokenId === '2' && action.unitIndex === '0')).toBe(true);
 
       const readOrder = (): Promise<CartOrder> => jsonCommand(live.buyerHome, ['cart', 'orders', 'get', '--id', purchase.orderId]);
@@ -142,8 +155,14 @@ describe('ordered blind mint and its physical Product variant', () => {
       const history = await jsonCommand<{ data: CartOrder[] }>(live.buyerHome, ['cart', 'orders', 'list', '--per-page', '100']);
       expect(history.data.find(candidate => candidate.id === purchase.orderId)?.items).toHaveLength(2);
       console.info('Blind print Product order verified', { transactionHash: purchase.txHash, orderId: purchase.orderId, providerOrderId: provider.id });
+      await expect.poll(async () => {
+        const product = await jsonCommand<CartApiProduct>(live.sellerHome,
+          ['cart', 'catalog', 'products', 'get', '--product-id', second.productId, '--chain', live.chain]);
+        return product.variants.filter(variant => !variant.isHidden && variant.universalTokenId === `${live.chainId}-${collection.contract.toLowerCase()}-2`).map(variant => variant.sku);
+      }, { timeout: 180_000, interval: 2_000 }).toEqual([second.nftSku]);
     } finally {
       try {
+        if (offeringProductId !== undefined) await jsonCommand(live.sellerHome, ['cart', 'catalog', 'products', 'archive', '--product-id', offeringProductId, '--chain', live.chain]);
         for (const artwork of prepared) {
           await jsonCommand(live.sellerHome, ['prints', 'drops', 'archive', '--id', artwork.dropId]);
           await jsonCommand(live.sellerHome, ['cart', 'catalog', 'products', 'archive', '--product-id', artwork.productId, '--chain', live.chain]);
