@@ -10,7 +10,7 @@ import { createAuthStore } from '../auth-storage.js';
 import { output } from '../output.js';
 import { formatPrintOutput } from './print-output-core.js';
 import { addChainOptions, type ChainOptions } from './options.js';
-import { parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, printListingInput } from './print-input-core.js';
+import { parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, printListingInput, printQuoteInput } from './print-input-core.js';
 
 type PrintOptions = AccountCommandOptions & ChainOptions;
 type IdentityOptions = PrintOptions & { id: string };
@@ -29,6 +29,12 @@ export function printsCommand(): Command {
     .requiredOption('--id <productId>', 'canonical print product ID, such as GLOBAL-FAP-8X12')
     .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.products.get(options.id)); }));
   prints.addCommand(products);
+  prints.addCommand(command('quote').description('Quote production and shipping without creating a listing or order')
+    .requiredOption('--input <path>', 'JSON specificationId, destinationCountryCode, optional copies and shippingMethod')
+    .action(async (options: InputOptions): Promise<void> => {
+      const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
+      print(await client(options).prints.quote(printQuoteInput.parse(input)));
+    }));
   prints.addCommand(command('get').description('Read a public print edition')
     .requiredOption('--id <uuid>', 'print drop ID')
     .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.drops.get(parseCommerceUuid(options.id))); }));
@@ -44,7 +50,7 @@ export function printsCommand(): Command {
     }));
 
   const drops = new Command('drops').description('Manage your creator print drafts');
-  drops.addCommand(command('create').requiredOption('--input <path>', 'JSON draft with chainId and print details: private productionUploadKey, public images and specificationId')
+  drops.addCommand(command('create').requiredOption('--input <path>', 'JSON draft with chainId, optional productId, and print details: private productionUploadKey, public images and specificationId')
     .action(async (options: InputOptions): Promise<void> => {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
       print(await client(options).prints.drops.create(printDropInput.parse(input)));
@@ -67,19 +73,25 @@ export function printsCommand(): Command {
     .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.drops.archive(parseCommerceUuid(options.id))); }));
   drops.addCommand(command('configure').requiredOption('--id <uuid>', 'owned drop ID')
     .requiredOption('--price-usd-cents <amount>', 'collector price, in integer USD cents; Listings settle in USDC')
-    .action(async (options: IdentityOptions & { priceUsdCents: string }): Promise<void> => {
+    .option('--specification-id <id>', 'offer this print format; repeat for several formats sharing inventory',
+      (value: string, previous: string[]) => [...previous, value], [])
+    .action(async (options: IdentityOptions & { priceUsdCents: string; specificationId: string[] }): Promise<void> => {
       const displayPriceUsdCents = parsePrintPrice(options.priceUsdCents);
-      print(await client(options).prints.options.configure({ dropId: parseCommerceUuid(options.id), input: { displayPriceUsdCents } }));
+      const rare = client(options);
+      const dropId = parseCommerceUuid(options.id);
+      print(options.specificationId.length === 0
+        ? await rare.prints.options.configure({ dropId, input: { displayPriceUsdCents } })
+        : await rare.prints.options.configure({ dropId, input: { displayPriceUsdCents, specificationIds: options.specificationId } }));
     }));
   prints.addCommand(drops);
 
   const listings = new Command('listing').description('Prepare and publish print Listing terms');
-  listings.addCommand(command('prepare').requiredOption('--input <path>', 'JSON listing terms, including optional eligibilityRuleId, maxQuantityPerCheckout and splits')
+  listings.addCommand(command('prepare').requiredOption('--input <path>', 'JSON listing terms, including optional eligibilityRuleId, maxQuantityPerCheckout, splits and mintSource')
     .action(async (options: InputOptions): Promise<void> => {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
       print(await client(options).prints.listings.prepare(printListingInput.parse(input)));
     }));
-  listings.addCommand(command('publish').requiredOption('--input <path>', 'JSON listing terms to prepare, sign and publish, including optional eligibilityRuleId, maxQuantityPerCheckout and splits')
+  listings.addCommand(command('publish').requiredOption('--input <path>', 'JSON listing terms to prepare, sign and publish, including optional eligibilityRuleId, maxQuantityPerCheckout, splits and mintSource')
     .option('--yes', 'proceed through all required signing and publication steps')
     .action(async (options: InputOptions): Promise<void> => {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));

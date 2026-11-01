@@ -223,7 +223,7 @@ function cartCheckoutCommand(swap = false): Command {
   const command = accountCommand(swap ? 'swap' : 'checkout');
   command.description('Preview or purchase an API-prepared Cart checkout');
   addChainOptions(command)
-    .option('--input <path>', 'JSON checkout document with typed listing and swap items; amounts are human-readable decimals')
+    .option('--input <path>', 'JSON checkout document with typed items and optional mintSelections; amounts are human-readable decimals')
     .option('--listing <listing-digest[=quantity]>', 'listing shortcut; cannot combine with --input (repeatable)', collectValue, [])
     .option('--output-currency <currency>', 'swap output token: eth, usdc, rare, or ERC-20 address')
     .option('--input-amount <amount>', 'exact payment budget for a swap, in payment currency units')
@@ -245,7 +245,7 @@ function cartCheckoutCommand(swap = false): Command {
         opts.paymentCurrency ?? '',
         '--payment-currency',
       ));
-      const selections = opts.input !== undefined
+      const checkoutInput = opts.input !== undefined
         ? unwrapCartCliResult(parseCartCheckoutFile(await readFile(opts.input, 'utf8')))
         : unwrapCartCliResult(parseCartCheckoutFile(JSON.stringify({ items: [
           ...(opts.listing.length === 0 ? [] : unwrapCartCliResult(parseCartListingSelections(opts.listing)).map(selection => ({ ...selection, quantity: selection.quantity.toString() }))),
@@ -253,6 +253,7 @@ function cartCheckoutCommand(swap = false): Command {
             ...(opts.inputAmount === undefined ? { outputAmount: opts.outputAmount } : { inputAmount: opts.inputAmount }) }] : []),
         ] })));
       const delivery = await readDelivery(opts.shippingInput, opts.savedAddressId);
+      if (checkoutInput.mintSelections !== undefined && delivery === undefined) throw new Error('mintSelections requires --shipping-input or --saved-address-id.');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const wallet = opts.preview === true || opts.authorizeOnly === true ? undefined : getWalletClient(chain);
@@ -268,7 +269,7 @@ function cartCheckoutCommand(swap = false): Command {
         ...(wallet === undefined ? {} : { walletClient: wallet.client }),
       });
       const paymentCurrency = await rare.currency.resolveDecimals(paymentCurrencyInput);
-      const items = await Promise.all(selections.map(async selection => {
+      const items = await Promise.all(checkoutInput.items.map(async selection => {
         if (selection.kind === 'listing') return { ...selection, recipient: selection.recipient ?? recipient };
         const outputCurrency = await rare.currency.resolveDecimals(selection.outputCurrency);
         const common = { kind: selection.kind, outputCurrency: outputCurrency.address, recipient: selection.recipient ?? recipient } satisfies { kind: 'swap'; outputCurrency: Address; recipient: Address };
@@ -279,7 +280,7 @@ function cartCheckoutCommand(swap = false): Command {
       const intent = {
         paymentCurrency: paymentCurrency.address,
         items,
-        ...(delivery === undefined ? {} : { delivery }),
+        ...(delivery === undefined ? {} : { delivery: { ...delivery, ...(checkoutInput.mintSelections === undefined ? {} : { mintSelections: checkoutInput.mintSelections }) } }),
       };
       const preparation = await rare.cart.checkout.prepare(intent);
 
