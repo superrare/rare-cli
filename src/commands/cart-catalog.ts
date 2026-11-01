@@ -16,7 +16,11 @@ type CatalogOptions = AccountCommandOptions & ChainOptions;
 const metadata = z.record(z.string(), z.unknown());
 const productInput = z.object({ slug: z.string().nullable().optional(), metadata }).strict();
 const variantsInput = z.union([
-  z.object({ variants: z.array(z.object({ metadata }).strict()).min(1) }).strict(),
+  z.object({ variants: z.array(z.object({ metadata, plannedNft: z.object({
+    chainId: z.string().regex(/^[1-9][0-9]*$/u),
+    contract: z.templateLiteral(['0x', z.string()]).refine(value => /^0x[0-9a-fA-F]{40}$/u.test(value)),
+    tokenId: z.string().regex(/^(0|[1-9][0-9]*)$/u),
+  }).strict().optional() }).strict()).min(1) }).strict(),
   z.object({ universalTokenIds: z.array(z.string()).min(1) }).strict(),
 ]);
 const skuInput = z.object({ sku: z.string().regex(/^0x[0-9a-fA-F]{64}$/), position: z.number().int().nonnegative(),
@@ -62,7 +66,7 @@ export function cartCatalogCommand(): Command {
     }));
   const variants = new Command('variants');
   variants.addCommand(command('add').requiredOption('--product-id <id>', 'product ID')
-    .requiredOption('--input <path>', 'JSON variants with metadata, or universalTokenIds for NFT attachment')
+    .requiredOption('--input <path>', 'JSON variants with metadata and optional plannedNft, or universalTokenIds for minted NFT attachment')
     .action(async (options: CatalogOptions & { productId: string; input: string }) => {
       const input = variantsInput.parse(await readInput(options.input));
       print(await client(options).cart.catalog.variants.add(options.productId, input));
