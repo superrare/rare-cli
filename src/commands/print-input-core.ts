@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isAddress, isAddressEqual, zeroAddress } from 'viem';
 
 const uuid = z.uuid();
 const uint = z.string().regex(/^(0|[1-9][0-9]*)$/u);
@@ -33,12 +34,27 @@ export const printDropInput = z.object({
   }).strict(),
 }).strict();
 
+const printListingSplit = z.object({
+  recipient: address.refine(value => isAddress(value, { strict: false }) && !isAddressEqual(value, zeroAddress),
+    'Split recipients must be valid nonzero addresses'),
+  basisPoints: z.number().int().min(1).max(10000),
+}).strict();
+const printListingSplits = z.array(printListingSplit).max(16)
+  .refine(splits => splits.length === 0 || splits.reduce((total, split) => total + split.basisPoints, 0) === 10000,
+    'Split basis points must sum to 10000')
+  .refine(splits => new Set(splits.map(split => split.recipient.toLowerCase())).size === splits.length,
+    'Split recipients must be unique');
+
 export const printListingInput = z.object({
   optionId: uuid, seller: address, listingSalt: bytes32, deadline: uint, availableQuantity: uint,
   eligibilityRuleId: uuid.optional(),
+  splits: printListingSplits.optional(),
   maxQuantityPerCheckout: z.string().regex(/^[1-9][0-9]*$/u)
     .pipe(z.string().refine(value => BigInt(value) <= 1000n, 'Print checkouts support at most 1000 copies')).optional(),
-}).strict();
+}).strict().refine(value => value.splits?.[0] === undefined ||
+  !isAddress(value.seller, { strict: false }) || !isAddress(value.splits[0].recipient, { strict: false }) ||
+  isAddressEqual(value.splits[0].recipient, value.seller),
+  { message: 'Print splits must start with the seller', path: ['splits'] });
 
 export const printDraftPatch = z.object({
   name: z.string().optional(), description: z.string().optional(), tags: z.array(z.string()).optional(),

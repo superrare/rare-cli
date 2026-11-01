@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { zeroAddress } from 'viem';
 import { printDropInput, printListingInput } from '../../src/commands/print-input-core.js';
 
 const draft = {
@@ -34,6 +35,30 @@ describe('print draft input', () => {
 describe('print listing input', () => {
   const terms = { optionId: '00000000-0000-4000-8000-000000000001', seller: `0x${'1'.repeat(40)}`,
     listingSalt: `0x${'2'.repeat(64)}`, deadline: '2000000000', availableQuantity: '10' };
+
+  it('accepts optional seller-signed splits using basis points', () => {
+    const input: unknown = { ...terms, splits: [
+      { recipient: terms.seller, basisPoints: 6667 },
+      { recipient: `0x${'3'.repeat(40)}`, basisPoints: 3333 },
+    ] };
+    expect(printListingInput.parse(input)).toEqual(input);
+    const unsplit: unknown = { ...terms, splits: [] };
+    expect(printListingInput.parse(unsplit)).toEqual(unsplit);
+  });
+
+  it.each([
+    [{ recipient: 'not-an-address', basisPoints: 10000 }],
+    [{ recipient: zeroAddress, basisPoints: 10000 }],
+    [{ recipient: terms.seller, basisPoints: 0 }],
+    [{ recipient: terms.seller, basisPoints: 10000.1 }],
+    [{ recipient: terms.seller, basisPoints: 9999 }],
+    [{ recipient: terms.seller, basisPoints: 5000 }, { recipient: terms.seller, basisPoints: 5000 }],
+    [{ recipient: `0x${'3'.repeat(40)}`, basisPoints: 10000 }],
+    Array.from({ length: 17 }, (_, index) => ({ recipient: `0x${(index + 1).toString(16).padStart(40, '0')}`, basisPoints: 1000 })),
+  ].map(splits => ({ splits })))('rejects invalid print payout splits: %j', ({ splits }) => {
+    const input: unknown = { ...terms, splits };
+    expect(printListingInput.safeParse(input).success).toBe(false);
+  });
 
   it('uses physical print fulfillment without a caller-selected NFT kind', () => {
     const input: unknown = terms;
