@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { CartOrder, EligibilityRule } from '@rareprotocol/rare-sdk';
+import type { CartCardCheckout, CartOrder, EligibilityRule } from '@rareprotocol/rare-sdk';
 import type { Address, Hex } from 'viem';
 import { cleanupLiveFixture, createCartLiveFixture, E2E_TOKEN_URI, jsonCommand } from './helpers/live-harness.js';
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
@@ -80,6 +80,18 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
           expect(checkout.preparedPurchase.executePurchase.platformSignature).not.toBe('0x');
           const existingOrderId = checkout.preparedPurchase.executePurchase.order.orderId;
           const existingOrder = await jsonCommand<CartOrder>(fixture.sellerHome, ['cart', 'orders', 'get', '--id', existingOrderId]);
+          const card = await jsonCommand<CartCardCheckout>(fixture.sellerHome, [
+            'cart', 'card', '--listing', listing.listingDigest, '--recipient', fixture.sellerAddress,
+            '--idempotency-key', randomUUID(), '--saved-address-id', addressId, '--chain', fixture.chain,
+          ], 180_000);
+          expect(card.config.env).toBe('sandbox');
+          expect(card.sessionKey.length).toBeGreaterThan(0);
+          expect(card.checkoutJwtToken.length).toBeGreaterThan(0);
+          expect(card.preparedPurchase.executePurchase.lines.find(line => line.listingDigest === listing.listingDigest)?.quantity).toBe('1');
+          const cardOrder = await jsonCommand<CartOrder>(fixture.sellerHome, [
+            'cart', 'orders', 'get', '--id', card.preparedPurchase.executePurchase.order.orderId,
+          ]);
+          expect(cardOrder.status).toBe('PENDING');
           const replacementImage = join(fixture.tempDir, 'replacement-production.jpg');
           await writeFile(replacementImage, await downloadTestImage());
           const replacement = await jsonCommand<{ access: string; key: string }>(fixture.sellerHome,

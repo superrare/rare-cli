@@ -9,6 +9,7 @@ import { cleanupLiveFixture, createCartLiveFixture, jsonCommand, readTokenBalanc
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
 import { createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
 import { runCli } from '../helpers/cli.js';
+import { verifyPrivateCartOrder } from './helpers/cart-order-history.js';
 
 type Preview = { preparation: { paymentAmount: string; lines: Array<{ fulfillmentKind: number; amount: string }> } };
 type Purchase = { orderId: Hex; txHash: Hex; paymentAmount: string; actionCount: number };
@@ -57,6 +58,7 @@ describe.sequential('live Cart routed swaps through the generic CLI checkout', (
     expect(history.id).toBe(purchase.orderId);
     expect(history.items).toEqual([expect.objectContaining({ lineIndex: 0, fulfillmentStatus: 'FULFILLED' })]);
     expect(history.fulfillments).toEqual([]);
+    await verifyPrivateCartOrder(live, purchase.orderId);
 
     const receipt = await live.publicClient.getTransactionReceipt({ hash: purchase.txHash });
     const lines = parseEventLogs({ abi: cartAbi, logs: receipt.logs.filter(log => log.address.toLowerCase() === getCartAddress(live.chain).toLowerCase()), eventName: 'OrderLineSettled' });

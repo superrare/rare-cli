@@ -223,7 +223,7 @@ function cartCheckoutCommand(swap = false): Command {
   const command = accountCommand(swap ? 'swap' : 'checkout');
   command.description('Preview or purchase an API-prepared Cart checkout');
   addChainOptions(command)
-    .option('--input <path>', 'JSON checkout document with typed items and optional mintSelections; amounts are human-readable decimals')
+    .option('--input <path>', 'JSON checkout document with typed items and optional mintSelections or optionSelections; amounts are human-readable decimals')
     .option('--listing <listing-digest[=quantity]>', 'listing shortcut; cannot combine with --input (repeatable)', collectValue, [])
     .option('--output-currency <currency>', 'swap output token: eth, usdc, rare, or ERC-20 address')
     .option('--input-amount <amount>', 'exact payment budget for a swap, in payment currency units')
@@ -254,6 +254,7 @@ function cartCheckoutCommand(swap = false): Command {
         ] })));
       const delivery = await readDelivery(opts.shippingInput, opts.savedAddressId);
       if (checkoutInput.mintSelections !== undefined && delivery === undefined) throw new Error('mintSelections requires --shipping-input or --saved-address-id.');
+      if (checkoutInput.optionSelections !== undefined && delivery === undefined) throw new Error('optionSelections requires --shipping-input or --saved-address-id.');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const wallet = opts.preview === true || opts.authorizeOnly === true ? undefined : getWalletClient(chain);
@@ -280,7 +281,9 @@ function cartCheckoutCommand(swap = false): Command {
       const intent = {
         paymentCurrency: paymentCurrency.address,
         items,
-        ...(delivery === undefined ? {} : { delivery: { ...delivery, ...(checkoutInput.mintSelections === undefined ? {} : { mintSelections: checkoutInput.mintSelections }) } }),
+        ...(delivery === undefined ? {} : { delivery: { ...delivery,
+          ...(checkoutInput.mintSelections === undefined ? {} : { mintSelections: checkoutInput.mintSelections }),
+          ...(checkoutInput.optionSelections === undefined ? {} : { optionSelections: checkoutInput.optionSelections }) } }),
       };
       const preparation = await rare.cart.checkout.prepare(intent);
 

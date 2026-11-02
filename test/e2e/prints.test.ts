@@ -160,7 +160,7 @@ describe('built print and shipping CLI', () => {
     } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
   });
 
-  it('forwards mint unit associations with authenticated delivery checkout', async () => {
+  it('forwards print format choices and mint unit associations with authenticated delivery checkout', async () => {
     let received: unknown;
     const server = createServer((request, response) => {
       void text(request).then(body => {
@@ -183,15 +183,16 @@ describe('built print and shipping CLI', () => {
           refreshToken: 'mint-print-refresh', expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
         const listingDigest = `0x${'1'.repeat(64)}`;
         const mintSelections = [{ preparationId: '00000000-0000-4000-8000-000000000001', listingDigest, unitIndexes: [0] }];
+        const optionSelections = [{ preparationId: '00000000-0000-4000-8000-000000000001', optionId: '00000000-0000-4000-8000-000000000003' }];
         const input = join(home, 'checkout.json');
-        await writeFile(input, JSON.stringify({ items: [{ kind: 'listing', listingDigest, quantity: '1' }], mintSelections }));
+        await writeFile(input, JSON.stringify({ items: [{ kind: 'listing', listingDigest, quantity: '1' }], mintSelections, optionSelections }));
         const savedAddressId = '00000000-0000-4000-8000-000000000002';
         const result = await runCli(['--json', 'cart', 'checkout', '--input', input, '--payment-currency', 'eth',
           '--recipient', `0x${'2'.repeat(40)}`, '--saved-address-id', savedAddressId, '--preview', '--chain', 'sepolia',
           '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory], { home });
         expect(result.code).toBe(1);
         expect(result.stderr).toContain('fixture_capture');
-        expect(received).toMatchObject({ body: { delivery: { savedAddressId, mintSelections } } });
+        expect(received).toMatchObject({ body: { delivery: { savedAddressId, mintSelections }, optionSelections } });
       });
     } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
   });

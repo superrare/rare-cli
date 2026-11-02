@@ -88,7 +88,8 @@
     "test:nfts:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/nft-search.test.ts --config vitest.config.ts",
     "test:notifications:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/notifications.test.ts --config vitest.config.ts",
     "test:blind-prints:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/blind-print-products.test.ts --config vitest.config.ts",
-    "test:commerce:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/cart.test.ts test/e2e-live/cart-fulfillment-kinds.test.ts test/e2e-live/cart-swaps.test.ts test/e2e-live/cart-splits.test.ts test/e2e-live/eligibility.test.ts test/e2e-live/eligibility-standards.test.ts test/e2e-live/print-products.test.ts test/e2e-live/prints.test.ts test/e2e-live/print-fulfillment.test.ts test/e2e-live/blind-print-products.test.ts --no-file-parallelism --config vitest.config.ts"
+    "test:commerce:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/cart.test.ts test/e2e-live/cart-free.test.ts test/e2e-live/cart-catalog.test.ts test/e2e-live/shipping-addresses.test.ts test/e2e-live/cart-fulfillment-kinds.test.ts test/e2e-live/cart-swaps.test.ts test/e2e-live/cart-splits.test.ts test/e2e-live/eligibility.test.ts test/e2e-live/eligibility-standards.test.ts test/e2e-live/print-products.test.ts test/e2e-live/prints.test.ts test/e2e-live/print-fulfillment.test.ts test/e2e-live/blind-print-products.test.ts --no-file-parallelism --config vitest.config.ts",
+    "test:print-quantity:e2e": "npm run build && npm run test:typecheck && vitest run test/e2e-live/print-quantity.test.ts --config vitest.config.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
