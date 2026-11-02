@@ -9,9 +9,9 @@ import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
 import { createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
 
 describe('eligibility through the built CLI and deployed Rare API', () => {
-  it('creates a creator-owned rule using a fresh SKU, lists claims and disables the rule', async () => {
+  it('creates a rule, removes its listing gate and permits purchase without a claim', async () => {
     if (!process.env.RARE_API_BASE_URL) throw new Error('Set RARE_API_BASE_URL to a deployed eligibility API.');
-    const fixture = await createCartLiveFixture();
+    const fixture = requireBuyerFixture(await createCartLiveFixture({ buyer: true }));
     try {
       await jsonCommand<{ data: EligibilityRule[] }>(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'list']).then(page => page.data);
       const collection = await deployErc721Collection(fixture, '1');
@@ -42,6 +42,21 @@ describe('eligibility through the built CLI and deployed Rare API', () => {
           'cart', 'purchase-eligibility', 'claims', 'list', '--rule-id', rule.id,
         ]).then(page => page.data);
         expect(claims).toEqual([]);
+        const [listingDigest] = published.listingDigests;
+        if (!listingDigest) throw new Error('Expected a gated Listing digest.');
+        const checkout = ['cart', 'checkout', '--listing', listingDigest, '--payment-currency', 'eth', '--chain', fixture.chain];
+        expect(await jsonCommand(fixture.buyerHome, [
+          'cart', 'purchase-eligibility', 'claims', 'list', '--rule-id', rule.id,
+        ])).toMatchObject({ data: [] });
+        await expect(jsonCommand(fixture.buyerHome, [...checkout, '--authorize-only', '--yes']))
+          .rejects.toThrow(/Insufficient unreserved claims/u);
+        expect(await jsonCommand(fixture.sellerHome, [
+          'cart', 'purchase-eligibility', 'listing-requirements', 'clear', '--listing-digest', listingDigest,
+        ])).toEqual({ listingDigest, removed: true });
+        const purchase = await jsonCommand<TxResult>(fixture.buyerHome, [...checkout, '--yes'], 240_000);
+        expectTx(purchase);
+        expect((await fixture.publicClient.readContract({ address: collection.contract, abi: erc721Abi,
+          functionName: 'ownerOf', args: [BigInt(token.tokenId)] })).toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
       } finally {
         expect(await jsonCommand(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'disable', '--rule-id', rule.id]))
           .toEqual({ ruleId: rule.id, disabled: true });
