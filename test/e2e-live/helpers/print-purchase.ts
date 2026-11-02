@@ -75,7 +75,7 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
       const drop = await jsonCommand<{ id: string }>(fixture.sellerHome, ['prints', 'drops', 'create', '--input', input]);
       dropId = drop.id;
       const configured = await jsonCommand<PrintOptionSet>(fixture.sellerHome, ['prints', 'drops', 'configure', '--id', drop.id,
-        '--price-usd-cents', '100', '--specification-id', 'GLOBAL-FAP-8X12', '--specification-id', 'GLOBAL-FAP-8X8']);
+        '--price-usd-cents', journey === 'two-copy' ? '50' : '100', '--specification-id', 'GLOBAL-FAP-8X12', '--specification-id', 'GLOBAL-FAP-8X8']);
       const option = configured.options.find(candidate => candidate.id === configured.listingOptionId);
       if (!option) throw new Error('Configured print formats did not identify their shared listing option.');
       if (!isHex(option.sku) || option.sku.length !== 66) throw new Error('Print format SKU is not bytes32.');
@@ -206,11 +206,11 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
     }
 }
 
-async function verifySettlement(
+export async function verifySettlement(
   fixture: Awaited<ReturnType<typeof createCartLiveFixture>>,
   rare: ReturnType<typeof createCreatorVariantClient>,
   purchase: { txHash: Hex; orderId: Hex },
-  preview: CartCheckoutPreparation,
+  preview: Pick<CartCheckoutPreparation, 'paymentAmount'>,
   physical: boolean,
 ): Promise<CartCheckoutReceipt> {
   await expect.poll(async () => (await rare.cart.checkout.receipt(purchase.orderId)).status,
@@ -244,7 +244,11 @@ async function verifySettlement(
     ...(physical ? [expect.objectContaining({ purpose: 'PRODUCTION', bearer: 'BUYER' }), expect.objectContaining({ purpose: 'SHIPPING', bearer: 'BUYER' })] : []),
   ]));
   for (const fee of fees) {
-    if (fee.calculation?.type === 'PERCENTAGE') expect(BigInt(fee.amount)).toBe(BigInt(fee.grossAmount) * BigInt(fee.calculation.basisPoints) / 10_000n);
+    if (fee.calculation?.type === 'PERCENTAGE') {
+      const unitFee = BigInt(fee.grossAmount) * BigInt(fee.calculation.basisPoints) / 10_000n;
+      expect(BigInt(fee.unitAmount)).toBe(unitFee);
+      expect(BigInt(fee.amount)).toBe(unitFee * (fee.amountKind === 'PER_UNIT' ? BigInt(fee.quantity) : 1n));
+    }
     if (fee.finalLineIndex !== null) expect(receipt.lines[fee.finalLineIndex]).toMatchObject({ sku: fee.feeSku, paymentRecipient: fee.recipient, settlementCurrency: fee.currency });
   }
   return receipt;
