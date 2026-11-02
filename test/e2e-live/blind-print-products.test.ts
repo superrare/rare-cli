@@ -1,3 +1,5 @@
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { readCollaboratorBalance, verifyPrintSplits } from './helpers/cart-print-splits.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -61,15 +63,17 @@ describe('ordered blind mint and its physical Product variant', () => {
       const mintProduct = await createCreatorMintProduct(live, collection.contract);
       offeringProductId = mintProduct.productId;
       const mintSku = mintProduct.sku;
+      const collaborator = privateKeyToAccount(generatePrivateKey()).address;
+      const splits = [{ recipient: live.sellerAddress, basisPoints: 7000 }, { recipient: collaborator, basisPoints: 3000 }];
       const mintTerms = await jsonFile(live, 'mint-listing', { deadline: deadline(), listings: [{
-        sku: mintSku, settlementCurrency: 'usdc', unitPrice: '1', quantity: '2', fulfillmentKind: 'ERC721_MINT_TO',
+        sku: mintSku, settlementCurrency: 'usdc', unitPrice: '1', quantity: '2', fulfillmentKind: 'ERC721_MINT_TO', splits,
       }] });
       const mintPublication = await jsonCommand<{ listingDigests: Hex[] }>(live.sellerHome,
         ['cart', 'listing', 'create', '--input', mintTerms, '--chain', live.chain, '--yes']);
       const mintListing = mintPublication.listingDigests[0];
       if (!mintListing) throw new Error('Collection mint Listing is missing.');
       const printTerms = await jsonFile(live, 'print-listing', { optionId: first.optionId, seller: live.sellerAddress,
-        listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: deadline(), availableQuantity: '2',
+        listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: deadline(), availableQuantity: '2', splits,
         mintSource: { chainId: String(live.chainId), contract: collection.contract, productIds: prepared.map(item => item.productId) },
       });
       const printPublication = await jsonCommand<PrintPublication>(live.sellerHome,
@@ -102,8 +106,12 @@ describe('ordered blind mint and its physical Product variant', () => {
       const firstCheckout = ['cart', 'checkout', '--listing', mintListing, '--payment-currency', 'usdc', '--chain', live.chain];
       const firstPreview = await jsonCommand<{ preparation: { paymentAmount: string } }>(live.buyerHome, [...firstCheckout, '--preview']);
       expect(BigInt(firstPreview.preparation.paymentAmount)).toBeLessThanOrEqual(5_000_000n);
+      const firstBalance = await readCollaboratorBalance(live, collaborator);
       const firstPurchase = await jsonCommand<Purchase>(live.buyerHome, [...firstCheckout, '--yes'], 300_000);
       await assertMint(live, firstPurchase, collection.contract, 1n);
+      await expect.poll(async () => (await creator.cart.checkout.receipt(firstPurchase.orderId)).status,
+        { timeout: 180_000, interval: 2_000 }).toBe('indexed');
+      await verifyPrintSplits(live, firstPurchase, await creator.cart.checkout.receipt(firstPurchase.orderId), [mintListing], collaborator, firstBalance);
 
       const shipping = await jsonFile(live, 'shipping', { name: 'Sandbox Blind Print Test', email: 'blind-print-e2e@example.test',
         phoneNumber: '+12025550123', addressLine1: '123 Test Street', townOrCity: 'New York', stateOrCounty: 'NY',
@@ -115,6 +123,7 @@ describe('ordered blind mint and its physical Product variant', () => {
       const checkout = ['cart', 'checkout', '--input', checkoutFile, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', live.chain];
       const preview = await jsonCommand<{ preparation: { paymentAmount: string } }>(live.buyerHome, [...checkout, '--preview']);
       expect(BigInt(preview.preparation.paymentAmount)).toBeLessThanOrEqual(50_000_000n);
+      const splitBalance = await readCollaboratorBalance(live, collaborator);
       const purchase = await jsonCommand<Purchase>(live.buyerHome, [...checkout, '--yes'], 300_000);
       await assertMint(live, purchase, collection.contract, 2n);
       console.info('Blind mint Cart payment confirmed', { transactionHash: purchase.txHash, orderId: purchase.orderId, collection: collection.contract, productId: second.productId });
@@ -122,6 +131,7 @@ describe('ordered blind mint and its physical Product variant', () => {
         { timeout: 180_000, interval: 2_000 }).toBe('indexed');
       const receipt = await creator.cart.checkout.receipt(purchase.orderId);
       assertFees(receipt, preview.preparation.paymentAmount);
+      await verifyPrintSplits(live, purchase, receipt, [mintListing, printListing], collaborator, splitBalance);
       expect(receipt.actions.some(action => action.target.toLowerCase() === collection.contract.toLowerCase() && action.tokenId === '2' && action.unitIndex === '0')).toBe(true);
 
       const readOrder = (): Promise<CartOrder> => jsonCommand(live.buyerHome, ['cart', 'orders', 'get', '--id', purchase.orderId]);

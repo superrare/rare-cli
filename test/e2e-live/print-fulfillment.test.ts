@@ -1,3 +1,5 @@
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { readCollaboratorBalance, verifyPrintSplits } from './helpers/cart-print-splits.js';
 import { downloadTestImage } from './helpers/test-image.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
@@ -83,10 +85,12 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
         const rule = await jsonCommand<EligibilityRule>(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'create', '--input', file]);
         ruleId = rule.id;
       }
+      const collaborator = privateKeyToAccount(generatePrivateKey()).address;
+      const splits = [{ recipient: fixture.sellerAddress, basisPoints: 7000 }, { recipient: collaborator, basisPoints: 3000 }];
       const terms = join(fixture.tempDir, 'listing.json');
       await writeFile(terms, JSON.stringify({ optionId: option.id, seller: fixture.sellerAddress,
-        listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: String(Math.floor(Date.now() / 1000) + 3600), availableQuantity: '2', ...(ruleId ? { eligibilityRuleId: ruleId } : {}) }));
-      const published = await jsonCommand<{ signedArtifact: { entries: { listingDigest: string }[] } }>(fixture.sellerHome, ['prints', 'listing', 'publish', '--input', terms, '--chain', fixture.chain, '--yes']);
+        listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: String(Math.floor(Date.now() / 1000) + 3600), availableQuantity: '2', maxQuantityPerCheckout: journey === 'print-only' ? '2' : '1', splits, ...(ruleId ? { eligibilityRuleId: ruleId } : {}) }));
+      const published = await jsonCommand<{ signedArtifact: { entries: { listingDigest: Hex }[] } }>(fixture.sellerHome, ['prints', 'listing', 'publish', '--input', terms, '--chain', fixture.chain, '--yes']);
       const entry = published.signedArtifact.entries[0];
       if (!entry) throw new Error('Print publication returned no Listing.');
       const shipping = join(fixture.tempDir, 'shipping.json');
@@ -96,7 +100,7 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
         const publicPrint = await jsonCommand<{ options: { listingDigest: string; eligibilityRuleId: string | null }[] }>(fixture.sellerHome, ['prints', 'get', '--id', drop.id]);
         expect(publicPrint.options).toContainEqual(expect.objectContaining({ listingDigest: entry.listingDigest, eligibilityRuleId: ruleId }));
       }
-      const printCheckout = ['cart', 'checkout', '--listing', entry.listingDigest, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', fixture.chain];
+      const printCheckout = ['cart', 'checkout', '--listing', `${entry.listingDigest}=${journey === 'print-only' ? 2 : 1}`, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', fixture.chain];
       const claims = (): Promise<EligibilityClaim[]> => jsonCommand<{ data: EligibilityClaim[] }>(buyerHome, ['cart', 'purchase-eligibility', 'claims', 'list', '--rule-id', ruleId ?? '', '--per-page', '100']).then(page => page.data);
       if (journey === 'claim' && source) {
         expect(await claims()).toEqual([]);
@@ -107,7 +111,7 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
         await verifySettlement(fixture, creator, nftPurchase, nftPreview.preparation, false);
         await expect.poll(claims, { timeout: 180_000, interval: 2_000 }).toMatchObject([{ status: 'AVAILABLE' }]);
       }
-      const checkout = ['cart', 'checkout', ...(journey === 'mixed' && source ? ['--listing', source.listingDigest] : []), '--listing', entry.listingDigest, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', fixture.chain];
+      const checkout = ['cart', 'checkout', ...(journey === 'mixed' && source ? ['--listing', source.listingDigest] : []), '--listing', `${entry.listingDigest}=${journey === 'print-only' ? 2 : 1}`, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', fixture.chain];
       const preview = await jsonCommand<{ preparation: CartCheckoutPreparation }>(buyerHome, [...checkout, '--preview']);
       if (journey !== 'mixed') {
         expect(BigInt(preview.preparation.breakdown?.production ?? '-1')).toBeGreaterThan(0n);
@@ -116,13 +120,16 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
       // Bound the test-wallet spend before requesting any approval or payment.
       expect(BigInt(preview.preparation.paymentAmount)).toBeLessThanOrEqual(50_000_000n);
       const sellerBefore = await fixture.publicClient.readContract({ address: fixture.usdcAddress, abi: erc20Abi, functionName: 'balanceOf', args: [fixture.sellerAddress] });
+      const splitBalance = await readCollaboratorBalance(fixture, collaborator);
       const purchase = await jsonCommand<{ txHash: Hex; orderId: Hex }>(buyerHome, [...checkout, '--yes'], 300_000);
       expect(await fixture.publicClient.getTransactionReceipt({ hash: purchase.txHash })).toMatchObject({ status: 'success' });
       console.info('Cart print payment confirmed', { transactionHash: purchase.txHash, orderId: purchase.orderId });
       const indexed = await verifySettlement(fixture, creator, purchase, preview.preparation, true);
+      await verifyPrintSplits(fixture, purchase, indexed, [entry.listingDigest], collaborator, splitBalance);
       const sellerProceeds = indexed.lines.filter(line => line.paymentRecipient.toLowerCase() === fixture.sellerAddress.toLowerCase()).reduce((total, line) => total + BigInt(line.amount), 0n);
       const sellerAfter = await fixture.publicClient.readContract({ address: fixture.usdcAddress, abi: erc20Abi, functionName: 'balanceOf', args: [fixture.sellerAddress] });
-      expect(sellerAfter - sellerBefore).toBe(sellerProceeds);
+      const collaboratorPaid = indexed.splitAllocations.filter(allocation => allocation.recipient.toLowerCase() === collaborator.toLowerCase()).reduce((total, allocation) => total + BigInt(allocation.amount), 0n);
+      expect(sellerAfter - sellerBefore).toBe(sellerProceeds - collaboratorPaid);
       if (source) expect(await fixture.publicClient.readContract({ address: source.contract, abi: erc721Abi, functionName: 'ownerOf', args: [BigInt(source.tokenId)] })).toBe(getAddress(fixture.buyerAddress ?? ''));
       if (journey === 'claim') {
         await expect.poll(claims, { timeout: 180_000, interval: 2_000 }).toMatchObject([{ status: 'CONSUMED' }]);
@@ -159,7 +166,7 @@ describe('Cart payment through Prodigi sandbox fulfillment', () => {
 
       expect(provider.metadata.fulfillmentId).toBe(fulfillment.id);
       expect(provider.merchantReference).toBe(createHash('sha256').update(`superrare:cart:fulfillment:${fulfillment.id}`).digest('hex'));
-      expect(provider.items).toEqual([{ sku: product.id, copies: 1 }]);
+      expect(provider.items).toEqual([{ sku: product.id, copies: journey === 'print-only' ? 2 : 1 }]);
       // Only public identifiers, never recipient details, private URLs or credentials.
       console.info('Prodigi sandbox order verified', { transactionHash: purchase.txHash, orderId: purchase.orderId, providerOrderId: provider.id });
     } finally {
@@ -193,8 +200,11 @@ async function verifySettlement(
   expect(receipt.issues).toEqual([]);
   const transfers = parseEventLogs({ abi: erc20Abi,
     logs: transaction.logs.filter(log => log.address.toLowerCase() === fixture.usdcAddress.toLowerCase()), eventName: 'Transfer' });
-  for (const recipient of new Set(receipt.lines.map(line => line.paymentRecipient.toLowerCase()))) {
-    const entitlement = receipt.lines.filter(line => line.paymentRecipient.toLowerCase() === recipient).reduce((sum, line) => sum + BigInt(line.amount), 0n);
+  const unsplitLines = receipt.lines.filter(line => !receipt.splitAllocations.some(allocation => allocation.lineIndex === line.lineIndex));
+  const recipients = new Set([...unsplitLines.map(line => line.paymentRecipient.toLowerCase()), ...receipt.splitAllocations.map(allocation => allocation.recipient.toLowerCase())]);
+  for (const recipient of recipients) {
+    const entitlement = unsplitLines.filter(line => line.paymentRecipient.toLowerCase() === recipient).reduce((sum, line) => sum + BigInt(line.amount), 0n)
+      + receipt.splitAllocations.filter(allocation => allocation.recipient.toLowerCase() === recipient).reduce((sum, allocation) => sum + BigInt(allocation.amount), 0n);
     const received = transfers.filter(event => event.args.to.toLowerCase() === recipient).reduce((sum, event) => sum + event.args.value, 0n);
     expect(received).toBe(entitlement);
   }
