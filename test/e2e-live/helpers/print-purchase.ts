@@ -206,7 +206,7 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
     }
 }
 
-export async function verifySettlement(
+async function verifySettlement(
   fixture: Awaited<ReturnType<typeof createCartLiveFixture>>,
   rare: ReturnType<typeof createCreatorVariantClient>,
   purchase: { txHash: Hex; orderId: Hex },
