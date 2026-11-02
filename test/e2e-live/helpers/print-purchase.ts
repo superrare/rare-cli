@@ -6,7 +6,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect } from 'vitest';
 import { z } from 'zod';
-import type { CartCheckoutPreparation, CartCheckoutReceipt, CartOrder, EligibilityClaim, EligibilityRule, PrintOptionSet, PublicPrintDrop } from '@rareprotocol/rare-sdk';
+import type { CartCheckoutPreparation, CartCheckoutReceipt, CartOrder, EligibilityClaim, EligibilityRule, PrintOption, PublicPrintDrop } from '@rareprotocol/rare-sdk';
 import { erc20Abi, erc721Abi, getAddress, isHex, parseEventLogs, parseUnits, type Address, type Hex } from 'viem';
 import { cartAbi, resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 import { deployErc721Collection, mintToken } from './live-erc721.js';
@@ -74,12 +74,9 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
         print: { name, description: 'Sandbox fulfillment test', tags: ['test'], productionUploadKey: master.key, images: [photo.url], specificationId: product.id } }));
       const drop = await jsonCommand<{ id: string }>(fixture.sellerHome, ['prints', 'drops', 'create', '--input', input]);
       dropId = drop.id;
-      const configured = await jsonCommand<PrintOptionSet>(fixture.sellerHome, ['prints', 'drops', 'configure', '--id', drop.id,
-        '--price-usd-cents', journey === 'two-copy' ? '50' : '100', '--specification-id', 'GLOBAL-FAP-8X12', '--specification-id', 'GLOBAL-FAP-8X8']);
-      const option = configured.options.find(candidate => candidate.id === configured.listingOptionId);
-      if (!option) throw new Error('Configured print formats did not identify their shared listing option.');
-      if (!isHex(option.sku) || option.sku.length !== 66) throw new Error('Print format SKU is not bytes32.');
-      expect(new Set(configured.options.map(candidate => candidate.sku)).size).toBe(1);
+      const option = await jsonCommand<PrintOption>(fixture.sellerHome, ['prints', 'drops', 'configure', '--id', drop.id,
+        '--price-usd-cents', journey === 'two-copy' ? '50' : '100']);
+      if (!isHex(option.sku) || option.sku.length !== 66) throw new Error('Print variant SKU is not bytes32.');
       if (source) {
         await creator.cart.catalog.products.attachSku(source.productId, { sku: option.sku, position: 1, metadata: {} });
         await creator.cart.catalog.products.publish(source.productId);
@@ -96,7 +93,7 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
       const collaborator = privateKeyToAccount(generatePrivateKey()).address;
       const splits = [{ recipient: fixture.sellerAddress, basisPoints: 7000 }, { recipient: collaborator, basisPoints: 3000 }];
       const terms = join(fixture.tempDir, 'listing.json');
-      await writeFile(terms, JSON.stringify({ optionId: configured.listingOptionId, seller: fixture.sellerAddress,
+      await writeFile(terms, JSON.stringify({ optionId: option.id, seller: fixture.sellerAddress,
         listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: String(Math.floor(Date.now() / 1000) + 3600), availableQuantity: '2', maxQuantityPerCheckout: journey === 'two-copy' ? '2' : '1', splits, ...(ruleId ? { eligibilityRuleId: ruleId } : {}) }));
       const published = await jsonCommand<{ signedArtifact: { entries: { listingDigest: Hex }[] } }>(fixture.sellerHome, ['prints', 'listing', 'publish', '--input', terms, '--chain', fixture.chain, '--yes']);
       const entry = published.signedArtifact.entries[0];
@@ -112,10 +109,9 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
       const selected = publicDrop.options.find(candidate => candidate.specificationId === product.id);
       if (!selected) throw new Error('Published print does not expose the chosen format.');
       expect(selected.listingDigest).toBe(entry.listingDigest);
-      const optionSelections = [{ preparationId: selected.preparationId, optionId: selected.id }];
       const printItem = { kind: 'listing', listingDigest: entry.listingDigest, quantity: journey === 'two-copy' ? '2' : '1' };
       const printInput = join(fixture.tempDir, 'print-selection.json');
-      await writeFile(printInput, JSON.stringify({ items: [printItem], optionSelections }));
+      await writeFile(printInput, JSON.stringify({ items: [printItem] }));
       const printCheckout = ['cart', 'checkout', '--input', printInput, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', fixture.chain];
       const claims = (): Promise<EligibilityClaim[]> => jsonCommand<{ data: EligibilityClaim[] }>(buyerHome, ['cart', 'purchase-eligibility', 'claims', 'list', '--rule-id', ruleId ?? '', '--per-page', '100']).then(page => page.data);
       if (journey === 'claim' && source) {
@@ -130,7 +126,7 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
       const checkoutInput = join(fixture.tempDir, 'selected-cart.json');
       await writeFile(checkoutInput, JSON.stringify({ items: [
         ...(journey === 'mixed' && source ? [{ kind: 'listing', listingDigest: source.listingDigest, quantity: '1' }] : []), printItem,
-      ], optionSelections }));
+      ] }));
       const checkout = ['cart', 'checkout', '--input', checkoutInput, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', fixture.chain];
       const preview = await jsonCommand<{ preparation: CartCheckoutPreparation }>(buyerHome, [...checkout, '--preview']);
       if (journey !== 'mixed') {

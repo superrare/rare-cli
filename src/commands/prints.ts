@@ -73,15 +73,11 @@ export function printsCommand(): Command {
     .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.drops.archive(parseCommerceUuid(options.id))); }));
   drops.addCommand(command('configure').requiredOption('--id <uuid>', 'owned drop ID')
     .requiredOption('--price-usd-cents <amount>', 'collector price, in integer USD cents; Listings settle in USDC')
-    .option('--specification-id <id>', 'offer this print format; repeat for several formats sharing inventory',
-      (value: string, previous: string[]) => [...previous, value], [])
-    .action(async (options: IdentityOptions & { priceUsdCents: string; specificationId: string[] }): Promise<void> => {
+    .action(async (options: IdentityOptions & { priceUsdCents: string }): Promise<void> => {
       const displayPriceUsdCents = parsePrintPrice(options.priceUsdCents);
       const rare = client(options);
       const dropId = parseCommerceUuid(options.id);
-      print(options.specificationId.length === 0
-        ? await rare.prints.options.configure({ dropId, input: { displayPriceUsdCents } })
-        : await rare.prints.options.configure({ dropId, input: { displayPriceUsdCents, specificationIds: options.specificationId } }));
+      print(await rare.prints.options.configure({ dropId, input: { displayPriceUsdCents } }));
     }));
   prints.addCommand(drops);
 
