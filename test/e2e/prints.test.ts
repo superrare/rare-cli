@@ -108,12 +108,11 @@ describe('built print and shipping CLI', () => {
           '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory], { home });
         expect(parseJsonStdout(result)).toEqual({ id: 'configured-option' });
         expect(received).toEqual([{ path: `/v1/prints/drops/${dropId}/options/standard`, authorization: 'Bearer print-options-access', body: { displayPriceUsdCents: '2500' } }]);
-        const formats = await runCli(['--json', 'prints', 'drops', 'configure', '--id', dropId, '--price-usd-cents', '2500',
-          '--specification-id', 'GLOBAL-FAP-8X12', '--specification-id', 'GLOBAL-FAP-12X18',
+        const largeDropId = '33333333-3333-4333-8333-333333333333';
+        const large = await runCli(['--json', 'prints', 'drops', 'configure', '--id', largeDropId, '--price-usd-cents', '4000',
           '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory], { home });
-        expect(formats.code).toBe(0);
-        expect(received[1]).toEqual({ path: `/v1/prints/drops/${dropId}/options`, authorization: 'Bearer print-options-access',
-          body: { displayPriceUsdCents: '2500', specificationIds: ['GLOBAL-FAP-8X12', 'GLOBAL-FAP-12X18'] } });
+        expect(large.code).toBe(0);
+        expect(received[1]).toEqual({ path: `/v1/prints/drops/${largeDropId}/options/standard`, authorization: 'Bearer print-options-access', body: { displayPriceUsdCents: '4000' } });
         const quoteInput = join(home, 'quote.json');
         await writeFile(quoteInput, JSON.stringify({ specificationId: 'GLOBAL-FAP-8X12', destinationCountryCode: 'US', copies: 2 }));
         const quote = await runCli(['--json', 'prints', 'quote', '--input', quoteInput, '--chain', 'sepolia',
@@ -183,16 +182,15 @@ describe('built print and shipping CLI', () => {
           refreshToken: 'mint-print-refresh', expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
         const listingDigest = `0x${'1'.repeat(64)}`;
         const mintSelections = [{ preparationId: '00000000-0000-4000-8000-000000000001', listingDigest, unitIndexes: [0] }];
-        const optionSelections = [{ preparationId: '00000000-0000-4000-8000-000000000001', optionId: '00000000-0000-4000-8000-000000000003' }];
         const input = join(home, 'checkout.json');
-        await writeFile(input, JSON.stringify({ items: [{ kind: 'listing', listingDigest, quantity: '1' }], mintSelections, optionSelections }));
+        await writeFile(input, JSON.stringify({ items: [{ kind: 'listing', listingDigest, quantity: '1' }], mintSelections }));
         const savedAddressId = '00000000-0000-4000-8000-000000000002';
         const result = await runCli(['--json', 'cart', 'checkout', '--input', input, '--payment-currency', 'eth',
           '--recipient', `0x${'2'.repeat(40)}`, '--saved-address-id', savedAddressId, '--preview', '--chain', 'sepolia',
           '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory], { home });
         expect(result.code).toBe(1);
         expect(result.stderr).toContain('fixture_capture');
-        expect(received).toMatchObject({ body: { delivery: { savedAddressId, mintSelections }, optionSelections } });
+        expect(received).toMatchObject({ body: { delivery: { savedAddressId, mintSelections } } });
       });
     } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
   });

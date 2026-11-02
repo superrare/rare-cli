@@ -223,7 +223,7 @@ function cartCheckoutCommand(swap = false): Command {
   const command = accountCommand(swap ? 'swap' : 'checkout');
   command.description('Preview or purchase an API-prepared Cart checkout');
   addChainOptions(command)
-    .option('--input <path>', 'JSON checkout document with typed items and optional mintSelections or optionSelections; amounts are human-readable decimals')
+    .option('--input <path>', 'JSON checkout document with typed items and optional mintSelections; amounts are human-readable decimals')
     .option('--listing <listing-digest[=quantity]>', 'listing shortcut; cannot combine with --input (repeatable)', collectValue, [])
     .option('--output-currency <currency>', 'swap output token: eth, usdc, rare, or ERC-20 address')
     .option('--input-amount <amount>', 'exact payment budget for a swap, in payment currency units')
@@ -254,7 +254,6 @@ function cartCheckoutCommand(swap = false): Command {
         ] })));
       const delivery = await readDelivery(opts.shippingInput, opts.savedAddressId);
       if (checkoutInput.mintSelections !== undefined && delivery === undefined) throw new Error('mintSelections requires --shipping-input or --saved-address-id.');
-      if (checkoutInput.optionSelections !== undefined && delivery === undefined) throw new Error('optionSelections requires --shipping-input or --saved-address-id.');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const wallet = opts.preview === true || opts.authorizeOnly === true ? undefined : getWalletClient(chain);
@@ -282,8 +281,7 @@ function cartCheckoutCommand(swap = false): Command {
         paymentCurrency: paymentCurrency.address,
         items,
         ...(delivery === undefined ? {} : { delivery: { ...delivery,
-          ...(checkoutInput.mintSelections === undefined ? {} : { mintSelections: checkoutInput.mintSelections }),
-          ...(checkoutInput.optionSelections === undefined ? {} : { optionSelections: checkoutInput.optionSelections }) } }),
+          ...(checkoutInput.mintSelections === undefined ? {} : { mintSelections: checkoutInput.mintSelections }) } }),
       };
       const preparation = await rare.cart.checkout.prepare(intent);
 
@@ -357,20 +355,21 @@ function cartCardCommand(): Command {
     .requiredOption('--listing <listing-digest[=quantity]>', 'Cart Listing and optional quantity (repeatable)', collectValue, [])
     .requiredOption('--recipient <address>', 'fulfillment wallet recipient')
     .requiredOption('--idempotency-key <uuid>', 'stable retry identity for this card checkout')
+    .requiredOption('--email <email>', 'payment contact email')
     .option('--shipping-input <path>', 'JSON shipping details for physical fulfillment')
     .option('--saved-address-id <uuid>', 'use a saved private shipping address')
-    .action(async (options: CartCheckoutOptions & { idempotencyKey: string }): Promise<void> => {
+    .action(async (options: CartCheckoutOptions & { idempotencyKey: string; email: string }): Promise<void> => {
       const recipient = unwrapCartCliResult(parseCartAddress(options.recipient, '--recipient'));
       if (recipient === undefined) throw new Error('--recipient is required.');
       const items = unwrapCartCliResult(parseCartListingSelections(options.listing)).map(selection => ({ ...selection, recipient }));
       const idempotencyKey = parseCommerceUuid(options.idempotencyKey);
       const delivery = await readDelivery(options.shippingInput, options.savedAddressId);
-      if (delivery === undefined) throw new Error('Card checkout requires --shipping-input or --saved-address-id.');
       const chain = getActiveChain(options.chain, options.chainId);
       const rare = createRareClient({ publicClient: getPublicClient(chain), apiBaseUrl: options.apiUrl,
         sessionStore: createAuthStore(storageOptions(options)), account: recipient });
       const paymentCurrency = await rare.currency.resolveDecimals('usdc');
-      const result = await rare.cart.checkout.coinflow({ paymentCurrency: paymentCurrency.address, items, delivery, idempotencyKey });
+      const preparation = await rare.cart.checkout.prepare({ paymentCurrency: paymentCurrency.address, items, ...(delivery === undefined ? {} : { delivery }) });
+      const result = await rare.cart.checkout.payment({ method: 'card', preparation: { ...preparation, idempotencyKey }, email: options.email });
       outputJson(result);
     });
 }

@@ -152,6 +152,7 @@ describe('Cart CLI input planning', () => {
     expect(parseCartCheckoutFile(JSON.stringify({ items: [{ kind: 'swap', mode: 'exact-input',
       outputCurrency: 'rare', inputAmount: '1', outputAmount: '2' }] })).isValid).toBe(false);
     expect(parseCartCheckoutFile(JSON.stringify({ items: [] })).isValid).toBe(false);
+    expect(parseCartCheckoutFile(JSON.stringify({ items: [{ kind: 'listing', listingDigest: listingA, quantity: '1' }], optionSelections: [] })).isValid).toBe(false);
   });
 
   it('preserves mint-to-print associations and rejects ambiguous unit mappings', () => {
