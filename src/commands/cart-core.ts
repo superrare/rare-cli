@@ -262,20 +262,25 @@ const mintSelectionSchema = z.object({
     .refine(indexes => new Set(indexes).size === indexes.length, 'Mint unit indexes must be unique'),
 }).strict();
 
+const printOptionSelectionSchema = z.object({ preparationId: z.uuid(), optionId: z.uuid() }).strict();
+
 export type CartCheckoutFile = {
   items: CartCheckoutFileItem[];
   mintSelections?: z.infer<typeof mintSelectionSchema>[];
+  optionSelections?: z.infer<typeof printOptionSelectionSchema>[];
 };
 
 export function parseCartCheckoutFile(content: string): CartCliResult<CartCheckoutFile> {
   const document = parseJsonDocument(content);
   if (!document.isValid) return document;
-  if (!isRecord(document.value) || Object.keys(document.value).some(key => !['items', 'mintSelections'].includes(key)) ||
+  if (!isRecord(document.value) || Object.keys(document.value).some(key => !['items', 'mintSelections', 'optionSelections'].includes(key)) ||
       !Array.isArray(document.value.items) || document.value.items.length === 0) {
-    return invalid('checkout input must contain a non-empty items array and optional mintSelections.');
+    return invalid('checkout input must contain a non-empty items array and optional mintSelections or optionSelections.');
   }
   const mintSelections = z.array(mintSelectionSchema).min(1).optional().safeParse(document.value.mintSelections);
   if (!mintSelections.success) return invalid(`Invalid mintSelections: ${mintSelections.error.message}`);
+  const optionSelections = z.array(printOptionSelectionSchema).min(1).optional().safeParse(document.value.optionSelections);
+  if (!optionSelections.success) return invalid(`Invalid optionSelections: ${optionSelections.error.message}`);
   const items = document.value.items.map((value: unknown, index: number): CartCliResult<CartCheckoutFileItem> => {
     const field = `items[${index}]`;
     if (!isRecord(value)) return invalid(`${field} must be an object.`);
@@ -307,7 +312,8 @@ export function parseCartCheckoutFile(content: string): CartCliResult<CartChecko
   return { isValid: true, value: { items: items.map(item => {
     if (!item.isValid) throw new Error('unreachable: invalid checkout item survived validation.');
     return item.value;
-  }), ...(mintSelections.data === undefined ? {} : { mintSelections: mintSelections.data }) } };
+  }), ...(mintSelections.data === undefined ? {} : { mintSelections: mintSelections.data }),
+  ...(optionSelections.data === undefined ? {} : { optionSelections: optionSelections.data }) } };
 }
 
 function parseDeadline(value: unknown): CartCliResult<bigint> {
