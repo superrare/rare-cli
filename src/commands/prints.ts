@@ -87,14 +87,14 @@ export function printsCommand(): Command {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
       print(await client(options).prints.listings.prepare(printListingInput.parse(input)));
     }));
-  listings.addCommand(command('publish').requiredOption('--input <path>', 'JSON listing terms to prepare, sign and publish, including optional eligibilityRuleId, maxQuantityPerCheckout, splits and mintSource')
+  listings.addCommand(command('publish').requiredOption('--input <path>', 'JSON listing terms or an array of up to 100 print offers to sign together')
     .option('--yes', 'proceed through all required signing and publication steps')
     .action(async (options: InputOptions): Promise<void> => {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
-      const parsed = printListingInput.parse(input);
+      const terms = z.array(printListingInput).min(1).max(100).parse(Array.isArray(input) ? input : [input]);
       const rare = client(options, true);
-      const preparation = await rare.prints.listings.prepare(parsed);
-      print(await rare.prints.listings.publish({ preparation }));
+      const preparations = await Promise.all(terms.map((item) => rare.prints.listings.prepare(item)));
+      print(await rare.cart.listing.publish({ printPreparations: preparations }));
     }));
   prints.addCommand(listings);
   return prints;
