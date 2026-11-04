@@ -149,13 +149,13 @@ function cartListingCreateCommand(): Command {
       }
 
       log(`Publishing ${preparation.artifact.entries.length} Cart listing(s) on ${chain}...`);
-      const publish = async (): ReturnType<typeof rare.cart.listing.publish> =>
+      const publish = async () =>
         rare.cart.listing.publish({ preparation, autoApprove: opts.yes === true });
       const result = await runWithNftApprovalConsent({
         commandName: 'rare cart listing create',
         approvalMessage: 'Cart requires approval for one or more NFT contracts before publishing these listings.',
         runWithoutApproval: publish,
-        runWithApproval: async (): ReturnType<typeof rare.cart.listing.publish> =>
+        runWithApproval: async () =>
           rare.cart.listing.publish({ preparation, autoApprove: true }),
       });
       if (result === undefined) return;

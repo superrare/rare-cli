@@ -13,6 +13,7 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
   it('uploads a private master, publishes a print and quotes generic checkout with saved shipping', async () => {
     const fixture = await createCartLiveFixture();
     const addressId = randomUUID();
+    const additionalDropIds: string[] = [];
     try {
       if (fixture.chain !== 'sepolia') throw new Error('Print tooling live E2E requires Sepolia.');
       const products = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['prints', 'products', 'list']);
@@ -41,13 +42,33 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
         const option = await jsonCommand<{ id: string; sku: string }>(fixture.sellerHome, [
           'prints', 'drops', 'configure', '--id', drop.id, '--price-usd-cents', '10000',
         ]);
+        const siblingFile = join(fixture.tempDir, 'sibling-print.json');
+        await writeFile(siblingFile, JSON.stringify({ idempotencyKey: randomUUID(), chainId: '11155111', name: `${name} sibling`,
+          print: { name: `${name} sibling`, description: 'Second print in the same Listing Root', tags: ['test'],
+            productionUploadKey: master.key, images: [media.url], specificationId: product.id } }));
+        const sibling = await jsonCommand<{ id: string }>(fixture.sellerHome, ['prints', 'drops', 'create', '--input', siblingFile]);
+        additionalDropIds.push(sibling.id);
+        const siblingOption = await jsonCommand<{ id: string }>(fixture.sellerHome, [
+          'prints', 'drops', 'configure', '--id', sibling.id, '--price-usd-cents', '12000',
+        ]);
         const terms = join(fixture.tempDir, 'listing.json');
-        await writeFile(terms, JSON.stringify({ optionId: option.id, seller: fixture.sellerAddress,
-          listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: String(Math.floor(Date.now() / 1000) + 3600),
-          availableQuantity: '10', maxQuantityPerCheckout: '3' }));
-        const publication = await jsonCommand<{ signedArtifact: { entries: { listingDigest: string }[] } }>(fixture.sellerHome, [
+        const deadline = String(Math.floor(Date.now() / 1000) + 3600);
+        await writeFile(terms, JSON.stringify([option.id, siblingOption.id].map(optionId => ({
+          optionId, seller: fixture.sellerAddress, listingSalt: `0x${randomBytes(32).toString('hex')}`,
+          deadline, availableQuantity: '10', maxQuantityPerCheckout: '3',
+        }))));
+        const publication = await jsonCommand<{ publishedRoot: { listingCount: number }; signedArtifact: {
+          entries: { listingDigest: string; proof: string[] }[];
+        } }>(fixture.sellerHome, [
           'prints', 'listing', 'publish', '--input', terms, '--chain', fixture.chain, '--yes',
         ]);
+        expect(publication.publishedRoot.listingCount).toBe(2);
+        expect(publication.signedArtifact.entries).toHaveLength(2);
+        const siblingListing = publication.signedArtifact.entries[1];
+        expect(siblingListing?.proof).toHaveLength(1);
+        expect(await jsonCommand(fixture.sellerHome, ['prints', 'get', '--id', sibling.id])).toMatchObject({
+          options: expect.arrayContaining([expect.objectContaining({ listingDigest: siblingListing?.listingDigest })]),
+        });
         const listing = publication.signedArtifact.entries[0];
         if (listing === undefined) throw new Error('Print publication returned no Listing entry.');
         const publicDrop = await jsonCommand<{ metadata: Record<string, unknown>; options: { listingDigest: string; maxQuantityPerCheckout: string; eligibilityRuleId: string | null }[] }>(fixture.sellerHome, ['prints', 'get', '--id', drop.id]);
@@ -199,7 +220,9 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
           expect(remaining.some(item => item.id === addressId)).toBe(false);
         }
       } finally {
-        await jsonCommand(fixture.sellerHome, ['prints', 'drops', 'archive', '--id', drop.id]);
+        for (const id of [drop.id, ...additionalDropIds]) {
+          await jsonCommand(fixture.sellerHome, ['prints', 'drops', 'archive', '--id', id]);
+        }
       }
     } finally {
       await cleanupLiveFixture(fixture);
