@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { cartFulfillmentKinds, createRareClient } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress, rareErc1155Abi, tokenAbi } from '@rareprotocol/rare-sdk/contracts';
-import { erc721Abi, parseEventLogs, type Address, type Hex } from 'viem';
+import { erc721Abi, getAddress, parseEventLogs, type Address, type Hex } from 'viem';
 import { createCreatorMintVariantSku, createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
 import {
   cleanupLiveFixture,
@@ -181,15 +181,15 @@ describeLive('live Cart on-chain fulfillment kinds', () => {
       timeout: 180_000, interval: 2_000,
     }).toMatchObject({ status: 'indexed', issues: [] });
     const saved = await rare.cart.checkout.receipt(purchase.orderId);
-    const allocations = saved.feeAllocations?.allocations;
-    if (allocations === undefined) throw new Error('Cart receipt lost its immutable refund allocations.');
-    const sellerAllocations = allocations.filter(allocation => allocation.bearer === 'SELLER');
-    expect(sellerAllocations).toHaveLength(maxCartListingItems);
-    expect(new Set(sellerAllocations.map(allocation => allocation.sourceLineIndex)).size).toBe(maxCartListingItems);
-    expect(new Set(sellerAllocations.map(allocation => allocation.finalLineIndex)).size).toBe(1);
-    for (const line of saved.lines.filter(line => line.fulfillmentKind === cartFulfillmentKinds.none)) {
-      expect(allocations.filter(allocation => allocation.finalLineIndex === Number(line.lineIndex))
-        .reduce((sum, allocation) => sum + BigInt(allocation.amount), 0n)).toBe(BigInt(line.amount));
+    expect(saved).not.toHaveProperty('feeAllocations');
+    const feeLines = saved.lines.filter(line => line.fulfillmentKind === cartFulfillmentKinds.none);
+    expect(feeLines).toHaveLength(2);
+    for (const line of feeLines) {
+      expect(settled.find(event => event.args.lineIndex === BigInt(line.lineIndex))?.args).toMatchObject({
+        amount: BigInt(line.amount),
+        sku: line.sku,
+        paymentRecipient: getAddress(line.paymentRecipient),
+      });
     }
   }, 600_000);
 
