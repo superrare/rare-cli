@@ -77,7 +77,6 @@ type ReleaseMintOptions = ReleaseContractOptions & {
   currency?: string;
   price?: string;
   proof?: string;
-  recipient?: string;
   yes?: boolean;
   autoApprove?: boolean;
 };
@@ -299,15 +298,11 @@ export function releaseCommand(): Command {
     .option('--currency <currency>', 'expected currency: eth, usdc, rare, or ERC20 address (defaults to configured sale currency)')
     .option('--price <amount>', 'expected per-token price in ETH or token units (defaults to configured sale price)')
     .option('--proof <file>', 'allowlist proof JSON from rare listing release allowlist proof')
-    .option('--recipient <address>', 'recipient when supported; RareMinter direct sales mint to the connected wallet')
     .option('--yes', 'yes to all prompts and required approvals')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ReleaseMintOptions): Promise<void> => {
       assertAddressOption(opts.contract, 'contract');
-      if (opts.recipient !== undefined) {
-        assertAddressOption(opts.recipient, 'recipient');
-      }
       const proof = opts.proof === undefined ? undefined : readProofFile(opts.proof);
       const quantity = opts.quantity ?? '1';
       const normalizedQuantity = toPositiveInteger(quantity, 'quantity');
@@ -343,7 +338,6 @@ export function releaseCommand(): Command {
         currency,
         price,
         proof,
-        recipient: opts.recipient,
       };
       const result = await runWithPaymentApprovalConsent({
         commandName: 'rare listing release mint',
