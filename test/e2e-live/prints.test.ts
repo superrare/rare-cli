@@ -103,6 +103,7 @@ describe('print tooling through the built CLI and deployed Rare API', () => {
           const existingOrder = await jsonCommand<CartOrder>(fixture.sellerHome, ['cart', 'orders', 'get', '--id', existingOrderId]);
           const card = await jsonCommand<CartCardCheckout>(fixture.sellerHome, [
             'cart', 'card', '--listing', listing.listingDigest, '--recipient', fixture.sellerAddress,
+            '--email', 'cli-test@example.com',
             '--idempotency-key', randomUUID(), '--saved-address-id', addressId, '--chain', fixture.chain,
           ], 180_000);
           expect(card.config.env).toBe('sandbox');
