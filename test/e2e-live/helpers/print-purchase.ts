@@ -106,7 +106,8 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
         expect(publicPrint.options).toContainEqual(expect.objectContaining({ listingDigest: entry.listingDigest, eligibilityRuleId: ruleId }));
       }
       const publicDrop = await jsonCommand<PublicPrintDrop>(fixture.sellerHome, ['prints', 'get', '--id', drop.id]);
-      const selected = publicDrop.options.find(candidate => candidate.specificationId === product.id);
+      expect(publicDrop.metadata['specificationId']).toBe(product.id);
+      const selected = publicDrop.options.find(candidate => candidate.id === option.id);
       if (!selected) throw new Error('Published print does not expose the chosen format.');
       expect(selected.listingDigest).toBe(entry.listingDigest);
       const printItem = { kind: 'listing', listingDigest: entry.listingDigest, quantity: journey === 'two-copy' ? '2' : '1' };

@@ -5,7 +5,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import type { CartApiProduct, CartCheckoutReceipt, CartOrder, PrintPublication } from '@rareprotocol/rare-sdk';
+import type { CartApiProduct, CartCheckoutReceipt, CartOrder, CartListingPublishResult, PrintListingPreparation } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress, resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 import { erc20Abi, erc721Abi, getAddress, parseEventLogs, parseUnits, type Address, type Hex } from 'viem';
 import { createCreatorVariantClient, createCreatorMintProduct } from './helpers/cart-creator-variants.js';
@@ -76,7 +76,9 @@ describe('ordered blind mint and its physical Product variant', () => {
         listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: deadline(), availableQuantity: '2', splits,
         mintSource: { chainId: String(live.chainId), contract: collection.contract, productIds: prepared.map(item => item.productId) },
       });
-      const printPublication = await jsonCommand<PrintPublication>(live.sellerHome,
+      const printPreparation = await jsonCommand<PrintListingPreparation>(live.sellerHome,
+        ['prints', 'listing', 'prepare', '--input', printTerms, '--chain', live.chain]);
+      const printPublication = await jsonCommand<Pick<CartListingPublishResult, 'signedArtifact'>>(live.sellerHome,
         ['prints', 'listing', 'publish', '--input', printTerms, '--chain', live.chain, '--yes']);
       const printListing = printPublication.signedArtifact.entries[0]?.listingDigest;
       if (!printListing) throw new Error('Physical release Listing is missing.');
@@ -94,7 +96,7 @@ describe('ordered blind mint and its physical Product variant', () => {
         const discovery = await creator.cart.listing.search({ seller: live.sellerAddress, fulfillmentKind: 4, productId: mintProduct.productId });
         return discovery.data.find(listing => listing.listingDigest === mintListing)?.productIds ?? [];
       }, { timeout: 180_000, interval: 2_000 }).toContain(mintProduct.productId);
-      expect((await creator.cart.listing.get(printListing)).metadata.fulfillmentPreparationId).toBe(printPublication.preparation.id);
+      expect((await creator.cart.listing.get(printListing)).metadata.fulfillmentPreparationId).toBe(printPreparation.id);
       for (const artwork of prepared) {
         const grouped = await jsonCommand<CartApiProduct>(live.sellerHome,
           ['cart', 'catalog', 'products', 'get-mine', '--product-id', artwork.productId, '--chain', live.chain]);
@@ -119,7 +121,7 @@ describe('ordered blind mint and its physical Product variant', () => {
       const checkoutFile = await jsonFile(live, 'checkout', { items: [
         { kind: 'listing', listingDigest: mintListing, quantity: '1' },
         { kind: 'listing', listingDigest: printListing, quantity: '1' },
-      ], mintSelections: [{ preparationId: printPublication.preparation.id, listingDigest: mintListing, unitIndexes: [0] }] });
+      ], mintSelections: [{ preparationId: printPreparation.id, listingDigest: mintListing, unitIndexes: [0] }] });
       const checkout = ['cart', 'checkout', '--input', checkoutFile, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', live.chain];
       const preview = await jsonCommand<{ preparation: { paymentAmount: string } }>(live.buyerHome, [...checkout, '--preview']);
       expect(BigInt(preview.preparation.paymentAmount)).toBeLessThanOrEqual(50_000_000n);
