@@ -501,6 +501,91 @@ rare listing status --contract 0x... --token-id 1
 
 `--split <ADDR=RATIO>` is repeatable. Ratios must sum to exactly 100. If you omit `--split`, the SDK defaults to `[caller, 100]` (100% to your wallet). If you pass any `--split`, you must specify the complete list — the caller is **not** auto-appended.
 
+### Cart
+
+Cart Listing creation and checkout use the same saved account session as
+`rare auth login`. Pass `--api-url`, `--storage`, and `--auth-directory` to use
+the same account storage, or set `RARE_API_URL`, `RARE_AUTH_STORAGE`, and
+`RARE_AUTH_DIRECTORY`. Public checkout previews do not require login. Wallet
+configuration remains separate and controls Listing and transaction signatures.
+
+Cart commands publish API-backed listing roots and purchase listings, token swaps, or both in one checkout. Create listings from a JSON intent file such as:
+
+```json
+{
+  "deadline": "2026-12-31T23:59:59Z",
+  "listings": [
+    {
+      "sku": "0x...bytes32",
+      "settlementCurrency": "usdc",
+      "unitPrice": "25",
+      "quantity": "2",
+      "paymentRecipient": "0x...seller"
+    }
+  ]
+}
+```
+
+`quantity` defaults to `"1"`, and `paymentRecipient` defaults to the seller. Amounts and quantities are strings so they remain exact. Named currencies (`eth`, `usdc`, and `rare`) and ERC-20 addresses are supported. Each listing can include `splits: [{"recipient": "0x...", "basisPoints": 7000}, {"recipient": "0x...", "basisPoints": 3000}]`. Omit splits or use `[]` for a single recipient. Nonempty schedules allow at most 16 unique nonzero recipients, must total 10,000 basis points, and must start with `paymentRecipient`. The seller signs each listing's schedule. Secondary shares round down per merchandise line; the first recipient receives the remainder. Fees and currency-swap outputs do not inherit these splits.
+
+```bash
+# Inspect the root, listing digests, and required NFT approvals without writing
+rare cart listing create --input ./cart-listings.json --preview --output ./prepared-cart.json
+
+# Sign and publish the root; approve NFT contracts when needed
+rare cart listing create --input ./cart-listings.json --output ./signed-cart.json --yes
+
+# Preview a multi-listing checkout; quantity defaults to one
+rare cart checkout \
+  --listing 0x...listingDigestA \
+  --listing 0x...listingDigestB=2 \
+  --payment-currency usdc \
+  --preview
+
+# Execute the verified checkout and approve ERC-20 spending when needed
+rare cart checkout \
+  --listing 0x...listingDigestA \
+  --payment-currency usdc \
+  --recipient 0x...recipient \
+  --yes
+
+# Spend an exact ETH budget for RARE, or request an exact RARE output
+rare cart swap --payment-currency eth --output-currency rare --input-amount 0.01 --preview
+rare cart swap --payment-currency eth --output-currency rare --output-amount 100 --yes
+
+# Preview typed items from a JSON document
+rare cart checkout --input ./checkout.json --payment-currency usdc --preview
+
+# Cancel one listing, cancel a whole root, or invalidate the current seller nonce
+rare cart listing cancel --listing-digest 0x... --yes
+rare cart listing cancel-root --root-digest 0x... --yes
+rare cart listing invalidate-nonce --yes
+```
+
+The checkout input contains an `items` array. Each item has one of these forms:
+
+```json
+{
+	"items": [
+		{ "kind": "listing", "listingDigest": "0x...bytes32", "quantity": "1" },
+		{ "kind": "swap", "mode": "exact-output", "outputCurrency": "rare", "outputAmount": "100" }
+	]
+}
+```
+
+For an exact-input swap, use `"mode": "exact-input"` and `"inputAmount": "10"` instead of `outputAmount`.
+Input amounts use the payment currency's units. Output amounts use the output currency's units.
+Every amount is a human-readable decimal string, not an integer in base units.
+Each item can specify a `recipient`; otherwise `--recipient` or the configured account receives the item.
+Use either `--input` or the listing and swap shortcuts, not both.
+
+Both quote directions commit to fixed payment and output amounts when signed. Execution price movement changes the platform spread, not the promised output. A route that cannot deliver the signed output fails.
+Standalone swaps use this routing spread, not the default 3% listing checkout fee.
+The API currently supports ETH, USDC, and RARE as checkout currencies. An ERC-20 address does not bypass that policy.
+CLI amount strings use human-readable units; SDK checkout amounts use `bigint` base units.
+
+`--preview` returns the Rare API quote and SDK preparation without signing, approving, publishing, or submitting a transaction. Before purchase, the SDK verifies the API bundle against the requested items, payment currency, recipients, chain, and connected payer. Routing, proofs, authorization, order construction, and platform signing remain internal to the Rare API and SDK.
+
 ### Batch Listings
 
 Batch listing roots are built from token sets. For create flows, you can pass a CSV file, a JSON token list, a token tree artifact from `rare utils tree build`, or the older root artifact shape that already includes listing config. Running `rare utils tree build` first is optional; use it when you want a reusable artifact or want to inspect/share the root before registering it.
@@ -1300,3 +1385,21 @@ conversation and returns an attachment ID for `messaging send --attachment`.
 Attach within 24 hours of upload completion. Subsequent reads use messaging
 permissions. The SDK browser client persists managed login across reloads; the CLI
 continues using its protected persistent credential store.
+
+### Platform adjustments
+
+Internal team members can manage reusable charge definitions and their scoped assignments:
+
+```sh
+rare cart adjustments list --api-url "$RARE_API_BASE_URL" --api-key-env GQL_API_KEY --json
+rare cart adjustments create --input charge.json --yes --api-url "$RARE_API_BASE_URL" --api-key-env GQL_API_KEY
+rare cart adjustments assignments create --input assignment.json --yes --api-url "$RARE_API_BASE_URL" --api-key-env GQL_API_KEY
+rare cart adjustments assignments list --adjustment-id ID --api-url "$RARE_API_BASE_URL" --api-key-env GQL_API_KEY --json
+rare cart adjustments assignments disable --id ASSIGNMENT_ID --yes --api-url "$RARE_API_BASE_URL" --api-key-env GQL_API_KEY
+```
+
+Omit `--api-key-env` to use an administrator account session. The key is read from the named environment variable, not a command-line value. It is sent only to adjustment administration endpoints.
+
+A definition requires `effect: "CHARGE"`, `phase`, `code`, `calculation` and `recipient`. An assignment requires `adjustmentId`, `priority` and a `scope`. Reuse a definition across multiple drops. Fixed amounts and NFT token IDs in JSON files use decimal strings; chain IDs use numbers. A 0% calculation waives the corresponding charge. Discounts are not supported.
+
+Highest priority replaces lower priorities for the same code. Assign seller-side overrides before preparing and signing listings; existing signed terms remain unchanged. Disabling one assignment preserves the reusable definition and other assignments.
