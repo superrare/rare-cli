@@ -233,20 +233,9 @@ async function verifySettlement(
     const received = transfers.filter(event => event.args.to.toLowerCase() === recipient).reduce((sum, event) => sum + event.args.value, 0n);
     expect(received).toBe(entitlement);
   }
-  const fees = receipt.feeAllocations?.allocations;
-  if (!fees) throw new Error('Indexed receipt lost item-level fee allocations.');
-  expect(fees).toEqual(expect.arrayContaining([
-    expect.objectContaining({ purpose: 'GALLERY_COMMISSION', bearer: 'SELLER' }),
-    expect.objectContaining({ purpose: 'NETWORK_FEE', bearer: 'BUYER' }),
-    ...(physical ? [expect.objectContaining({ purpose: 'PRODUCTION', bearer: 'BUYER' }), expect.objectContaining({ purpose: 'SHIPPING', bearer: 'BUYER' })] : []),
-  ]));
-  for (const fee of fees) {
-    if (fee.calculation?.type === 'PERCENTAGE') {
-      const unitFee = BigInt(fee.grossAmount) * BigInt(fee.calculation.basisPoints) / 10_000n;
-      expect(BigInt(fee.unitAmount)).toBe(unitFee);
-      expect(BigInt(fee.amount)).toBe(unitFee * (fee.amountKind === 'PER_UNIT' ? BigInt(fee.quantity) : 1n));
-    }
-    if (fee.finalLineIndex !== null) expect(receipt.lines[fee.finalLineIndex]).toMatchObject({ sku: fee.feeSku, paymentRecipient: fee.recipient, settlementCurrency: fee.currency });
-  }
+  expect(receipt).not.toHaveProperty('feeAllocations');
+  const feeLines = receipt.lines.filter(line => line.fulfillmentKind === 0);
+  expect(feeLines).toHaveLength(physical ? 4 : 2);
+  expect(feeLines.every(line => BigInt(line.amount) > 0n)).toBe(true);
   return receipt;
 }

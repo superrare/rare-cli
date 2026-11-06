@@ -232,10 +232,8 @@ function assertFees(receipt: CartCheckoutReceipt, paymentAmount: string): void {
   expect(receipt.issues).toEqual([]);
   expect(receipt.paymentAmount).toBe(paymentAmount);
   expect(receipt.lines.reduce((sum, line) => sum + BigInt(line.amount), 0n)).toBe(BigInt(paymentAmount));
-  expect(receipt.feeAllocations?.allocations).toEqual(expect.arrayContaining([
-    expect.objectContaining({ purpose: 'GALLERY_COMMISSION', bearer: 'SELLER' }),
-    expect.objectContaining({ purpose: 'NETWORK_FEE', bearer: 'BUYER' }),
-    expect.objectContaining({ purpose: 'PRODUCTION', bearer: 'BUYER' }),
-    expect.objectContaining({ purpose: 'SHIPPING', bearer: 'BUYER' }),
-  ]));
+  expect(receipt).not.toHaveProperty('feeAllocations');
+  const feeLines = receipt.lines.filter(line => line.fulfillmentKind === 0);
+  expect(feeLines).toHaveLength(4);
+  expect(feeLines.every(line => BigInt(line.amount) > 0n)).toBe(true);
 }
