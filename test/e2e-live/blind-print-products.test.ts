@@ -249,7 +249,7 @@ describe('ordered blind mint and its physical Product variant', () => {
           const terms = await jsonFile(live, `rare-minter-print-${index}`, { optionId: artwork.optionId,
             seller: live.sellerAddress, listingSalt: `0x${randomBytes(32).toString('hex')}`,
             deadline: deadline(), availableQuantity: '1', ...(ruleId ? { eligibilityRuleId: ruleId } : {}) });
-          const publication = await jsonCommand<PrintPublication>(live.sellerHome,
+          const publication = await jsonCommand<Pick<CartListingPublishResult, 'signedArtifact'>>(live.sellerHome,
             ['prints', 'listing', 'publish', '--input', terms, '--chain', live.chain, '--yes']);
           const listingDigest = publication.signedArtifact.entries[0]?.listingDigest;
           if (!listingDigest) throw new Error('Print listing is missing.');
