@@ -15,6 +15,7 @@ import { parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, pr
 type PrintOptions = AccountCommandOptions & ChainOptions;
 type IdentityOptions = PrintOptions & { id: string };
 type InputOptions = PrintOptions & { input: string };
+type FileToolOptions = PrintOptions & { productionUploadKey: string; specificationId: string };
 
 function command(name: string): Command {
   return addChainOptions(accountCommand(name));
@@ -29,6 +30,27 @@ export function printsCommand(): Command {
     .requiredOption('--id <productId>', 'canonical print product ID, such as GLOBAL-FAP-8X12')
     .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.products.get(options.id)); }));
   prints.addCommand(products);
+  const files = new Command('files').description('Check private production files against a print product');
+  files.addCommand(command('validate').description('Validate an uploaded production file for a print size')
+    .requiredOption('--production-upload-key <key>', 'owned private upload key')
+    .requiredOption('--specification-id <id>', 'print product ID, such as GLOBAL-FAP-8X12')
+    .action(async (options: FileToolOptions): Promise<void> => {
+      print(await client(options).prints.files.validate({ productionUploadKey: options.productionUploadKey, specificationId: options.specificationId }));
+    }));
+  prints.addCommand(files);
+  const mockups = new Command('mockups').description('Generate and read private print previews');
+  mockups.addCommand(command('create').description('Create a preview from an uploaded production file')
+    .requiredOption('--production-upload-key <key>', 'owned private upload key')
+    .requiredOption('--specification-id <id>', 'print product ID, such as GLOBAL-FAP-8X12')
+    .action(async (options: FileToolOptions): Promise<void> => {
+      print(await client(options).prints.mockups.create({ productionUploadKey: options.productionUploadKey, specificationId: options.specificationId }));
+    }));
+  mockups.addCommand(command('get').description('Read the status and image of an account-owned preview')
+    .requiredOption('--id <uuid>', 'preview job ID')
+    .action(async (options: IdentityOptions): Promise<void> => {
+      print(await client(options).prints.mockups.get(parseCommerceUuid(options.id)));
+    }));
+  prints.addCommand(mockups);
   prints.addCommand(command('quote').description('Quote production and shipping without creating a listing or order')
     .requiredOption('--input <path>', 'JSON specificationId, destinationCountryCode, optional copies and shippingMethod')
     .action(async (options: InputOptions): Promise<void> => {
@@ -91,9 +113,10 @@ export function printsCommand(): Command {
     .option('--yes', 'proceed through all required signing and publication steps')
     .action(async (options: InputOptions): Promise<void> => {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
-      const terms = z.array(printListingInput).min(1).max(100).parse(Array.isArray(input) ? input : [input]);
+      const inputs: unknown = Array.isArray(input) ? input : [input];
+      const terms = z.array(printListingInput).min(1).max(100).parse(inputs);
       const rare = client(options, true);
-      const preparations = await Promise.all(terms.map((item) => rare.prints.listings.prepare(item)));
+      const preparations = await Promise.all(terms.map(async (item) => rare.prints.listings.prepare(item)));
       print(await rare.cart.listing.publish({ printPreparations: preparations }));
     }));
   prints.addCommand(listings);

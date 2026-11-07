@@ -610,6 +610,21 @@ and display photos with `--access public`. Create a draft with
 }
 ```
 
+Validate an owned private master and create a provider preview before publication:
+
+```bash
+rare prints files validate --production-upload-key <key> --specification-id GLOBAL-FAP-8X12
+rare prints mockups create --production-upload-key <key> --specification-id GLOBAL-FAP-8X12
+rare prints mockups get --id <preview-id>
+```
+
+These commands use the signed-in account and never accept arbitrary asset URLs or
+provider IDs. Preview creation returns a job; repeat `get` until it completes or
+fails. Completed jobs include an image URL and pixel dimensions. Validation can
+return warnings even when the provider accepts the file. Use `--json` for structured
+output. `npm run test:print-files:e2e` exercises private upload, validation, preview
+creation and polling against a deployed API; it requires a real completed image.
+
 Get supported print products with `rare prints products list`. Read provider recommended
 artwork dimensions with `rare prints products get --id GLOBAL-FAP-8X12`. Both
 commands support `--json` and work without signing in. Products support automatic
@@ -646,7 +661,7 @@ Use generic Cart checkout for prints. For two copies, pass `--listing 0x...listi
 
 `npm run test:prints:e2e` runs print authoring/quote coverage and a paid Cart-to-Prodigi sandbox flow. The fulfillment case uses registered Sepolia seller and buyer accounts, creates a physical variant, checks buyer-funded charges, pays through Cart, waits for indexed fulfillment, and independently retrieves the resulting order from Prodigi. It checks provider acceptance, background status reconciliation, the provider ID, fulfillment reference, product and copy count. Stored progress must match a real provider order and expose only safe parcel tracking information; dispatch never implies delivery. Successful runs print public transaction and order identifiers for dashboard lookup.
 
-Set `RARE_API_BASE_URL` and `RARE_ACCOUNT_TEST_API_URL` to the deployed feature API and `PRODIGI_SANDBOX_API_KEY` to that deployment's v4 sandbox key. Rare API and Pipelines must both use `https://api.sandbox.prodigi.com/v4.0` with the same sandbox credentials. The Cart contract must be registered and indexing active. The selected test buyer needs Sepolia ETH and USDC. Credentials remain environment variables; never commit them.
+Set `RARE_API_BASE_URL` and `RARE_ACCOUNT_TEST_API_URL` to the deployed feature API and `PRODIGI_SANDBOX_API_KEY` to that deployment's sandbox key (`sandbox_` or a legacy `test_` key). Rare API and Pipelines must both use `https://api.prodigi.com/v5` with the same sandbox credentials. The Cart contract must be registered and indexing active. The selected test buyer needs Sepolia ETH and USDC. Credentials remain environment variables; never commit them.
 
 The suite covers a print-only checkout and two product journeys. Each product journey deploys and mints its own ERC-721, creates its NFT SKU, uploads a private print master and public photo, configures the print SKU, groups both variants into one published Product, and publishes separate Listings. The mixed journey buys both Listings in one Cart. The primary-sale journey first denies print checkout, purchases the NFT, waits for claim issuance, redeems the print and verifies consumption and denial of reuse while print inventory remains. Both verify NFT ownership, item-level fees, settlement events, seller proceeds and the resulting Prodigi order.
 

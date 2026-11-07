@@ -13,9 +13,9 @@ import { cleanupLiveFixture, createCartLiveFixture, jsonCommand, requireBuyerFix
 import { nftFixtureManifest } from './helpers/nft-fixture-manifest.js';
 import { downloadTestImage } from './helpers/test-image.js';
 
-const sandboxOrder = z.object({ outcome: z.literal('Ok'), order: z.object({
+const sandboxOrder = z.object({ data: z.object({
   id: z.string(), metadata: z.object({ fulfillmentId: z.string() }),
-  items: z.array(z.object({ sku: z.string(), copies: z.number(), assets: z.array(z.object({ url: z.url() })) })),
+  items: z.array(z.object({ sku: z.string(), quantity: z.number(), assets: z.array(z.object({ url: z.url() })) })),
 }) });
 type PreparedArtwork = { productId: string; dropId: string; nftSku: Hex; printSku: Hex; optionId: string; masterKey: string };
 type Purchase = { txHash: Hex; orderId: Hex };
@@ -24,8 +24,9 @@ type Purchase = { txHash: Hex; orderId: Hex };
 // This test deploys the same LazySovereign contract as release creation, not fixture bytecode.
 describe('ordered blind mint and its physical Product variant', () => {
   it('prepares future artworks, buys through Cart, and prints the actually minted artwork', async () => {
-    const sandboxKey = process.env.PRODIGI_SANDBOX_API_KEY;
-    if (!sandboxKey?.startsWith('test_')) throw new Error('Set PRODIGI_SANDBOX_API_KEY and deploy Rare API/Pipelines against the Prodigi sandbox.');
+    const configuredKey = process.env.PRODIGI_SANDBOX_API_KEY;
+    if (!configuredKey?.startsWith('sandbox_') && !configuredKey?.startsWith('test_')) throw new Error('Set PRODIGI_SANDBOX_API_KEY and deploy Rare API/Pipelines against the Prodigi v5 sandbox.');
+    const sandboxKey = configuredKey.startsWith('test_') ? `sandbox_${configuredKey}` : configuredKey;
     const live = requireBuyerFixture(await createCartLiveFixture({ buyer: true,
       buyerWalletFilter: async (wallet, { chain, publicClient }) => {
         const currency = resolveCurrency('usdc', chain);
@@ -138,7 +139,7 @@ describe('ordered blind mint and its physical Product variant', () => {
 
       const readOrder = (): Promise<CartOrder> => jsonCommand(live.buyerHome, ['cart', 'orders', 'get', '--id', purchase.orderId]);
       await expect.poll(async () => (await readOrder()).fulfillments[0]?.providerOrderId,
-        { timeout: 240_000, interval: 3_000 }).toMatch(/^ord_/u);
+        { timeout: 240_000, interval: 3_000 }).toMatch(/^[A-Za-z0-9~_-]+$/u);
       const order = await readOrder();
       expect(order.status).toBe('CONFIRMED');
       expect(order.items).toHaveLength(2);
@@ -147,17 +148,17 @@ describe('ordered blind mint and its physical Product variant', () => {
       if (!fulfillment?.providerOrderId) throw new Error('Resolved print did not reach Prodigi.');
       expect(fulfillment).toMatchObject({ resolvedItems: [{ productId: second.productId, sku: second.printSku,
         tokenId: '2', sourceLineIndex: 0, sourceUnitIndex: 0 }] });
-      const response = await fetch(`https://api.sandbox.prodigi.com/v4.0/orders/${encodeURIComponent(fulfillment.providerOrderId)}`, {
+      const response = await fetch(`https://api.prodigi.com/v5/orders/${encodeURIComponent(fulfillment.providerOrderId)}`, {
         headers: { 'X-API-Key': sandboxKey }, signal: AbortSignal.timeout(30_000), redirect: 'error',
       });
       expect(response.status).toBe(200);
       const body: unknown = await response.json();
-      const provider = sandboxOrder.parse(body).order;
+      const provider = sandboxOrder.parse(body).data;
       expect(provider.metadata.fulfillmentId).toBe(fulfillment.id);
       expect(provider.items).toHaveLength(1);
       const item = provider.items[0];
       if (!item) throw new Error('Prodigi accepted no physical item.');
-      expect(item).toMatchObject({ sku: 'GLOBAL-FAP-8X12', copies: 1 });
+      expect(item).toMatchObject({ sku: 'GLOBAL-FAP-8X12', quantity: 1 });
       const asset = item.assets[0];
       if (!asset) throw new Error('Prodigi order has no production asset.');
       // Assert privately. Never include signed URLs or recipient details in log output.

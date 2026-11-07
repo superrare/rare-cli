@@ -11,6 +11,7 @@ describe('built print and shipping CLI', () => {
   it('exposes creator print, private upload and address-book commands', async () => {
     await withTempHome(async home => {
       for (const path of [
+        ['prints', 'files', 'validate'], ['prints', 'mockups', 'create'], ['prints', 'mockups', 'get'],
         ['prints', 'quote'], ['prints', 'products', 'list'], ['prints', 'products', 'get'], ['prints', 'get'], ['prints', 'activity'], ['prints', 'releases'],
         ['prints', 'drops', 'create'], ['prints', 'drops', 'list'], ['prints', 'drops', 'get'],
         ['prints', 'drops', 'archive'], ['prints', 'drops', 'configure'], ['prints', 'drops', 'update'],
@@ -68,6 +69,53 @@ describe('built print and shipping CLI', () => {
           '/v1/prints/products', '/v1/prints/products', `/v1/prints/products/${product.id}`, `/v1/prints/products/${product.id}`, '/v1/prints/products/unsupported',
         ]);
         expect(requests.every(request => request.authorization === undefined)).toBe(true);
+      });
+    } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
+  });
+
+  it('validates owned files and creates and reads preview jobs through authenticated SDK requests', async () => {
+    const uploadKey = 'a'.repeat(64);
+    const id = '00000000-0000-4000-8000-000000000001';
+    const validation = { valid: true, status: 'warning', issues: [{ code: 'low_resolution', severity: 'warning', message: 'Low resolution' }] };
+    const preview = { id, status: 'completed', result: { url: 'https://example.com/preview.jpg', widthPx: 800, heightPx: 1200 } };
+    const received: { path?: string; method?: string; authorization?: string; body: unknown }[] = [];
+    const server = createServer((request, response) => {
+      void text(request).then(body => {
+        // eslint-disable-next-line functional/immutable-data -- Observe actual requests from the built CLI.
+        received.push({ path: request.url, method: request.method, authorization: request.headers.authorization, body: body === '' ? null : JSON.parse(body) });
+        response.writeHead(request.method === 'POST' && request.url === '/v1/prints/mockups' ? 201 : 200, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ data: request.url === '/v1/prints/files/validate' ? validation : preview }));
+      });
+    });
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error('Missing fixture address');
+    try {
+      await withTempHome(async temporary => {
+        const home = await realpath(temporary);
+        const apiBaseUrl = `http://127.0.0.1:${address.port}`;
+        const directory = join(home, 'auth');
+        const scope = { apiBaseUrl, authBaseUrl: `${apiBaseUrl}/auth/v2`, clientId: 'rare-sdk' };
+        const store = createAuthStore({ ...scope, backend: 'file', directory });
+        await store.withLock(async () => { await store.set({ ...scope, revision: 'print-files-session', accessToken: 'print-files-access',
+          refreshToken: 'print-files-refresh', expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
+        const options = ['--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory];
+        const fileOptions = ['--production-upload-key', uploadKey, '--specification-id', 'GLOBAL-FAP-8X12'];
+        expect(parseJsonStdout(await runCli(['--json', 'prints', 'files', 'validate', ...fileOptions, ...options], { home }))).toEqual(validation);
+        expect(parseJsonStdout(await runCli(['--json', 'prints', 'mockups', 'create', ...fileOptions, ...options], { home }))).toEqual(preview);
+        const human = await runCli(['prints', 'mockups', 'get', '--id', id, ...options], { home });
+        expect(human.code).toBe(0);
+        expect(human.stdout).toContain('Status: completed');
+        expect(human.stdout).toContain('Url: https://example.com/preview.jpg');
+        expect(human.stdout).not.toContain('"result"');
+        expect(received).toEqual([
+          { path: '/v1/prints/files/validate', method: 'POST', authorization: 'Bearer print-files-access', body: { productionUploadKey: uploadKey, specificationId: 'GLOBAL-FAP-8X12' } },
+          { path: '/v1/prints/mockups', method: 'POST', authorization: 'Bearer print-files-access', body: { productionUploadKey: uploadKey, specificationId: 'GLOBAL-FAP-8X12' } },
+          { path: `/v1/prints/mockups/${id}`, method: 'GET', authorization: 'Bearer print-files-access', body: null },
+        ]);
+        const malformed = await runCli(['--json', 'prints', 'files', 'validate', '--production-upload-key', 'https://example.com/master.jpg', '--specification-id', 'GLOBAL-FAP-8X12', ...options], { home });
+        expect(malformed.code).toBe(1);
+        expect(received).toHaveLength(3);
       });
     } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
   });
