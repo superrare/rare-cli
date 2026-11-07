@@ -16,14 +16,15 @@ import { verifyCartPurchaseNotifications } from './cart-notifications.js';
 import { cleanupLiveFixture, createCartLiveFixture, jsonCommand } from './live-harness.js';
 
 // Verify against the provider independently of our persisted status. Never target the live API.
-const sandboxOrderSchema = z.object({ outcome: z.literal('Ok'), order: z.object({
-  id: z.string(), lastUpdated: z.string(), shipments: z.array(z.object({ id: z.string() })).default([]), merchantReference: z.string(), metadata: z.object({ fulfillmentId: z.string() }),
-  items: z.array(z.object({ sku: z.string(), copies: z.number() })),
+const sandboxOrderSchema = z.object({ data: z.object({
+  id: z.string(), updatedAt: z.string(), shipments: z.array(z.object({ id: z.string() })).default([]), merchantReference: z.string(), metadata: z.object({ fulfillmentId: z.string() }),
+  items: z.array(z.object({ sku: z.string(), quantity: z.number() })),
 }) });
 
 export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'claim' | 'two-copy'): Promise<void> {
-    const sandboxKey = process.env.PRODIGI_SANDBOX_API_KEY;
-    if (!sandboxKey?.startsWith('test_')) throw new Error('Set PRODIGI_SANDBOX_API_KEY to a v4 sandbox key. Deploy Rare API and Pipelines with the same sandbox configuration.');
+    const configuredKey = process.env.PRODIGI_SANDBOX_API_KEY;
+    if (!configuredKey?.startsWith('sandbox_') && !configuredKey?.startsWith('test_')) throw new Error('Set PRODIGI_SANDBOX_API_KEY to a sandbox key. Deploy Rare API and Pipelines with the same v5 sandbox configuration.');
+    const sandboxKey = configuredKey.startsWith('test_') ? `sandbox_${configuredKey}` : configuredKey;
     const maximumPayment = parseUnits(journey === 'two-copy' ? '50' : '25', 6);
     const fixture = await createCartLiveFixture({ buyer: true,
       buyerWalletFilter: async (wallet, { chain, publicClient }) => {
@@ -157,7 +158,7 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
         await expect(jsonCommand(buyerHome, [...printCheckout, '--authorize-only', '--yes'])).rejects.toThrow(/Status: 409/u);
       }
       const readOrder = (): Promise<CartOrder> => jsonCommand<CartOrder>(buyerHome, ['cart', 'orders', 'get', '--id', purchase.orderId]);
-      await expect.poll(async () => (await readOrder()).fulfillments[0]?.providerOrderId, { timeout: 240_000, interval: 3_000 }).toMatch(/^ord_/u);
+      await expect.poll(async () => (await readOrder()).fulfillments[0]?.providerOrderId, { timeout: 240_000, interval: 3_000 }).toMatch(/^[A-Za-z0-9~_-]+$/u);
       await expect.poll(async () => (await readOrder()).fulfillments[0]?.progress ?? null, { timeout: 240_000, interval: 5_000 }).not.toBeNull();
       const order = await readOrder();
       const fulfillment = order.fulfillments[0];
@@ -168,17 +169,17 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
       if (!fixture.buyerHome || !fixture.buyerAddress) throw new Error('Print buyer fixture is missing.');
       await verifyPrivateCartOrder({ ...fixture, buyerHome: fixture.buyerHome, buyerAddress: fixture.buyerAddress }, purchase.orderId);
       await verifyCartPurchaseNotifications({ ...fixture, buyerHome: fixture.buyerHome, buyerAddress: fixture.buyerAddress }, purchase, journey === 'mixed' ? 2 : 1);
-      const response = await fetch(`https://api.sandbox.prodigi.com/v4.0/orders/${encodeURIComponent(fulfillment.providerOrderId)}`, {
+      const response = await fetch(`https://api.prodigi.com/v5/orders/${encodeURIComponent(fulfillment.providerOrderId)}`, {
         headers: { 'X-API-Key': sandboxKey }, signal: AbortSignal.timeout(30_000), redirect: 'error',
       });
       expect(response.status).toBe(200);
       const body: unknown = await response.json();
-      const provider = sandboxOrderSchema.parse(body).order;
+      const provider = sandboxOrderSchema.parse(body).data;
       expect(provider.id).toBe(fulfillment.providerOrderId);
       const progress = fulfillment.progress;
       if (!progress) throw new Error('Backend did not reconcile provider progress.');
       expect(['SUBMITTED', 'IN_PRODUCTION', 'PARTIALLY_SHIPPED', 'SHIPPED', 'CANCELLED']).toContain(progress.stage);
-      expect(Date.parse(progress.providerUpdatedAt)).toBeLessThanOrEqual(Date.parse(provider.lastUpdated));
+      expect(Date.parse(progress.providerUpdatedAt)).toBeLessThanOrEqual(Date.parse(provider.updatedAt));
       expect(progress).not.toHaveProperty('recipient');
       expect(progress).not.toHaveProperty('items');
       for (const shipment of progress.shipments) {
@@ -189,7 +190,7 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
 
       expect(provider.metadata.fulfillmentId).toBe(fulfillment.id);
       expect(provider.merchantReference).toBe(createHash('sha256').update(`superrare:cart:fulfillment:${fulfillment.id}`).digest('hex'));
-      expect(provider.items).toEqual([{ sku: product.id, copies: journey === 'two-copy' ? 2 : 1 }]);
+      expect(provider.items).toEqual([{ sku: product.id, quantity: journey === 'two-copy' ? 2 : 1 }]);
       // Only public identifiers, never recipient details, private URLs or credentials.
       console.info('Prodigi sandbox order verified', { transactionHash: purchase.txHash, orderId: purchase.orderId, providerOrderId: provider.id });
     } finally {

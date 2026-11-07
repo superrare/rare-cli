@@ -2,7 +2,7 @@
 
 Run `npm run test:blind-prints:e2e` after deploying the matching Rare API and Pipelines stack. This is a live write test, not a simulation. It deploys a collection, uploads files, publishes listings, spends testnet USDC, and creates one Prodigi sandbox order.
 
-Configure the existing live test wallet pool and RPC settings, `RARE_API_BASE_URL`, and `PRODIGI_SANDBOX_API_KEY`. The provider key must start with `test_`. Rare API and Pipelines must use the same sandbox configuration. The Cart and factory must be registered for indexing in that deployment, and Pipelines must have permission to sign private production-file download URLs. The creator and buyer must have accounts in that deployment. The buyer needs at least 60 test USDC, and both wallets need Sepolia ETH for gas. Missing prerequisites fail the selected test.
+Configure the existing live test wallet pool and RPC settings, `RARE_API_BASE_URL`, and `PRODIGI_SANDBOX_API_KEY`. The provider key must start with `sandbox_` or the legacy `test_` prefix. Rare API and Pipelines must use `https://api.prodigi.com/v5` with the same sandbox configuration. The Cart and factory must be registered for indexing in that deployment, and Pipelines must have permission to sign private production-file download URLs. The creator and buyer must have accounts in that deployment. The buyer needs at least 60 test USDC, and both wallets need Sepolia ETH for gas. Missing prerequisites fail the selected test.
 
 The test uses the real LazySovereign factory and the CLI's `collection prepare-lazy-mint` command. This is the release contract used by the website. It approves Cart as a minter; it does not replace the collection with test bytecode or require a separate NFT receipt contract.
 
