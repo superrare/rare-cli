@@ -208,8 +208,9 @@ describe('ordered blind mint and its physical Product variant', () => {
   it.each(['open', 'primary-sale', 'primary-sale-after-mint'] as const)('buys a RareMinter blind mint, then buys its matching %s print', async mode => {
     const gated = mode !== 'open';
     const afterMint = mode === 'primary-sale-after-mint';
-    const sandboxKey = process.env.PRODIGI_SANDBOX_API_KEY;
-    if (!sandboxKey?.startsWith('test_')) throw new Error('Set PRODIGI_SANDBOX_API_KEY and deploy Rare API/Pipelines against the Prodigi sandbox.');
+    const configuredKey = process.env.PRODIGI_SANDBOX_API_KEY;
+    if (!configuredKey?.startsWith('sandbox_') && !configuredKey?.startsWith('test_')) throw new Error('Set PRODIGI_SANDBOX_API_KEY and deploy Rare API/Pipelines against the Prodigi v5 sandbox.');
+    const sandboxKey = configuredKey.startsWith('test_') ? `sandbox_${configuredKey}` : configuredKey;
     const live = requireBuyerFixture(await createCartLiveFixture({ buyer: true,
       buyerWalletFilter: async (wallet, { chain, publicClient }) => {
         const balance = await publicClient.readContract({ address: resolveCurrency('usdc', chain),
@@ -328,7 +329,7 @@ describe('ordered blind mint and its physical Product variant', () => {
       expect((await live.publicClient.getTransactionReceipt({ hash: purchase.txHash })).status).toBe('success');
       const readOrder = (): Promise<CartOrder> => jsonCommand(live.buyerHome, ['cart', 'orders', 'get', '--id', purchase.orderId]);
       await expect.poll(async () => (await readOrder()).fulfillments[0]?.providerOrderId,
-        { timeout: 240_000, interval: 3_000 }).toMatch(/^ord_/u);
+        { timeout: 240_000, interval: 3_000 }).toMatch(/^[A-Za-z0-9~_-]+$/u);
       const order = await readOrder();
       expect(order.items).toHaveLength(1);
       expect(order.fulfillments).toHaveLength(1);
@@ -350,15 +351,15 @@ describe('ordered blind mint and its physical Product variant', () => {
       await verifyCartPurchaseNotifications(live, purchase, 1);
       const fulfillment = order.fulfillments[0];
       if (!fulfillment?.providerOrderId) throw new Error('Print did not reach Prodigi.');
-      const response = await fetch(`https://api.sandbox.prodigi.com/v4.0/orders/${encodeURIComponent(fulfillment.providerOrderId)}`, {
+      const response = await fetch(`https://api.prodigi.com/v5/orders/${encodeURIComponent(fulfillment.providerOrderId)}`, {
         headers: { 'X-API-Key': sandboxKey }, signal: AbortSignal.timeout(30_000), redirect: 'error',
       });
       expect(response.status).toBe(200);
       const body: unknown = await response.json();
-      const provider = sandboxOrder.parse(body).order;
+      const provider = sandboxOrder.parse(body).data;
       expect(provider.metadata.fulfillmentId).toBe(fulfillment.id);
       expect(provider.items).toHaveLength(1);
-      expect(provider.items[0]).toMatchObject({ sku: 'GLOBAL-FAP-8X12', copies: 1 });
+      expect(provider.items[0]).toMatchObject({ sku: 'GLOBAL-FAP-8X12', quantity: 1 });
       const asset = provider.items[0]?.assets[0];
       if (!asset) throw new Error('Prodigi order has no production asset.');
       expect(decodeURIComponent(new URL(asset.url).pathname).includes(selected.artwork.masterKey)).toBe(true);
