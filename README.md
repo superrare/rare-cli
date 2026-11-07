@@ -588,6 +588,85 @@ CLI amount strings use human-readable units; SDK checkout amounts use `bigint` b
 
 `--preview` returns the Rare API quote and SDK preparation without signing, approving, publishing, or submitting a transaction. Before purchase, the SDK verifies the API bundle against the requested items, payment currency, recipients, chain, and connected payer. Routing, proofs, authorization, order construction, and platform signing remain internal to the Rare API and SDK.
 
+### Print drafts
+
+Upload the production file with `rare uploads upload master.png --access private`
+and display photos with `--access public`. Create a draft with
+`rare prints drops create --input print.json`:
+
+```json
+{
+  "idempotencyKey": "00000000-0000-4000-8000-000000000001",
+  "chainId": "11155111",
+  "name": "Print edition",
+  "print": {
+    "name": "Print edition",
+    "description": "An archival print",
+    "tags": [],
+    "productionUploadKey": "<private upload key>",
+    "images": ["<public upload URL>"],
+    "specificationId": "GLOBAL-FAP-8X12"
+  }
+}
+```
+
+Validate an owned private master and create a provider preview before publication:
+
+```bash
+rare prints files validate --production-upload-key <key> --specification-id GLOBAL-FAP-8X12
+rare prints mockups create --production-upload-key <key> --specification-id GLOBAL-FAP-8X12
+rare prints mockups get --id <preview-id>
+```
+
+These commands use the signed-in account and never accept arbitrary asset URLs or
+provider IDs. Preview creation returns a job; repeat `get` until it completes or
+fails. Completed jobs include an image URL and pixel dimensions. Validation can
+return warnings even when the provider accepts the file. Use `--json` for structured
+output. `npm run test:print-files:e2e` exercises private upload, validation, preview
+creation and polling against a deployed API; it requires a real completed image.
+
+Get supported print products with `rare prints products list`. Read provider recommended
+artwork dimensions with `rare prints products get --id GLOBAL-FAP-8X12`. Both
+commands support `--json` and work without signing in. Products support automatic
+orientation. `fileRequirements` reports accepted file types and maximum bytes.
+Recommended pixel dimensions are guidance, not upload minimums.
+Use the selected product ID in the existing `specificationId` draft field. Set optional
+`print.sourceUniversalTokenId` to attribute a creator-owned NFT. The production
+file and specification are required for every print draft. NFT attribution does
+not transfer the NFT or configure an eligibility rule or receipt.
+
+Replace a production master on a configured or published print by uploading the
+replacement privately, then running `rare prints drops update --id <drop-id>
+--input replacement.json` with `{ "productionUploadKey": "<new private upload key>" }`.
+New orders use the replacement. Existing authorized and paid orders keep their
+saved production snapshots. Specification edits still require an unconfigured
+draft or a replacement print draft.
+
+Run `npm run test:print-products:e2e` with `RARE_API_BASE_URL` for a public catalog
+check against a deployment containing the product endpoints. This check requires
+no wallet and creates no drafts or orders.
+
+### Print listing eligibility and quantity
+
+`rare prints listing prepare --input listing.json` and `rare prints listing publish --input listing.json --yes` accept these optional fields in the listing JSON:
+
+- `eligibilityRuleId`: an enabled rule owned by the creator that authorizes the print option's SKU. Publication applies the requirement before the listing becomes available.
+- `maxQuantityPerCheckout`: a decimal string from `"1"` to `"1000"`, defaulting to `"1"`. This limits copies in one checkout, independently of `availableQuantity`, which sets total edition supply.
+
+Use generic Cart checkout for prints. For two copies, pass `--listing 0x...listingDigest=2` together with `--saved-address-id` or `--shipping-input`. The API checks the creator's quantity limit and eligibility claims before authorizing payment. `--preview` quotes production and shipping for the selected quantity without paying or submitting a print order. These are buyer-funded charges added on top of the artwork price. Listing preparation does not call Prodigi or subtract production from seller proceeds.
+
+`--authorize-only --yes` also requests the signed checkout authorization without approving tokens or submitting payment. This reserves any required claims until the order expires. Do not combine it with `--preview`.
+
+### Sandbox print fulfillment E2E
+
+`npm run test:prints:e2e` runs print authoring/quote coverage and a paid Cart-to-Prodigi sandbox flow. The fulfillment case uses registered Sepolia seller and buyer accounts, creates a physical variant, checks buyer-funded charges, pays through Cart, waits for indexed fulfillment, and independently retrieves the resulting order from Prodigi. It checks provider acceptance, background status reconciliation, the provider ID, fulfillment reference, product and copy count. Stored progress must match a real provider order and expose only safe parcel tracking information; dispatch never implies delivery. Successful runs print public transaction and order identifiers for dashboard lookup.
+
+Set `RARE_API_BASE_URL` and `RARE_ACCOUNT_TEST_API_URL` to the deployed feature API and `PRODIGI_SANDBOX_API_KEY` to that deployment's sandbox key (`sandbox_` or a legacy `test_` key). Rare API and Pipelines must both use `https://api.prodigi.com/v5` with the same sandbox credentials. The Cart contract must be registered and indexing active. The selected test buyer needs Sepolia ETH and USDC. Credentials remain environment variables; never commit them.
+
+The suite covers a print-only checkout and two product journeys. Each product journey deploys and mints its own ERC-721, creates its NFT SKU, uploads a private print master and public photo, configures the print SKU, groups both variants into one published Product, and publishes separate Listings. The mixed journey buys both Listings in one Cart. The primary-sale journey first denies print checkout, purchases the NFT, waits for claim issuance, redeems the print and verifies consumption and denial of reuse while print inventory remains. Both verify NFT ownership, item-level fees, settlement events, seller proceeds and the resulting Prodigi order.
+
+This test makes a Sepolia payment and leaves a visible sandbox order. It never targets Prodigi's live API. Missing prerequisites fail rather than skip. To run only the full fulfillment case after building, use `npx vitest run test/e2e-live/print-fulfillment.test.ts`.
+
 ### Batch Listings
 
 Batch listing roots are built from token sets. For create flows, you can pass a CSV file, a JSON token list, a token tree artifact from `rare utils tree build`, or the older root artifact shape that already includes listing config. Running `rare utils tree build` first is optional; use it when you want a reusable artifact or want to inspect/share the root before registering it.
@@ -1405,3 +1484,5 @@ Omit `--api-key-env` to use an administrator account session. The key is read fr
 A definition requires `effect: "CHARGE"`, `phase`, `code`, `calculation` and `recipient`. An assignment requires `adjustmentId`, `priority` and a `scope`. Reuse a definition across multiple drops. Fixed amounts and NFT token IDs in JSON files use decimal strings; chain IDs use numbers. A 0% calculation waives the corresponding charge. Discounts are not supported.
 
 Highest priority replaces lower priorities for the same code. Assign seller-side overrides before preparing and signing listings; existing signed terms remain unchanged. Disabling one assignment preserves the reusable definition and other assignments.
+
+Live image fixtures use [Picsum](https://picsum.photos/) photographs downloaded during setup and uploaded through the ordinary SDK or CLI paths. The shared `downloadTestImage` helper accepts a seed and dimensions; omitting the seed selects a new photograph. Each download includes a unique JPEG comment so content-addressed cleanup cannot delete another run’s upload. Selected live tests fail if Picsum is unavailable. Local validation and corrupt-file fixtures stay offline.

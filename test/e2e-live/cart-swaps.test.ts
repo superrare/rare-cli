@@ -1,3 +1,4 @@
+import type { CartOrder } from '@rareprotocol/rare-sdk';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -8,9 +9,10 @@ import { cleanupLiveFixture, createCartLiveFixture, jsonCommand, readTokenBalanc
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
 import { createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
 import { runCli } from '../helpers/cli.js';
+import { verifyPrivateCartOrder } from './helpers/cart-order-history.js';
 
 type Preview = { preparation: { paymentAmount: string; lines: Array<{ fulfillmentKind: number; amount: string }> } };
-type Purchase = { txHash: Hex; paymentAmount: string; actionCount: number };
+type Purchase = { orderId: Hex; txHash: Hex; paymentAmount: string; actionCount: number };
 
 describe.sequential('live Cart routed swaps through the generic CLI checkout', () => {
   let fixture: BuyerLiveFixture | undefined;
@@ -49,6 +51,15 @@ describe.sequential('live Cart routed swaps through the generic CLI checkout', (
     const purchase = await jsonCommand<Purchase>(live.buyerHome, [...args, '--yes'], 240_000);
     expect(purchase.txHash).toMatch(/^0x[0-9a-fA-F]{64}$/);
     expect(purchase.actionCount).toBe(0);
+    await expect.poll(async () => (await jsonCommand<CartOrder>(live.buyerHome,
+      ['cart', 'orders', 'get', '--id', purchase.orderId])).status, { timeout: 180_000, interval: 2_000 }).toBe('FULFILLED');
+    const history = await jsonCommand<CartOrder>(live.buyerHome,
+      ['cart', 'orders', 'get', '--id', purchase.orderId]);
+    expect(history.id).toBe(purchase.orderId);
+    expect(history.items).toEqual([expect.objectContaining({ lineIndex: 0, fulfillmentStatus: 'FULFILLED' })]);
+    expect(history.fulfillments).toEqual([]);
+    await verifyPrivateCartOrder(live, purchase.orderId);
+
     const receipt = await live.publicClient.getTransactionReceipt({ hash: purchase.txHash });
     const lines = parseEventLogs({ abi: cartAbi, logs: receipt.logs.filter(log => log.address.toLowerCase() === getCartAddress(live.chain).toLowerCase()), eventName: 'OrderLineSettled' });
     expect(lines).toHaveLength(1);
