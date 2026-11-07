@@ -46,6 +46,12 @@ export function purchaseEligibilityCommand(): Command {
       await rareClient(options).cart.purchaseEligibility.rules.disable(options.ruleId);
       print({ ruleId: options.ruleId, disabled: true });
     }));
+  rules.addCommand(addChainOptions(accountCommand('backfill'))
+    .description('Queue claims for historical sales covered by an owned rule')
+    .requiredOption('--rule-id <id>', 'eligibility rule ID')
+    .action(async (options: EligibilityOptions & { ruleId: string }) => {
+      print(await rareClient(options).cart.purchaseEligibility.rules.backfill(options.ruleId));
+    }));
   command.addCommand(rules);
 
   const claims = new Command('claims').description('Inspect claims belonging to your authenticated account');
