@@ -17,13 +17,14 @@ const sandboxOrder = z.object({ data: z.object({
   id: z.string(), metadata: z.object({ fulfillmentId: z.string() }),
   items: z.array(z.object({ sku: z.string(), quantity: z.number(), assets: z.array(z.object({ url: z.url() })) })),
 }) });
-type PreparedArtwork = { productId: string; dropId: string; nftSku: Hex; printSku: Hex; optionId: string; masterKey: string };
+type PreparedPrintSize = { dropId: string; printSku: Hex; optionId: string; specificationId: string };
+type PreparedArtwork = PreparedPrintSize & { productId: string; nftSku: Hex; masterKey: string; publicUrl: string; name: string };
 type Purchase = { txHash: Hex; orderId: Hex };
 
 // Selected live suites fail when deployment, wallet or provider prerequisites are missing.
 // This test deploys the same LazySovereign contract as release creation, not fixture bytecode.
 describe('ordered blind mint and its physical Product variant', () => {
-  it('prepares future artworks, buys through Cart, and prints the actually minted artwork', async () => {
+  it('buys a blind mint with two print sizes of the artwork actually minted', async () => {
     const configuredKey = process.env.PRODIGI_SANDBOX_API_KEY;
     if (!configuredKey?.startsWith('sandbox_') && !configuredKey?.startsWith('test_')) throw new Error('Set PRODIGI_SANDBOX_API_KEY and deploy Rare API/Pipelines against the Prodigi v5 sandbox.');
     const sandboxKey = configuredKey.startsWith('test_') ? `sandbox_${configuredKey}` : configuredKey;
@@ -39,6 +40,7 @@ describe('ordered blind mint and its physical Product variant', () => {
     }));
     let prepared: PreparedArtwork[] = [];
     let offeringProductId: string | undefined;
+    let extraSizes: PreparedPrintSize[] = [];
     try {
       if (live.chain !== 'sepolia') throw new Error('Blind print Product E2E requires Sepolia.');
       const collection = await jsonCommand<{ contract: Address }>(live.sellerHome, [
@@ -56,6 +58,14 @@ describe('ordered blind mint and its physical Product variant', () => {
       for (const tokenId of ['1', '2']) prepared = [...prepared, await prepareArtwork(live, collection.contract, tokenId)];
       const [first, second] = prepared;
       if (!first || !second) throw new Error('Both planned artwork Products must exist.');
+      for (const artwork of prepared)
+        extraSizes = [...extraSizes, await preparePrintSize(live, {
+          productId: artwork.productId, name: artwork.name,
+          masterKey: artwork.masterKey, publicUrl: artwork.publicUrl,
+          specificationId: 'GLOBAL-FAP-12X18',
+        })];
+      const [firstExtra, secondExtra] = extraSizes;
+      if (!firstExtra || !secondExtra) throw new Error('Both artworks must offer the second print size.');
       for (const artwork of prepared) {
         const visible = await jsonCommand<CartApiProduct>(live.sellerHome,
           ['cart', 'catalog', 'products', 'get', '--product-id', artwork.productId, '--chain', live.chain]);
@@ -73,31 +83,34 @@ describe('ordered blind mint and its physical Product variant', () => {
         ['cart', 'listing', 'create', '--input', mintTerms, '--chain', live.chain, '--yes']);
       const mintListing = mintPublication.listingDigests[0];
       if (!mintListing) throw new Error('Collection mint Listing is missing.');
-      const printTerms = await jsonFile(live, 'print-listing', { optionId: first.optionId, seller: live.sellerAddress,
-        listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: deadline(), availableQuantity: '2', splits,
-        mintSource: { chainId: String(live.chainId), contract: collection.contract, productIds: prepared.map(item => item.productId) },
-      });
-      const printPreparation = await jsonCommand<PrintListingPreparation>(live.sellerHome,
-        ['prints', 'listing', 'prepare', '--input', printTerms, '--chain', live.chain]);
-      const printPublication = await jsonCommand<Pick<CartListingPublishResult, 'signedArtifact'>>(live.sellerHome,
-        ['prints', 'listing', 'publish', '--input', printTerms, '--chain', live.chain, '--yes']);
-      const printListing = printPublication.signedArtifact.entries[0]?.listingDigest;
-      if (!printListing) throw new Error('Physical release Listing is missing.');
       const creator = createCreatorVariantClient(live);
-      const companion = await jsonFile(live, 'companion-membership', {
-        sku: first.printSku, position: 1, metadata: { printDropId: first.dropId },
-      });
-      await jsonCommand(live.sellerHome, ['cart', 'catalog', 'products', 'attach-sku',
-        '--product-id', mintProduct.productId, '--input', companion, '--chain', live.chain]);
+      let publishedPrints: { listingDigest: Hex; preparationId: string }[] = [];
+      for (const [index, offer] of [first, firstExtra].entries()) {
+        const printTerms = await jsonFile(live, `print-listing-${index}`, { optionId: offer.optionId, seller: live.sellerAddress,
+          listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: deadline(), availableQuantity: '2', splits,
+          mintSource: { chainId: String(live.chainId), contract: collection.contract, productIds: prepared.map(item => item.productId) },
+        });
+        const preparation = await jsonCommand<PrintListingPreparation>(live.sellerHome,
+          ['prints', 'listing', 'prepare', '--input', printTerms, '--chain', live.chain]);
+        const publication = await jsonCommand<Pick<CartListingPublishResult, 'signedArtifact'>>(live.sellerHome,
+          ['prints', 'listing', 'publish', '--input', printTerms, '--chain', live.chain, '--yes']);
+        const listingDigest = publication.signedArtifact.entries[0]?.listingDigest;
+        if (!listingDigest) throw new Error('Physical release Listing is missing.');
+        const companion = await jsonFile(live, `companion-membership-${index}`, {
+          sku: offer.printSku, position: index + 1, metadata: { printDropId: offer.dropId, mintCompanion: true },
+        });
+        await jsonCommand(live.sellerHome, ['cart', 'catalog', 'products', 'attach-sku',
+          '--product-id', mintProduct.productId, '--input', companion, '--chain', live.chain]);
+        publishedPrints = [...publishedPrints, { listingDigest, preparationId: preparation.id }];
+      }
       const offering = await creator.cart.catalog.products.get(mintProduct.productId);
-      expect(offering.variants.map(variant => variant.sku)).toEqual(expect.arrayContaining([mintSku, first.printSku]));
-      expect(offering.variants.find(variant => variant.sku === first.printSku)?.metadata)
-        .toMatchObject({ printDropId: first.dropId });
+      expect(offering.variants.map(variant => variant.sku)).toEqual(expect.arrayContaining([mintSku, first.printSku, firstExtra.printSku]));
+      for (const offer of publishedPrints)
+        expect((await creator.cart.listing.get(offer.listingDigest)).metadata.fulfillmentPreparationId).toBe(offer.preparationId);
       await expect.poll(async () => {
         const discovery = await creator.cart.listing.search({ seller: live.sellerAddress, fulfillmentKind: 4, productId: mintProduct.productId });
         return discovery.data.find(listing => listing.listingDigest === mintListing)?.productIds ?? [];
       }, { timeout: 180_000, interval: 2_000 }).toContain(mintProduct.productId);
-      expect((await creator.cart.listing.get(printListing)).metadata.fulfillmentPreparationId).toBe(printPreparation.id);
       for (const artwork of prepared) {
         const grouped = await jsonCommand<CartApiProduct>(live.sellerHome,
           ['cart', 'catalog', 'products', 'get-mine', '--product-id', artwork.productId, '--chain', live.chain]);
@@ -121,8 +134,10 @@ describe('ordered blind mint and its physical Product variant', () => {
         postalOrZipCode: '10001', countryCode: 'US' });
       const checkoutFile = await jsonFile(live, 'checkout', { items: [
         { kind: 'listing', listingDigest: mintListing, quantity: '1' },
-        { kind: 'listing', listingDigest: printListing, quantity: '1' },
-      ], mintSelections: [{ preparationId: printPreparation.id, listingDigest: mintListing, unitIndexes: [0] }] });
+        ...publishedPrints.map(({ listingDigest }) => ({ kind: 'listing', listingDigest, quantity: '1' })),
+      ], mintSelections: publishedPrints.map(({ preparationId }) => ({
+        preparationId, listingDigest: mintListing, unitIndexes: [0],
+      })) });
       const checkout = ['cart', 'checkout', '--input', checkoutFile, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', live.chain];
       const preview = await jsonCommand<{ preparation: { paymentAmount: string } }>(live.buyerHome, [...checkout, '--preview']);
       expect(BigInt(preview.preparation.paymentAmount)).toBeLessThanOrEqual(50_000_000n);
@@ -134,40 +149,40 @@ describe('ordered blind mint and its physical Product variant', () => {
         { timeout: 180_000, interval: 2_000 }).toBe('indexed');
       const receipt = await creator.cart.checkout.receipt(purchase.orderId);
       assertFees(receipt, preview.preparation.paymentAmount);
-      await verifyPrintSplits(live, purchase, receipt, [mintListing, printListing], collaborator, splitBalance);
+      await verifyPrintSplits(live, purchase, receipt, [mintListing, ...publishedPrints.map(({ listingDigest }) => listingDigest)], collaborator, splitBalance);
       expect(receipt.actions.some(action => action.target.toLowerCase() === collection.contract.toLowerCase() && action.tokenId === '2' && action.unitIndex === '0')).toBe(true);
 
       const readOrder = (): Promise<CartOrder> => jsonCommand(live.buyerHome, ['cart', 'orders', 'get', '--id', purchase.orderId]);
-      await expect.poll(async () => (await readOrder()).fulfillments[0]?.providerOrderId,
-        { timeout: 240_000, interval: 3_000 }).toMatch(/^[A-Za-z0-9~_-]+$/u);
+      await expect.poll(async () => (await readOrder()).fulfillments.filter(item => item.providerOrderId).length,
+        { timeout: 240_000, interval: 3_000 }).toBe(2);
       const order = await readOrder();
       expect(order.status).toBe('CONFIRMED');
-      expect(order.items).toHaveLength(2);
-      expect(order.fulfillments).toHaveLength(1);
-      const fulfillment = order.fulfillments[0];
-      if (!fulfillment?.providerOrderId) throw new Error('Resolved print did not reach Prodigi.');
-      expect(fulfillment).toMatchObject({ resolvedItems: [{ productId: second.productId, sku: second.printSku,
-        tokenId: '2', sourceLineIndex: 0, sourceUnitIndex: 0 }] });
-      const response = await fetch(`https://api.prodigi.com/v5/orders/${encodeURIComponent(fulfillment.providerOrderId)}`, {
-        headers: { 'X-API-Key': sandboxKey }, signal: AbortSignal.timeout(30_000), redirect: 'error',
-      });
-      expect(response.status).toBe(200);
-      const body: unknown = await response.json();
-      const provider = sandboxOrder.parse(body).data;
-      expect(provider.metadata.fulfillmentId).toBe(fulfillment.id);
-      expect(provider.items).toHaveLength(1);
-      const item = provider.items[0];
-      if (!item) throw new Error('Prodigi accepted no physical item.');
-      expect(item).toMatchObject({ sku: 'GLOBAL-FAP-8X12', quantity: 1 });
-      const asset = item.assets[0];
-      if (!asset) throw new Error('Prodigi order has no production asset.');
-      // Assert privately. Never include signed URLs or recipient details in log output.
-      const deliveredPath = decodeURIComponent(new URL(asset.url).pathname);
-      expect(deliveredPath.includes(second.masterKey)).toBe(true);
-      expect(deliveredPath.includes(first.masterKey)).toBe(false);
+      expect(order.items).toHaveLength(3);
+      expect(order.fulfillments).toHaveLength(2);
+      for (const format of [second, secondExtra]) {
+        const fulfillment = order.fulfillments.find(item =>
+          item.resolvedItems?.some(resolved => resolved.sku === format.printSku));
+        if (!fulfillment?.providerOrderId) throw new Error('Resolved print size did not reach Prodigi.');
+        expect(fulfillment).toMatchObject({ resolvedItems: [{ productId: second.productId, sku: format.printSku,
+          tokenId: '2', sourceLineIndex: 0, sourceUnitIndex: 0 }] });
+        const response = await fetch(`https://api.prodigi.com/v5/orders/${encodeURIComponent(fulfillment.providerOrderId)}`, {
+          headers: { 'X-API-Key': sandboxKey }, signal: AbortSignal.timeout(30_000), redirect: 'error',
+        });
+        expect(response.status).toBe(200);
+        const body: unknown = await response.json();
+        const provider = sandboxOrder.parse(body).data;
+        expect(provider.metadata.fulfillmentId).toBe(fulfillment.id);
+        expect(provider.items).toHaveLength(1);
+        const item = provider.items[0];
+        expect(item).toMatchObject({ sku: format.specificationId, quantity: 1 });
+        const asset = item?.assets[0];
+        if (!asset) throw new Error('Prodigi order has no production asset.');
+        const deliveredPath = decodeURIComponent(new URL(asset.url).pathname);
+        expect(deliveredPath.includes(second.masterKey)).toBe(true);
+        expect(deliveredPath.includes(first.masterKey)).toBe(false);
+      }
       const history = await jsonCommand<{ data: CartOrder[] }>(live.buyerHome, ['cart', 'orders', 'list', '--per-page', '100']);
-      expect(history.data.find(candidate => candidate.id === purchase.orderId)?.items).toHaveLength(2);
-      console.info('Blind print Product order verified', { transactionHash: purchase.txHash, orderId: purchase.orderId, providerOrderId: provider.id });
+      expect(history.data.find(candidate => candidate.id === purchase.orderId)?.items).toHaveLength(3);
       await expect.poll(async () => {
         const product = await jsonCommand<CartApiProduct>(live.sellerHome,
           ['cart', 'catalog', 'products', 'get', '--product-id', second.productId, '--chain', live.chain]);
@@ -176,6 +191,8 @@ describe('ordered blind mint and its physical Product variant', () => {
     } finally {
       try {
         if (offeringProductId !== undefined) await jsonCommand(live.sellerHome, ['cart', 'catalog', 'products', 'archive', '--product-id', offeringProductId, '--chain', live.chain]);
+        for (const format of extraSizes)
+          await jsonCommand(live.sellerHome, ['prints', 'drops', 'archive', '--id', format.dropId]);
         for (const artwork of prepared) {
           await jsonCommand(live.sellerHome, ['prints', 'drops', 'archive', '--id', artwork.dropId]);
           await jsonCommand(live.sellerHome, ['cart', 'catalog', 'products', 'archive', '--product-id', artwork.productId, '--chain', live.chain]);
@@ -203,14 +220,26 @@ async function prepareArtwork(live: BuyerLiveFixture, contract: Address, tokenId
   const master = await jsonCommand<{ key: string }>(live.sellerHome, ['uploads', 'upload', imageFile, '--access', 'private', '--content-type', 'image/jpeg']);
   const photo = await jsonCommand<{ url: string }>(live.sellerHome, ['uploads', 'upload', imageFile, '--access', 'public', '--content-type', 'image/jpeg']);
   expect(master.key).toBe(createHash('sha256').update(image).digest('hex'));
-  const printFile = await jsonFile(live, `print-${tokenId}`, { idempotencyKey: randomUUID(), productId: product.id,
-    chainId: String(live.chainId), name, print: { name, description: 'Ordered blind mint physical variant', tags: ['test'],
-      productionUploadKey: master.key, images: [photo.url], specificationId: 'GLOBAL-FAP-8X12' } });
+  const print = await preparePrintSize(live, {
+    productId: product.id, name, masterKey: master.key, publicUrl: photo.url, specificationId: 'GLOBAL-FAP-8X12',
+  });
+  await jsonCommand(live.sellerHome, ['cart', 'catalog', 'products', 'publish', '--product-id', product.id, '--chain', live.chain]);
+  return { ...print, productId: product.id, nftSku: nft.sku, masterKey: master.key, publicUrl: photo.url, name };
+}
+
+async function preparePrintSize(live: BuyerLiveFixture, input: {
+  productId: string; name: string; masterKey: string; publicUrl: string; specificationId: string;
+}): Promise<PreparedPrintSize> {
+  const { productId, name, masterKey, publicUrl, specificationId } = input;
+  const printFile = await jsonFile(live, `print-${productId}-${specificationId}`, {
+    idempotencyKey: randomUUID(), productId, chainId: String(live.chainId), name,
+    print: { name, description: 'Ordered blind mint physical variant', tags: ['test'],
+      productionUploadKey: masterKey, images: [publicUrl], specificationId },
+  });
   const drop = await jsonCommand<{ id: string }>(live.sellerHome, ['prints', 'drops', 'create', '--input', printFile]);
   const option = await jsonCommand<{ id: string; sku: Hex }>(live.sellerHome,
     ['prints', 'drops', 'configure', '--id', drop.id, '--price-usd-cents', '100']);
-  await jsonCommand(live.sellerHome, ['cart', 'catalog', 'products', 'publish', '--product-id', product.id, '--chain', live.chain]);
-  return { productId: product.id, dropId: drop.id, nftSku: nft.sku, printSku: option.sku, optionId: option.id, masterKey: master.key };
+  return { dropId: drop.id, printSku: option.sku, optionId: option.id, specificationId };
 }
 
 async function jsonFile(live: BuyerLiveFixture, name: string, value: unknown): Promise<string> {
