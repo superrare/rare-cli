@@ -71,6 +71,22 @@ export function printsCommand(): Command {
       print(await client(options).prints.releases.list({ universalTokenId: options.universalTokenId }));
     }));
 
+  const concierge = new Command('concierge').description('Set up prints on behalf of a creator');
+  concierge.addCommand(command('create').requiredOption('--input <path>', 'JSON creatorUserId, drop, displayPriceUsdCents and optional listing terms')
+    .action(async (options: InputOptions): Promise<void> => {
+      const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
+      const setup = z.object({
+        creatorUserId: z.string().regex(/^[1-9][0-9]{0,18}$/u),
+        drop: printDropInput,
+        listing: printListingInput.omit({ seller: true, optionId: true, mintSource: true }).optional(),
+        displayPriceUsdCents: z.string(),
+      }).strict().parse(input);
+      print(await client(options).prints.concierge.createDraft({
+        ...setup, displayPriceUsdCents: parsePrintPrice(setup.displayPriceUsdCents),
+      }));
+    }));
+  prints.addCommand(concierge);
+
   const drops = new Command('drops').description('Manage your creator print drafts');
   drops.addCommand(command('create').requiredOption('--input <path>', 'JSON draft with chainId, optional productId, and print details: private productionUploadKey, public images and specificationId')
     .action(async (options: InputOptions): Promise<void> => {
