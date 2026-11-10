@@ -15,7 +15,7 @@ describe('built print and shipping CLI', () => {
         ['prints', 'quote'], ['prints', 'products', 'list'], ['prints', 'products', 'get'], ['prints', 'get'], ['prints', 'activity'], ['prints', 'releases'],
         ['prints', 'drops', 'create'], ['prints', 'drops', 'list'], ['prints', 'drops', 'get'],
         ['prints', 'drops', 'archive'], ['prints', 'drops', 'configure'], ['prints', 'drops', 'update'],
-        ['prints', 'listing', 'prepare'], ['prints', 'listing', 'publish'],
+        ['prints', 'listing', 'prepare'], ['prints', 'listing', 'review'], ['prints', 'listing', 'publish'],
         ['shipping', 'list'], ['shipping', 'save'], ['shipping', 'delete'], ['uploads', 'upload'], ['cart', 'card'],
         ['cart', 'orders', 'list'], ['cart', 'orders', 'get'],
       ]) {
@@ -30,9 +30,14 @@ describe('built print and shipping CLI', () => {
     });
   });
 
-  it('reuses generated draft keys and listing salts after a failed request', async () => {
+  it('reviews preparations by ID and reuses generated keys after a failed request', async () => {
     const received = new Map<string, unknown[]>();
     const server = createServer((request, response) => {
+      if (request.method === 'GET' && request.url === '/v1/prints/listings/preparations/00000000-0000-4000-8000-000000000001') {
+        response.writeHead(request.headers.authorization === 'Bearer print-retry-access' ? 200 : 401, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ data: { id: '00000000-0000-4000-8000-000000000001' } }));
+        return;
+      }
       void text(request).then(body => {
         const path = request.url ?? '';
         const requests = [...(received.get(path) ?? []), JSON.parse(body)];
@@ -55,6 +60,11 @@ describe('built print and shipping CLI', () => {
         await store.withLock(async () => { await store.set({ ...scope, revision: 'print-retry-session',
           accessToken: 'print-retry-access', refreshToken: 'print-retry-refresh',
           expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
+        const preparationId = '00000000-0000-4000-8000-000000000001';
+        const review = await runCli(['--json', 'prints', 'listing', 'review', '--preparation-id', preparationId,
+          '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory], { home });
+        expect(parseJsonStdout(review)).toEqual({ id: preparationId });
+        expect(received.size).toBe(0);
         const draft = { chainId: '11155111', name: 'Print', print: { name: 'Print', description: '', tags: [],
           productionUploadKey: 'a'.repeat(64), specificationId: 'GLOBAL-FAP-8X12', images: ['https://example.com/preview.jpg'] } };
         const terms = { deadline: '1999999999', availableQuantity: '2' };

@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { z } from 'zod';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import { createConciergePrintRequest, createPrintDropRequest, createPrintListingRequest, type PreparePrintListing, type RareClient } from '@rareprotocol/rare-sdk';
@@ -16,6 +16,8 @@ import { conciergePrintListingInput, parseCommerceUuid, parsePrintPrice, printDr
 type PrintOptions = AccountCommandOptions & ChainOptions;
 type IdentityOptions = PrintOptions & { id: string };
 type InputOptions = PrintOptions & { input: string };
+type PreparationOptions = PrintOptions & { preparationId: string };
+type PublishOptions = PrintOptions & { preparationId?: string; input?: string };
 type FileToolOptions = PrintOptions & { productionUploadKey: string; specificationId: string };
 
 function command(name: string): Command {
@@ -137,9 +139,22 @@ export function printsCommand(): Command {
       if (listing === undefined) throw new Error('Expected one print listing.');
       print(await client(options).prints.listings.prepare(listing));
     }));
-  listings.addCommand(command('publish').requiredOption('--input <path>', 'JSON listing terms or an array of up to 100 print offers to sign together')
+  listings.addCommand(command('review').description('Review a saved print listing before signing')
+    .requiredOption('--preparation-id <uuid>', 'saved listing preparation ID')
+    .action(async (options: PreparationOptions): Promise<void> => {
+      print(await client(options).prints.listings.getPreparation(parseCommerceUuid(options.preparationId)));
+    }));
+  listings.addCommand(command('publish')
+    .addOption(new Option('--preparation-id <uuid>', 'saved listing preparation ID').conflicts('input'))
+    .option('--input <path>', 'JSON listing terms or an array of up to 100 print offers to sign together')
     .option('--yes', 'proceed through all required signing and publication steps')
-    .action(async (options: InputOptions): Promise<void> => {
+    .action(async (options: PublishOptions): Promise<void> => {
+      if (options.preparationId !== undefined) {
+        const printPreparationId = parseCommerceUuid(options.preparationId);
+        print(await client(options, true).cart.listing.publish({ printPreparationId }));
+        return;
+      }
+      if (options.input === undefined) throw new Error('Provide --preparation-id or --input.');
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
       const inputs: unknown = Array.isArray(input) ? input : [input];
       const terms = await loadPrintListingRequests(options.input, inputs);

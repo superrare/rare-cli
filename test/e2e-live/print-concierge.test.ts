@@ -57,14 +57,12 @@ it('lets a Cart administrator set up a print that only its creator can publish',
     expect(draft.preparationId).toBeTruthy();
     expect(owned.metadata).toMatchObject({ productionUploadKey: master.key, images: [preview.url], sourceUniversalTokenId });
     await expect(jsonCommand(adminHome, ['prints', 'drops', 'get', '--id', dropId])).rejects.toThrow(/Status: 404/u);
-    const listing = join(fixture.tempDir, 'concierge-listing.json');
-    await writeFile(listing, JSON.stringify(draft.listing));
-    await expect(jsonCommand(adminHome, ['prints', 'listing', 'prepare', '--input', listing, '--chain', fixture.chain]))
-      .rejects.toThrow(/Status: 401/u);
-    const preparation = await jsonCommand<{ id: string }>(creatorHome, ['prints', 'listing', 'prepare', '--input', listing, '--chain', fixture.chain]);
-    expect(preparation.id).toBe(draft.preparationId);
+    const review = ['prints', 'listing', 'review', '--preparation-id', draft.preparationId ?? '', '--chain', fixture.chain];
+    await expect(jsonCommand(adminHome, review)).rejects.toThrow(/Status: 404/u);
+    const preparation = await jsonCommand<{ id: string; option_id: string }>(creatorHome, review);
+    expect(preparation).toMatchObject({ id: draft.preparationId, option_id: draft.option.id });
     const published = await jsonCommand<{ signedArtifact: { entries: { listingDigest: string }[] } }>(creatorHome, [
-      'prints', 'listing', 'publish', '--input', listing, '--chain', fixture.chain, '--yes',
+      'prints', 'listing', 'publish', '--preparation-id', preparation.id, '--chain', fixture.chain, '--yes',
     ]);
     expect(published.signedArtifact.entries).toHaveLength(1);
     await expect.poll(async () => (await jsonCommand<PrintDrop>(creatorHome, ['prints', 'drops', 'get', '--id', dropId ?? ''])).status)

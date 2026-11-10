@@ -98,7 +98,7 @@ describe('ordered blind mint and its physical Product variant', () => {
         const preparation = await jsonCommand<PrintListingPreparation>(live.sellerHome,
           ['prints', 'listing', 'prepare', '--input', printTerms, '--chain', live.chain]);
         const publication = await jsonCommand<Pick<CartListingPublishResult, 'signedArtifact'>>(live.sellerHome,
-          ['prints', 'listing', 'publish', '--input', printTerms, '--chain', live.chain, '--yes']);
+          ['prints', 'listing', 'publish', '--preparation-id', preparation.id, '--chain', live.chain, '--yes']);
         const listingDigest = publication.signedArtifact.entries[0]?.listingDigest;
         if (!listingDigest) throw new Error('Physical release Listing is missing.');
         const companion = await jsonFile(live, `companion-membership-${index}`, {
