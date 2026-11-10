@@ -10,7 +10,7 @@ import { createAuthStore } from '../auth-storage.js';
 import { output } from '../output.js';
 import { formatPrintOutput } from './print-output-core.js';
 import { addChainOptions, type ChainOptions } from './options.js';
-import { parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, printListingInput, printQuoteInput } from './print-input-core.js';
+import { conciergePrintListingInput, parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, printListingInput, printQuoteInput } from './print-input-core.js';
 
 type PrintOptions = AccountCommandOptions & ChainOptions;
 type IdentityOptions = PrintOptions & { id: string };
@@ -78,7 +78,7 @@ export function printsCommand(): Command {
       const setup = z.object({
         creatorUserId: z.string().regex(/^[1-9][0-9]{0,18}$/u),
         drop: printDropInput,
-        listing: printListingInput.omit({ seller: true, optionId: true, mintSource: true }).optional(),
+        listing: conciergePrintListingInput.optional(),
         displayPriceUsdCents: z.string(),
       }).strict().parse(input);
       print(await client(options).prints.concierge.createDraft({

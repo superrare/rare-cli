@@ -46,7 +46,7 @@ const printListingSplits = z.array(printListingSplit).max(16)
   .refine(splits => new Set(splits.map(split => split.recipient.toLowerCase())).size === splits.length,
     'Split recipients must be unique');
 
-export const printListingInput = z.object({
+const printListingFields = z.object({
   optionId: uuid, seller: address, listingSalt: bytes32, deadline: uint, availableQuantity: uint,
   eligibilityRuleId: uuid.optional(),
   mintSource: z.object({ chainId: z.string().regex(/^[1-9][0-9]*$/u), contract: address,
@@ -55,7 +55,15 @@ export const printListingInput = z.object({
   splits: printListingSplits.optional(),
   maxQuantityPerCheckout: z.string().regex(/^[1-9][0-9]*$/u)
     .pipe(z.string().refine(value => BigInt(value) <= 1000n, 'Print checkouts support at most 1000 copies')).optional(),
-}).strict().refine(value => value.splits?.[0] === undefined ||
+}).strict();
+
+export const conciergePrintListingInput = printListingFields.omit({
+  seller: true,
+  optionId: true,
+  mintSource: true,
+});
+
+export const printListingInput = printListingFields.refine(value => value.splits?.[0] === undefined ||
   !isAddress(value.seller, { strict: false }) || !isAddress(value.splits[0].recipient, { strict: false }) ||
   isAddressEqual(value.splits[0].recipient, value.seller),
   { message: 'Print splits must start with the seller', path: ['splits'] });
