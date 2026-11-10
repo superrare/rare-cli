@@ -24,6 +24,42 @@ const sandboxOrder = z.object({ data: z.object({
 type PreparedPrintSize = { dropId: string; printSku: Hex; optionId: string; specificationId: string };
 type PreparedArtwork = PreparedPrintSize & { productId: string; nftSku: Hex; masterKey: string; publicUrl: string; name: string };
 type Purchase = { txHash: Hex; orderId: Hex };
+const sepoliaTreasury = getAddress('0xBa68422A154e459f7b4992a95Ad358d412b6bd1d');
+const printPriceUsdCents = '100';
+const galleryBasisPoints = 3000;
+const printPrice = parseUnits(printPriceUsdCents, 4);
+const galleryFee = printPrice * BigInt(galleryBasisPoints) / 10_000n;
+const printSellerProceeds = printPrice - galleryFee;
+const adjustmentOptions = (): string[] => ['--chain', 'sepolia',
+  ...(process.env.GQL_API_KEY ? ['--api-key-env', 'GQL_API_KEY'] : []),
+];
+const galleryRulesPage = z.object({
+  data: z.array(z.object({
+    id: z.string(),
+    chargeSku: z.string(),
+    code: z.string(),
+    calculation: z.object({ type: z.string(), basisPoints: z.number().optional() }),
+    recipient: z.object({ type: z.string(), address: z.string().optional() }),
+  })),
+  pagination: z.object({ hasNextPage: z.boolean() }),
+});
+
+async function readSepoliaGalleryOverride(live: BuyerLiveFixture): Promise<z.infer<typeof galleryRulesPage>['data'][number]> {
+  for (let page = 1; ; page += 1) {
+    const result = galleryRulesPage.parse(await jsonCommand(live.sellerHome, [
+      'cart', 'adjustments', 'list', '--phase', 'LISTING_CONFIGURATION',
+      '--page', String(page), '--per-page', '100', ...adjustmentOptions(),
+    ]));
+    const rule = result.data.find(({ code, calculation, recipient }) =>
+      code === 'GALLERY_COMMISSION' && calculation.type === 'PERCENTAGE' &&
+      calculation.basisPoints === galleryBasisPoints && recipient.type === 'FIXED' &&
+      recipient.address?.toLowerCase() === sepoliaTreasury.toLowerCase());
+    if (rule !== undefined) return rule;
+    if (!result.pagination.hasNextPage)
+      throw new Error('Rare API is missing the seeded 30% Sepolia GALLERY_COMMISSION rule.');
+  }
+}
+
 
 // Selected live suites fail when deployment, wallet or provider prerequisites are missing.
 // This test deploys the same LazySovereign contract as release creation, not fixture bytecode.
@@ -220,8 +256,12 @@ describe('ordered blind mint and its physical Product variant', () => {
     }));
     let prepared: PreparedArtwork[] = [];
     let ruleIds: string[] = [];
+    let adjustmentAssignmentId: string | undefined;
     try {
       if (live.chain !== 'sepolia') throw new Error('RareMinter print E2E requires Sepolia.');
+      const galleryOverride = afterMint ? await readSepoliaGalleryOverride(live) : undefined;
+      if (galleryOverride && live.sellerAddress.toLowerCase() === sepoliaTreasury.toLowerCase())
+        throw new Error('The print seller and gallery treasury must be distinct to verify both payouts.');
       const rareMinter = getContractAddresses(live.chain).rareMinter;
       if (!rareMinter) throw new Error('RareMinter is not configured.');
       const collection = await jsonCommand<{ contract: Address }>(live.sellerHome, [
@@ -252,8 +292,10 @@ describe('ordered blind mint and its physical Product variant', () => {
             deadline: deadline(), availableQuantity: '1', ...(ruleId ? { eligibilityRuleId: ruleId } : {}) });
           const publication = await jsonCommand<Pick<CartListingPublishResult, 'signedArtifact'>>(live.sellerHome,
             ['prints', 'listing', 'publish', '--input', terms, '--chain', live.chain, '--yes']);
-          const listingDigest = publication.signedArtifact.entries[0]?.listingDigest;
-          if (!listingDigest) throw new Error('Print listing is missing.');
+          const entry = publication.signedArtifact.entries[0];
+          if (!entry) throw new Error('Print listing is missing.');
+          if (galleryOverride) expect(BigInt(entry.listing.minimumUnitPrice)).toBe(printSellerProceeds);
+          const listingDigest = entry.listingDigest;
           publications = [...publications, { artwork, tokenId, listingDigest, ruleId }];
         }
       };
@@ -281,6 +323,17 @@ describe('ordered blind mint and its physical Product variant', () => {
           });
         }
         const block = await live.publicClient.getBlock({ blockNumber: mintReceipt.blockNumber });
+        if (!galleryOverride) throw new Error('The seeded gallery override was not loaded.');
+        const assignmentFile = await jsonFile(live, 'gallery-commission-assignment', {
+          adjustmentId: galleryOverride.id,
+          priority: 1,
+          scope: { collections: [{ chainId: live.chainId, contract: collection.contract }] },
+        });
+        const assignment = z.object({ id: z.string() }).parse(await jsonCommand(live.sellerHome, [
+          'cart', 'adjustments', 'assignments', 'create', '--input', assignmentFile, '--yes',
+          ...adjustmentOptions(),
+        ]));
+        adjustmentAssignmentId = assignment.id;
         await setupPrints(new Date(Number(block.timestamp) * 1000).toISOString());
       }
       const tokenId = minted.tokenIds[1];
@@ -336,8 +389,21 @@ describe('ordered blind mint and its physical Product variant', () => {
       const settlement = await verifyUsdcCartSettlement(live, creator, purchase, { paymentAmount: BigInt(preview.preparation.paymentAmount) }, true);
       const sellerProceeds = settlement.lines.filter(line => line.paymentRecipient.toLowerCase() === live.sellerAddress.toLowerCase())
         .reduce((sum, line) => sum + BigInt(line.amount), 0n);
+      if (galleryOverride) {
+        const printLine = settlement.lines.find(line => line.listingDigest === selected.listingDigest);
+        expect(printLine).toMatchObject({ sku: selected.artwork.printSku, fulfillmentKind: 1 });
+        expect(getAddress(printLine?.paymentRecipient ?? zeroAddress)).toBe(live.sellerAddress);
+        expect(BigInt(printLine?.amount ?? '-1')).toBe(printSellerProceeds);
+        expect(sellerProceeds).toBe(printSellerProceeds);
+        const commissionLines = settlement.lines.filter(line => line.fulfillmentKind === 0 &&
+          line.sku.toLowerCase() === galleryOverride.chargeSku.toLowerCase());
+        expect(commissionLines).toHaveLength(1);
+        expect(getAddress(commissionLines[0]?.paymentRecipient ?? zeroAddress)).toBe(sepoliaTreasury);
+        expect(BigInt(commissionLines[0]?.amount ?? '-1')).toBe(galleryFee);
+      }
       await verifyPurchaseBalances(live, { transactionHash: purchase.txHash, currency: live.usdcAddress,
-        before: printBalances, buyerPayment: BigInt(preview.preparation.paymentAmount), sellerProceeds });
+        before: printBalances, buyerPayment: BigInt(preview.preparation.paymentAmount),
+        sellerProceeds: galleryOverride ? printSellerProceeds : sellerProceeds });
       if (selected.ruleId) {
         const ruleId = selected.ruleId;
         await expect.poll(() => claims(live.buyerHome, ruleId), { timeout: 180_000, interval: 2_000 })
@@ -373,7 +439,15 @@ describe('ordered blind mint and its physical Product variant', () => {
           await jsonCommand(live.sellerHome, ['prints', 'drops', 'archive', '--id', artwork.dropId]);
           await jsonCommand(live.sellerHome, ['cart', 'catalog', 'products', 'archive', '--product-id', artwork.productId, '--chain', live.chain]);
         }
-      } finally { await cleanupLiveFixture(live); }
+      } finally {
+        try {
+          if (adjustmentAssignmentId !== undefined)
+            await jsonCommand(live.sellerHome, [
+              'cart', 'adjustments', 'assignments', 'disable', '--id', adjustmentAssignmentId, '--yes',
+              ...adjustmentOptions(),
+            ]);
+        } finally { await cleanupLiveFixture(live); }
+      }
     }
   }, 900_000);
 
@@ -401,23 +475,25 @@ async function prepareArtwork(live: BuyerLiveFixture, contract: Address, tokenId
   expect(master.key).toBe(createHash('sha256').update(image).digest('hex'));
   const print = await preparePrintSize(live, {
     productId: product.id, name, masterKey: master.key, publicUrl: photo.url, specificationId: 'GLOBAL-FAP-8X12',
+    ...(alreadyMinted ? { sourceUniversalTokenId: `${live.chainId}-${contract.toLowerCase()}-${tokenId}` } : {}),
   });
   await jsonCommand(live.sellerHome, ['cart', 'catalog', 'products', 'publish', '--product-id', product.id, '--chain', live.chain]);
   return { ...print, productId: product.id, nftSku: nft.sku, masterKey: master.key, publicUrl: photo.url, name };
 }
 
 async function preparePrintSize(live: BuyerLiveFixture, input: {
-  productId: string; name: string; masterKey: string; publicUrl: string; specificationId: string;
+  productId: string; name: string; masterKey: string; publicUrl: string; specificationId: string; sourceUniversalTokenId?: string;
 }): Promise<PreparedPrintSize> {
   const { productId, name, masterKey, publicUrl, specificationId } = input;
   const printFile = await jsonFile(live, `print-${productId}-${specificationId}`, {
     idempotencyKey: randomUUID(), productId, chainId: String(live.chainId), name,
     print: { name, description: 'Ordered blind mint physical variant', tags: ['test'],
-      productionUploadKey: masterKey, images: [publicUrl], specificationId },
+      productionUploadKey: masterKey, images: [publicUrl], specificationId,
+      ...(input.sourceUniversalTokenId === undefined ? {} : { sourceUniversalTokenId: input.sourceUniversalTokenId }) },
   });
   const drop = await jsonCommand<{ id: string }>(live.sellerHome, ['prints', 'drops', 'create', '--input', printFile]);
   const option = await jsonCommand<{ id: string; sku: Hex }>(live.sellerHome,
-    ['prints', 'drops', 'configure', '--id', drop.id, '--price-usd-cents', '100']);
+    ['prints', 'drops', 'configure', '--id', drop.id, '--price-usd-cents', printPriceUsdCents]);
   return { dropId: drop.id, printSku: option.sku, optionId: option.id, specificationId };
 }
 
