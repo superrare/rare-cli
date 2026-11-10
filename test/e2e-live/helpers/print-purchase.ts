@@ -7,21 +7,21 @@ import { join } from 'node:path';
 import { expect } from 'vitest';
 import { z } from 'zod';
 import type { CartCheckoutPreparation, CartCheckoutReceipt, CartOrder, EligibilityClaim, EligibilityRule, PrintOption, PublicPrintDrop } from '@rareprotocol/rare-sdk';
-import { erc20Abi, erc721Abi, getAddress, isHex, parseEventLogs, parseUnits, type Address, type Hex } from 'viem';
-import { cartAbi, resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
+import { erc20Abi, erc721Abi, erc1155Abi, getAddress, isHex, parseEventLogs, parseUnits, zeroAddress, type Address, type Hex } from 'viem';
+import { cartAbi, getCartAddress, rareErc1155Abi, resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 import { deployErc721Collection, mintToken } from './live-erc721.js';
 import { createCreatorVariantClient } from './cart-creator-variants.js';
 import { verifyPrivateCartOrder } from './cart-order-history.js';
 import { verifyCartPurchaseNotifications } from './cart-notifications.js';
-import { cleanupLiveFixture, createCartLiveFixture, jsonCommand } from './live-harness.js';
+import { cleanupLiveFixture, createCartLiveFixture, E2E_TOKEN_URI, jsonCommand } from './live-harness.js';
 
 // Verify against the provider independently of our persisted status. Never target the live API.
 const sandboxOrderSchema = z.object({ data: z.object({
   id: z.string(), updatedAt: z.string(), shipments: z.array(z.object({ id: z.string() })).default([]), merchantReference: z.string(), metadata: z.object({ fulfillmentId: z.string() }),
-  items: z.array(z.object({ sku: z.string(), quantity: z.number() })),
+  items: z.array(z.object({ sku: z.string(), quantity: z.number(), assets: z.array(z.object({ url: z.string() })).optional() })),
 }) });
 
-export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'claim' | 'two-copy'): Promise<void> {
+export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'claim' | 'two-copy' | 'can-opener'): Promise<void> {
     const configuredKey = process.env.PRODIGI_SANDBOX_API_KEY;
     if (!configuredKey?.startsWith('sandbox_') && !configuredKey?.startsWith('test_')) throw new Error('Set PRODIGI_SANDBOX_API_KEY to a sandbox key. Deploy Rare API and Pipelines with the same v5 sandbox configuration.');
     const sandboxKey = configuredKey.startsWith('test_') ? `sandbox_${configuredKey}` : configuredKey;
@@ -44,19 +44,24 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
       if (fixture.chain !== 'sepolia' || !fixture.buyerHome || !fixture.buyerAddress) throw new Error('Print fulfillment E2E requires Sepolia and a registered buyer.');
       const buyerHome = fixture.buyerHome;
       const creator = createCreatorVariantClient(fixture);
-      const source = journey === 'print-only' || journey === 'two-copy' ? undefined : await (async (): Promise<{ contract: Address; tokenId: string; sku: Hex; listingDigest: Hex; productId: string }> => {
-        const collection = await deployErc721Collection(fixture, '1');
-        const token = await mintToken(fixture, collection.contract);
+      const isCanOpener = journey === 'can-opener';
+      const includesNft = journey === 'mixed' || isCanOpener;
+      const source = !includesNft && journey !== 'claim' ? undefined : await (async (): Promise<{ contract: Address; tokenId: string; sku: Hex; listingDigest: Hex; productId: string }> => {
+        const token = isCanOpener ? await createCanOpenerEdition(fixture) : await (async (): Promise<{ contract: Address; tokenId: string }> => {
+          const collection = await deployErc721Collection(fixture, '1');
+          return mintToken(fixture, collection.contract);
+        })();
         const product = await creator.cart.catalog.products.create({ metadata: { title: `NFT and print ${randomUUID()}` } });
         productId = product.id;
         const configured = await creator.cart.catalog.variants.add(product.id, { variants: [{ metadata: {
-          type: 'ERC721', chainId: String(fixture.chainId), tokenContract: token.contract, tokenId: token.tokenId,
+          type: isCanOpener ? 'ERC1155' : 'ERC721', chainId: String(fixture.chainId), tokenContract: token.contract, tokenId: token.tokenId,
         } }] });
         const variant = configured.variants[0];
         if (!variant) throw new Error('NFT variant was not created.');
         const terms = join(fixture.tempDir, 'nft-listing.json');
         await writeFile(terms, JSON.stringify({ deadline: String(Math.floor(Date.now() / 1000) + 3600),
-          listings: [{ sku: variant.sku, settlementCurrency: 'usdc', unitPrice: '1', quantity: '1', fulfillmentKind: 'ERC721_TRANSFER' }] }));
+          listings: [{ sku: variant.sku, settlementCurrency: 'usdc', unitPrice: '1', quantity: '1',
+            fulfillmentKind: isCanOpener ? 'ERC1155_MINT_TO' : 'ERC721_TRANSFER' }] }));
         const published = await jsonCommand<{ listingDigests: Hex[] }>(fixture.sellerHome, ['cart', 'listing', 'create', '--input', terms, '--chain', fixture.chain, '--yes']);
         const digest = published.listingDigests[0];
         if (!digest) throw new Error('NFT Listing was not published.');
@@ -127,11 +132,11 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
       }
       const checkoutInput = join(fixture.tempDir, 'selected-cart.json');
       await writeFile(checkoutInput, JSON.stringify({ items: [
-        ...(journey === 'mixed' && source ? [{ kind: 'listing', listingDigest: source.listingDigest, quantity: '1' }] : []), printItem,
+        ...(includesNft && source ? [{ kind: 'listing', listingDigest: source.listingDigest, quantity: '1' }] : []), printItem,
       ] }));
       const checkout = ['cart', 'checkout', '--input', checkoutInput, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', fixture.chain];
       const preview = await jsonCommand<{ preparation: CartCheckoutPreparation }>(buyerHome, [...checkout, '--preview']);
-      if (journey !== 'mixed') {
+      if (!includesNft) {
         expect(BigInt(preview.preparation.breakdown?.production ?? '-1')).toBeGreaterThan(0n);
         expect(BigInt(preview.preparation.breakdown?.shipping ?? '-1')).toBeGreaterThanOrEqual(0n);
       }
@@ -143,7 +148,8 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
       const sellerBefore = await fixture.publicClient.readContract({ address: fixture.usdcAddress, abi: erc20Abi, functionName: 'balanceOf', args: [fixture.sellerAddress] });
       const splitBalance = await readCollaboratorBalance(fixture, collaborator);
       const purchase = await jsonCommand<{ txHash: Hex; orderId: Hex }>(buyerHome, [...checkout, '--yes'], 300_000);
-      expect(await fixture.publicClient.getTransactionReceipt({ hash: purchase.txHash })).toMatchObject({ status: 'success' });
+      const transaction = await fixture.publicClient.getTransactionReceipt({ hash: purchase.txHash });
+      expect(transaction.status).toBe('success');
       console.info('Cart print payment confirmed', { transactionHash: purchase.txHash, orderId: purchase.orderId });
       const indexed = await verifySettlement(fixture, creator, purchase, preview.preparation, true);
       await verifyPrintSplits(fixture, purchase, indexed, [entry.listingDigest], collaborator, splitBalance);
@@ -151,7 +157,25 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
       const sellerAfter = await fixture.publicClient.readContract({ address: fixture.usdcAddress, abi: erc20Abi, functionName: 'balanceOf', args: [fixture.sellerAddress] });
       const collaboratorPaid = indexed.splitAllocations.filter(allocation => allocation.recipient.toLowerCase() === collaborator.toLowerCase()).reduce((total, allocation) => total + BigInt(allocation.amount), 0n);
       expect(sellerAfter - sellerBefore).toBe(sellerProceeds - collaboratorPaid);
-      if (source) expect(await fixture.publicClient.readContract({ address: source.contract, abi: erc721Abi, functionName: 'ownerOf', args: [BigInt(source.tokenId)] })).toBe(getAddress(fixture.buyerAddress ?? ''));
+      if (isCanOpener && source) {
+        const payments = parseEventLogs({ abi: cartAbi, eventName: 'PurchaseExecuted',
+          logs: transaction.logs.filter(log => log.address.toLowerCase() === getCartAddress(fixture.chain).toLowerCase()) });
+        expect(payments.map(event => event.args)).toEqual([expect.objectContaining({
+          orderId: purchase.orderId, payer: getAddress(fixture.buyerAddress),
+        })]);
+        const mints = parseEventLogs({ abi: erc1155Abi, eventName: 'TransferBatch',
+          logs: transaction.logs.filter(log => log.address.toLowerCase() === source.contract.toLowerCase()) });
+        expect(mints.map(event => event.args)).toEqual([expect.objectContaining({
+          from: zeroAddress, to: getAddress(fixture.buyerAddress), ids: [BigInt(source.tokenId)], values: [1n],
+        })]);
+        expect(indexed.lines.find(line => line.listingDigest === source.listingDigest))
+          .toMatchObject({ sku: source.sku, fulfillmentKind: 5, quantity: '1' });
+        expect(indexed.lines.find(line => line.listingDigest === entry.listingDigest))
+          .toMatchObject({ sku: option.sku, fulfillmentKind: 1, quantity: '1' });
+        await expect(fixture.publicClient.readContract({ address: source.contract, abi: rareErc1155Abi,
+          functionName: 'balanceOf', args: [fixture.buyerAddress, BigInt(source.tokenId)] })).resolves.toBe(1n);
+      }
+      if (source && !isCanOpener) expect(await fixture.publicClient.readContract({ address: source.contract, abi: erc721Abi, functionName: 'ownerOf', args: [BigInt(source.tokenId)] })).toBe(getAddress(fixture.buyerAddress ?? ''));
       if (journey === 'claim') {
         await expect.poll(claims, { timeout: 180_000, interval: 2_000 }).toMatchObject([{ status: 'CONSUMED' }]);
         expect(await claims()).toHaveLength(1);
@@ -164,11 +188,11 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
       const fulfillment = order.fulfillments[0];
       if (!fulfillment?.providerOrderId) throw new Error('Provider order ID is missing after submission.');
       expect(order.status).toBe('CONFIRMED');
-      expect(order.items).toHaveLength(journey === 'mixed' ? 2 : 1);
+      expect(order.items).toHaveLength(includesNft ? 2 : 1);
       expect(order.fulfillments).toHaveLength(1);
       if (!fixture.buyerHome || !fixture.buyerAddress) throw new Error('Print buyer fixture is missing.');
       await verifyPrivateCartOrder({ ...fixture, buyerHome: fixture.buyerHome, buyerAddress: fixture.buyerAddress }, purchase.orderId);
-      await verifyCartPurchaseNotifications({ ...fixture, buyerHome: fixture.buyerHome, buyerAddress: fixture.buyerAddress }, purchase, journey === 'mixed' ? 2 : 1);
+      await verifyCartPurchaseNotifications({ ...fixture, buyerHome: fixture.buyerHome, buyerAddress: fixture.buyerAddress }, purchase, includesNft ? 2 : 1);
       const response = await fetch(`https://api.prodigi.com/v5/orders/${encodeURIComponent(fulfillment.providerOrderId)}`, {
         headers: { 'X-API-Key': sandboxKey }, signal: AbortSignal.timeout(30_000), redirect: 'error',
       });
@@ -190,7 +214,12 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
 
       expect(provider.metadata.fulfillmentId).toBe(fulfillment.id);
       expect(provider.merchantReference).toBe(createHash('sha256').update(`superrare:cart:fulfillment:${fulfillment.id}`).digest('hex'));
-      expect(provider.items).toEqual([{ sku: product.id, quantity: journey === 'two-copy' ? 2 : 1 }]);
+      expect(provider.items).toMatchObject([{ sku: product.id, quantity: journey === 'two-copy' ? 2 : 1 }]);
+      if (isCanOpener) {
+        const asset = provider.items[0]?.assets?.[0];
+        if (!asset) throw new Error('Prodigi order has no generic print production asset.');
+        expect(decodeURIComponent(new URL(asset.url).pathname)).toContain(master.key);
+      }
       // Only public identifiers, never recipient details, private URLs or credentials.
       console.info('Prodigi sandbox order verified', { transactionHash: purchase.txHash, orderId: purchase.orderId, providerOrderId: provider.id });
     } finally {
@@ -202,6 +231,24 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
         await cleanupLiveFixture(fixture);
       }
     }
+}
+
+async function createCanOpenerEdition(fixture: Awaited<ReturnType<typeof createCartLiveFixture>>): Promise<{ contract: Address; tokenId: string }> {
+  const { contract } = await jsonCommand<{ contract: Address }>(fixture.sellerHome, [
+    'collection', 'deploy', 'erc1155', `Can Opener ${randomUUID()}`, 'OPENER', '--base-uri', E2E_TOKEN_URI, '--chain', fixture.chain,
+  ], 240_000);
+  const { tokenId } = await jsonCommand<{ tokenId: string }>(fixture.sellerHome, [
+    'collection', 'erc1155', 'create-token', '--contract', contract, '--max-supply', '10', '--token-uri', E2E_TOKEN_URI,
+    '--chain', fixture.chain,
+  ], 240_000);
+  await jsonCommand(fixture.sellerHome, [
+    'collection', 'erc1155', 'mint', '--contract', contract, '--token-id', tokenId, '--quantity', '1', '--chain', fixture.chain,
+  ], 240_000);
+  await jsonCommand(fixture.sellerHome, [
+    'collection', 'erc1155', 'minter', 'set', '--contract', contract, '--minter', getCartAddress(fixture.chain),
+    '--approved', 'true', '--chain', fixture.chain,
+  ], 240_000);
+  return { contract, tokenId };
 }
 
 async function verifySettlement(
