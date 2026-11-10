@@ -30,6 +30,60 @@ describe('built print and shipping CLI', () => {
     });
   });
 
+  it('reuses generated draft keys and listing salts after a failed request', async () => {
+    const received = new Map<string, unknown[]>();
+    const server = createServer((request, response) => {
+      void text(request).then(body => {
+        const path = request.url ?? '';
+        const requests = [...(received.get(path) ?? []), JSON.parse(body)];
+        // eslint-disable-next-line functional/immutable-data -- Record requests from separate CLI processes.
+        received.set(path, requests);
+        response.writeHead(requests.length === 1 ? 503 : 201, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify(requests.length === 1 ? { message: 'Unavailable' } : { data: { id: 'saved' } }));
+      });
+    });
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error('Missing fixture address');
+    try {
+      await withTempHome(async temporary => {
+        const home = await realpath(temporary);
+        const apiBaseUrl = `http://127.0.0.1:${address.port}`;
+        const directory = join(home, 'auth');
+        const scope = { apiBaseUrl, authBaseUrl: `${apiBaseUrl}/auth/v2`, clientId: 'rare-sdk' };
+        const store = createAuthStore({ ...scope, backend: 'file', directory });
+        await store.withLock(async () => { await store.set({ ...scope, revision: 'print-retry-session',
+          accessToken: 'print-retry-access', refreshToken: 'print-retry-refresh',
+          expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
+        const draft = { chainId: '11155111', name: 'Print', print: { name: 'Print', description: '', tags: [],
+          productionUploadKey: 'a'.repeat(64), specificationId: 'GLOBAL-FAP-8X12', images: ['https://example.com/preview.jpg'] } };
+        const terms = { deadline: '1999999999', availableQuantity: '2' };
+        const key = expect.stringMatching(/^[0-9a-f-]{36}$/u);
+        const salt = expect.stringMatching(/^0x[0-9a-f]{64}$/u);
+        const scenarios = [
+          { command: ['drops', 'create'], path: '/v1/prints/drops', input: draft, generated: { idempotencyKey: key } },
+          { command: ['listing', 'prepare'], path: '/v1/prints/listings/prepare',
+            input: { ...terms, optionId: '00000000-0000-4000-8000-000000000001', seller: '0x1111111111111111111111111111111111111111' },
+            generated: { listingSalt: salt } },
+          { command: ['concierge', 'create'], path: '/v1/prints/concierge/drafts',
+            input: { creatorUserId: '17', drop: draft, listing: terms, displayPriceUsdCents: '1000' },
+            generated: { drop: { idempotencyKey: key }, listing: { listingSalt: salt } } },
+        ];
+        for (const scenario of scenarios) {
+          const inputPath = join(home, `${scenario.command[0]}.json`);
+          await writeFile(inputPath, JSON.stringify(scenario.input));
+          const args = ['--json', 'prints', ...scenario.command, '--input', inputPath,
+            '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory];
+          expect((await runCli(args, { home })).stderr).toContain('503');
+          expect(parseJsonStdout(await runCli(args, { home }))).toEqual({ id: 'saved' });
+          const [first, second] = received.get(scenario.path) ?? [];
+          expect(first).toMatchObject(scenario.generated);
+          expect(second).toEqual(first);
+        }
+      });
+    } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
+  });
+
   it('lists and gets public products in human and JSON output without signing in', async () => {
     const product = { id: 'GLOBAL-FAP-8X12', description: 'Enhanced matte art print', paper: 'Enhanced matte art paper · 200gsm',
       size: '8 × 12 in', widthInches: 8, heightInches: 12, sizeCategory: 'small', format: 'rectangular', automaticOrientation: true,

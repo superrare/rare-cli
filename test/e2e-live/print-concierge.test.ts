@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
@@ -32,12 +32,11 @@ it('lets a Cart administrator set up a print that only its creator can publish',
     const listingTerms = {
       availableQuantity: '3', maxQuantityPerCheckout: '2',
       deadline: String(Math.floor(Date.now() / 1000) + 3600),
-      listingSalt: `0x${randomBytes(32).toString('hex')}`,
     };
     await writeFile(input, JSON.stringify({
       creatorUserId: creator.accountId,
       drop: {
-        idempotencyKey: randomUUID(), chainId: String(fixture.chainId), name,
+        chainId: String(fixture.chainId), name,
         print: { name, description: '', tags: ['test'], productionUploadKey: master.key,
           images: [preview.url], specificationId: 'GLOBAL-FAP-8X12', sourceUniversalTokenId },
       },
@@ -53,6 +52,7 @@ it('lets a Cart administrator set up a print that only its creator can publish',
     expect(owned.options).toEqual([draft.option]);
     expect(draft.option.metadata).toMatchObject({ displayPriceUsdCents: '100' });
     expect(draft.listing).toMatchObject({ ...listingTerms, optionId: draft.option.id });
+    expect(draft.listing?.listingSalt).toMatch(/^0x[0-9a-f]{64}$/u);
     expect(draft.listing?.seller.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
     expect(draft.preparationId).toBeTruthy();
     expect(owned.metadata).toMatchObject({ productionUploadKey: master.key, images: [preview.url], sourceUniversalTokenId });

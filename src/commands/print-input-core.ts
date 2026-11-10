@@ -26,7 +26,7 @@ export const savedShippingInput = z.object({
 }).strict();
 
 export const printDropInput = z.object({
-  idempotencyKey: uuid, productId: productId.optional(), name: z.string(), description: z.string().optional(),
+  idempotencyKey: uuid.optional(), productId: productId.optional(), name: z.string(), description: z.string().optional(),
   chainId: z.literal('11155111'),
   print: z.object({
     name: z.string(), description: z.string(), tags: z.array(z.string()),
@@ -47,7 +47,7 @@ const printListingSplits = z.array(printListingSplit).max(16)
     'Split recipients must be unique');
 
 const printListingFields = z.object({
-  optionId: uuid, seller: address, listingSalt: bytes32, deadline: uint, availableQuantity: uint,
+  optionId: uuid, seller: address, listingSalt: bytes32.optional(), deadline: uint, availableQuantity: uint,
   eligibilityRuleId: uuid.optional(),
   mintSource: z.object({ chainId: z.string().regex(/^[1-9][0-9]*$/u), contract: address,
     productIds: z.array(productId).min(1).max(1000),
