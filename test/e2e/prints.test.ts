@@ -38,8 +38,8 @@ describe('built print and shipping CLI', () => {
         const requests = [...(received.get(path) ?? []), JSON.parse(body)];
         // eslint-disable-next-line functional/immutable-data -- Record requests from separate CLI processes.
         received.set(path, requests);
-        response.writeHead(requests.length === 1 ? 503 : 201, { 'Content-Type': 'application/json' });
-        response.end(JSON.stringify(requests.length === 1 ? { message: 'Unavailable' } : { data: { id: 'saved' } }));
+        response.writeHead(requests.length <= 2 ? 503 : 201, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify(requests.length <= 2 ? { message: 'Unavailable' } : { data: { id: 'saved' } }));
       });
     });
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
@@ -74,11 +74,13 @@ describe('built print and shipping CLI', () => {
           await writeFile(inputPath, JSON.stringify(scenario.input));
           const args = ['--json', 'prints', ...scenario.command, '--input', inputPath,
             '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory];
-          expect((await runCli(args, { home })).stderr).toContain('503');
+          expect((await runCli(args, { home })).stderr).toContain('Rerun the same command with the same input file');
+          expect(received.get(scenario.path)).toHaveLength(2);
           expect(parseJsonStdout(await runCli(args, { home }))).toEqual({ id: 'saved' });
-          const [first, second] = received.get(scenario.path) ?? [];
+          const [first, second, third] = received.get(scenario.path) ?? [];
           expect(first).toMatchObject(scenario.generated);
           expect(second).toEqual(first);
+          expect(third).toEqual(first);
         }
       });
     } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
