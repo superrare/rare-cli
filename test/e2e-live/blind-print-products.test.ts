@@ -37,6 +37,7 @@ const galleryRulesPage = z.object({
   data: z.array(z.object({
     id: z.string(),
     chargeSku: z.string(),
+    chainId: z.string(),
     code: z.string(),
     calculation: z.object({ type: z.string(), basisPoints: z.number().optional() }),
     recipient: z.object({ type: z.string(), address: z.string().optional() }),
@@ -50,8 +51,8 @@ async function readSepoliaGalleryOverride(live: BuyerLiveFixture): Promise<z.inf
       'cart', 'adjustments', 'list', '--phase', 'LISTING_CONFIGURATION',
       '--page', String(page), '--per-page', '100', ...adjustmentOptions(),
     ]));
-    const rule = result.data.find(({ code, calculation, recipient }) =>
-      code === 'GALLERY_COMMISSION' && calculation.type === 'PERCENTAGE' &&
+    const rule = result.data.find(({ code, chainId, calculation, recipient }) =>
+      chainId === String(live.chainId) && code === 'GALLERY_COMMISSION' && calculation.type === 'PERCENTAGE' &&
       calculation.basisPoints === galleryBasisPoints && recipient.type === 'FIXED' &&
       recipient.address?.toLowerCase() === sepoliaTreasury.toLowerCase());
     if (rule !== undefined) return rule;
