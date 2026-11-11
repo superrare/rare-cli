@@ -5,7 +5,7 @@ import { purchaseEligibilityCommand } from './eligibility.js';
 import { cartCatalogCommand } from './cart-catalog.js';
 import { formatUnits, type Address } from 'viem';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import type { CartCheckoutPreparation, CartListingPreparation, RareClient } from '@rareprotocol/rare-sdk';
+import type { CartCheckoutPreparation, CartListingPreparation, CartPaymentStart, RareClient } from '@rareprotocol/rare-sdk';
 import { hashCartListingRoot } from '@rareprotocol/rare-sdk/utils';
 import { cartFulfillmentKinds } from '@rareprotocol/rare-sdk';
 import { getActiveChain } from '../config.js';
@@ -290,7 +290,7 @@ function cartCheckoutCommand(swap = false): Command {
           const currency = await rare.currency.resolveDecimals(line.settlementCurrency);
           return `${formatUnits(line.amount, currency.decimals)} ${currency.symbol ?? currency.address} to ${line.paymentRecipient}`;
         }));
-        const fees = await Promise.all(preparation.fees.map(async fee => {
+        const fees = preparation.quote !== undefined ? [] : await Promise.all(preparation.fees.map(async fee => {
           const currency = await rare.currency.resolveDecimals(fee.currency);
           return `${fee.label}: ${formatUnits(fee.amount, currency.decimals)} ${currency.symbol ?? currency.address}`;
         }));
@@ -317,7 +317,7 @@ function cartCheckoutCommand(swap = false): Command {
 
       log(`Purchasing ${intent.items.length} Cart item(s) on ${chain}...`);
       const quote = await rare.cart.checkout.quote(intent);
-      const purchase = async (autoApprove: boolean) => {
+      const purchase = async (autoApprove: boolean): Promise<Extract<CartPaymentStart, { method: 'wallet' }>> => {
         const result = await rare.cart.checkout.pay({ quote, method: 'wallet', autoApprove,
           onAttempt: attemptId => { log(`Checkout attempt: ${attemptId}`); } });
         if (result.method !== 'wallet') throw new Error('Expected a wallet payment.');
@@ -326,8 +326,8 @@ function cartCheckoutCommand(swap = false): Command {
       const payment = await runWithPaymentApprovalConsent({
         commandName: swap ? 'rare cart swap' : 'rare cart checkout',
         approvalMessage: 'ERC20 approval is required before purchasing this Cart checkout.',
-        runWithoutApproval: () => purchase(opts.yes === true),
-        runWithApproval: () => purchase(true),
+        runWithoutApproval: async (): ReturnType<typeof purchase> => purchase(opts.yes === true),
+        runWithApproval: async (): ReturnType<typeof purchase> => purchase(true),
       });
       if (payment === undefined) return;
       const { purchase: result, attemptId } = payment;
@@ -468,7 +468,14 @@ function printCheckoutPreparation(preparation: CartCheckoutPreparation, symbol: 
   console.log('Cart checkout preview:');
   console.log(`  Items: ${preparation.intent.items.length}`);
   console.log(`  Payment: ${formatUnits(preparation.paymentAmount, decimals)} ${symbol}`);
-  console.log(`  Fees: ${preparation.fees.length}`);
+  if (preparation.quote !== undefined) {
+    const labels = { items: 'Merchandise proceeds', fees: 'Fees', converted: 'Converted items and charges' };
+    for (const line of preparation.quote.lines) {
+      console.log(`  ${labels[line.kind]}: ${formatUnits(line.amount, decimals)} ${symbol}`);
+    }
+  } else {
+    console.log(`  Fees: ${preparation.fees.length}`);
+  }
   console.log(`  Settlements: ${preparation.settlements.length}`);
   console.log(`  Route actions: ${preparation.route.inputs.length}`);
   console.log(`  Prepared: ${preparation.preparedAt}`);
