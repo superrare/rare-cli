@@ -72,6 +72,7 @@ export function cartCommand(): Command {
   command.addCommand(cartCheckoutCommand());
   command.addCommand(cartCheckoutCommand(true));
   command.addCommand(cartCardCommand());
+  command.addCommand(cartResumeCommand());
   command.addCommand(ordersCommand());
   return command;
 }
@@ -283,9 +284,8 @@ function cartCheckoutCommand(swap = false): Command {
         ...(delivery === undefined ? {} : { delivery: { ...delivery,
           ...(checkoutInput.mintSelections === undefined ? {} : { mintSelections: checkoutInput.mintSelections }) } }),
       };
-      const preparation = await rare.cart.checkout.prepare(intent);
-
       if (opts.preview === true) {
+        const preparation = await rare.cart.checkout.prepare(intent);
         const outputs = await Promise.all(preparation.lines.filter(line => line.fulfillmentKind === cartFulfillmentKinds.currencySwap).map(async line => {
           const currency = await rare.currency.resolveDecimals(line.settlementCurrency);
           return `${formatUnits(line.amount, currency.decimals)} ${currency.symbol ?? currency.address} to ${line.paymentRecipient}`;
@@ -295,7 +295,7 @@ function cartCheckoutCommand(swap = false): Command {
           return `${fee.label}: ${formatUnits(fee.amount, currency.decimals)} ${currency.symbol ?? currency.address}`;
         }));
         output(
-          { preview: true, preparation },
+          { preview: true, quote: preparation.quote, preparation },
           () => {
             printCheckoutPreparation(preparation, paymentCurrency.symbol ?? paymentCurrency.address, paymentCurrency.decimals);
             for (const value of outputs) console.log(`  Receive: ${value}`);
@@ -306,6 +306,7 @@ function cartCheckoutCommand(swap = false): Command {
       }
 
       if (opts.authorizeOnly === true) {
+        const preparation = await rare.cart.checkout.prepare(intent);
         const preparedPurchase = await rare.cart.checkout.authorize(preparation);
         output({ authorizeOnly: true, preparation, preparedPurchase }, () => {
           console.log(`Checkout authorized: ${preparedPurchase.executePurchase.order.orderId}`);
@@ -315,22 +316,28 @@ function cartCheckoutCommand(swap = false): Command {
       }
 
       log(`Purchasing ${intent.items.length} Cart item(s) on ${chain}...`);
-      const purchase = async (): ReturnType<typeof rare.cart.checkout.purchase> =>
-        rare.cart.checkout.purchase({ preparation, autoApprove: opts.yes === true });
-      const result = await runWithPaymentApprovalConsent({
+      const quote = await rare.cart.checkout.quote(intent);
+      const purchase = async (autoApprove: boolean) => {
+        const result = await rare.cart.checkout.pay({ quote, method: 'wallet', autoApprove,
+          onAttempt: attemptId => { log(`Checkout attempt: ${attemptId}`); } });
+        if (result.method !== 'wallet') throw new Error('Expected a wallet payment.');
+        return result;
+      };
+      const payment = await runWithPaymentApprovalConsent({
         commandName: swap ? 'rare cart swap' : 'rare cart checkout',
         approvalMessage: 'ERC20 approval is required before purchasing this Cart checkout.',
-        runWithoutApproval: purchase,
-        runWithApproval: async (): ReturnType<typeof rare.cart.checkout.purchase> =>
-          rare.cart.checkout.purchase({ preparation, autoApprove: true }),
+        runWithoutApproval: () => purchase(opts.yes === true),
+        runWithApproval: () => purchase(true),
       });
-      if (result === undefined) return;
+      if (payment === undefined) return;
+      const { purchase: result, attemptId } = payment;
       output(
         {
           txHash: result.txHash,
           blockNumber: result.receipt.blockNumber.toString(),
           approvalTxHash: result.approvalTxHash ?? null,
           orderId: result.orderId,
+          attemptId,
           payer: result.payer,
           paymentCurrency: result.paymentCurrency,
           paymentAmount: result.paymentAmount,
@@ -349,28 +356,46 @@ function cartCheckoutCommand(swap = false): Command {
   return command;
 }
 
+function cartResumeCommand(): Command {
+  return addChainOptions(accountCommand('resume'))
+    .description('Read the status of a Cart payment attempt')
+    .argument('<attempt-id>', 'checkout attempt reference')
+    .action(async (attemptId: string, options: ChainOptions & AccountCommandOptions): Promise<void> => {
+      const chain = getActiveChain(options.chain, options.chainId);
+      const rare = createRareClient({ publicClient: getPublicClient(chain), apiBaseUrl: options.apiUrl,
+        sessionStore: createAuthStore(storageOptions(options)) });
+      const result = await rare.cart.checkout.resume(parseCommerceUuid(attemptId));
+      output(result, () => {
+        console.log(result.status);
+        if (result.orderId !== undefined) console.log(`Order: ${result.orderId}`);
+      });
+    });
+}
+
 function cartCardCommand(): Command {
   return addChainOptions(accountCommand('card'))
     .description('Prepare a hosted credit-card checkout without sending an on-chain payment')
     .requiredOption('--listing <listing-digest[=quantity]>', 'Cart Listing and optional quantity (repeatable)', collectValue, [])
     .requiredOption('--recipient <address>', 'fulfillment wallet recipient')
-    .requiredOption('--idempotency-key <uuid>', 'stable retry identity for this card checkout')
+    .option('--idempotency-key <uuid>', 'reuse a previous card attempt reference')
     .requiredOption('--email <email>', 'payment contact email')
     .option('--shipping-input <path>', 'JSON shipping details for physical fulfillment')
     .option('--saved-address-id <uuid>', 'use a saved private shipping address')
-    .action(async (options: CartCheckoutOptions & { idempotencyKey: string; email: string }): Promise<void> => {
+    .action(async (options: CartCheckoutOptions & { idempotencyKey?: string; email: string }): Promise<void> => {
       const recipient = unwrapCartCliResult(parseCartAddress(options.recipient, '--recipient'));
       if (recipient === undefined) throw new Error('--recipient is required.');
       const items = unwrapCartCliResult(parseCartListingSelections(options.listing)).map(selection => ({ ...selection, recipient }));
-      const idempotencyKey = parseCommerceUuid(options.idempotencyKey);
+      const attemptId = options.idempotencyKey === undefined ? undefined : parseCommerceUuid(options.idempotencyKey);
       const delivery = await readDelivery(options.shippingInput, options.savedAddressId);
       const chain = getActiveChain(options.chain, options.chainId);
       const rare = createRareClient({ publicClient: getPublicClient(chain), apiBaseUrl: options.apiUrl,
         sessionStore: createAuthStore(storageOptions(options)), account: recipient });
       const paymentCurrency = await rare.currency.resolveDecimals('usdc');
-      const preparation = await rare.cart.checkout.prepare({ paymentCurrency: paymentCurrency.address, items, ...(delivery === undefined ? {} : { delivery }) });
-      const result = await rare.cart.checkout.payment({ method: 'card', preparation: { ...preparation, idempotencyKey }, email: options.email });
-      outputJson(result);
+      const quote = await rare.cart.checkout.quote({ paymentCurrency: paymentCurrency.address, items, ...(delivery === undefined ? {} : { delivery }) });
+      const result = await rare.cart.checkout.pay({ method: 'card', quote, email: options.email, attemptId,
+        onAttempt: id => { log(`Checkout attempt: ${id}`); } });
+      if (result.method !== 'card') throw new Error('Expected a card payment session.');
+      outputJson({ ...result.session, attemptId: result.attemptId });
     });
 }
 

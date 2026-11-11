@@ -144,7 +144,12 @@ describe('ordered blind mint and its physical Product variant', () => {
         preparationId, listingDigest: mintListing, unitIndexes: [0],
       })) });
       const checkout = ['cart', 'checkout', '--input', checkoutFile, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', live.chain];
-      const preview = await jsonCommand<{ preparation: { paymentAmount: string } }>(live.buyerHome, [...checkout, '--preview']);
+      const preview = await jsonCommand<{
+        quote: { currency: Address; total: string; lines: Array<{ amount: string }> };
+        preparation: { paymentAmount: string };
+      }>(live.buyerHome, [...checkout, '--preview']);
+      expect(preview.quote.total).toBe(preview.preparation.paymentAmount);
+      expect(preview.quote.lines.reduce((sum, line) => sum + BigInt(line.amount), 0n)).toBe(BigInt(preview.quote.total));
       expect(BigInt(preview.preparation.paymentAmount)).toBeLessThanOrEqual(50_000_000n);
       const splitBalance = await readCollaboratorBalance(live, collaborator);
       const purchase = await jsonCommand<Purchase>(live.buyerHome, [...checkout, '--yes'], 300_000);
