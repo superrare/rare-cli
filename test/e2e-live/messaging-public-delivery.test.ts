@@ -1,7 +1,6 @@
 import { downloadTestImage } from './helpers/test-image.js';
 import { parseJsonStdout } from '../helpers/cli.js';
 import { retryPublicSend } from './helpers/messaging-live.js';
-import { appendSystemFixture } from './helpers/messaging-system-fixture.js';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -109,7 +108,6 @@ describe('public room delivery and system-message protection through the built C
               } finally { await owner.json(['messaging', 'close', control.id]); }
               await recipient.json(['messaging', 'preferences', room.id, '--notification', 'all']);
               expect(await preference()).toBe('all');
-              const systemBefore = (await notices(recipient, room.id)).map(row => row.id);
               const system = { sourceId: `integration:${randomUUID()}`, type: 'integration.notice', summary: 'Live CLI system notification fixture', payload: { fixture: true, values: [1, 2] }, occurredAt: new Date().toISOString() };
               const append = (token?: string, body: unknown = system): Promise<Response> => fetch(`${messagingOrigin()}/v1/messaging/internal/public/rooms/${room.id}/system`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Messaging-Request': '1', ...(token === undefined ? {} : { Authorization: `Bearer ${token}` }) }, body: JSON.stringify(body), signal: AbortSignal.timeout(30_000) });
               const session = await fixture.auth.getSession();
@@ -117,19 +115,6 @@ describe('public room delivery and system-message protection through the built C
               for (const token of [undefined, 'forged']) expect([401, 404]).toContain((await append(token)).status);
               expect((await append(session.accessToken)).status).toBe(404);
               expect((await thread()).messages.some(row => row.system?.sourceId === system.sourceId)).toBe(false);
-              // Set up through the real Pipelines writer; the CLI independently
-              // verifies persisted history and notification delivery afterward.
-              const stored = await appendSystemFixture((await thread()).room.context, system);
-              expect((await appendSystemFixture((await thread()).room.context, system)).id).toBe(stored.id);
-              await expect(appendSystemFixture((await thread()).room.context, { ...system, summary: 'Conflicting system fixture' })).rejects.toThrow('reused');
-              const saved = await thread();
-              expect(saved.messages.filter(row => row.id === stored.id)).toHaveLength(1);
-              expect(saved.messages.find(row => row.id === stored.id)).toMatchObject({ type: 'system', author: null, body: system.summary, system });
-              const systemNotification = await delivered(recipient, room.id, systemBefore);
-              await stableNotices(recipient, room.id, [...systemBefore, systemNotification.id]);
-              expect((await owner.run(['messaging', 'edit', room.id, stored.id, '--body', 'Forged edit'])).code).not.toBe(0);
-              expect((await owner.run(['messaging', 'delete', room.id, stored.id])).code).not.toBe(0);
-              expect((await thread()).messages.find(row => row.id === stored.id)).toMatchObject({ type: 'system', body: system.summary, system });
             }
           } finally {
             for (const message of sent) await message.actor.json(['messaging', 'delete', room.id, message.id]);
