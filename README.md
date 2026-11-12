@@ -1391,14 +1391,14 @@ continues using its protected persistent credential store.
 Internal team members can manage reusable charge definitions and their scoped assignments:
 
 ```sh
-rare cart adjustments list --api-url "$RARE_API_BASE_URL" --api-key-env GQL_API_KEY --json
-rare cart adjustments create --input charge.json --yes --api-url "$RARE_API_BASE_URL" --api-key-env GQL_API_KEY
-rare cart adjustments assignments create --input assignment.json --yes --api-url "$RARE_API_BASE_URL" --api-key-env GQL_API_KEY
-rare cart adjustments assignments list --adjustment-id ID --api-url "$RARE_API_BASE_URL" --api-key-env GQL_API_KEY --json
-rare cart adjustments assignments disable --id ASSIGNMENT_ID --yes --api-url "$RARE_API_BASE_URL" --api-key-env GQL_API_KEY
+rare cart adjustments list --api-url "$RARE_API_BASE_URL" --json
+rare cart adjustments create --input charge.json --yes --api-url "$RARE_API_BASE_URL"
+rare cart adjustments assignments create --input assignment.json --yes --api-url "$RARE_API_BASE_URL"
+rare cart adjustments assignments list --adjustment-id ID --api-url "$RARE_API_BASE_URL" --json
+rare cart adjustments assignments disable --id ASSIGNMENT_ID --yes --api-url "$RARE_API_BASE_URL"
 ```
 
-Omit `--api-key-env` to use an administrator account session. The key is read from the named environment variable, not a command-line value. It is sent only to adjustment administration endpoints.
+Sign in with an account whose user ID is in the Rare API deployment’s `CART_ADMIN_USER_IDS`.
 
 A definition requires `effect: "CHARGE"`, `phase`, `code`, `calculation` and `recipient`. An assignment requires `adjustmentId`, `priority` and a `scope`. Reuse a definition across multiple drops. Fixed amounts and NFT token IDs in JSON files use decimal strings; chain IDs use numbers. A 0% calculation waives the corresponding charge. Discounts are not supported.
 

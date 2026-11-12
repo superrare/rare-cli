@@ -7,7 +7,7 @@ describe('built Cart adjustment commands', () => {
   await withTempHome(async home => {
    for (const path of [['create'], ['list'], ['assignments', 'create'], ['assignments', 'list'], ['assignments', 'disable']]) {
     const help = await runCli(['cart', 'adjustments', ...path, '--help'], {home});
-    expect(help.code).toBe(0); expect(help.stdout).toContain('--api-key-env <name>');
+    expect(help.code).toBe(0); expect(help.stdout).not.toContain('--api-key-env');
     if (path.at(-1) !== 'list') expect(help.stdout).toContain('--yes');
    }
   });
