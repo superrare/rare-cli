@@ -1,4 +1,3 @@
-import {cartAdjustmentsCommand} from './cart-adjustments.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import { Command } from 'commander';
 import { cartCatalogCommand } from './cart-catalog.js';
