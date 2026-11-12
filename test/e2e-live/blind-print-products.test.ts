@@ -30,9 +30,7 @@ const galleryBasisPoints = 3000;
 const printPrice = parseUnits(printPriceUsdCents, 4);
 const galleryFee = printPrice * BigInt(galleryBasisPoints) / 10_000n;
 const printSellerProceeds = printPrice - galleryFee;
-const adjustmentOptions = (): string[] => ['--chain', 'sepolia',
-  ...(process.env.GQL_API_KEY ? ['--api-key-env', 'GQL_API_KEY'] : []),
-];
+const adjustmentOptions = (): string[] => ['--chain', 'sepolia'];
 const galleryRulesPage = z.object({
   data: z.array(z.object({
     id: z.string(),
