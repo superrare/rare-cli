@@ -4,6 +4,11 @@ import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { getCartAddress } from '@rareprotocol/rare-sdk/contracts';
+import { hashCartListing } from '@rareprotocol/rare-sdk/utils';
+import { zeroAddress } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { z } from 'zod';
 import { createAuthStore } from '../../src/auth-storage.js';
 import { parseJsonStdout, runCli, withTempHome } from '../helpers/cli.js';
 
@@ -92,6 +97,113 @@ describe('built print and shipping CLI', () => {
           expect(second).toEqual(first);
           expect(third).toEqual(first);
         }
+      });
+    } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
+  });
+
+  it.each([1, 2])('resumes publication of %i print offers after losing the response, without signing again', async count => {
+    const privateKey = `0x${'11'.repeat(32)}` as const;
+    const seller = privateKeyToAccount(privateKey).address;
+    const deadline = String(Math.floor(Date.now() / 1000) + 3600);
+    const cart = getCartAddress('sepolia');
+    const requests: unknown[] = [];
+    let nonceReads = 0;
+    const preparations = new Map<string, string>();
+    const published = new Map<string, string>();
+    const termsSchema = z.object({ optionId: z.uuid(), listingSalt: z.templateLiteral(['0x', z.string().regex(/^[0-9a-f]{64}$/u)]) });
+    const publicationSchema = z.object({
+      preparationIds: z.array(z.uuid()),
+      artifact: z.object({ root: z.object({ listingsRoot: z.string(), nonce: z.string(), deadline: z.string() }),
+        signature: z.string(), entries: z.array(z.object({ listingDigest: z.string() })) }),
+    });
+    const server = createServer((request, response) => {
+      void text(request).then(raw => {
+        const body: unknown = JSON.parse(raw);
+        response.setHeader('Content-Type', 'application/json');
+        if (request.url === '/rpc') {
+          const rpc = z.object({ id: z.number(), method: z.literal('eth_call') }).parse(body);
+          nonceReads += 1;
+          response.end(JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result: `0x${nonceReads === 1 ? '00'.repeat(32) : '01'.repeat(32)}` }));
+          return;
+        }
+        if (request.headers.authorization !== 'Bearer print-publish-access') {
+          response.writeHead(401).end();
+          return;
+        }
+        if (request.url === '/v1/prints/listings/prepare') {
+          const { optionId, listingSalt } = termsSchema.parse(body);
+          const sku = `0x${'22'.repeat(32)}` as const;
+          const listing = { listingSalt, seller, sku, fulfillmentKind: 1 as const, tokenContract: zeroAddress,
+            tokenId: 0n, settlementCurrency: zeroAddress, minimumUnitPrice: 1n, availableQuantity: 2n, paymentRecipient: seller, splits: [] };
+          const digest = hashCartListing(listing, 11155111, cart);
+          const previous = preparations.get(optionId);
+          if (previous !== undefined && previous !== listingSalt) {
+            response.writeHead(409).end();
+            return;
+          }
+          // eslint-disable-next-line functional/immutable-data -- Model the API retaining the prepared offer.
+          preparations.set(optionId, listingSalt);
+          response.end(JSON.stringify({ data: { id: optionId, chain_id: '11155111', cart_address: cart, listing_digest: digest,
+            snapshot: { dropId: optionId, configured: { listing: { ...listing, tokenId: '0', minimumUnitPrice: '1', availableQuantity: '2' } },
+              intent: { deadline } } } }));
+          return;
+        }
+        if (request.url === '/v1/cart/listing-roots') {
+          const { artifact } = publicationSchema.parse(body);
+          // eslint-disable-next-line functional/immutable-data -- Capture the original request and its replay.
+          requests.push(body);
+          for (const entry of artifact.entries) {
+            const previous = published.get(entry.listingDigest);
+            if (previous !== undefined && previous !== artifact.root.listingsRoot) {
+              response.writeHead(409).end();
+              return;
+            }
+            // eslint-disable-next-line functional/immutable-data -- Record listings by their unique identity.
+            published.set(entry.listingDigest, artifact.root.listingsRoot);
+          }
+          if (requests.length <= 2) {
+            request.socket.destroy();
+            return;
+          }
+          response.end(JSON.stringify({ data: { chainId: '11155111', cart, seller, root: artifact.root, signature: artifact.signature, listingCount: published.size } }));
+          return;
+        }
+        response.writeHead(404).end();
+      }).catch(() => response.writeHead(400).end());
+    });
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error('Missing fixture address');
+    try {
+      await withTempHome(async temporary => {
+        const home = await realpath(temporary);
+        const apiBaseUrl = `http://127.0.0.1:${address.port}`;
+        const directory = join(home, 'auth');
+        const scope = { apiBaseUrl, authBaseUrl: `${apiBaseUrl}/auth/v2`, clientId: 'rare-sdk' };
+        const store = createAuthStore({ ...scope, backend: 'file', directory });
+        await store.withLock(async () => { await store.set({ ...scope, revision: 'print-publish-session',
+          accessToken: 'print-publish-access', refreshToken: 'print-publish-refresh',
+          expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
+        expect((await runCli(['configure', '--chain', 'sepolia', '--private-key', privateKey,
+          '--rpc-url', `${apiBaseUrl}/rpc`], { home })).code).toBe(0);
+        const inputPath = join(home, 'print-listings.json');
+        const offers = Array.from({ length: count }, (_, index) => ({
+          optionId: `00000000-0000-4000-8000-00000000000${index + 1}`, seller, deadline, availableQuantity: '2',
+        }));
+        await writeFile(inputPath, JSON.stringify(count === 1 ? offers[0] : offers));
+        const args = ['--json', 'prints', 'listing', 'publish', '--input', inputPath, '--yes', '--chain', 'sepolia',
+          '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory];
+        const interrupted = await runCli(args, { home });
+        expect(interrupted.code).not.toBe(0);
+        expect(requests, interrupted.stderr || interrupted.stdout).toHaveLength(2);
+        expect(requests[1]).toEqual(requests[0]);
+        expect(published.size).toBe(count);
+        const resumed = await runCli(args, { home });
+        expect(parseJsonStdout(resumed)).toMatchObject({ publishedRoot: { listingCount: count } });
+        expect(requests).toHaveLength(3);
+        expect(requests[2]).toEqual(requests[0]);
+        expect(published.size).toBe(count);
+        expect(nonceReads).toBe(1);
       });
     } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
   });
