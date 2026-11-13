@@ -8,6 +8,7 @@ export function withLiveWriteConsent(args: string[]): string[] {
 function acceptsLiveWriteConsent(args: string[]): boolean {
   const [command, subcommand] = args;
   if (args.includes('--quote-only')) return false;
+  if (args.includes('--preview')) return false;
   if (command === 'liquid-edition') return subcommand === 'deploy';
   if (command === 'listing') {
     if (subcommand === 'create' || subcommand === 'buy') return true;
@@ -58,12 +59,17 @@ function acceptsLiveWriteConsent(args: string[]): boolean {
   if (command === 'bridge') {
     return subcommand === 'send';
   }
+  if (command === 'cart') {
+    if (subcommand === 'checkout') return true;
+    return subcommand === 'listing' && args[2] !== undefined && args[2] !== 'search';
+  }
   return false;
 }
 
 export function isLiveWriteCommand(args: string[]): boolean {
   const [command, subcommand] = args;
   if (args.includes('--quote-only')) return false;
+  if (args.includes('--preview')) return false;
   if (command === 'liquid-edition') {
     return subcommand === 'deploy' || subcommand === 'set-render-contract';
   }
@@ -154,6 +160,10 @@ export function isLiveWriteCommand(args: string[]): boolean {
   }
   if (command === 'bridge') {
     return subcommand === 'send';
+  }
+  if (command === 'cart') {
+    if (subcommand === 'checkout') return true;
+    return subcommand === 'listing' && args[2] !== undefined && args[2] !== 'search';
   }
   return false;
 }
