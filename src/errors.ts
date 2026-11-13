@@ -1,6 +1,6 @@
 import { isJsonMode } from './output.js';
 import { RareApiError } from '@rareprotocol/rare-sdk/data-access';
-import { AvatarProfileUpdateError, RareAuthError } from '@rareprotocol/rare-sdk';
+import { AvatarProfileUpdateError, PrintRequestUncertainError, RareAuthError } from '@rareprotocol/rare-sdk';
 import { AuthStorageError } from './auth-storage.js';
 
 type ErrorDetails = {
@@ -105,6 +105,9 @@ function collectCauses(current: unknown): string[] {
 }
 
 function getErrorMessage(error: Error): string {
+  if (error instanceof PrintRequestUncertainError) {
+    return 'Rare API could not confirm the print request. Rerun the same command with the same input file to resume.';
+  }
   return getStringProperty(error, 'shortMessage') ?? error.message;
 }
 

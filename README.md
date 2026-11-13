@@ -596,7 +596,6 @@ and display photos with `--access public`. Create a draft with
 
 ```json
 {
-  "idempotencyKey": "00000000-0000-4000-8000-000000000001",
   "chainId": "11155111",
   "name": "Print edition",
   "print": {
@@ -609,6 +608,13 @@ and display photos with `--access public`. Create a draft with
   }
 }
 ```
+
+The CLI generates missing draft keys and listing salts for creator and concierge
+requests. It saves the resolved requests in `.rare-print-requests` beside the
+input file before calling Rare API. The SDK retries an uncertain request once.
+If the result is still unconfirmed, keep that directory and rerun with the same
+input file. To start a separate operation with identical terms, use a
+new input filename and omit the generated values.
 
 Validate an owned private master and create a provider preview before publication:
 

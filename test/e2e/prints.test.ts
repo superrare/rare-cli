@@ -15,7 +15,7 @@ describe('built print and shipping CLI', () => {
         ['prints', 'quote'], ['prints', 'products', 'list'], ['prints', 'products', 'get'], ['prints', 'get'], ['prints', 'activity'], ['prints', 'releases'],
         ['prints', 'drops', 'create'], ['prints', 'drops', 'list'], ['prints', 'drops', 'get'],
         ['prints', 'drops', 'archive'], ['prints', 'drops', 'configure'], ['prints', 'drops', 'update'],
-        ['prints', 'listing', 'prepare'], ['prints', 'listing', 'publish'],
+        ['prints', 'listing', 'prepare'], ['prints', 'listing', 'review'], ['prints', 'listing', 'publish'],
         ['shipping', 'list'], ['shipping', 'save'], ['shipping', 'delete'], ['uploads', 'upload'], ['cart', 'card'],
         ['cart', 'orders', 'list'], ['cart', 'orders', 'get'],
       ]) {
@@ -28,6 +28,72 @@ describe('built print and shipping CLI', () => {
       const upload = await runCli(['uploads', 'upload', '--help'], { home });
       expect(upload.stdout).toContain('default: "public"');
     });
+  });
+
+  it('reviews preparations by ID and reuses generated keys after a failed request', async () => {
+    const received = new Map<string, unknown[]>();
+    const server = createServer((request, response) => {
+      if (request.method === 'GET' && request.url === '/v1/prints/listings/preparations/00000000-0000-4000-8000-000000000001') {
+        response.writeHead(request.headers.authorization === 'Bearer print-retry-access' ? 200 : 401, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ data: { id: '00000000-0000-4000-8000-000000000001' } }));
+        return;
+      }
+      void text(request).then(body => {
+        const path = request.url ?? '';
+        const requests = [...(received.get(path) ?? []), JSON.parse(body)];
+        // eslint-disable-next-line functional/immutable-data -- Record requests from separate CLI processes.
+        received.set(path, requests);
+        response.writeHead(requests.length <= 2 ? 503 : 201, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify(requests.length <= 2 ? { message: 'Unavailable' } : { data: { id: 'saved' } }));
+      });
+    });
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+    const address = server.address();
+    if (address === null || typeof address === 'string') throw new Error('Missing fixture address');
+    try {
+      await withTempHome(async temporary => {
+        const home = await realpath(temporary);
+        const apiBaseUrl = `http://127.0.0.1:${address.port}`;
+        const directory = join(home, 'auth');
+        const scope = { apiBaseUrl, authBaseUrl: `${apiBaseUrl}/auth/v2`, clientId: 'rare-sdk' };
+        const store = createAuthStore({ ...scope, backend: 'file', directory });
+        await store.withLock(async () => { await store.set({ ...scope, revision: 'print-retry-session',
+          accessToken: 'print-retry-access', refreshToken: 'print-retry-refresh',
+          expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
+        const preparationId = '00000000-0000-4000-8000-000000000001';
+        const review = await runCli(['--json', 'prints', 'listing', 'review', '--preparation-id', preparationId,
+          '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory], { home });
+        expect(parseJsonStdout(review)).toEqual({ id: preparationId });
+        expect(received.size).toBe(0);
+        const draft = { chainId: '11155111', name: 'Print', print: { name: 'Print', description: '', tags: [],
+          productionUploadKey: 'a'.repeat(64), specificationId: 'GLOBAL-FAP-8X12', images: ['https://example.com/preview.jpg'] } };
+        const terms = { deadline: '1999999999', availableQuantity: '2' };
+        const key = expect.stringMatching(/^[0-9a-f-]{36}$/u);
+        const salt = expect.stringMatching(/^0x[0-9a-f]{64}$/u);
+        const scenarios = [
+          { command: ['drops', 'create'], path: '/v1/prints/drops', input: draft, generated: { idempotencyKey: key } },
+          { command: ['listing', 'prepare'], path: '/v1/prints/listings/prepare',
+            input: { ...terms, optionId: '00000000-0000-4000-8000-000000000001', seller: '0x1111111111111111111111111111111111111111' },
+            generated: { listingSalt: salt } },
+          { command: ['concierge', 'create'], path: '/v1/prints/concierge/drafts',
+            input: { creatorUserId: '17', drop: draft, listing: terms, displayPriceUsdCents: '1000' },
+            generated: { drop: { idempotencyKey: key }, listing: { listingSalt: salt } } },
+        ];
+        for (const scenario of scenarios) {
+          const inputPath = join(home, `${scenario.command[0]}.json`);
+          await writeFile(inputPath, JSON.stringify(scenario.input));
+          const args = ['--json', 'prints', ...scenario.command, '--input', inputPath,
+            '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory];
+          expect((await runCli(args, { home })).stderr).toContain('Rerun the same command with the same input file');
+          expect(received.get(scenario.path)).toHaveLength(2);
+          expect(parseJsonStdout(await runCli(args, { home }))).toEqual({ id: 'saved' });
+          const [first, second, third] = received.get(scenario.path) ?? [];
+          expect(first).toMatchObject(scenario.generated);
+          expect(second).toEqual(first);
+          expect(third).toEqual(first);
+        }
+      });
+    } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
   });
 
   it('lists and gets public products in human and JSON output without signing in', async () => {
