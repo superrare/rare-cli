@@ -11,6 +11,7 @@ import { getActiveChain } from '../config.js';
 import { createAuthStore } from '../auth-storage.js';
 import { output } from '../output.js';
 import { formatPrintOutput } from './print-output-core.js';
+import { parseCartAmount, parseCartCliCurrency } from './cart-core.js';
 import { printRecoveryStore } from './print-request-storage.js';
 import { addChainOptions, type ChainOptions } from './options.js';
 import { parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, printListingInput, printQuoteInput } from './print-input-core.js';
@@ -107,12 +108,31 @@ export function printsCommand(): Command {
   drops.addCommand(command('archive').requiredOption('--id <uuid>', 'owned drop ID')
     .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.drops.archive(parseCommerceUuid(options.id))); }));
   drops.addCommand(command('configure').requiredOption('--id <uuid>', 'owned drop ID')
-    .requiredOption('--price-usd-cents <amount>', 'collector price, in integer USD cents; Listings settle in USDC')
-    .action(async (options: IdentityOptions & { priceUsdCents: string }): Promise<void> => {
-      const displayPriceUsdCents = parsePrintPrice(options.priceUsdCents);
+    .option('--price-usd-cents <amount>', 'artwork price in integer USD cents, settled in USDC')
+    .option('--price <amount>', 'artwork price in units of the selected currency')
+    .option('--currency <currency>', 'listing currency, such as eth, usdc, or rare')
+    .action(async (options: IdentityOptions & {
+      priceUsdCents?: string; price?: string; currency?: string;
+    }): Promise<void> => {
+      const { priceUsdCents, price, currency } = options;
       const rare = client(options);
       const dropId = parseCommerceUuid(options.id);
-      print(await rare.prints.options.configure({ dropId, input: { displayPriceUsdCents } }));
+      if (priceUsdCents !== undefined && price === undefined && currency === undefined) {
+        print(await rare.prints.options.configure({ dropId, input: {
+          displayPriceUsdCents: parsePrintPrice(priceUsdCents),
+        } }));
+        return;
+      }
+      if (priceUsdCents !== undefined || price === undefined || currency === undefined)
+        throw new Error('Use --price and --currency together, or supply --price-usd-cents.');
+      const selected = parseCartCliCurrency(currency, 'Listing currency');
+      if (!selected.isValid) throw new Error(selected.issues.join(" "));
+      const resolved = await rare.currency.resolveDecimals(selected.value);
+      const amount = parseCartAmount(price, resolved.decimals, 'Print price');
+      if (!amount.isValid) throw new Error(amount.issues.join(" "));
+      print(await rare.prints.options.configure({ dropId, input: {
+        price: { currency: resolved.address, amount: amount.value.toString() },
+      } }));
     }));
   prints.addCommand(drops);
 
