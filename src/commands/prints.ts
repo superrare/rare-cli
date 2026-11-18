@@ -2,16 +2,17 @@ import { readFile } from 'node:fs/promises';
 import { Command, Option } from 'commander';
 import { z } from 'zod';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import { createConciergePrintRequest, createPrintDropRequest, createPrintListingRequest, type PreparePrintListing, type RareClient } from '@rareprotocol/rare-sdk';
-import { accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
+import { createPrintDropRequest, createPrintListingRequest, type PreparePrintListing, type RareClient } from '@rareprotocol/rare-sdk';
+import { accountClient, accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
 import { createAuthStore } from '../auth-storage.js';
 import { output } from '../output.js';
 import { formatPrintOutput } from './print-output-core.js';
 import { savePrintRequest } from './print-request-storage.js';
+import { createConciergeDraft, loadConciergeRequest, requireConciergeConnection } from './print-concierge.js';
 import { addChainOptions, type ChainOptions } from './options.js';
-import { conciergePrintListingInput, parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, printListingInput, printQuoteInput } from './print-input-core.js';
+import { parseCommerceUuid, parsePrintPrice, printConciergeInput, printDraftPatch, printDropInput, printListingInput, printQuoteInput } from './print-input-core.js';
 
 type PrintOptions = AccountCommandOptions & ChainOptions;
 type IdentityOptions = PrintOptions & { id: string };
@@ -74,25 +75,15 @@ export function printsCommand(): Command {
       print(await client(options).prints.releases.list({ universalTokenId: options.universalTokenId }));
     }));
 
-  const concierge = new Command('concierge').description('Set up prints on behalf of a creator');
+  const concierge = new Command('concierge').description('Set up prints on behalf of a creator using PIPELINES_BASE_URL and GQL_API_KEY');
   concierge.addCommand(command('create').requiredOption('--input <path>', 'JSON creatorUserId, drop, displayPriceUsdCents and optional listing terms')
     .action(async (options: InputOptions): Promise<void> => {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
-      const schema = z.object({
-        creatorUserId: z.string().regex(/^[1-9][0-9]{0,18}$/u),
-        drop: printDropInput,
-        listing: conciergePrintListingInput.optional(),
-        displayPriceUsdCents: z.string().transform(parsePrintPrice),
-      }).strict();
-      const request = await savePrintRequest(options.input, 'concierge', schema.parse(input), createConciergePrintRequest,
-        value => {
-          const saved = schema.parse(value);
-          if (saved.drop.idempotencyKey === undefined || (saved.listing !== undefined && saved.listing.listingSalt === undefined)) {
-            throw new Error('Saved concierge request is missing its identifiers.');
-          }
-          return createConciergePrintRequest(saved);
-        });
-      print(await client(options).prints.concierge.createDraft(request));
+      const terms = printConciergeInput.parse(input);
+      const connection = requireConciergeConnection(process.env);
+      const { accountId: operatorUserId } = await accountClient(storageOptions(options)).profile.get();
+      const request = await loadConciergeRequest(options.input, terms);
+      print(await createConciergeDraft(connection, { ...request, operatorUserId }));
     }));
   prints.addCommand(concierge);
 
