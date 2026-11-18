@@ -1,3 +1,4 @@
+import { assertSepoliaPrintMarkup } from './helpers/print-markup.js';
 import { verifyUsdcCartSettlement } from './helpers/cart-settlement-outcomes.js';
 import { readPurchaseBalances, readPrimarySaleProceeds, verifyPurchaseBalances, verifyErc721Ownership } from './helpers/purchase-outcomes.js';
 import { verifyPrivateCartOrder, waitForSubmittedPrintOrder } from './helpers/cart-order-history.js';
@@ -416,6 +417,7 @@ function assertFees(receipt: CartCheckoutReceipt, paymentAmount: string): void {
   expect(receipt.lines.reduce((sum, line) => sum + BigInt(line.amount), 0n)).toBe(BigInt(paymentAmount));
   expect(receipt).not.toHaveProperty('feeAllocations');
   const feeLines = receipt.lines.filter(line => line.fulfillmentKind === 0);
-  expect(feeLines).toHaveLength(4);
+  expect(feeLines).toHaveLength(5);
+  assertSepoliaPrintMarkup(receipt);
   expect(feeLines.every(line => BigInt(line.amount) > 0n)).toBe(true);
 }
