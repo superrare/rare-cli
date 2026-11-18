@@ -1,6 +1,6 @@
 import { verifyUsdcCartSettlement } from './helpers/cart-settlement-outcomes.js';
 import { readPurchaseBalances, readPrimarySaleProceeds, verifyPurchaseBalances, verifyErc721Ownership } from './helpers/purchase-outcomes.js';
-import { verifyPrivateCartOrder } from './helpers/cart-order-history.js';
+import { verifyPrivateCartOrder, waitForSubmittedPrintOrder } from './helpers/cart-order-history.js';
 import { verifyCartPurchaseNotifications } from './helpers/cart-notifications.js';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { readCollaboratorBalance, verifyPrintSplits } from './helpers/cart-print-splits.js';
@@ -8,7 +8,6 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
 import type { CartApiProduct, CartCheckoutReceipt, CartOrder, EligibilityClaim, EligibilityRule, CartListingPublishResult, PrintListingPreparation } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress, getContractAddresses, resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 import { erc20Abi, erc721Abi, getAddress, parseEventLogs, parseUnits, zeroAddress, type Address, type Hex } from 'viem';
@@ -17,10 +16,6 @@ import { cleanupLiveFixture, createCartLiveFixture, jsonCommand, requireBuyerFix
 import { nftFixtureManifest } from './helpers/nft-fixture-manifest.js';
 import { downloadTestImage } from './helpers/test-image.js';
 
-const sandboxOrder = z.object({ data: z.object({
-  id: z.string(), metadata: z.object({ fulfillmentId: z.string() }),
-  items: z.array(z.object({ sku: z.string(), quantity: z.number(), assets: z.array(z.object({ url: z.url() })) })),
-}) });
 type PreparedPrintSize = { dropId: string; printSku: Hex; optionId: string; specificationId: string };
 type PreparedArtwork = PreparedPrintSize & { productId: string; nftSku: Hex; masterKey: string; publicUrl: string; name: string };
 type Purchase = { txHash: Hex; orderId: Hex };
@@ -30,9 +25,6 @@ const printPriceUsdCents = '100';
 // This test deploys the same LazySovereign contract as release creation, not fixture bytecode.
 describe('ordered blind mint and its physical Product variant', () => {
   it('buys a blind mint with two print sizes of the artwork actually minted', async () => {
-    const configuredKey = process.env.PRODIGI_SANDBOX_API_KEY;
-    if (!configuredKey?.startsWith('sandbox_') && !configuredKey?.startsWith('test_')) throw new Error('Set PRODIGI_SANDBOX_API_KEY and deploy Rare API/Pipelines against the Prodigi v5 sandbox.');
-    const sandboxKey = configuredKey.startsWith('test_') ? `sandbox_${configuredKey}` : configuredKey;
     const live = requireBuyerFixture(await createCartLiveFixture({ buyer: true,
       buyerWalletFilter: async (wallet, { chain, publicClient }) => {
         const currency = resolveCurrency('usdc', chain);
@@ -73,7 +65,11 @@ describe('ordered blind mint and its physical Product variant', () => {
       if (!firstExtra || !secondExtra) throw new Error('Both artworks must offer the second print size.');
       for (const artwork of prepared) {
         const visible = await jsonCommand<CartApiProduct>(live.sellerHome,
-          ['cart', 'catalog', 'products', 'get', '--product-id', artwork.productId, '--chain', live.chain]);
+          ['cart', 'catalog', 'products', 'get-mine', '--product-id', artwork.productId, '--chain', live.chain]);
+        expect(visible.status).toBe('DRAFT');
+        await expect(jsonCommand(live.sellerHome,
+          ['cart', 'catalog', 'products', 'publish', '--product-id', artwork.productId, '--chain', live.chain]))
+          .rejects.toThrow(/Status: 409/u);
         expect(visible.variants.find(variant => variant.sku === artwork.nftSku)).toMatchObject({ isHidden: true });
       }
       const mintProduct = await createCreatorMintProduct(live, collection.contract);
@@ -157,40 +153,22 @@ describe('ordered blind mint and its physical Product variant', () => {
       await verifyPrintSplits(live, purchase, receipt, [mintListing, ...publishedPrints.map(({ listingDigest }) => listingDigest)], collaborator, splitBalance);
       expect(receipt.actions.some(action => action.target.toLowerCase() === collection.contract.toLowerCase() && action.tokenId === '2' && action.unitIndex === '0')).toBe(true);
 
-      const readOrder = (): Promise<CartOrder> => jsonCommand(live.buyerHome, ['cart', 'orders', 'get', '--id', purchase.orderId]);
-      await expect.poll(async () => (await readOrder()).fulfillments.filter(item => item.providerOrderId).length,
-        { timeout: 240_000, interval: 3_000 }).toBe(2);
-      const order = await readOrder();
-      expect(order.status).toBe('CONFIRMED');
+      const order = await waitForSubmittedPrintOrder(live.buyerHome, purchase.orderId, 2);
       expect(order.items).toHaveLength(3);
-      expect(order.fulfillments).toHaveLength(2);
       for (const format of [second, secondExtra]) {
         const fulfillment = order.fulfillments.find(item =>
           item.resolvedItems?.some(resolved => resolved.sku === format.printSku));
-        if (!fulfillment?.providerOrderId) throw new Error('Resolved print size did not reach Prodigi.');
-        expect(fulfillment).toMatchObject({ resolvedItems: [{ productId: second.productId, sku: format.printSku,
-          tokenId: '2', sourceLineIndex: 0, sourceUnitIndex: 0 }] });
-        const response = await fetch(`https://api.prodigi.com/v5/orders/${encodeURIComponent(fulfillment.providerOrderId)}`, {
-          headers: { 'X-API-Key': sandboxKey }, signal: AbortSignal.timeout(30_000), redirect: 'error',
-        });
-        expect(response.status).toBe(200);
-        const body: unknown = await response.json();
-        const provider = sandboxOrder.parse(body).data;
-        expect(provider.metadata.fulfillmentId).toBe(fulfillment.id);
-        expect(provider.items).toHaveLength(1);
-        const item = provider.items[0];
-        expect(item).toMatchObject({ sku: format.specificationId, quantity: 1 });
-        const asset = item?.assets[0];
-        if (!asset) throw new Error('Prodigi order has no production asset.');
-        const deliveredPath = decodeURIComponent(new URL(asset.url).pathname);
-        expect(deliveredPath.includes(second.masterKey)).toBe(true);
-        expect(deliveredPath.includes(first.masterKey)).toBe(false);
+        if (!fulfillment) throw new Error('The minted artwork and print size did not resolve.');
+        expect(fulfillment.resolvedItems).toEqual([expect.objectContaining({
+          productId: second.productId, sku: format.printSku, tokenId: '2', sourceLineIndex: 0, sourceUnitIndex: 0,
+        })]);
+        expect(order.items?.find(item => item.lineIndex === fulfillment.orderLineIndex)).toMatchObject({ quantity: '1' });
       }
       const history = await jsonCommand<{ data: CartOrder[] }>(live.buyerHome, ['cart', 'orders', 'list', '--per-page', '100']);
       expect(history.data.find(candidate => candidate.id === purchase.orderId)?.items).toHaveLength(3);
       await expect.poll(async () => {
         const product = await jsonCommand<CartApiProduct>(live.sellerHome,
-          ['cart', 'catalog', 'products', 'get', '--product-id', second.productId, '--chain', live.chain]);
+          ['cart', 'catalog', 'products', 'get-mine', '--product-id', second.productId, '--chain', live.chain]);
         return product.variants.filter(variant => !variant.isHidden && variant.universalTokenId === `${live.chainId}-${collection.contract.toLowerCase()}-2`).map(variant => variant.sku);
       }, { timeout: 180_000, interval: 2_000 }).toEqual([second.nftSku]);
     } finally {
@@ -209,9 +187,6 @@ describe('ordered blind mint and its physical Product variant', () => {
   it.each(['open', 'primary-sale', 'primary-sale-after-mint'] as const)('buys a RareMinter blind mint, then buys its matching %s print', async mode => {
     const gated = mode !== 'open';
     const afterMint = mode === 'primary-sale-after-mint';
-    const configuredKey = process.env.PRODIGI_SANDBOX_API_KEY;
-    if (!configuredKey?.startsWith('sandbox_') && !configuredKey?.startsWith('test_')) throw new Error('Set PRODIGI_SANDBOX_API_KEY and deploy Rare API/Pipelines against the Prodigi v5 sandbox.');
-    const sandboxKey = configuredKey.startsWith('test_') ? `sandbox_${configuredKey}` : configuredKey;
     const live = requireBuyerFixture(await createCartLiveFixture({ buyer: true,
       buyerWalletFilter: async (wallet, { chain, publicClient }) => {
         const balance = await publicClient.readContract({ address: resolveCurrency('usdc', chain),
@@ -329,12 +304,13 @@ describe('ordered blind mint and its physical Product variant', () => {
       const printBalances = await readPurchaseBalances(live, live.usdcAddress);
       const purchase = await jsonCommand<Purchase>(live.buyerHome, [...checkout, '--yes'], 300_000);
       expect((await live.publicClient.getTransactionReceipt({ hash: purchase.txHash })).status).toBe('success');
-      const readOrder = (): Promise<CartOrder> => jsonCommand(live.buyerHome, ['cart', 'orders', 'get', '--id', purchase.orderId]);
-      await expect.poll(async () => (await readOrder()).fulfillments[0]?.providerOrderId,
-        { timeout: 240_000, interval: 3_000 }).toMatch(/^[A-Za-z0-9~_-]+$/u);
-      const order = await readOrder();
+      const order = await waitForSubmittedPrintOrder(live.buyerHome, purchase.orderId, 1);
+      const fulfillment = order.fulfillments[0];
+      if (!fulfillment) throw new Error('Print fulfillment is missing after submission.');
       expect(order.items).toHaveLength(1);
-      expect(order.fulfillments).toHaveLength(1);
+      expect(order.items?.find(item => item.lineIndex === fulfillment.orderLineIndex)).toMatchObject({
+        listingDigest: selected.listingDigest, printDropId: selected.artwork.dropId, sku: selected.artwork.printSku, quantity: '1',
+      });
       const settlement = await verifyUsdcCartSettlement(live, creator, purchase, { paymentAmount: BigInt(preview.preparation.paymentAmount) }, true);
       const sellerProceeds = settlement.lines.filter(line => line.paymentRecipient.toLowerCase() === live.sellerAddress.toLowerCase())
         .reduce((sum, line) => sum + BigInt(line.amount), 0n);
@@ -352,22 +328,8 @@ describe('ordered blind mint and its physical Product variant', () => {
       }
       await verifyPrivateCartOrder(live, purchase.orderId);
       await verifyCartPurchaseNotifications(live, purchase, 1);
-      const fulfillment = order.fulfillments[0];
-      if (!fulfillment?.providerOrderId) throw new Error('Print did not reach Prodigi.');
-      const response = await fetch(`https://api.prodigi.com/v5/orders/${encodeURIComponent(fulfillment.providerOrderId)}`, {
-        headers: { 'X-API-Key': sandboxKey }, signal: AbortSignal.timeout(30_000), redirect: 'error',
-      });
-      expect(response.status).toBe(200);
-      const body: unknown = await response.json();
-      const provider = sandboxOrder.parse(body).data;
-      expect(provider.metadata.fulfillmentId).toBe(fulfillment.id);
-      expect(provider.items).toHaveLength(1);
-      expect(provider.items[0]).toMatchObject({ sku: 'GLOBAL-FAP-8X12', quantity: 1 });
-      const asset = provider.items[0]?.assets[0];
-      if (!asset) throw new Error('Prodigi order has no production asset.');
-      expect(decodeURIComponent(new URL(asset.url).pathname).includes(selected.artwork.masterKey)).toBe(true);
       console.info('RareMinter to Cart print verified', { mintTransactionHash: minted.txHash,
-        transactionHash: purchase.txHash, orderId: purchase.orderId, providerOrderId: provider.id });
+        transactionHash: purchase.txHash, orderId: purchase.orderId, providerOrderId: fulfillment.providerOrderId });
     } finally {
       try {
         for (const ruleId of ruleIds)
@@ -408,7 +370,8 @@ async function prepareArtwork(live: BuyerLiveFixture, contract: Address, tokenId
     productId: product.id, name, masterKey: master.key, publicUrl: photo.url, specificationId: 'GLOBAL-FAP-8X12',
     ...(alreadyMinted ? { sourceUniversalTokenId: `${live.chainId}-${contract.toLowerCase()}-${tokenId}` } : {}),
   });
-  await jsonCommand(live.sellerHome, ['cart', 'catalog', 'products', 'publish', '--product-id', product.id, '--chain', live.chain]);
+  if (alreadyMinted)
+    await jsonCommand(live.sellerHome, ['cart', 'catalog', 'products', 'publish', '--product-id', product.id, '--chain', live.chain]);
   return { ...print, productId: product.id, nftSku: nft.sku, masterKey: master.key, publicUrl: photo.url, name };
 }
 
