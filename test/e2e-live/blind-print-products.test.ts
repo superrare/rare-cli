@@ -1,3 +1,4 @@
+import { assertSepoliaPrintMarkup } from './helpers/print-markup.js';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { readCollaboratorBalance, verifyPrintSplits } from './helpers/cart-print-splits.js';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -262,6 +263,7 @@ async function assertMint(live: BuyerLiveFixture, purchase: Purchase, contract: 
     .toBe(`ipfs://${nftFixtureManifest.metadataCid}/lazy/${tokenId}.json`);
 }
 function assertFees(receipt: CartCheckoutReceipt, preview: CheckoutPreview): void {
+  assertSepoliaPrintMarkup(receipt);
   expect(receipt.issues).toEqual([]);
   expect(receipt.paymentAmount).toBe(preview.paymentAmount);
   expect(receipt.lines.reduce((sum, line) => sum + BigInt(line.amount), 0n)).toBe(BigInt(preview.paymentAmount));

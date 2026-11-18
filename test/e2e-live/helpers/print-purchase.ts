@@ -1,3 +1,4 @@
+import { assertSepoliaPrintMarkup } from './print-markup.js';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { readCollaboratorBalance, verifyPrintSplits } from './cart-print-splits.js';
 import { downloadTestImage } from './test-image.js';
@@ -255,7 +256,7 @@ async function verifySettlement(
   fixture: Awaited<ReturnType<typeof createCartLiveFixture>>,
   rare: ReturnType<typeof createCreatorVariantClient>,
   purchase: { txHash: Hex; orderId: Hex },
-  preview: Pick<CartCheckoutPreparation, 'paymentAmount'>,
+  preview: Pick<CartCheckoutPreparation, 'paymentAmount' | 'breakdown'>,
   physical: boolean,
 ): Promise<CartCheckoutReceipt> {
   await expect.poll(async () => (await rare.cart.checkout.receipt(purchase.orderId)).status,
@@ -283,7 +284,12 @@ async function verifySettlement(
   }
   expect(receipt).not.toHaveProperty('feeAllocations');
   const feeLines = receipt.lines.filter(line => line.fulfillmentKind === 0);
-  expect(feeLines).toHaveLength(physical ? 4 : 2);
+  expect(feeLines).toHaveLength(physical ? 5 : 2);
+  if (physical) {
+    const production = preview.breakdown?.production;
+    if (production === undefined) throw new Error('Expected a quoted print production cost.');
+    assertSepoliaPrintMarkup(receipt, BigInt(production));
+  }
   expect(feeLines.every(line => BigInt(line.amount) > 0n)).toBe(true);
   return receipt;
 }
