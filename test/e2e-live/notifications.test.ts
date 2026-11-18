@@ -58,7 +58,8 @@ describe('notifications through the built CLI and deployed services', () => {
         expect(notificationSchema.parse(parseJsonStdout(await recipient(['notifications', 'read', delivered.id]))).readAt).toBe(read.readAt);
         expect(z.object({ unreadCount: z.number() }).parse(parseJsonStdout(await recipient(['notifications', 'unread-count']))).unreadCount).toBe(before.unreadCount - 1);
         const after = pageSchema.parse(parseJsonStdout(await recipient(['notifications', 'list', '--per-page', '50']))); expect(after.data.find(row => row.id === delivered.id)?.readAt).toBe(read.readAt); expect(after.data.find(row => row.id === secondDelivery.id)?.readAt).toBeNull();
-        expect((await recipient(['notifications', 'list', '--per-page', '51'])).code).not.toBe(0);
+        expect((await recipient(['notifications', 'list', '--per-page', '100'])).code).toBe(0);
+        expect((await recipient(['notifications', 'list', '--per-page', '101'])).code).not.toBe(0);
         expect((await recipient(['notifications', 'list', '--user-id', '1'])).code).not.toBe(0);
         expect((await recipient(['notifications', 'read', secondDelivery.id])).code).toBe(0);
         expect(pageSchema.parse(parseJsonStdout(await recipient(['notifications', 'list', '--per-page', '50']))).data.find(row => row.id === secondDelivery.id)?.readAt).not.toBeNull();
