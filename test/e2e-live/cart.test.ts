@@ -55,6 +55,7 @@ type CartListingCreateResult = {
 
 type CartCheckoutPreviewResult = {
   preview: true;
+  quote: { currency: Address; total: string; expiresAt: string; lines: Array<{ amount: string }> };
   preparation: {
     intent: { items: Array<{ listingDigest: Hex; quantity: string; recipient: Address }> };
     paymentAmount: string;
@@ -75,6 +76,7 @@ type CartCheckoutPreviewResult = {
 type CartPurchaseResult = TxResult & {
   txHash: Hex;
   approvalTxHash: Hex | null;
+  attemptId: string;
   orderId: Hex;
   payer: Address;
   paymentCurrency: Address;
@@ -201,6 +203,9 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
         'cart', 'checkout', ...listingArgs, '--payment-currency', 'rare', '--preview', '--chain', fixture.chain,
       ], 240_000));
     expect(preview.preview).toBe(true);
+    expect(preview.quote.currency.toLowerCase()).toBe(fixture.rareAddress.toLowerCase());
+    expect(preview.quote.total).toBe(preview.preparation.paymentAmount);
+    expect(preview.quote.lines.reduce((sum, line) => sum + BigInt(line.amount), 0n)).toBe(BigInt(preview.quote.total));
     expect(preview.preparation.intent.items).toEqual(listingDigests.map((listingDigest) => ({
       kind: 'listing',
       listingDigest,
@@ -230,6 +235,9 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
     expect(purchase.orderId).toMatch(/^0x[0-9a-fA-F]{64}$/);
     await expect.poll(async () => (await jsonCommand<CartOrder>(fixture.buyerHome,
       ['cart', 'orders', 'get', '--id', purchase.orderId])).status, { timeout: 180_000, interval: 2_000 }).toBe('FULFILLED');
+    const resumed = await jsonCommand<{ status: string; orderId: Hex }>(fixture.buyerHome,
+      ['cart', 'resume', purchase.attemptId, '--chain', fixture.chain]);
+    expect(resumed).toMatchObject({ status: 'EXECUTED', orderId: purchase.orderId });
     const history = await jsonCommand<CartOrder>(fixture.buyerHome,
       ['cart', 'orders', 'get', '--id', purchase.orderId]);
     expect(history.id).toBe(purchase.orderId);
