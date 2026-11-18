@@ -10,12 +10,10 @@ import { output, log, isJsonMode } from '../output.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import type { RareClient } from '@rareprotocol/rare-sdk/client';
 import {
-  buildBatchListingArtifact,
   buildMerkleProof,
   getBatchTokenProof,
   normalizeMerkleRoot,
   normalizeTokenId,
-  parseBatchListingArtifact,
   parseBatchTokenTreeInput,
   parseBatchTokenProof,
   validateBatchTokenProofTarget,
@@ -28,7 +26,6 @@ import {
   writeMerkleArtifact,
 } from '../merkle-file-shell.js';
 import type {
-  BatchListingRootArtifact,
   BuildUtilsTreeParams,
   UtilsTreeArtifact,
   UtilsTreeProofArtifact,
@@ -84,7 +81,7 @@ type BatchListingCreateOptions = ChainOptions & {
   input: string;
   format?: string;
   currency?: string;
-  price?: string;
+  price: string;
   split?: SplitAccumulator;
   yes?: boolean;
 };
@@ -1101,11 +1098,11 @@ function addBatchListingCommands(cmd: Command): void {
 
   cmd
     .command('create')
-    .description('Register a sale-price Merkle root from a root artifact or token tree artifact')
-    .requiredOption('--input <path>', 'path to a root artifact JSON file, token tree artifact, CSV, or JSON token list')
+    .description('Register a batch listing from a token tree artifact, CSV, or JSON token list')
+    .requiredOption('--input <path>', 'path to a token tree artifact, CSV, or JSON token list')
     .option('--format <format>', 'input format for --input (csv, json)')
     .option('--currency <currency>', 'currency: eth, usdc, rare, or ERC20 address (defaults to eth for token tree inputs)')
-    .option('--price <amount>', 'listing price in ETH or token units (required for token tree inputs)')
+    .requiredOption('--price <amount>', 'listing price in ETH or token units')
     .option(
       '--split <addr=ratio>',
       'seller payout split recipient (repeatable). Format: 0xADDR=RATIO. Ratios must sum to 100. If omitted, 100% goes to the connected wallet.',
@@ -1117,23 +1114,23 @@ function addBatchListingCommands(cmd: Command): void {
     .action(async (opts: BatchListingCreateOptions): Promise<void> => {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
-      const artifact = await resolveBatchListingCreateArtifact(opts, { chain, publicClient });
+      const createInput = await resolveBatchListingCreateInput(opts, { chain, publicClient });
       const { client } = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
 
       log(`Registering batch listing on ${chain}...`);
       log(`  Marketplace contract: ${rare.contracts.batchListing}`);
       log('  Root: rare-api canonical root from artifact');
-      log(`  Tokens in set: ${artifact.tokens.length}`);
+      log(`  Tokens in set: ${createInput.artifact.tokens.length}`);
       log(
-        `  Amount: ${await formatBatchAmount(publicClient, chain, artifact.currency, BigInt(artifact.amount))}` +
-          ` ${isAddressEqual(artifact.currency, ETH_ADDRESS) ? 'ETH' : artifact.currency}`,
+        `  Amount: ${await formatBatchAmount(publicClient, chain, createInput.currency, createInput.price)}` +
+          ` ${isAddressEqual(createInput.currency, ETH_ADDRESS) ? 'ETH' : createInput.currency}`,
       );
-      if (artifact.splitAddresses.length > 0) {
+      if (createInput.splitAddresses !== undefined) {
         log('  Splits:');
         formatSplitLines({
-          addresses: artifact.splitAddresses,
-          ratios: artifact.splitRatios,
+          addresses: createInput.splitAddresses,
+          ratios: createInput.splitRatios ?? [],
         }).forEach((line) => {
           log(line);
         });
@@ -1144,11 +1141,11 @@ function addBatchListingCommands(cmd: Command): void {
         commandName: 'rare listing batch create',
         approvalMessage: 'NFT approval is required before creating this batch listing.',
         runWithoutApproval: async () => rare.listing.batch.create({
-          artifact,
+          ...createInput,
           autoApprove: opts.yes === true,
         }),
         runWithApproval: async () => rare.listing.batch.create({
-          artifact,
+          ...createInput,
           autoApprove: true,
         }),
       });
@@ -1416,44 +1413,24 @@ async function readBatchTreeArtifact(opts: TreeInputOptions): Promise<BatchToken
   });
 }
 
-async function resolveBatchListingCreateArtifact(
+async function resolveBatchListingCreateInput(
   opts: BatchListingCreateOptions,
   context: Pick<BatchCommandClient, 'chain' | 'publicClient'>,
-): Promise<BatchListingRootArtifact> {
+): Promise<{
+  artifact: BatchTokenListArtifact;
+  price: bigint;
+  currency: Address;
+  splitAddresses?: Address[];
+  splitRatios?: number[];
+}> {
   const content = await readFile(opts.input, 'utf8');
   const parsedObject = parseJsonObjectInput(content);
-  const splits = finalizeSplits(opts.split);
-  const rootArtifact = parsedObject === undefined
-    ? undefined
-    : parseBatchListingArtifact(parsedObject);
-
-  if (rootArtifact !== undefined) {
-    const currencyOverride = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, context.chain);
-    const amountOverride = opts.price === undefined
-      ? undefined
-      : (await parseBatchAmount(
-          context.publicClient,
-          context.chain,
-          currencyOverride ?? rootArtifact.currency,
-          opts.price,
-        )).toString();
-
-    return buildBatchListingArtifact({
-      source: 'root-artifact',
-      artifact: rootArtifact,
-      currency: currencyOverride,
-      price: amountOverride,
-      splitAddresses: splits?.addresses,
-      splitRatios: splits?.ratios,
-    });
-  }
-
-  if (opts.price === undefined) {
+  if (parsedObject !== undefined && 'amount' in parsedObject && 'splitAddresses' in parsedObject) {
     throw new Error(
-      'rare listing batch create requires --price when --input is a token tree artifact from rare utils tree build.',
+      'Legacy batch listing registration artifacts are not accepted in V2. Pass the token tree artifact from rare utils tree build and provide --price, --currency, and optional --split flags.',
     );
   }
-
+  const splits = finalizeSplits(opts.split);
   const currency = opts.currency === undefined ? ETH_ADDRESS : resolveCurrency(opts.currency, context.chain);
   const amount = await parseBatchAmount(context.publicClient, context.chain, currency, opts.price);
   const tokenTreeArtifact = parseBatchTokenTreeInput({
@@ -1463,14 +1440,13 @@ async function resolveBatchListingCreateArtifact(
     chainId: resolveTreeChainId(opts),
   });
 
-  return buildBatchListingArtifact({
-    source: 'token-tree',
+  return {
     artifact: tokenTreeArtifact,
     currency,
-    price: amount.toString(),
+    price: amount,
     splitAddresses: splits?.addresses,
     splitRatios: splits?.ratios,
-  });
+  };
 }
 
 function parseJsonObjectInput(content: string): Record<string, unknown> | undefined {
