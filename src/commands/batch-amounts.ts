@@ -1,5 +1,5 @@
-import { formatUnits, parseUnits, type Address, type PublicClient } from 'viem';
-import { viemChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
+import { formatUnits, isAddressEqual, parseUnits, type Address, type PublicClient } from 'viem';
+import { ETH_ADDRESS, viemChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 
 export async function getBatchCurrencyDecimals(
@@ -7,6 +7,7 @@ export async function getBatchCurrencyDecimals(
   chain: SupportedChain,
   currency: Address,
 ): Promise<number> {
+  if (isAddressEqual(currency, ETH_ADDRESS)) return 18;
   const chainBoundClient = publicClient.chain === undefined
     ? { ...publicClient, chain: viemChains[chain] }
     : publicClient;

@@ -421,8 +421,9 @@ function createOfferCreateCommand(): Command {
       if (expiry <= currentUnixTimestamp()) {
         throw new Error('expiry must be in the future.');
       }
-      const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
+      const { chain, publicClient, rare } = createWriteBatchClient(opts.chain, opts.chainId);
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
+      const price = await parseBatchAmount(publicClient, chain, currency, opts.price);
 
       log(`Creating batch offer on ${chain}...`);
       log(`  BatchOfferCreator: ${rare.contracts.batchOfferCreator}`);
@@ -434,7 +435,7 @@ function createOfferCreateCommand(): Command {
 
       const createParams = {
         ...rootInput,
-        price: opts.price,
+        price,
         currency,
         endTime: opts.endTime,
       };
@@ -697,8 +698,9 @@ function createAuctionCreateCommand(): Command {
       if (endTime <= currentUnixTimestamp()) {
         throw new Error('endTime must be in the future.');
       }
-      const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
+      const { chain, publicClient, rare } = createWriteBatchClient(opts.chain, opts.chainId);
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
+      const price = await parseBatchAmount(publicClient, chain, currency, opts.price);
 
       log(`Creating batch auction on ${chain}...`);
       log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse}`);
@@ -716,7 +718,7 @@ function createAuctionCreateCommand(): Command {
 
       const createParams = {
         ...rootInput,
-        price: opts.price,
+        price,
         currency,
         endTime: opts.endTime,
         splitAddresses: splits?.addresses,
@@ -841,8 +843,9 @@ function createAuctionBidCommand(): Command {
       }
       const tokenId = normalizeTokenId(opts.tokenId, 'tokenId');
       toPositiveWei(opts.price, 'price');
-      const { chain, rare } = createWriteBatchClient(opts.chain, opts.chainId);
+      const { chain, publicClient, rare } = createWriteBatchClient(opts.chain, opts.chainId);
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
+      const price = await parseBatchAmount(publicClient, chain, currency, opts.price);
 
       log(`Bidding on batch auction token on ${chain}...`);
       log(`  BatchAuctionHouse: ${rare.contracts.batchAuctionHouse}`);
@@ -859,7 +862,7 @@ function createAuctionBidCommand(): Command {
         contract,
         tokenId,
         currency,
-        price: opts.price,
+        price,
       };
       const result = await runWithPaymentApprovalConsent({
         commandName: 'rare auction batch bid',

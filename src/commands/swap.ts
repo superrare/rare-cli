@@ -5,6 +5,7 @@ import { formatEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getConfiguredAccountAddress, getConfiguredUniswapApiKey, getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import { ETH_ADDRESS, resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 import { output, log, isJsonMode } from '../output.js';
 import {
   ensureHex,
@@ -18,6 +19,7 @@ import {
   validatePositiveRawSwapAmount,
   validateTokenTradeInputs,
 } from './swap-core.js';
+import { parseBatchAmount } from './batch-amounts.js';
 
 export {
   ensureHex,
@@ -106,6 +108,8 @@ function swapTokensCommand(): Command {
       }
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
+      const amountInWei = await parseBatchAmount(publicClient, chain, tokenIn, opts.amountIn);
+      const minAmountOutWei = await parseBatchAmount(publicClient, chain, tokenOut, minAmountOut);
       const rare = createRareClient({ publicClient, walletClient: client });
 
       log(`Swapping via router on ${chain}...`);
@@ -117,9 +121,9 @@ function swapTokensCommand(): Command {
 
       const result = await rare.swap.swapTokens({
         tokenIn,
-        amountIn: opts.amountIn,
+        amountIn: amountInWei,
         tokenOut,
-        minAmountOut,
+        minAmountOut: minAmountOutWei,
         commands,
         inputs,
         recipient,
@@ -203,11 +207,13 @@ function swapBuyTokenCommand(): Command {
         }
         const wallet = getWalletClient(chain);
         const rare = createRareClient({ publicClient, walletClient: wallet.client });
+        const amountInWei = await parseBatchAmount(publicClient, chain, ETH_ADDRESS, amountIn);
+        const minAmountOutWei = await parseBatchAmount(publicClient, chain, token, opts.minAmountOut);
         const result = await rare.swap.buyToken({
           route,
           token,
-          amountIn,
-          minAmountOut: opts.minAmountOut,
+          amountIn: amountInWei,
+          minAmountOut: minAmountOutWei,
           commands,
           inputs,
           recipient: explicitRecipient,
@@ -242,10 +248,14 @@ function swapBuyTokenCommand(): Command {
           })
         : createRareClient({ publicClient, walletClient: wallet.client, resolveUniswapApiKey });
       const recipient = explicitRecipient ?? wallet?.account.address;
+      const amountInWei = await parseBatchAmount(publicClient, chain, ETH_ADDRESS, amountIn);
+      const minAmountOutWei = opts.minAmountOut === undefined
+        ? undefined
+        : await parseBatchAmount(publicClient, chain, token, opts.minAmountOut);
       const quote = await rare.swap.quoteBuyToken({
         token,
-        amountIn,
-        minAmountOut: opts.minAmountOut,
+        amountIn: amountInWei,
+        minAmountOut: minAmountOutWei,
         slippageBps: opts.slippageBps,
         recipient,
         route,
@@ -299,7 +309,7 @@ function swapBuyTokenCommand(): Command {
 
       const result = await rare.swap.buyToken({
         token,
-        amountIn,
+        amountIn: amountInWei,
         minAmountOut: quote.minAmountOut,
         recipient,
         deadline: opts.deadline,
@@ -392,11 +402,13 @@ function swapSellTokenCommand(): Command {
         }
         const wallet = getWalletClient(chain);
         const rare = createRareClient({ publicClient, walletClient: wallet.client });
+        const amountInWei = await parseBatchAmount(publicClient, chain, token, amountIn);
+        const minAmountOutWei = await parseBatchAmount(publicClient, chain, ETH_ADDRESS, opts.minAmountOut);
         const result = await rare.swap.sellToken({
           route,
           token,
-          amountIn,
-          minAmountOut: opts.minAmountOut,
+          amountIn: amountInWei,
+          minAmountOut: minAmountOutWei,
           commands,
           inputs,
           recipient: explicitRecipient,
@@ -432,10 +444,14 @@ function swapSellTokenCommand(): Command {
           })
         : createRareClient({ publicClient, walletClient: wallet.client, resolveUniswapApiKey });
       const recipient = explicitRecipient ?? wallet?.account.address;
+      const amountInWei = await parseBatchAmount(publicClient, chain, token, amountIn);
+      const minAmountOutWei = opts.minAmountOut === undefined
+        ? undefined
+        : await parseBatchAmount(publicClient, chain, ETH_ADDRESS, opts.minAmountOut);
       const quote = await rare.swap.quoteSellToken({
         token,
-        amountIn,
-        minAmountOut: opts.minAmountOut,
+        amountIn: amountInWei,
+        minAmountOut: minAmountOutWei,
         slippageBps: opts.slippageBps,
         recipient,
         route,
@@ -489,7 +505,7 @@ function swapSellTokenCommand(): Command {
 
       const result = await rare.swap.sellToken({
         token,
-        amountIn,
+        amountIn: amountInWei,
         minAmountOut: quote.minAmountOut,
         recipient,
         deadline: opts.deadline,
@@ -553,9 +569,13 @@ function swapBuyRareCommand(): Command {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const quoteClient = createRareClient({ publicClient });
+      const amountInWei = await parseBatchAmount(publicClient, chain, ETH_ADDRESS, amountIn);
+      const minAmountOutWei = opts.minAmountOut === undefined
+        ? undefined
+        : await parseBatchAmount(publicClient, chain, resolveCurrency('rare', chain), opts.minAmountOut);
       const quote = await quoteClient.swap.quoteBuyRare({
-        amountIn,
-        minAmountOut: opts.minAmountOut,
+        amountIn: amountInWei,
+        minAmountOut: minAmountOutWei,
         slippageBps: opts.slippageBps,
       });
       const wallet = quoteOnly ? undefined : getWalletClient(chain);
@@ -608,7 +628,7 @@ function swapBuyRareCommand(): Command {
       log(`Submitting RARE buy on ${chain}...`);
 
       const result = await rare.swap.buyRare({
-        amountIn,
+        amountIn: amountInWei,
         minAmountOut: quote.minRareOut,
         recipient,
         deadline: opts.deadline,

@@ -1,6 +1,7 @@
 import { expect } from 'vitest';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { parseEther } from 'viem';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import type { LiquidRouterTokenTradeQuote, TokenTradeQuote } from '@rareprotocol/rare-sdk';
 import {
@@ -27,7 +28,7 @@ export async function encodeRareToEthSwap(live: LiveFixture, rareAmount: string)
 }> {
   const quote = requireLiquidRouterQuote(await createRareClient({ publicClient: live.publicClient }).swap.quoteSellToken({
     token: live.rareAddress,
-    amountIn: rareAmount,
+    amountIn: parseEther(rareAmount),
     slippageBps: 50,
     route: 'local',
   }));
@@ -48,7 +49,7 @@ export async function encodeEthToUsdcSwap(live: LiveFixture, ethAmount: string):
 }> {
   const quote = requireLiquidRouterQuote(await createRareClient({ publicClient: live.publicClient }).swap.quoteBuyToken({
     token: live.usdcAddress,
-    amountIn: ethAmount,
+    amountIn: parseEther(ethAmount),
     slippageBps: 50,
     route: 'local',
   }));

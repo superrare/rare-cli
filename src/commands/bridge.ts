@@ -1,6 +1,6 @@
 import type { RareClient } from '@rareprotocol/rare-sdk';
 import { Command } from 'commander';
-import { formatEther } from 'viem';
+import { formatEther, parseEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getConfiguredAccountAddress, getPublicClient, getWalletClient } from '../client.js';
 import { isSupportedChain, supportedChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
@@ -88,7 +88,7 @@ function bridgeSendCommand(): Command {
 
       log(`Bridging RARE from ${plan.sourceChain} to ${plan.destinationChain}...`);
       log(`  Source bridge: ${rare.contracts.rareBridge ?? 'unavailable'}`);
-      log(`  Amount: ${plan.amount} RARE`);
+      log(`  Amount: ${formatEther(plan.amount)} RARE`);
       if (plan.recipient !== undefined) {
         log(`  Recipient: ${plan.recipient}`);
       }
@@ -161,7 +161,7 @@ function parseBridgeRouteOptions(
 ): {
   sourceChain: SupportedChain;
   destinationChain: SupportedChain;
-  amount: string;
+  amount: bigint;
   recipient?: `0x${string}`;
 } {
   if (opts.amount === undefined) {
@@ -174,7 +174,7 @@ function parseBridgeRouteOptions(
   return {
     sourceChain: getActiveChain(opts.chain, opts.chainId),
     destinationChain: parseDestinationChain(opts.destinationChain),
-    amount: opts.amount,
+    amount: parseEther(opts.amount),
     recipient: parseOptionalAddress(opts.recipient, '--recipient'),
   };
 }

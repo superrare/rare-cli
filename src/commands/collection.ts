@@ -396,7 +396,7 @@ function createRoyaltyStatusCommand(): Command {
       const result = await rare.collection.royalty.status({
         contract,
         tokenId: opts.tokenId,
-        price: opts.price,
+        price: opts.price === undefined ? undefined : toNonNegativeInteger(opts.price, 'price'),
       });
 
       output(
@@ -582,7 +582,7 @@ function createCollectionStatusCommand(): Command {
       const result = await rare.collection.status({
         contract,
         tokenId: opts.tokenId,
-        price: opts.price,
+        price: opts.price === undefined ? undefined : toNonNegativeInteger(opts.price, 'price'),
       });
 
       output(
