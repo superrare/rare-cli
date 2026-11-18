@@ -7,7 +7,7 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect } from 'vitest';
 import type { CartCheckoutPreparation, CartCheckoutReceipt, EligibilityClaim, EligibilityRule, PrintOption, PublicPrintDrop } from '@rareprotocol/rare-sdk';
-import { erc20Abi, erc721Abi, erc1155Abi, getAddress, isHex, parseEventLogs, parseUnits, zeroAddress, type Address, type Hex } from 'viem';
+import { erc20Abi, erc721Abi, erc1155Abi, getAddress, isHex, parseEventLogs, parseEther, parseUnits, zeroAddress, type Address, type Hex } from 'viem';
 import { cartAbi, getCartAddress, rareErc1155Abi, resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 import { deployErc721Collection, mintToken } from './live-erc721.js';
 import { createCreatorVariantClient } from './cart-creator-variants.js';
@@ -15,10 +15,12 @@ import { verifyPrivateCartOrder, waitForSubmittedPrintOrder } from './cart-order
 import { verifyCartPurchaseNotifications } from './cart-notifications.js';
 import { cleanupLiveFixture, createCartLiveFixture, E2E_TOKEN_URI, jsonCommand } from './live-harness.js';
 
-export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'claim' | 'two-copy' | 'can-opener'): Promise<void> {
-    const maximumPayment = parseUnits(journey === 'two-copy' ? '50' : '25', 6);
+export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'claim' | 'two-copy' | 'can-opener', ethListingPayment?: 'eth' | 'usdc'): Promise<void> {
+    const ethListingPrice = '0.00005';
+    const maximumPayment = ethListingPayment === 'eth' ? parseEther('0.015') : parseUnits(journey === 'two-copy' ? '50' : '25', 6);
     const fixture = await createCartLiveFixture({ buyer: true,
       buyerWalletFilter: async (wallet, { chain, publicClient }) => {
+        if (ethListingPayment === 'eth') return (await publicClient.getBalance({ address: wallet.address })) > 0n;
         const currency = resolveCurrency('usdc', chain);
         const [balance, decimals] = await Promise.all([
           publicClient.readContract({ address: currency, abi: erc20Abi, functionName: 'balanceOf', args: [wallet.address] }),
@@ -72,7 +74,8 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
       const drop = await jsonCommand<{ id: string }>(fixture.sellerHome, ['prints', 'drops', 'create', '--input', input]);
       dropId = drop.id;
       const option = await jsonCommand<PrintOption>(fixture.sellerHome, ['prints', 'drops', 'configure', '--id', drop.id,
-        '--price-usd-cents', journey === 'two-copy' ? '50' : '100']);
+        ...(ethListingPayment ? ['--price', ethListingPrice, '--currency', 'eth']
+          : ['--price-usd-cents', journey === 'two-copy' ? '50' : '100'])]);
       if (!isHex(option.sku) || option.sku.length !== 66) throw new Error('Print variant SKU is not bytes32.');
       if (source) {
         await creator.cart.catalog.products.attachSku(source.productId, { sku: option.sku, position: 1, metadata: {} });
@@ -125,7 +128,7 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
       await writeFile(checkoutInput, JSON.stringify({ items: [
         ...(includesNft && source ? [{ kind: 'listing', listingDigest: source.listingDigest, quantity: '1' }] : []), printItem,
       ] }));
-      const checkout = ['cart', 'checkout', '--input', checkoutInput, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', fixture.chain];
+      const checkout = ['cart', 'checkout', '--input', checkoutInput, '--payment-currency', ethListingPayment ?? 'usdc', '--shipping-input', shipping, '--chain', fixture.chain];
       const preview = await jsonCommand<{ preparation: CartCheckoutPreparation }>(buyerHome, [...checkout, '--preview']);
       if (!includesNft) {
         expect(BigInt(preview.preparation.breakdown?.production ?? '-1')).toBeGreaterThan(0n);
@@ -133,16 +136,44 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
       }
       // Bound the test-wallet spend before requesting any approval or payment.
       expect(BigInt(preview.preparation.paymentAmount)).toBeLessThanOrEqual(maximumPayment);
-      const buyerBalance = await fixture.publicClient.readContract({ address: fixture.usdcAddress, abi: erc20Abi,
+      const buyerBalance = ethListingPayment === 'eth'
+        ? await fixture.publicClient.getBalance({ address: fixture.buyerAddress })
+        : await fixture.publicClient.readContract({ address: fixture.usdcAddress, abi: erc20Abi,
         functionName: 'balanceOf', args: [fixture.buyerAddress] });
       expect(buyerBalance, 'Fund the buyer for the actual quote, not the spending ceiling.').toBeGreaterThanOrEqual(BigInt(preview.preparation.paymentAmount));
       const sellerBefore = await fixture.publicClient.readContract({ address: fixture.usdcAddress, abi: erc20Abi, functionName: 'balanceOf', args: [fixture.sellerAddress] });
       const splitBalance = await readCollaboratorBalance(fixture, collaborator);
-      const purchase = await jsonCommand<{ txHash: Hex; orderId: Hex }>(buyerHome, [...checkout, '--yes'], 300_000);
+      const purchase = await jsonCommand<{ txHash: Hex; orderId: Hex; paymentAmount: string }>(buyerHome, [...checkout, '--yes'], 300_000);
       const transaction = await fixture.publicClient.getTransactionReceipt({ hash: purchase.txHash });
       expect(transaction.status).toBe('success');
       console.info('Cart print payment confirmed', { transactionHash: purchase.txHash, orderId: purchase.orderId });
-      const indexed = await verifySettlement(fixture, creator, purchase, preview.preparation, true);
+      const indexed = await verifySettlement(fixture, creator, purchase, preview.preparation, true, ethListingPayment !== undefined);
+      if (ethListingPayment) {
+        const paymentCurrency = getAddress(resolveCurrency(ethListingPayment, fixture.chain));
+        const payments = parseEventLogs({ abi: cartAbi, eventName: 'PurchaseExecuted',
+          logs: transaction.logs.filter(log => log.address.toLowerCase() === getCartAddress(fixture.chain).toLowerCase()) });
+        expect(payments.map(event => event.args)).toEqual([expect.objectContaining({
+          orderId: purchase.orderId, payer: getAddress(fixture.buyerAddress), paymentCurrency,
+          paymentAmount: BigInt(purchase.paymentAmount),
+        })]);
+        expect(preview.preparation.breakdown?.displayPrices).toEqual([
+          expect.objectContaining({ currency: zeroAddress, amount: parseEther(ethListingPrice).toString() }),
+        ]);
+        expect(indexed.lines.find(line => line.listingDigest === entry.listingDigest))
+          .toMatchObject({ sku: option.sku, settlementCurrency: zeroAddress, fulfillmentKind: 1 });
+        const usdcFees = indexed.lines.filter(line => line.fulfillmentKind === 0
+          && getAddress(line.settlementCurrency) === getAddress(fixture.usdcAddress));
+        const { production, shipping } = preview.preparation.breakdown ?? {};
+        if (production === undefined || shipping === undefined) throw new Error('Expected quoted fulfillment charges.');
+        const expectedCharges = [BigInt(production), BigInt(shipping), BigInt(production) * 5n / 100n]
+          .filter(amount => amount > 0n).map(amount => amount.toString()).sort();
+        for (const amount of new Set(expectedCharges)) {
+          expect(usdcFees.filter(line => line.amount === amount).length)
+            .toBeGreaterThanOrEqual(expectedCharges.filter(charge => charge === amount).length);
+        }
+        expect(BigInt(indexed.paymentAmount ?? '-1')).toBe(BigInt(purchase.paymentAmount));
+        return;
+      }
       await verifyPrintSplits(fixture, purchase, indexed, [entry.listingDigest], collaborator, splitBalance);
       const sellerProceeds = indexed.lines.filter(line => line.paymentRecipient.toLowerCase() === fixture.sellerAddress.toLowerCase()).reduce((total, line) => total + BigInt(line.amount), 0n);
       const sellerAfter = await fixture.publicClient.readContract({ address: fixture.usdcAddress, abi: erc20Abi, functionName: 'balanceOf', args: [fixture.sellerAddress] });
@@ -217,14 +248,19 @@ async function verifySettlement(
   purchase: { txHash: Hex; orderId: Hex },
   preview: Pick<CartCheckoutPreparation, 'paymentAmount' | 'breakdown'>,
   physical: boolean,
+  mixedCurrency = false,
 ): Promise<CartCheckoutReceipt> {
   await expect.poll(async () => (await rare.cart.checkout.receipt(purchase.orderId)).status,
     { timeout: 180_000, interval: 2_000 }).toBe('indexed');
   const receipt = await rare.cart.checkout.receipt(purchase.orderId);
-  expect(BigInt(receipt.paymentAmount ?? '-1')).toBe(BigInt(preview.paymentAmount));
-  expect(receipt.lines.reduce((sum, line) => sum + BigInt(line.amount), 0n)).toBe(BigInt(preview.paymentAmount));
+  if (!mixedCurrency) {
+    expect(BigInt(receipt.paymentAmount ?? '-1')).toBe(BigInt(preview.paymentAmount));
+    expect(receipt.lines.reduce((sum, line) => sum + BigInt(line.amount), 0n)).toBe(BigInt(preview.paymentAmount));
+  }
   const transaction = await fixture.publicClient.getTransactionReceipt({ hash: purchase.txHash });
-  const events = parseEventLogs({ abi: cartAbi, logs: transaction.logs, eventName: 'OrderLineSettled' });
+  const cartAddress = getCartAddress(fixture.chain).toLowerCase();
+  const cartLogs = transaction.logs.filter(log => log.address.toLowerCase() === cartAddress);
+  const events = parseEventLogs({ abi: cartAbi, logs: cartLogs, eventName: 'OrderLineSettled' });
   expect(events).toHaveLength(receipt.lines.length);
   for (const line of receipt.lines) expect(events.find(event => event.args.lineIndex === BigInt(line.lineIndex))?.args).toMatchObject({
     orderId: purchase.orderId, sku: line.sku, listingDigest: line.listingDigest, amount: BigInt(line.amount),
@@ -233,17 +269,27 @@ async function verifySettlement(
   expect(receipt.issues).toEqual([]);
   const transfers = parseEventLogs({ abi: erc20Abi,
     logs: transaction.logs.filter(log => log.address.toLowerCase() === fixture.usdcAddress.toLowerCase()), eventName: 'Transfer' });
-  const unsplitLines = receipt.lines.filter(line => !receipt.splitAllocations.some(allocation => allocation.lineIndex === line.lineIndex));
-  const recipients = new Set([...unsplitLines.map(line => line.paymentRecipient.toLowerCase()), ...receipt.splitAllocations.map(allocation => allocation.recipient.toLowerCase())]);
+  const usdcLines = receipt.lines.filter(line => getAddress(line.settlementCurrency) === getAddress(fixture.usdcAddress));
+  const usdcSplits = receipt.splitAllocations.filter(allocation => usdcLines.some(line => line.lineIndex === allocation.lineIndex));
+  const unsplitLines = usdcLines.filter(line => !usdcSplits.some(allocation => allocation.lineIndex === line.lineIndex));
+  const usdcSpreads = parseEventLogs({ abi: cartAbi, logs: cartLogs, eventName: 'ProtocolSpreadCaptured' })
+    .map(event => event.args)
+    .filter(spread => spread.orderId === purchase.orderId && getAddress(spread.currency) === getAddress(fixture.usdcAddress));
+  const recipients = new Set([
+    ...unsplitLines.map(line => line.paymentRecipient.toLowerCase()),
+    ...usdcSplits.map(allocation => allocation.recipient.toLowerCase()),
+    ...usdcSpreads.map(spread => spread.recipient.toLowerCase()),
+  ]);
   for (const recipient of recipients) {
     const entitlement = unsplitLines.filter(line => line.paymentRecipient.toLowerCase() === recipient).reduce((sum, line) => sum + BigInt(line.amount), 0n)
-      + receipt.splitAllocations.filter(allocation => allocation.recipient.toLowerCase() === recipient).reduce((sum, allocation) => sum + BigInt(allocation.amount), 0n);
+      + usdcSplits.filter(allocation => allocation.recipient.toLowerCase() === recipient).reduce((sum, allocation) => sum + BigInt(allocation.amount), 0n)
+      + usdcSpreads.filter(spread => spread.recipient.toLowerCase() === recipient).reduce((sum, spread) => sum + spread.amount, 0n);
     const received = transfers.filter(event => event.args.to.toLowerCase() === recipient).reduce((sum, event) => sum + event.args.value, 0n);
     expect(received).toBe(entitlement);
   }
   expect(receipt).not.toHaveProperty('feeAllocations');
   const feeLines = receipt.lines.filter(line => line.fulfillmentKind === 0);
-  expect(feeLines).toHaveLength(physical ? 5 : 2);
+  if (!mixedCurrency) expect(feeLines).toHaveLength(physical ? 5 : 2);
   if (physical) {
     const production = preview.breakdown?.production;
     if (production === undefined) throw new Error('Expected a quoted print production cost.');
