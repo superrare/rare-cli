@@ -1,13 +1,15 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { CartCheckoutPreparation } from '@rareprotocol/rare-sdk';
+import type { CartCheckoutPreparation, CartOrder } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress } from '@rareprotocol/rare-sdk/contracts';
 import { erc721Abi, parseEventLogs, type Address, type Hex } from 'viem';
 import { cleanupLiveFixture, createCartLiveFixture, jsonCommand, requireBuyerFixture } from './helpers/live-harness.js';
 import { createCreatorMintVariantSku, createCreatorVariantSkus } from './helpers/cart-creator-variants.js';
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
 import { nftFixtureManifest } from './helpers/nft-fixture-manifest.js';
+import { verifyPrivateCartOrder } from './helpers/cart-order-history.js';
+import { verifyCartPurchaseNotifications } from './helpers/cart-notifications.js';
 
 describe('free Cart merchandise through the built CLI', () => {
   it('transfers an existing NFT and mints a new NFT at zero merchandise price', async () => {
@@ -57,6 +59,10 @@ describe('free Cart merchandise through the built CLI', () => {
         expect((await fixture.publicClient.readContract({ address: item.contract, abi: erc721Abi,
           functionName: 'ownerOf', args: [item.tokenId] })).toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
       }
+      await expect.poll(async () => (await jsonCommand<CartOrder>(fixture.buyerHome,
+        ['cart', 'orders', 'get', '--id', purchase.orderId])).status, { timeout: 180_000, interval: 2_000 }).toBe('FULFILLED');
+      await verifyPrivateCartOrder(fixture, purchase.orderId);
+      await verifyCartPurchaseNotifications(fixture, purchase, 2);
     } finally {
       await cleanupLiveFixture(fixture);
     }

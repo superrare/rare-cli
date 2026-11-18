@@ -1,7 +1,8 @@
+import { findCartOrderInHistory } from './helpers/cart-order-history.js';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createRareClient, type RareClient } from '@rareprotocol/rare-sdk';
+import { createRareClient, type CartOrder, type RareClient } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress, resolveCurrency, viemChains } from '@rareprotocol/rare-sdk/contracts';
 import { createWalletClient, erc20Abi, erc721Abi, getAddress, http, parseEther, parseEventLogs, parseUnits, zeroAddress, type Address, type Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -227,6 +228,16 @@ describeLive('live Rare API and Sepolia Cart CLI workflow', () => {
       await expect(fixture.publicClient.getTransactionReceipt({ hash: purchase.approvalTxHash })).resolves.toMatchObject({ status: 'success' });
     }
     expect(purchase.orderId).toMatch(/^0x[0-9a-fA-F]{64}$/);
+    await expect.poll(async () => (await jsonCommand<CartOrder>(fixture.buyerHome,
+      ['cart', 'orders', 'get', '--id', purchase.orderId])).status, { timeout: 180_000, interval: 2_000 }).toBe('FULFILLED');
+    const history = await jsonCommand<CartOrder>(fixture.buyerHome,
+      ['cart', 'orders', 'get', '--id', purchase.orderId]);
+    expect(history.id).toBe(purchase.orderId);
+    expect(history.items).toHaveLength(2);
+    expect(history.items?.every(item => item.fulfillmentStatus === 'FULFILLED')).toBe(true);
+    expect(history.fulfillments).toEqual([]);
+    expect((await findCartOrderInHistory(fixture.buyerHome, purchase.orderId))?.id).toBe(purchase.orderId);
+
     expect(purchase.payer.toLowerCase()).toBe(fixture.buyerAddress.toLowerCase());
     expect(purchase.paymentCurrency.toLowerCase()).toBe(fixture.rareAddress.toLowerCase());
     expect(purchase.lineCount).toBeGreaterThanOrEqual(2);

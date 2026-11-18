@@ -145,13 +145,25 @@ describe('Cart CLI input planning', () => {
     expect(parseCartCheckoutFile(JSON.stringify({ items: [
       { kind: 'listing', listingDigest: listingA },
       { kind: 'swap', mode: 'exact-output', outputCurrency: 'USDC', outputAmount: '12.5' },
-    ] }))).toEqual({ isValid: true, value: [
+    ] }))).toEqual({ isValid: true, value: { items: [
       { kind: 'listing', listingDigest: listingA, quantity: 1n },
       { kind: 'swap', mode: 'exact-output', outputCurrency: 'usdc', outputAmount: '12.5' },
-    ] });
+    ] } });
     expect(parseCartCheckoutFile(JSON.stringify({ items: [{ kind: 'swap', mode: 'exact-input',
       outputCurrency: 'rare', inputAmount: '1', outputAmount: '2' }] })).isValid).toBe(false);
     expect(parseCartCheckoutFile(JSON.stringify({ items: [] })).isValid).toBe(false);
+    expect(parseCartCheckoutFile(JSON.stringify({ items: [{ kind: 'listing', listingDigest: listingA, quantity: '1' }], optionSelections: [] })).isValid).toBe(false);
+  });
+
+  it('preserves mint-to-print associations and rejects ambiguous unit mappings', () => {
+    const selection = { preparationId: '89e5fd73-4c38-4cc6-84d3-e526de485cda', listingDigest: listingA, unitIndexes: [0, 1] };
+    const input = { items: [{ kind: 'listing', listingDigest: listingA, quantity: '2' }], mintSelections: [selection] };
+    expect(parseCartCheckoutFile(JSON.stringify(input))).toEqual({ isValid: true, value: {
+      items: [{ kind: 'listing', listingDigest: listingA, quantity: 2n }], mintSelections: [selection],
+    } });
+    for (const unitIndexes of [[], [0, 0], [-1], [0.5]]) {
+      expect(parseCartCheckoutFile(JSON.stringify({ ...input, mintSelections: [{ ...selection, unitIndexes }] })).isValid).toBe(false);
+    }
   });
 
   it('rejects duplicate listings and unsafe quantities', () => {
