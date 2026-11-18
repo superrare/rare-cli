@@ -273,9 +273,10 @@ describe('ordered blind mint and its physical Product variant', () => {
         await verifyErc721Ownership(live, creator, { transactionHash: minted.txHash,
           contract: collection.contract, tokenId: mintedTokenId });
       }
-      await expect.poll(async () => (await creator.cart.catalog.products.get(selected.artwork.productId)).variants
+      await expect.poll(async () => (await creator.cart.catalog.products.getMine(selected.artwork.productId)).variants
         .find(variant => variant.sku === selected.artwork.nftSku), { timeout: 180_000, interval: 2_000 })
         .toMatchObject({ isHidden: false, universalTokenId: `${live.chainId}-${collection.contract.toLowerCase()}-${tokenId}` });
+      if (!afterMint) await creator.cart.catalog.products.publish(selected.artwork.productId);
       const product = await creator.cart.catalog.products.get(selected.artwork.productId);
       expect(product.variants.map(variant => variant.sku)).toEqual(expect.arrayContaining([selected.artwork.nftSku, selected.artwork.printSku]));
       const shipping = await jsonFile(live, 'rare-minter-shipping', { name: 'Sandbox RareMinter Print Test',
