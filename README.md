@@ -1423,26 +1423,16 @@ Run `npm run test:messaging:e2e` manually against a non-production deployment. S
 `RARE_ACCOUNT_TEST_THIRD_PRIVATE_KEY`. Keep the first/second pair reserved for
 repeatedly declined direct requests; do not accept the request or follow the first
 account from the second. The first/third pair is used for an accepted conversation.
-Set `RARE_MESSAGING_TEST_PRIVATE_BUCKET` to the deployment's private messaging
-bucket and authenticate `gcloud` for `superrare-dev` to remove attachment fixtures.
 Public tests also require `RARE_MESSAGING_TEST_AUCTION_ID`,
 `RARE_MESSAGING_TEST_DROP_ID`, `RARE_MESSAGING_TEST_EDITION_ADDRESS`, and
-`RARE_MESSAGING_TEST_EDITION_CHAIN_ID`. Set
-`RARE_MESSAGING_TEST_PIPELINES_DIR` to the monorepo `services/pipelines` directory
-and `RARE_MESSAGING_TEST_DATABASE_URL` to the matching non-production database.
-System fixtures invoke the production Pipelines writer; CLI commands independently
-verify the saved history and notifications. No internal HTTP producer key is used.
+`RARE_MESSAGING_TEST_EDITION_CHAIN_ID`.
 
-The command runs the existing messaging flow, authorization checks, and public
-notification delivery sequentially. It verifies thread/roster/block-list reads,
-downloaded image bytes, revocation after bans or deletion, real app notifications,
-mentions-only and muted preferences, and trusted system-message deduplication.
-A positive worker control precedes absence assertions for muted notifications.
-System fixtures use a temporary drop room; they do not create synthetic events in
-an existing auction or edition. System messages remain in its unadvertised durable
-history after the drop is deleted. Public messages and transient direct replies
-are deleted; request seed messages and closed group history remain for repeatable
-runs. These tests are not added to CI.
+The command runs messaging, authorization, and public notification delivery
+tests sequentially. It covers thread and member reads, image downloads, access
+revocation, app-inbox delivery, and notification preferences. It also checks that
+ordinary callers cannot write trusted system messages. Public messages and
+transient direct replies are deleted. Request seed messages and closed group
+history remain for repeatable runs.
 
 
 Random NFT sampling uses the existing search command:
@@ -1473,3 +1463,4 @@ Attach within 24 hours of upload completion. Subsequent reads use messaging
 permissions. The SDK browser client persists managed login across reloads; the CLI
 continues using its protected persistent credential store.
 
+Live image fixtures use [Picsum](https://picsum.photos/) photographs downloaded during setup and uploaded through the ordinary SDK or CLI paths. The shared `downloadTestImage` helper accepts a seed and dimensions; omitting the seed selects a new photograph. Each download includes a unique JPEG comment so content-addressed cleanup cannot delete another run’s upload. Selected live tests fail if Picsum is unavailable. Local validation and corrupt-file fixtures stay offline.

@@ -1,5 +1,4 @@
 import { downloadTestImage } from './helpers/test-image.js';
-import { execFileSync } from 'node:child_process';
 import { createRareClient } from '@rareprotocol/rare-sdk';
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -105,32 +104,27 @@ describe('uploaded post images through the built CLI', () => {
     const signer = privateKeyToAccount(privateKey);
     const fixture = createRareClient({ apiBaseUrl: apiUrl.origin });
     const bytes = await downloadTestImage();
-    execFileSync('gcloud', ['--project=superrare-dev', 'storage', 'buckets', 'describe', 'gs://rare-api-public-upload-dev', '--format=value(name)'], { stdio: 'pipe' });
     await fixture.auth.loginWithWallet({ address: signer.address, chainId: 1, signMessage: message => signer.signMessage({ message }) });
     const image = await fixture.upload(bytes, 'cli-post.jpg', { contentType: 'image/jpeg' }).finally(() => fixture.auth.logout());
-    try {
-      await withTempHome(async first => withTempHome(async second => {
-        const owner = await setup(first, privateKey, apiUrl.origin);
-        const publicReader = await setup(second, privateKey, apiUrl.origin);
-        expect((await owner.run(['auth', 'login', '--wallet', '--chain', 'mainnet'])).code).toBe(0);
-        const ids: string[] = [];
-        try {
-          const post = postResult.parse(parseJsonStdout(await owner.run(['posts', 'create', '--title', `CLI image ${Date.now()}`, '--body', 'Uploaded image fixture', '--image-url', image.url])));
-          // eslint-disable-next-line functional/immutable-data
-          ids.push(post.id);
-          expect(post.imageUrls).toEqual([image.url]);
-          const detail = postResult.parse(parseJsonStdout(await publicReader.run(['posts', 'get', post.id])));
-          expect(detail.imageUrls).toEqual([image.url]);
-          const page = z.object({ data: z.array(postResult) }).parse(parseJsonStdout(await publicReader.run(['posts', 'list', '--address', signer.address, '--per-page', '100'])));
-          expect(page.data.find(row => row.id === post.id)?.imageUrls).toEqual([image.url]);
-          expect(Buffer.from(await (await fetch(image.url)).arrayBuffer())).toEqual(bytes);
-        } finally {
-          for (const id of ids) expect((await owner.run(['posts', 'delete', id])).code).toBe(0);
-          expect((await owner.run(['auth', 'logout'])).code).toBe(0);
-        }
-      }));
-    } finally {
-      execFileSync('gcloud', ['--project=superrare-dev', 'storage', 'rm', `gs://rare-api-public-upload-dev/${image.key}`], { stdio: 'pipe' });
-    }
+    await withTempHome(async first => withTempHome(async second => {
+      const owner = await setup(first, privateKey, apiUrl.origin);
+      const publicReader = await setup(second, privateKey, apiUrl.origin);
+      expect((await owner.run(['auth', 'login', '--wallet', '--chain', 'mainnet'])).code).toBe(0);
+      const ids: string[] = [];
+      try {
+        const post = postResult.parse(parseJsonStdout(await owner.run(['posts', 'create', '--title', `CLI image ${Date.now()}`, '--body', 'Uploaded image fixture', '--image-url', image.url])));
+        // eslint-disable-next-line functional/immutable-data
+        ids.push(post.id);
+        expect(post.imageUrls).toEqual([image.url]);
+        const detail = postResult.parse(parseJsonStdout(await publicReader.run(['posts', 'get', post.id])));
+        expect(detail.imageUrls).toEqual([image.url]);
+        const page = z.object({ data: z.array(postResult) }).parse(parseJsonStdout(await publicReader.run(['posts', 'list', '--address', signer.address, '--per-page', '100'])));
+        expect(page.data.find(row => row.id === post.id)?.imageUrls).toEqual([image.url]);
+        expect(Buffer.from(await (await fetch(image.url)).arrayBuffer())).toEqual(bytes);
+      } finally {
+        for (const id of ids) expect((await owner.run(['posts', 'delete', id])).code).toBe(0);
+        expect((await owner.run(['auth', 'logout'])).code).toBe(0);
+      }
+    }));
   }, 180_000);
 });

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { link, mkdir, open, readFile, realpath, rm } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
+import type { PrintRecoveryStore } from '@rareprotocol/rare-sdk';
 
 export async function savePrintRequest<Input, Request>(
   inputPath: string,
@@ -26,12 +27,38 @@ export async function savePrintRequest<Input, Request>(
   const request = resolveRequest(input);
   if (JSON.stringify(input) === JSON.stringify(request)) return request;
 
+  await writeCheckpoint(directory, saved, JSON.stringify(request));
+  return await readSaved();
+}
+
+export function printRecoveryStore(directory: string, scope: string): PrintRecoveryStore {
+  const pathFor = (key: string): string =>
+    join(directory, `recovery-${createHash('sha256').update(JSON.stringify([scope, key])).digest('hex')}.json`);
+  const read = async (key: string): Promise<string | undefined> => {
+    try {
+      return await readFile(pathFor(key), 'utf8');
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return undefined;
+      throw error;
+    }
+  };
+  return {
+    read,
+    async save(key, value): Promise<void> {
+      await writeCheckpoint(directory, pathFor(key), value);
+      if (await read(key) !== value)
+        throw new Error('Another invocation saved this print operation. Rerun the command to resume it.');
+    },
+  };
+}
+
+async function writeCheckpoint(directory: string, saved: string, value: string): Promise<void> {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const temporary = join(directory, `${randomUUID()}.tmp`);
   const handle = await open(temporary, 'wx', 0o600);
   try {
     try {
-      await handle.writeFile(JSON.stringify(request), 'utf8');
+      await handle.writeFile(value, 'utf8');
       await handle.sync();
     } finally {
       await handle.close();
@@ -44,7 +71,6 @@ export async function savePrintRequest<Input, Request>(
     }
     const directoryHandle = await open(directory, 'r');
     try { await directoryHandle.sync(); } finally { await directoryHandle.close(); }
-    return await readSaved();
   } finally {
     await rm(temporary, { force: true });
   }

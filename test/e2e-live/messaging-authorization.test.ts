@@ -1,6 +1,5 @@
 import { downloadTestImage } from './helpers/test-image.js';
-import { createHash, randomUUID } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -95,9 +94,6 @@ describe('messaging authorization through the built CLI and deployed services', 
   }, 300_000);
 
   it('verifies uploaded image bytes and denies attachment reuse, outsiders and revoked members', async () => {
-    const bucket = 'rare-api-private-upload-dev';
-    if (bucket.includes('prod') || !/^[a-z0-9-]+$/.test(bucket)) throw new Error('Use the non-production messaging bucket');
-    execFileSync('gcloud', ['--project=superrare-dev', 'storage', 'buckets', 'describe', `gs://${bucket}`, '--format=value(name)'], { stdio: 'pipe' });
     await withMessagingActors(async (owner, member, outsider) => {
       const room = created.parse(await owner.json(['messaging', 'group', '--title', `CLI images ${randomUUID()}`]));
       const otherRoom = created.parse(await owner.json(['messaging', 'group', '--title', `CLI other images ${randomUUID()}`]));
@@ -105,7 +101,6 @@ describe('messaging authorization through the built CLI and deployed services', 
       const file = join(owner.directory, 'private.jpg');
       await writeFile(file, bytes);
       const uploadId = randomUUID();
-      const object = `gs://${bucket}/${createHash('sha256').update(bytes).digest('hex')}`;
       const download = async (actor: typeof owner, id: string): Promise<Buffer> => {
         const output = join(actor.directory, `download-${randomUUID()}.png`);
         await actor.json(['messaging', 'download-image', id, '--output', output]);
@@ -141,11 +136,6 @@ describe('messaging authorization through the built CLI and deployed services', 
       } finally {
         await owner.json(['messaging', 'close', room.id]);
         await owner.json(['messaging', 'close', otherRoom.id]);
-        try { execFileSync('gcloud', ['--project=superrare-dev', 'storage', 'rm', object], { stdio: 'pipe' }); }
-        catch (error) {
-          const stderr = error !== null && typeof error === 'object' && 'stderr' in error && error.stderr instanceof Uint8Array ? Buffer.from(error.stderr).toString('utf8') : '';
-          if (!/No URLs matched|URLs matched no objects or files|HTTPError 404|does not exist/.test(stderr)) throw error;
-        }
       }
     });
   }, 300_000);
