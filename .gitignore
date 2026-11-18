@@ -9,4 +9,8 @@ docs-site/.docusaurus/
 .env
 .context/
 .clawpatch
-/docs
+/docs/*
+!/docs/intro.md
+!/docs/compatibility-shims.md
+!/docs/eligibility.md
+!/docs/blind-print-products.md

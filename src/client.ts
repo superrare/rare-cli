@@ -1,7 +1,7 @@
 import { createPublicClient, createWalletClient, http, type Address, type PublicClient, type WalletClient } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import type { LocalAccount, PrivateKeyAccount } from 'viem/accounts';
-import { viemChains, defaultRpcUrls, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { viemChains, defaultRpcUrls, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
 import {
   getChainConfig,
   readConfig,
@@ -77,6 +77,15 @@ export function getConfiguredAccountAddress(chain: SupportedChain): Address | un
   }
 
   return chainConfig.accountAddress;
+}
+
+/** Message authentication uses an existing signer without creating a wallet or RPC client. */
+export function getConfiguredWalletAccount(chain: SupportedChain): WalletAccount {
+  const config = getExistingWalletConfig(getChainConfig(chain));
+  if (config === null) {
+    throw new Error(`No complete wallet configured for "${chain}". Configure a wallet before using auth login --wallet.`);
+  }
+  return getWalletAccount(config);
 }
 
 export async function getConfiguredUniswapApiKey(chain: SupportedChain): Promise<string | undefined> {

@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { Address } from 'viem';
-import { parseHexString } from '@rareprotocol/rare-sdk/validation';
-import { chainIds, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { chainIds, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
+import { parsePrivateKey } from '../../../src/input-core.js';
 
 export type LiveWalletRole = 'seller' | 'buyer';
 
@@ -19,6 +19,8 @@ export type LiveWalletPairLease = {
   sellerWallet: LiveWalletLease;
   buyerWallet: LiveWalletLease;
 };
+
+export type LiveWalletLeaseFilter = (lease: LiveWalletLease) => Promise<boolean>;
 
 export async function reserveLiveWallet(role: LiveWalletRole, chain: SupportedChain): Promise<LiveWalletLease> {
   const candidates = livePrivateKeys(role);
@@ -51,7 +53,10 @@ export async function reserveLiveWallet(role: LiveWalletRole, chain: SupportedCh
   }
 }
 
-export async function reserveLiveWalletPair(chain: SupportedChain): Promise<LiveWalletPairLease> {
+export async function reserveLiveWalletPair(
+  chain: SupportedChain,
+  options: { buyerFilter?: LiveWalletLeaseFilter } = {},
+): Promise<LiveWalletPairLease> {
   const sellerCandidates = livePrivateKeys('seller');
   const buyerCandidates = livePrivateKeys('buyer');
   const start = Date.now();
@@ -69,7 +74,11 @@ export async function reserveLiveWalletPair(chain: SupportedChain): Promise<Live
         for (const buyerPrivateKey of buyerCandidates) {
           buyerWallet = await tryReserveLiveWallet('buyer', chain, buyerPrivateKey);
           if (buyerWallet !== undefined) {
-            return { sellerWallet, buyerWallet };
+            if (options.buyerFilter === undefined || await options.buyerFilter(buyerWallet)) {
+              return { sellerWallet, buyerWallet };
+            }
+            await buyerWallet.release();
+            buyerWallet = undefined;
           }
         }
       } finally {
@@ -112,7 +121,7 @@ function livePrivateKeys(role: LiveWalletRole): `0x${string}`[] {
     ? []
     : rawPool.split(/[\s,]+/).filter((value) => value.trim() !== '');
 
-  const keys = rawKeys.map((value, index) => parseHexString(value, `${pluralName}[${index}]`));
+  const keys = rawKeys.map((value, index) => parsePrivateKey(value, `${pluralName}[${index}]`));
   if (keys.length === 0) {
     throw new Error(`${pluralName} must provide at least one 0x-prefixed private key.`);
   }

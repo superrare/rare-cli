@@ -1,0 +1,487 @@
+import { ordersCommand } from './orders.js';
+import { readFile, writeFile } from 'node:fs/promises';
+import { Command } from 'commander';
+import { purchaseEligibilityCommand } from './eligibility.js';
+import { cartCatalogCommand } from './cart-catalog.js';
+import { formatUnits, type Address } from 'viem';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import type { CartCheckoutPreparation, CartListingPreparation, CartPaymentStart, RareClient } from '@rareprotocol/rare-sdk';
+import { hashCartListingRoot } from '@rareprotocol/rare-sdk/utils';
+import { cartFulfillmentKinds } from '@rareprotocol/rare-sdk';
+import { getActiveChain } from '../config.js';
+import { createAuthStore } from '../auth-storage.js';
+import {
+  getConfiguredAccountAddress,
+  getPublicClient,
+  getWalletClient,
+} from '../client.js';
+import { log, output, outputJson } from '../output.js';
+import { serializeOutputJson } from '../output-core.js';
+import { accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
+import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
+import { addChainOptions, type ChainOptions } from './options.js';
+import { parseEligibilityRuleId } from './eligibility-core.js';
+import { parseCommerceUuid, shippingDetailsInput } from './print-input-core.js';
+import type { z } from 'zod';
+import {
+  parseCartAddress,
+  parseCartAmount,
+  parseCartBytes32,
+  parseCartCliCurrency,
+  parseCartListingFile,
+  parseCartListingSelections,
+  parseCartCheckoutFile,
+  unwrapCartCliResult,
+} from './cart-core.js';
+
+type CartListingCreateOptions = ChainOptions & AccountCommandOptions & {
+  input: string;
+  output?: string;
+  preview?: boolean;
+  yes?: boolean;
+  eligibilityRuleId?: string;
+};
+
+type CartDigestOptions = ChainOptions & {
+  listingDigest?: string;
+  rootDigest?: string;
+  yes?: boolean;
+};
+
+type CartCheckoutOptions = ChainOptions & AccountCommandOptions & {
+  listing: string[];
+  input?: string;
+  outputCurrency?: string;
+  inputAmount?: string;
+  outputAmount?: string;
+  paymentCurrency?: string;
+  recipient?: string;
+  shippingInput?: string;
+  savedAddressId?: string;
+  preview?: boolean;
+  authorizeOnly?: boolean;
+  yes?: boolean;
+};
+
+export function cartCommand(): Command {
+  const command = new Command('cart');
+  command.addCommand(cartCatalogCommand());
+  command.addCommand(purchaseEligibilityCommand());
+  command.description('Create Cart listings and purchase fixed-price Cart checkouts');
+  command.addCommand(cartListingCommand());
+  command.addCommand(cartCheckoutCommand());
+  command.addCommand(cartCheckoutCommand(true));
+  command.addCommand(cartCardCommand());
+  command.addCommand(cartResumeCommand());
+  command.addCommand(ordersCommand());
+  return command;
+}
+
+function cartListingCommand(): Command {
+  const command = new Command('listing');
+  command.description('Prepare, publish, and invalidate Cart listings');
+  command.addCommand(cartListingCreateCommand());
+  command.addCommand(cartListingCancelCommand());
+  command.addCommand(cartListingCancelRootCommand());
+  command.addCommand(cartListingInvalidateNonceCommand());
+  return command;
+}
+
+function cartListingCreateCommand(): Command {
+  const command = accountCommand('create');
+  command.description('Prepare and publish a seller-signed Cart Listing Root');
+  addChainOptions(command)
+    .requiredOption('--input <path>', 'JSON file containing the listing intent')
+    .option('--output <path>', 'write the prepared or signed Listing Root artifact to a JSON file')
+    .option('--preview', 'show the prepared Listing Root and required approvals without signing or publishing')
+    .option('--yes', 'approve NFT contracts if needed and skip transaction confirmation')
+    .option('--eligibility-rule-id <id>', 'require an owned eligibility rule atomically when publishing these Listings')
+    .action(async (opts: CartListingCreateOptions): Promise<void> => {
+      const file = unwrapCartCliResult(parseCartListingFile(await readFile(opts.input, 'utf8')));
+      const eligibilityRuleId = opts.eligibilityRuleId === undefined ? undefined : parseEligibilityRuleId(opts.eligibilityRuleId);
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const publicClient = getPublicClient(chain);
+      const wallet = opts.preview === true ? undefined : getWalletClient(chain);
+      const seller = wallet?.account.address ?? getConfiguredAccountAddress(chain);
+      if (seller === undefined) {
+        throw new Error(`rare cart listing create requires a configured seller account for "${chain}".`);
+      }
+      const rare = createRareClient({
+        publicClient,
+        apiBaseUrl: opts.apiUrl,
+        sessionStore: createAuthStore(storageOptions(opts)),
+        account: seller,
+        ...(wallet === undefined ? {} : { walletClient: wallet.client }),
+      });
+      const listings = await Promise.all(file.listings.map(async (listing, index) => {
+        const currency = await rare.currency.resolveDecimals(listing.settlementCurrency);
+        const unitPrice = unwrapCartCliResult(parseCartAmount(
+          listing.unitPrice,
+          currency.decimals,
+          `listings[${index}].unitPrice`,
+        ));
+        return {
+          sku: listing.sku,
+          settlementCurrency: currency.address,
+          unitPrice,
+          quantity: listing.quantity,
+          ...(listing.fulfillmentKind === undefined ? {} : { fulfillmentKind: listing.fulfillmentKind }),
+          ...(listing.paymentRecipient === undefined ? {} : { paymentRecipient: listing.paymentRecipient }),
+          ...(listing.splits === undefined ? {} : { splits: listing.splits }),
+        };
+      }));
+      const preparation = await rare.cart.listing.prepare({
+        seller,
+        listings,
+        deadline: file.deadline,
+        ...(eligibilityRuleId === undefined ? {} : { eligibilityRuleId }),
+      });
+
+      if (opts.preview === true) {
+        const rootDigest = getListingRootDigest(preparation);
+        await writeCartArtifact(opts.output, preparation.artifact);
+        output(
+          { preview: true, rootDigest, preparation, outputPath: opts.output ?? null },
+          () => {
+            printListingPreparation(preparation, opts.output);
+          },
+        );
+        return;
+      }
+
+      log(`Publishing ${preparation.artifact.entries.length} Cart listing(s) on ${chain}...`);
+      const publish = async () =>
+        rare.cart.listing.publish({ preparation, autoApprove: opts.yes === true });
+      const result = await runWithNftApprovalConsent({
+        commandName: 'rare cart listing create',
+        approvalMessage: 'Cart requires approval for one or more NFT contracts before publishing these listings.',
+        runWithoutApproval: publish,
+        runWithApproval: async () =>
+          rare.cart.listing.publish({ preparation, autoApprove: true }),
+      });
+      if (result === undefined) return;
+      const rootDigest = getListingRootDigest(result.preparation);
+      await writeCartArtifact(opts.output, result.signedArtifact);
+      output(
+        {
+          preview: false,
+          rootDigest,
+          publishedRoot: result.publishedRoot,
+          listingDigests: result.signedArtifact.entries.map((entry) => entry.listingDigest),
+          approvalTxHashes: result.approvalTxHashes,
+          signedArtifact: result.signedArtifact,
+          outputPath: opts.output ?? null,
+        },
+        () => {
+          console.log(`Published Cart Listing Root: ${rootDigest}`);
+          console.log(`Listings: ${result.signedArtifact.entries.length}`);
+          for (const txHash of result.approvalTxHashes) console.log(`Approval tx sent: ${txHash}`);
+          if (opts.output !== undefined) console.log(`Wrote signed artifact: ${opts.output}`);
+        },
+      );
+    });
+  return command;
+}
+
+function cartListingCancelCommand(): Command {
+  const command = new Command('cancel');
+  command.description('Cancel one Cart listing on-chain');
+  addChainOptions(command)
+    .requiredOption('--listing-digest <bytes32>', 'canonical Cart listing digest')
+    .option('--yes', 'skip transaction confirmation')
+    .action(async (opts: CartDigestOptions): Promise<void> => {
+      const listingDigest = unwrapCartCliResult(parseCartBytes32(opts.listingDigest, '--listing-digest'));
+      await runSimpleCartWrite(opts, 'Cancelling Cart listing...', async (rare) => rare.cart.listing.cancel(listingDigest));
+    });
+  return command;
+}
+
+function cartListingCancelRootCommand(): Command {
+  const command = new Command('cancel-root');
+  command.description('Cancel one Cart Listing Root on-chain');
+  addChainOptions(command)
+    .requiredOption('--root-digest <bytes32>', 'Cart Listing Root digest')
+    .option('--yes', 'skip transaction confirmation')
+    .action(async (opts: CartDigestOptions): Promise<void> => {
+      const rootDigest = unwrapCartCliResult(parseCartBytes32(opts.rootDigest, '--root-digest'));
+      await runSimpleCartWrite(opts, 'Cancelling Cart Listing Root...', async (rare) => rare.cart.listing.cancelRoot(rootDigest));
+    });
+  return command;
+}
+
+function cartListingInvalidateNonceCommand(): Command {
+  const command = new Command('invalidate-nonce');
+  command.description('Invalidate every Cart Listing Root using the current seller nonce');
+  addChainOptions(command)
+    .option('--yes', 'skip transaction confirmation')
+    .action(async (opts: CartDigestOptions): Promise<void> => {
+      await runSimpleCartWrite(opts, 'Invalidating the current Cart listing nonce...', async (rare) => rare.cart.listing.invalidateNonce());
+    });
+  return command;
+}
+
+function cartCheckoutCommand(swap = false): Command {
+  const command = accountCommand(swap ? 'swap' : 'checkout');
+  command.description('Preview or purchase an API-prepared Cart checkout');
+  addChainOptions(command)
+    .option('--input <path>', 'JSON checkout document with typed items and optional mintSelections; amounts are human-readable decimals')
+    .option('--listing <listing-digest[=quantity]>', 'listing shortcut; cannot combine with --input (repeatable)', collectValue, [])
+    .option('--output-currency <currency>', 'swap output token: eth, usdc, rare, or ERC-20 address')
+    .option('--input-amount <amount>', 'exact payment budget for a swap, in payment currency units')
+    .option('--output-amount <amount>', 'exact tokens to receive for a swap, in output currency units')
+    .requiredOption('--payment-currency <currency>', 'payment currency: eth, usdc, rare, or ERC-20 address')
+    .option('--recipient <address>', 'fulfillment recipient (defaults to the configured wallet)')
+    .option('--shipping-input <path>', 'JSON shipping details for physical fulfillment')
+    .option('--saved-address-id <uuid>', 'use a saved private shipping address instead of --shipping-input')
+    .option('--preview', 'show the API quote and SDK preparation without signing, approving, or submitting')
+    .option('--authorize-only', 'reserve and authorize checkout without approving tokens or submitting payment; claims remain reserved until expiry')
+    .option('--yes', 'approve payment currency if needed and skip transaction confirmation')
+    .action(async (opts: CartCheckoutOptions): Promise<void> => {
+      if (opts.preview === true && opts.authorizeOnly === true) throw new Error('Use either --preview or --authorize-only, not both.');
+      if (opts.input !== undefined && (opts.listing.length > 0 || opts.outputCurrency !== undefined || opts.inputAmount !== undefined || opts.outputAmount !== undefined)) throw new Error('Use --input alone, or listing/swap shortcuts, not both.');
+      const hasSwap = opts.outputCurrency !== undefined || opts.inputAmount !== undefined || opts.outputAmount !== undefined;
+      if ((swap || hasSwap) && (opts.outputCurrency === undefined || (opts.inputAmount === undefined) === (opts.outputAmount === undefined))) throw new Error('A swap requires --output-currency and exactly one of --input-amount or --output-amount.');
+      const configuredRecipient = unwrapCartCliResult(parseCartAddress(opts.recipient, '--recipient'));
+      const paymentCurrencyInput = unwrapCartCliResult(parseCartCliCurrency(
+        opts.paymentCurrency ?? '',
+        '--payment-currency',
+      ));
+      const checkoutInput = opts.input !== undefined
+        ? unwrapCartCliResult(parseCartCheckoutFile(await readFile(opts.input, 'utf8')))
+        : unwrapCartCliResult(parseCartCheckoutFile(JSON.stringify({ items: [
+          ...(opts.listing.length === 0 ? [] : unwrapCartCliResult(parseCartListingSelections(opts.listing)).map(selection => ({ ...selection, quantity: selection.quantity.toString() }))),
+          ...(hasSwap ? [{ kind: 'swap', mode: opts.inputAmount === undefined ? 'exact-output' : 'exact-input', outputCurrency: opts.outputCurrency,
+            ...(opts.inputAmount === undefined ? { outputAmount: opts.outputAmount } : { inputAmount: opts.inputAmount }) }] : []),
+        ] })));
+      const delivery = await readDelivery(opts.shippingInput, opts.savedAddressId);
+      if (checkoutInput.mintSelections !== undefined && delivery === undefined) throw new Error('mintSelections requires --shipping-input or --saved-address-id.');
+      const chain = getActiveChain(opts.chain, opts.chainId);
+      const publicClient = getPublicClient(chain);
+      const wallet = opts.preview === true || opts.authorizeOnly === true ? undefined : getWalletClient(chain);
+      const recipient = configuredRecipient ?? wallet?.account.address ?? getConfiguredAccountAddress(chain);
+      if (recipient === undefined) {
+        throw new Error(`rare cart checkout requires --recipient or a configured account for "${chain}".`);
+      }
+      const rare = createRareClient({
+        publicClient,
+        apiBaseUrl: opts.apiUrl,
+        sessionStore: createAuthStore(storageOptions(opts)),
+        account: wallet?.account.address ?? getConfiguredAccountAddress(chain),
+        ...(wallet === undefined ? {} : { walletClient: wallet.client }),
+      });
+      const paymentCurrency = await rare.currency.resolveDecimals(paymentCurrencyInput);
+      const items = await Promise.all(checkoutInput.items.map(async selection => {
+        if (selection.kind === 'listing') return { ...selection, recipient: selection.recipient ?? recipient };
+        const outputCurrency = await rare.currency.resolveDecimals(selection.outputCurrency);
+        const common = { kind: selection.kind, outputCurrency: outputCurrency.address, recipient: selection.recipient ?? recipient } satisfies { kind: 'swap'; outputCurrency: Address; recipient: Address };
+        return selection.mode === 'exact-input'
+          ? { ...common, mode: selection.mode, inputAmount: unwrapCartCliResult(parseCartAmount(selection.inputAmount, paymentCurrency.decimals, 'inputAmount')) }
+          : { ...common, mode: selection.mode, outputAmount: unwrapCartCliResult(parseCartAmount(selection.outputAmount, outputCurrency.decimals, 'outputAmount')) };
+      }));
+      const intent = {
+        paymentCurrency: paymentCurrency.address,
+        items,
+        ...(delivery === undefined ? {} : { delivery: { ...delivery,
+          ...(checkoutInput.mintSelections === undefined ? {} : { mintSelections: checkoutInput.mintSelections }) } }),
+      };
+      if (opts.preview === true) {
+        const preparation = await rare.cart.checkout.prepare(intent);
+        const outputs = await Promise.all(preparation.lines.filter(line => line.fulfillmentKind === cartFulfillmentKinds.currencySwap).map(async line => {
+          const currency = await rare.currency.resolveDecimals(line.settlementCurrency);
+          return `${formatUnits(line.amount, currency.decimals)} ${currency.symbol ?? currency.address} to ${line.paymentRecipient}`;
+        }));
+        const fees = preparation.quote !== undefined ? [] : await Promise.all(preparation.fees.map(async fee => {
+          const currency = await rare.currency.resolveDecimals(fee.currency);
+          return `${fee.label}: ${formatUnits(fee.amount, currency.decimals)} ${currency.symbol ?? currency.address}`;
+        }));
+        output(
+          { preview: true, quote: preparation.quote, preparation },
+          () => {
+            printCheckoutPreparation(preparation, paymentCurrency.symbol ?? paymentCurrency.address, paymentCurrency.decimals);
+            for (const value of outputs) console.log(`  Receive: ${value}`);
+            for (const value of fees) console.log(`  Fee: ${value}`);
+          },
+        );
+        return;
+      }
+
+      if (opts.authorizeOnly === true) {
+        const preparation = await rare.cart.checkout.prepare(intent);
+        const preparedPurchase = await rare.cart.checkout.authorize(preparation);
+        output({ authorizeOnly: true, preparation, preparedPurchase }, () => {
+          console.log(`Checkout authorized: ${preparedPurchase.executePurchase.order.orderId}`);
+          console.log('No payment was submitted. Any eligibility claims remain reserved until the order expires.');
+        });
+        return;
+      }
+
+      log(`Purchasing ${intent.items.length} Cart item(s) on ${chain}...`);
+      const quote = await rare.cart.checkout.quote(intent);
+      const purchase = async (autoApprove: boolean): Promise<Extract<CartPaymentStart, { method: 'wallet' }>> => {
+        const result = await rare.cart.checkout.pay({ quote, method: 'wallet', autoApprove,
+          onAttempt: attemptId => { log(`Checkout attempt: ${attemptId}`); } });
+        if (result.method !== 'wallet') throw new Error('Expected a wallet payment.');
+        return result;
+      };
+      const payment = await runWithPaymentApprovalConsent({
+        commandName: swap ? 'rare cart swap' : 'rare cart checkout',
+        approvalMessage: 'ERC20 approval is required before purchasing this Cart checkout.',
+        runWithoutApproval: async (): ReturnType<typeof purchase> => purchase(opts.yes === true),
+        runWithApproval: async (): ReturnType<typeof purchase> => purchase(true),
+      });
+      if (payment === undefined) return;
+      const { purchase: result, attemptId } = payment;
+      output(
+        {
+          txHash: result.txHash,
+          blockNumber: result.receipt.blockNumber.toString(),
+          approvalTxHash: result.approvalTxHash ?? null,
+          orderId: result.orderId,
+          attemptId,
+          payer: result.payer,
+          paymentCurrency: result.paymentCurrency,
+          paymentAmount: result.paymentAmount,
+          lineCount: result.lineCount,
+          actionCount: result.actionCount,
+          preparedAt: result.preparedPurchase.preparedAt,
+        },
+        () => {
+          if (result.approvalTxHash !== undefined) console.log(`Approval tx sent: ${result.approvalTxHash}`);
+          console.log(`Transaction sent: ${result.txHash}`);
+          console.log(`Confirmed in block ${result.receipt.blockNumber}`);
+          console.log(`Order: ${result.orderId}`);
+        },
+      );
+    });
+  return command;
+}
+
+function cartResumeCommand(): Command {
+  return addChainOptions(accountCommand('resume'))
+    .description('Read the status of a Cart payment attempt')
+    .argument('<attempt-id>', 'checkout attempt reference')
+    .action(async (attemptId: string, options: ChainOptions & AccountCommandOptions): Promise<void> => {
+      const chain = getActiveChain(options.chain, options.chainId);
+      const rare = createRareClient({ publicClient: getPublicClient(chain), apiBaseUrl: options.apiUrl,
+        sessionStore: createAuthStore(storageOptions(options)) });
+      const result = await rare.cart.checkout.resume(parseCommerceUuid(attemptId));
+      output(result, () => {
+        console.log(result.status);
+        if (result.orderId !== undefined) console.log(`Order: ${result.orderId}`);
+      });
+    });
+}
+
+function cartCardCommand(): Command {
+  return addChainOptions(accountCommand('card'))
+    .description('Prepare a hosted credit-card checkout without sending an on-chain payment')
+    .requiredOption('--listing <listing-digest[=quantity]>', 'Cart Listing and optional quantity (repeatable)', collectValue, [])
+    .requiredOption('--recipient <address>', 'fulfillment wallet recipient')
+    .option('--idempotency-key <uuid>', 'reuse a previous card attempt reference')
+    .requiredOption('--email <email>', 'payment contact email')
+    .option('--shipping-input <path>', 'JSON shipping details for physical fulfillment')
+    .option('--saved-address-id <uuid>', 'use a saved private shipping address')
+    .action(async (options: CartCheckoutOptions & { idempotencyKey?: string; email: string }): Promise<void> => {
+      const recipient = unwrapCartCliResult(parseCartAddress(options.recipient, '--recipient'));
+      if (recipient === undefined) throw new Error('--recipient is required.');
+      const items = unwrapCartCliResult(parseCartListingSelections(options.listing)).map(selection => ({ ...selection, recipient }));
+      const attemptId = options.idempotencyKey === undefined ? undefined : parseCommerceUuid(options.idempotencyKey);
+      const delivery = await readDelivery(options.shippingInput, options.savedAddressId);
+      const chain = getActiveChain(options.chain, options.chainId);
+      const rare = createRareClient({ publicClient: getPublicClient(chain), apiBaseUrl: options.apiUrl,
+        sessionStore: createAuthStore(storageOptions(options)), account: recipient });
+      const paymentCurrency = await rare.currency.resolveDecimals('usdc');
+      const quote = await rare.cart.checkout.quote({ paymentCurrency: paymentCurrency.address, items, ...(delivery === undefined ? {} : { delivery }) });
+      const result = await rare.cart.checkout.pay({ method: 'card', quote, email: options.email, attemptId,
+        onAttempt: id => { log(`Checkout attempt: ${id}`); } });
+      if (result.method !== 'card') throw new Error('Expected a card payment session.');
+      outputJson({ ...result.session, attemptId: result.attemptId });
+    });
+}
+
+async function readDelivery(shippingInput: string | undefined, savedAddressId: string | undefined): Promise<
+  { recipientDetails: z.infer<typeof shippingDetailsInput> } | { savedAddressId: string } | undefined
+> {
+  if (shippingInput !== undefined && savedAddressId !== undefined) throw new Error('Use either --shipping-input or --saved-address-id, not both.');
+  if (savedAddressId !== undefined) return { savedAddressId: parseCommerceUuid(savedAddressId) };
+  if (shippingInput === undefined) return undefined;
+  const value: unknown = JSON.parse(await readFile(shippingInput, 'utf8'));
+  return { recipientDetails: shippingDetailsInput.parse(value) };
+}
+
+async function runSimpleCartWrite(
+  opts: ChainOptions,
+  message: string,
+  run: (rare: RareClient) => Promise<{ txHash: `0x${string}`; receipt: { blockNumber: bigint } }>,
+): Promise<void> {
+  const chain = getActiveChain(opts.chain, opts.chainId);
+  const publicClient = getPublicClient(chain);
+  const wallet = getWalletClient(chain);
+  const rare = createRareClient({ publicClient, walletClient: wallet.client });
+  log(`${message} (${chain})`);
+  const result = await run(rare);
+  output(
+    { txHash: result.txHash, blockNumber: result.receipt.blockNumber.toString() },
+    () => {
+      console.log(`Transaction sent: ${result.txHash}`);
+      console.log(`Confirmed in block ${result.receipt.blockNumber}`);
+    },
+  );
+}
+
+function collectValue(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
+async function writeCartArtifact(path: string | undefined, artifact: unknown): Promise<void> {
+  if (path === undefined) return;
+  await writeFile(path, `${serializeOutputJson(artifact)}\n`, 'utf8');
+}
+
+function printListingPreparation(preparation: CartListingPreparation, outputPath: string | undefined): void {
+  console.log('Cart Listing Root preview:');
+  console.log(`  Seller: ${preparation.intent.seller}`);
+  console.log(`  Listings: ${preparation.artifact.entries.length}`);
+  console.log(`  Root: ${preparation.artifact.root.listingsRoot}`);
+  console.log(`  Root digest: ${getListingRootDigest(preparation)}`);
+  console.log(`  Nonce: ${preparation.artifact.root.nonce}`);
+  console.log(`  Deadline: ${formatUnixTimestamp(preparation.artifact.root.deadline)}`);
+  console.log(`  Required NFT approvals: ${preparation.requiredApprovals.length}`);
+  for (const contract of preparation.requiredApprovals) console.log(`    ${contract}`);
+  for (const entry of preparation.artifact.entries.filter(candidate => candidate.listing.splits.length > 0)) {
+    console.log(`  Payout splits for ${entry.listingDigest}:`);
+    for (const split of entry.listing.splits) console.log(`    ${split.recipient}: ${split.basisPoints} basis points`);
+  }
+  if (outputPath !== undefined) console.log(`Wrote prepared artifact: ${outputPath}`);
+}
+
+function getListingRootDigest(preparation: CartListingPreparation): `0x${string}` {
+  const artifact = preparation.artifact;
+  return hashCartListingRoot({
+    listingsRoot: artifact.root.listingsRoot,
+    nonce: BigInt(artifact.root.nonce),
+    deadline: BigInt(artifact.root.deadline),
+  }, BigInt(artifact.chainId), artifact.cart);
+}
+
+function printCheckoutPreparation(preparation: CartCheckoutPreparation, symbol: string, decimals: number): void {
+  console.log('Cart checkout preview:');
+  console.log(`  Items: ${preparation.intent.items.length}`);
+  console.log(`  Payment: ${formatUnits(preparation.paymentAmount, decimals)} ${symbol}`);
+  if (preparation.quote !== undefined) {
+    const labels = { items: 'Merchandise proceeds', fees: 'Fees', converted: 'Converted items and charges' };
+    for (const line of preparation.quote.lines) {
+      console.log(`  ${labels[line.kind]}: ${formatUnits(line.amount, decimals)} ${symbol}`);
+    }
+  } else {
+    console.log(`  Fees: ${preparation.fees.length}`);
+  }
+  console.log(`  Settlements: ${preparation.settlements.length}`);
+  console.log(`  Route actions: ${preparation.route.inputs.length}`);
+  console.log(`  Prepared: ${preparation.preparedAt}`);
+  console.log(`  Expires: ${preparation.expiresAt}`);
+}
+
+function formatUnixTimestamp(value: string): string {
+  return new Date(Number(BigInt(value)) * 1_000).toISOString();
+}

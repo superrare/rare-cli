@@ -2,10 +2,10 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Address } from 'viem';
-import { chainIds, getContractAddresses, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { chainIds, getContractAddresses, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
 import { getPublicClient } from '../../src/client.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import type { Nft } from '@rareprotocol/rare-sdk/api';
+import type { Nft } from '@rareprotocol/rare-sdk';
 import {
   cleanupTempHome,
   configureLiveHome,
@@ -31,7 +31,7 @@ const missingEnv = [
 ];
 const describeLive = missingEnv.length === 0 ? describe.sequential : describe.skip;
 const ONE_WEI_ETH = '0.000000000000000001';
-const alternateRecipient = '0x000000000000000000000000000000000000dead' as Address;
+const alternateRecipient = '0x000000000000000000000000000000000000dead' satisfies Address;
 const rareApiIndexTimeoutMs = Number.parseInt(process.env.E2E_RARE_API_INDEX_TIMEOUT_MS ?? '180000', 10);
 const rareApiIndexPollMs = Number.parseInt(process.env.E2E_RARE_API_INDEX_POLL_MS ?? '5000', 10);
 

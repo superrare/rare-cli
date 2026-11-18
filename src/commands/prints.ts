@@ -1,0 +1,203 @@
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { readFile, realpath } from 'node:fs/promises';
+import { Command, Option } from 'commander';
+import { z } from 'zod';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
+import type { PrintRecoveryStore, RareClient } from '@rareprotocol/rare-sdk';
+import { accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
+import { getPublicClient, getWalletClient } from '../client.js';
+import { getActiveChain } from '../config.js';
+import { createAuthStore } from '../auth-storage.js';
+import { output } from '../output.js';
+import { formatPrintOutput } from './print-output-core.js';
+import { parseCartAmount, parseCartCliCurrency } from './cart-core.js';
+import { printRecoveryStore } from './print-request-storage.js';
+import { addChainOptions, type ChainOptions } from './options.js';
+import { parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, printListingInput, printQuoteInput } from './print-input-core.js';
+
+type PrintOptions = AccountCommandOptions & ChainOptions;
+type IdentityOptions = PrintOptions & { id: string };
+type InputOptions = PrintOptions & { input: string };
+type PreparationOptions = PrintOptions & { preparationId: string };
+type PublishOptions = PrintOptions & { preparationId?: string; input?: string };
+type FileToolOptions = PrintOptions & { productionUploadKey: string; specificationId: string };
+
+const printDraftInputs = z.union([printDropInput, z.array(printDropInput).min(1).max(100)]);
+const printListingInputs = z.union([printListingInput, z.array(printListingInput).min(1).max(100)]);
+
+function command(name: string): Command {
+  return addChainOptions(accountCommand(name));
+}
+
+export function printsCommand(): Command {
+  const prints = new Command('prints').description('Create and publish print editions through Rare API');
+  const products = new Command('products').description('Read supported print products and recommended artwork dimensions');
+  products.addCommand(command('list').description('List available paper and size presets')
+    .action(async (options: PrintOptions): Promise<void> => { print(await client(options).prints.products.list()); }));
+  products.addCommand(command('get').description('Read a print product')
+    .requiredOption('--id <productId>', 'canonical print product ID, such as GLOBAL-FAP-8X12')
+    .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.products.get(options.id)); }));
+  prints.addCommand(products);
+  const files = new Command('files').description('Check private production files against a print product');
+  files.addCommand(command('validate').description('Validate an uploaded production file for a print size')
+    .requiredOption('--production-upload-key <key>', 'owned private upload key')
+    .requiredOption('--specification-id <id>', 'print product ID, such as GLOBAL-FAP-8X12')
+    .action(async (options: FileToolOptions): Promise<void> => {
+      print(await client(options).prints.files.validate({ productionUploadKey: options.productionUploadKey, specificationId: options.specificationId }));
+    }));
+  prints.addCommand(files);
+  const mockups = new Command('mockups').description('Generate and read private print previews');
+  mockups.addCommand(command('create').description('Create a preview from an uploaded production file')
+    .requiredOption('--production-upload-key <key>', 'owned private upload key')
+    .requiredOption('--specification-id <id>', 'print product ID, such as GLOBAL-FAP-8X12')
+    .action(async (options: FileToolOptions): Promise<void> => {
+      print(await client(options).prints.mockups.create({ productionUploadKey: options.productionUploadKey, specificationId: options.specificationId }));
+    }));
+  mockups.addCommand(command('get').description('Read the status and image of an account-owned preview')
+    .requiredOption('--id <uuid>', 'preview job ID')
+    .action(async (options: IdentityOptions): Promise<void> => {
+      print(await client(options).prints.mockups.get(parseCommerceUuid(options.id)));
+    }));
+  prints.addCommand(mockups);
+  prints.addCommand(command('quote').description('Quote production and shipping without creating a listing or order')
+    .requiredOption('--input <path>', 'JSON specificationId, destinationCountryCode, optional copies and shippingMethod')
+    .action(async (options: InputOptions): Promise<void> => {
+      const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
+      print(await client(options).prints.quote(printQuoteInput.parse(input)));
+    }));
+  prints.addCommand(command('get').description('Read a public print edition')
+    .requiredOption('--id <uuid>', 'print drop ID')
+    .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.drops.get(parseCommerceUuid(options.id))); }));
+  prints.addCommand(command('activity').requiredOption('--id <uuid>', 'print drop ID')
+    .option('--page <number>', 'page number, starting at 1', (value: unknown) => z.coerce.number().int().positive().parse(value))
+    .option('--per-page <number>', 'maximum records per page', (value: unknown) => z.coerce.number().int().min(1).max(100).parse(value))
+    .action(async (options: IdentityOptions & { page?: number; perPage?: number }): Promise<void> => {
+      print(await client(options).prints.drops.activity(parseCommerceUuid(options.id), { page: options.page, perPage: options.perPage }));
+    }));
+  prints.addCommand(command('releases').requiredOption('--universal-token-id <id>', 'linked NFT universal token ID')
+    .action(async (options: PrintOptions & { universalTokenId: string }): Promise<void> => {
+      print(await client(options).prints.releases.list({ universalTokenId: options.universalTokenId }));
+    }));
+
+  const drops = new Command('drops').description('Manage your creator print drafts');
+  drops.addCommand(command('create').requiredOption('--input <path>', 'JSON draft with chainId, optional productId, and print details: private productionUploadKey, public images and specificationId')
+    .action(async (options: InputOptions): Promise<void> => {
+      const json: unknown = JSON.parse(await readFile(options.input, 'utf8'));
+      const input = printDraftInputs.parse(json);
+      const rare = client(options);
+      const recovery = await recoveryFor(options);
+      print(Array.isArray(input)
+        ? await rare.prints.drops.create(input, { recovery })
+        : await rare.prints.drops.create(input, { recovery }));
+    }));
+  drops.addCommand(command('update').requiredOption('--id <uuid>', 'owned drop ID')
+    .requiredOption('--input <path>', 'JSON patch; replace productionUploadKey even after publication; specification changes require an unconfigured draft')
+    .action(async (options: InputOptions & { id: string }): Promise<void> => {
+      const id = parseCommerceUuid(options.id);
+      const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
+      print(await client(options).prints.drops.update(id, printDraftPatch.parse(input)));
+    }));
+  drops.addCommand(command('list').option('--page <number>', 'page number, starting at 1', (value: unknown) => z.coerce.number().int().positive().parse(value))
+    .option('--per-page <number>', 'maximum records per page', (value: unknown) => z.coerce.number().int().min(1).max(100).parse(value))
+    .action(async (options: PrintOptions & { page?: number; perPage?: number }): Promise<void> => {
+      print(await client(options).prints.drops.listMine({ page: options.page, perPage: options.perPage }));
+    }));
+  drops.addCommand(command('get').requiredOption('--id <uuid>', 'owned drop ID')
+    .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.drops.getMine(parseCommerceUuid(options.id))); }));
+  drops.addCommand(command('archive').requiredOption('--id <uuid>', 'owned drop ID')
+    .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.drops.archive(parseCommerceUuid(options.id))); }));
+  drops.addCommand(command('configure').requiredOption('--id <uuid>', 'owned drop ID')
+    .option('--price-usd-cents <amount>', 'artwork price in integer USD cents, settled in USDC')
+    .option('--price <amount>', 'artwork price in units of the selected currency')
+    .option('--currency <currency>', 'listing currency, such as eth, usdc, or rare')
+    .action(async (options: IdentityOptions & {
+      priceUsdCents?: string; price?: string; currency?: string;
+    }): Promise<void> => {
+      const { priceUsdCents, price, currency } = options;
+      const rare = client(options);
+      const dropId = parseCommerceUuid(options.id);
+      if (priceUsdCents !== undefined && price === undefined && currency === undefined) {
+        print(await rare.prints.options.configure({ dropId, input: {
+          displayPriceUsdCents: parsePrintPrice(priceUsdCents),
+        } }));
+        return;
+      }
+      if (priceUsdCents !== undefined || price === undefined || currency === undefined)
+        throw new Error('Use --price and --currency together, or supply --price-usd-cents.');
+      const selected = parseCartCliCurrency(currency, 'Listing currency');
+      if (!selected.isValid) throw new Error(selected.issues.join(" "));
+      const resolved = await rare.currency.resolveDecimals(selected.value);
+      const amount = parseCartAmount(price, resolved.decimals, 'Print price');
+      if (!amount.isValid) throw new Error(amount.issues.join(" "));
+      print(await rare.prints.options.configure({ dropId, input: {
+        price: { currency: resolved.address, amount: amount.value.toString() },
+      } }));
+    }));
+  prints.addCommand(drops);
+
+  const listings = new Command('listing').description('Prepare and publish print Listing terms');
+  listings.addCommand(command('prepare').requiredOption('--input <path>', 'JSON listing terms, including optional eligibilityRuleId, maxQuantityPerCheckout, splits and mintSource')
+    .action(async (options: InputOptions): Promise<void> => {
+      const json: unknown = JSON.parse(await readFile(options.input, 'utf8'));
+      const input = printListingInputs.parse(json);
+      const rare = client(options);
+      const recovery = await recoveryFor(options);
+      print(Array.isArray(input)
+        ? await rare.prints.listings.prepare(input, { recovery })
+        : await rare.prints.listings.prepare(input, { recovery }));
+    }));
+  listings.addCommand(command('review').description('Review a saved print listing before signing')
+    .requiredOption('--preparation-id <uuid>', 'saved listing preparation ID')
+    .action(async (options: PreparationOptions): Promise<void> => {
+      print(await client(options).prints.listings.getPreparation(parseCommerceUuid(options.preparationId)));
+    }));
+  listings.addCommand(command('publish')
+    .addOption(new Option('--preparation-id <uuid>', 'saved listing preparation ID').conflicts('input'))
+    .option('--input <path>', 'JSON listing terms or an array of up to 100 print offers to sign together')
+    .option('--yes', 'proceed through all required signing and publication steps')
+    .action(async (options: PublishOptions): Promise<void> => {
+      const recovery = await recoveryFor(options);
+      if (options.preparationId !== undefined) {
+        const printPreparationId = parseCommerceUuid(options.preparationId);
+        print(await client(options, true).cart.listing.publish({ printPreparationId, recovery }));
+        return;
+      }
+      if (options.input === undefined) throw new Error('Provide --preparation-id or --input.');
+      const json: unknown = JSON.parse(await readFile(options.input, 'utf8'));
+      const input = printListingInputs.parse(json);
+      const terms = Array.isArray(input) ? input : [input];
+      const rare = client(options, true);
+      const results = await rare.prints.listings.prepare(terms, { recovery });
+      const preparations = results.map(result => {
+        if (result.status === 'rejected') throw result.error;
+        return result.value;
+      });
+      print(await rare.cart.listing.publish({ printPreparations: preparations, recovery }));
+    }));
+  prints.addCommand(listings);
+  return prints;
+}
+
+async function recoveryFor(options: PublishOptions): Promise<PrintRecoveryStore> {
+  const path = options.input === undefined ? undefined : await realpath(options.input);
+  const directory = path === undefined ? homedir() : dirname(path);
+  const chain = getActiveChain(options.chain, options.chainId);
+  return printRecoveryStore(join(directory, '.rare-print-requests'),
+    JSON.stringify([path, storageOptions(options), chain]));
+}
+
+function client(options: PrintOptions, signing = false): RareClient {
+  const chain = getActiveChain(options.chain, options.chainId);
+  const wallet = signing ? getWalletClient(chain) : undefined;
+  return createRareClient({ publicClient: getPublicClient(chain), apiBaseUrl: options.apiUrl,
+    sessionStore: createAuthStore(storageOptions(options)),
+    ...(wallet === undefined ? {} : { walletClient: wallet.client, account: wallet.account.address }),
+  });
+}
+
+function print(value: unknown): void {
+  output(value, () => {
+    for (const line of formatPrintOutput(value)) console.log(line);
+  });
+}

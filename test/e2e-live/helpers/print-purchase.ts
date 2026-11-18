@@ -1,0 +1,300 @@
+import { assertSepoliaPrintMarkup } from './print-markup.js';
+import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { readCollaboratorBalance, verifyPrintSplits } from './cart-print-splits.js';
+import { downloadTestImage } from './test-image.js';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { expect } from 'vitest';
+import type { CartCheckoutPreparation, CartCheckoutReceipt, EligibilityClaim, EligibilityRule, PrintOption, PublicPrintDrop } from '@rareprotocol/rare-sdk';
+import { erc20Abi, erc721Abi, erc1155Abi, getAddress, isHex, parseEventLogs, parseEther, parseUnits, zeroAddress, type Address, type Hex } from 'viem';
+import { cartAbi, getCartAddress, rareErc1155Abi, resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
+import { deployErc721Collection, mintToken } from './live-erc721.js';
+import { createCreatorVariantClient } from './cart-creator-variants.js';
+import { verifyPrivateCartOrder, waitForSubmittedPrintOrder } from './cart-order-history.js';
+import { verifyCartPurchaseNotifications } from './cart-notifications.js';
+import { cleanupLiveFixture, createCartLiveFixture, E2E_TOKEN_URI, jsonCommand } from './live-harness.js';
+
+export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'claim' | 'two-copy' | 'can-opener', ethListingPayment?: 'eth' | 'usdc'): Promise<void> {
+    const ethListingPrice = '0.00005';
+    const maximumPayment = ethListingPayment === 'eth' ? parseEther('0.015') : parseUnits(journey === 'two-copy' ? '50' : '25', 6);
+    const fixture = await createCartLiveFixture({ buyer: true,
+      buyerWalletFilter: async (wallet, { chain, publicClient }) => {
+        if (ethListingPayment === 'eth') return (await publicClient.getBalance({ address: wallet.address })) > 0n;
+        const currency = resolveCurrency('usdc', chain);
+        const [balance, decimals] = await Promise.all([
+          publicClient.readContract({ address: currency, abi: erc20Abi, functionName: 'balanceOf', args: [wallet.address] }),
+          publicClient.readContract({ address: currency, abi: erc20Abi, functionName: 'decimals' }),
+        ]);
+        if (decimals !== 6) throw new Error('Print E2E requires six-decimal USDC.');
+        return balance > 0n;
+      },
+    });
+    let dropId: string | undefined;
+    let productId: string | undefined;
+    let ruleId: string | undefined;
+    try {
+      if (fixture.chain !== 'sepolia' || !fixture.buyerHome || !fixture.buyerAddress) throw new Error('Print fulfillment E2E requires Sepolia and a registered buyer.');
+      const buyerHome = fixture.buyerHome;
+      const creator = createCreatorVariantClient(fixture);
+      const isCanOpener = journey === 'can-opener';
+      const includesNft = journey === 'mixed' || isCanOpener;
+      const source = !includesNft && journey !== 'claim' ? undefined : await (async (): Promise<{ contract: Address; tokenId: string; sku: Hex; listingDigest: Hex; productId: string }> => {
+        const token = isCanOpener ? await createCanOpenerEdition(fixture) : await (async (): Promise<{ contract: Address; tokenId: string }> => {
+          const collection = await deployErc721Collection(fixture, '1');
+          return mintToken(fixture, collection.contract);
+        })();
+        const product = await creator.cart.catalog.products.create({ metadata: { title: `NFT and print ${randomUUID()}` } });
+        productId = product.id;
+        const configured = await creator.cart.catalog.variants.add(product.id, { variants: [{ metadata: {
+          type: isCanOpener ? 'ERC1155' : 'ERC721', chainId: String(fixture.chainId), tokenContract: token.contract, tokenId: token.tokenId,
+        } }] });
+        const variant = configured.variants[0];
+        if (!variant) throw new Error('NFT variant was not created.');
+        const terms = join(fixture.tempDir, 'nft-listing.json');
+        await writeFile(terms, JSON.stringify({ deadline: String(Math.floor(Date.now() / 1000) + 3600),
+          listings: [{ sku: variant.sku, settlementCurrency: 'usdc', unitPrice: '1', quantity: '1',
+            fulfillmentKind: isCanOpener ? 'ERC1155_MINT_TO' : 'ERC721_TRANSFER' }] }));
+        const published = await jsonCommand<{ listingDigests: Hex[] }>(fixture.sellerHome, ['cart', 'listing', 'create', '--input', terms, '--chain', fixture.chain, '--yes']);
+        const digest = published.listingDigests[0];
+        if (!digest) throw new Error('NFT Listing was not published.');
+        return { ...token, sku: variant.sku, listingDigest: digest, productId: product.id };
+      })();
+      const products = await jsonCommand<{ id: string }[]>(fixture.sellerHome, ['prints', 'products', 'list']);
+      const product = products.find(item => item.id === (journey === 'mixed' || journey === 'claim' ? 'GLOBAL-FAP-8X12' : 'GLOBAL-FAP-8X8'));
+      if (!product) throw new Error('No supported print specification.');
+      const image = join(fixture.tempDir, 'sandbox-print.jpg');
+      await writeFile(image, await downloadTestImage());
+      const master = await jsonCommand<{ key: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'private', '--content-type', 'image/jpeg']);
+      const photo = await jsonCommand<{ url: string }>(fixture.sellerHome, ['uploads', 'upload', image, '--access', 'public', '--content-type', 'image/jpeg']);
+      const input = join(fixture.tempDir, 'print.json');
+      const name = `Cart sandbox fulfillment ${randomUUID()}`;
+      await writeFile(input, JSON.stringify({ idempotencyKey: randomUUID(), chainId: '11155111', name,
+        print: { name, description: 'Sandbox fulfillment test', tags: ['test'], productionUploadKey: master.key, images: [photo.url], specificationId: product.id } }));
+      const drop = await jsonCommand<{ id: string }>(fixture.sellerHome, ['prints', 'drops', 'create', '--input', input]);
+      dropId = drop.id;
+      const option = await jsonCommand<PrintOption>(fixture.sellerHome, ['prints', 'drops', 'configure', '--id', drop.id,
+        ...(ethListingPayment ? ['--price', ethListingPrice, '--currency', 'eth']
+          : ['--price-usd-cents', journey === 'two-copy' ? '50' : '100'])]);
+      if (!isHex(option.sku) || option.sku.length !== 66) throw new Error('Print variant SKU is not bytes32.');
+      if (source) {
+        await creator.cart.catalog.products.attachSku(source.productId, { sku: option.sku, position: 1, metadata: {} });
+        await creator.cart.catalog.products.publish(source.productId);
+        const grouped = await creator.cart.catalog.products.get(source.productId);
+        expect(grouped.variants.map(variant => variant.sku).sort()).toEqual([source.sku, option.sku].sort());
+      }
+      if (journey === 'claim' && source) {
+        const file = join(fixture.tempDir, 'eligibility.json');
+        await writeFile(file, JSON.stringify({ definition: { kind: 'PRIMARY_SALE',
+          source: { chainId: String(fixture.chainId), tokenContract: source.contract, tokenIds: [source.tokenId] }, targets: [{ sku: option.sku }] } }));
+        const rule = await jsonCommand<EligibilityRule>(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'create', '--input', file]);
+        ruleId = rule.id;
+      }
+      const collaborator = privateKeyToAccount(generatePrivateKey()).address;
+      const splits = [{ recipient: fixture.sellerAddress, basisPoints: 7000 }, { recipient: collaborator, basisPoints: 3000 }];
+      const terms = join(fixture.tempDir, 'listing.json');
+      await writeFile(terms, JSON.stringify({ optionId: option.id, seller: fixture.sellerAddress,
+        listingSalt: `0x${randomBytes(32).toString('hex')}`, deadline: String(Math.floor(Date.now() / 1000) + 3600), availableQuantity: '2', maxQuantityPerCheckout: journey === 'two-copy' ? '2' : '1', splits, ...(ruleId ? { eligibilityRuleId: ruleId } : {}) }));
+      const published = await jsonCommand<{ signedArtifact: { entries: { listingDigest: Hex }[] } }>(fixture.sellerHome, ['prints', 'listing', 'publish', '--input', terms, '--chain', fixture.chain, '--yes']);
+      const entry = published.signedArtifact.entries[0];
+      if (!entry) throw new Error('Print publication returned no Listing.');
+      const shipping = join(fixture.tempDir, 'shipping.json');
+      await writeFile(shipping, JSON.stringify({ name: 'Sandbox Cart Test', email: 'print-e2e@example.test', phoneNumber: '+12025550123',
+        addressLine1: '123 Test Street', townOrCity: 'New York', stateOrCounty: 'NY', postalOrZipCode: '10001', countryCode: 'US' }));
+      if (ruleId) {
+        const publicPrint = await jsonCommand<{ options: { listingDigest: string; eligibilityRuleId: string | null }[] }>(fixture.sellerHome, ['prints', 'get', '--id', drop.id]);
+        expect(publicPrint.options).toContainEqual(expect.objectContaining({ listingDigest: entry.listingDigest, eligibilityRuleId: ruleId }));
+      }
+      const publicDrop = await jsonCommand<PublicPrintDrop>(fixture.sellerHome, ['prints', 'get', '--id', drop.id]);
+      expect(publicDrop.metadata['specificationId']).toBe(product.id);
+      const selected = publicDrop.options.find(candidate => candidate.id === option.id);
+      if (!selected) throw new Error('Published print does not expose the chosen format.');
+      expect(selected.listingDigest).toBe(entry.listingDigest);
+      const printItem = { kind: 'listing', listingDigest: entry.listingDigest, quantity: journey === 'two-copy' ? '2' : '1' };
+      const printInput = join(fixture.tempDir, 'print-selection.json');
+      await writeFile(printInput, JSON.stringify({ items: [printItem] }));
+      const printCheckout = ['cart', 'checkout', '--input', printInput, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', fixture.chain];
+      const claims = (): Promise<EligibilityClaim[]> => jsonCommand<{ data: EligibilityClaim[] }>(buyerHome, ['cart', 'purchase-eligibility', 'claims', 'list', '--rule-id', ruleId ?? '', '--per-page', '100']).then(page => page.data);
+      if (journey === 'claim' && source) {
+        expect(await claims()).toEqual([]);
+        await expect(jsonCommand(buyerHome, [...printCheckout, '--authorize-only', '--yes'])).rejects.toThrow(/Status: 409/u);
+        const nftCheckout = ['cart', 'checkout', '--listing', source.listingDigest, '--payment-currency', 'usdc', '--chain', fixture.chain];
+        const nftPreview = await jsonCommand<{ preparation: CartCheckoutPreparation }>(buyerHome, [...nftCheckout, '--preview']);
+        const nftPurchase = await jsonCommand<{ txHash: Hex; orderId: Hex }>(buyerHome, [...nftCheckout, '--yes'], 300_000);
+        await verifySettlement(fixture, creator, nftPurchase, nftPreview.preparation, false);
+        await expect.poll(claims, { timeout: 180_000, interval: 2_000 }).toMatchObject([{ status: 'AVAILABLE' }]);
+      }
+      const checkoutInput = join(fixture.tempDir, 'selected-cart.json');
+      await writeFile(checkoutInput, JSON.stringify({ items: [
+        ...(includesNft && source ? [{ kind: 'listing', listingDigest: source.listingDigest, quantity: '1' }] : []), printItem,
+      ] }));
+      const checkout = ['cart', 'checkout', '--input', checkoutInput, '--payment-currency', ethListingPayment ?? 'usdc', '--shipping-input', shipping, '--chain', fixture.chain];
+      const preview = await jsonCommand<{ preparation: CartCheckoutPreparation }>(buyerHome, [...checkout, '--preview']);
+      if (!includesNft) {
+        expect(BigInt(preview.preparation.breakdown?.production ?? '-1')).toBeGreaterThan(0n);
+        expect(BigInt(preview.preparation.breakdown?.shipping ?? '-1')).toBeGreaterThanOrEqual(0n);
+      }
+      // Bound the test-wallet spend before requesting any approval or payment.
+      expect(BigInt(preview.preparation.paymentAmount)).toBeLessThanOrEqual(maximumPayment);
+      const buyerBalance = ethListingPayment === 'eth'
+        ? await fixture.publicClient.getBalance({ address: fixture.buyerAddress })
+        : await fixture.publicClient.readContract({ address: fixture.usdcAddress, abi: erc20Abi,
+        functionName: 'balanceOf', args: [fixture.buyerAddress] });
+      expect(buyerBalance, 'Fund the buyer for the actual quote, not the spending ceiling.').toBeGreaterThanOrEqual(BigInt(preview.preparation.paymentAmount));
+      const sellerBefore = await fixture.publicClient.readContract({ address: fixture.usdcAddress, abi: erc20Abi, functionName: 'balanceOf', args: [fixture.sellerAddress] });
+      const splitBalance = await readCollaboratorBalance(fixture, collaborator);
+      const purchase = await jsonCommand<{ txHash: Hex; orderId: Hex; paymentAmount: string }>(buyerHome, [...checkout, '--yes'], 300_000);
+      const transaction = await fixture.publicClient.getTransactionReceipt({ hash: purchase.txHash });
+      expect(transaction.status).toBe('success');
+      console.info('Cart print payment confirmed', { transactionHash: purchase.txHash, orderId: purchase.orderId });
+      const indexed = await verifySettlement(fixture, creator, purchase, preview.preparation, true, ethListingPayment !== undefined);
+      if (ethListingPayment) {
+        const paymentCurrency = getAddress(resolveCurrency(ethListingPayment, fixture.chain));
+        const payments = parseEventLogs({ abi: cartAbi, eventName: 'PurchaseExecuted',
+          logs: transaction.logs.filter(log => log.address.toLowerCase() === getCartAddress(fixture.chain).toLowerCase()) });
+        expect(payments.map(event => event.args)).toEqual([expect.objectContaining({
+          orderId: purchase.orderId, payer: getAddress(fixture.buyerAddress), paymentCurrency,
+          paymentAmount: BigInt(purchase.paymentAmount),
+        })]);
+        expect(preview.preparation.breakdown?.displayPrices).toEqual([
+          expect.objectContaining({ currency: zeroAddress, amount: parseEther(ethListingPrice).toString() }),
+        ]);
+        expect(indexed.lines.find(line => line.listingDigest === entry.listingDigest))
+          .toMatchObject({ sku: option.sku, settlementCurrency: zeroAddress, fulfillmentKind: 1 });
+        const usdcFees = indexed.lines.filter(line => line.fulfillmentKind === 0
+          && getAddress(line.settlementCurrency) === getAddress(fixture.usdcAddress));
+        const { production, shipping } = preview.preparation.breakdown ?? {};
+        if (production === undefined || shipping === undefined) throw new Error('Expected quoted fulfillment charges.');
+        const expectedCharges = [BigInt(production), BigInt(shipping), BigInt(production) * 5n / 100n]
+          .filter(amount => amount > 0n).map(amount => amount.toString()).sort();
+        for (const amount of new Set(expectedCharges)) {
+          expect(usdcFees.filter(line => line.amount === amount).length)
+            .toBeGreaterThanOrEqual(expectedCharges.filter(charge => charge === amount).length);
+        }
+        expect(BigInt(indexed.paymentAmount ?? '-1')).toBe(BigInt(purchase.paymentAmount));
+        return;
+      }
+      await verifyPrintSplits(fixture, purchase, indexed, [entry.listingDigest], collaborator, splitBalance);
+      const sellerProceeds = indexed.lines.filter(line => line.paymentRecipient.toLowerCase() === fixture.sellerAddress.toLowerCase()).reduce((total, line) => total + BigInt(line.amount), 0n);
+      const sellerAfter = await fixture.publicClient.readContract({ address: fixture.usdcAddress, abi: erc20Abi, functionName: 'balanceOf', args: [fixture.sellerAddress] });
+      const collaboratorPaid = indexed.splitAllocations.filter(allocation => allocation.recipient.toLowerCase() === collaborator.toLowerCase()).reduce((total, allocation) => total + BigInt(allocation.amount), 0n);
+      expect(sellerAfter - sellerBefore).toBe(sellerProceeds - collaboratorPaid);
+      if (isCanOpener && source) {
+        const payments = parseEventLogs({ abi: cartAbi, eventName: 'PurchaseExecuted',
+          logs: transaction.logs.filter(log => log.address.toLowerCase() === getCartAddress(fixture.chain).toLowerCase()) });
+        expect(payments.map(event => event.args)).toEqual([expect.objectContaining({
+          orderId: purchase.orderId, payer: getAddress(fixture.buyerAddress),
+        })]);
+        const mints = parseEventLogs({ abi: erc1155Abi, eventName: 'TransferBatch',
+          logs: transaction.logs.filter(log => log.address.toLowerCase() === source.contract.toLowerCase()) });
+        expect(mints.map(event => event.args)).toEqual([expect.objectContaining({
+          from: zeroAddress, to: getAddress(fixture.buyerAddress), ids: [BigInt(source.tokenId)], values: [1n],
+        })]);
+        expect(indexed.lines.find(line => line.listingDigest === source.listingDigest))
+          .toMatchObject({ sku: source.sku, fulfillmentKind: 5, quantity: '1' });
+        expect(indexed.lines.find(line => line.listingDigest === entry.listingDigest))
+          .toMatchObject({ sku: option.sku, fulfillmentKind: 1, quantity: '1' });
+        await expect(fixture.publicClient.readContract({ address: source.contract, abi: rareErc1155Abi,
+          functionName: 'balanceOf', args: [fixture.buyerAddress, BigInt(source.tokenId)] })).resolves.toBe(1n);
+      }
+      if (source && !isCanOpener) expect(await fixture.publicClient.readContract({ address: source.contract, abi: erc721Abi, functionName: 'ownerOf', args: [BigInt(source.tokenId)] })).toBe(getAddress(fixture.buyerAddress ?? ''));
+      if (journey === 'claim') {
+        await expect.poll(claims, { timeout: 180_000, interval: 2_000 }).toMatchObject([{ status: 'CONSUMED' }]);
+        expect(await claims()).toHaveLength(1);
+        await expect(jsonCommand(buyerHome, [...printCheckout, '--authorize-only', '--yes'])).rejects.toThrow(/Status: 409/u);
+      }
+      const order = await waitForSubmittedPrintOrder(buyerHome, purchase.orderId, 1);
+      const fulfillment = order.fulfillments[0];
+      if (!fulfillment) throw new Error('Print fulfillment is missing after submission.');
+      expect(order.items).toHaveLength(includesNft ? 2 : 1);
+      expect(order.items?.find(item => item.lineIndex === fulfillment.orderLineIndex)).toMatchObject({
+        listingDigest: entry.listingDigest, printDropId: drop.id, sku: option.sku, quantity: journey === 'two-copy' ? '2' : '1',
+      });
+      await verifyPrivateCartOrder({ ...fixture, buyerHome, buyerAddress: fixture.buyerAddress }, purchase.orderId);
+      await verifyCartPurchaseNotifications({ ...fixture, buyerHome, buyerAddress: fixture.buyerAddress }, purchase, includesNft ? 2 : 1);
+      console.info('Print fulfillment verified', { transactionHash: purchase.txHash, orderId: purchase.orderId, providerOrderId: fulfillment.providerOrderId });
+    } finally {
+      try {
+        if (ruleId) await jsonCommand(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'disable', '--rule-id', ruleId]);
+        if (productId) await createCreatorVariantClient(fixture).cart.catalog.products.archive(productId);
+        if (dropId) await jsonCommand(fixture.sellerHome, ['prints', 'drops', 'archive', '--id', dropId]);
+      } finally {
+        await cleanupLiveFixture(fixture);
+      }
+    }
+}
+
+async function createCanOpenerEdition(fixture: Awaited<ReturnType<typeof createCartLiveFixture>>): Promise<{ contract: Address; tokenId: string }> {
+  const { contract } = await jsonCommand<{ contract: Address }>(fixture.sellerHome, [
+    'collection', 'deploy', 'erc1155', `Can Opener ${randomUUID()}`, 'OPENER', '--base-uri', E2E_TOKEN_URI, '--chain', fixture.chain,
+  ], 240_000);
+  const { tokenId } = await jsonCommand<{ tokenId: string }>(fixture.sellerHome, [
+    'collection', 'erc1155', 'create-token', '--contract', contract, '--max-supply', '10', '--token-uri', E2E_TOKEN_URI,
+    '--chain', fixture.chain,
+  ], 240_000);
+  await jsonCommand(fixture.sellerHome, [
+    'collection', 'erc1155', 'mint', '--contract', contract, '--token-id', tokenId, '--quantity', '1', '--chain', fixture.chain,
+  ], 240_000);
+  await jsonCommand(fixture.sellerHome, [
+    'collection', 'erc1155', 'minter', 'set', '--contract', contract, '--minter', getCartAddress(fixture.chain),
+    '--approved', 'true', '--chain', fixture.chain,
+  ], 240_000);
+  return { contract, tokenId };
+}
+
+async function verifySettlement(
+  fixture: Awaited<ReturnType<typeof createCartLiveFixture>>,
+  rare: ReturnType<typeof createCreatorVariantClient>,
+  purchase: { txHash: Hex; orderId: Hex },
+  preview: Pick<CartCheckoutPreparation, 'paymentAmount' | 'breakdown'>,
+  physical: boolean,
+  mixedCurrency = false,
+): Promise<CartCheckoutReceipt> {
+  await expect.poll(async () => (await rare.cart.checkout.receipt(purchase.orderId)).status,
+    { timeout: 180_000, interval: 2_000 }).toBe('indexed');
+  const receipt = await rare.cart.checkout.receipt(purchase.orderId);
+  if (!mixedCurrency) {
+    expect(BigInt(receipt.paymentAmount ?? '-1')).toBe(BigInt(preview.paymentAmount));
+    expect(receipt.lines.reduce((sum, line) => sum + BigInt(line.amount), 0n)).toBe(BigInt(preview.paymentAmount));
+  }
+  const transaction = await fixture.publicClient.getTransactionReceipt({ hash: purchase.txHash });
+  const cartAddress = getCartAddress(fixture.chain).toLowerCase();
+  const cartLogs = transaction.logs.filter(log => log.address.toLowerCase() === cartAddress);
+  const events = parseEventLogs({ abi: cartAbi, logs: cartLogs, eventName: 'OrderLineSettled' });
+  expect(events).toHaveLength(receipt.lines.length);
+  for (const line of receipt.lines) expect(events.find(event => event.args.lineIndex === BigInt(line.lineIndex))?.args).toMatchObject({
+    orderId: purchase.orderId, sku: line.sku, listingDigest: line.listingDigest, amount: BigInt(line.amount),
+    paymentRecipient: getAddress(line.paymentRecipient), settlementCurrency: getAddress(line.settlementCurrency), quantity: BigInt(line.quantity),
+  });
+  expect(receipt.issues).toEqual([]);
+  const transfers = parseEventLogs({ abi: erc20Abi,
+    logs: transaction.logs.filter(log => log.address.toLowerCase() === fixture.usdcAddress.toLowerCase()), eventName: 'Transfer' });
+  const usdcLines = receipt.lines.filter(line => getAddress(line.settlementCurrency) === getAddress(fixture.usdcAddress));
+  const usdcSplits = receipt.splitAllocations.filter(allocation => usdcLines.some(line => line.lineIndex === allocation.lineIndex));
+  const unsplitLines = usdcLines.filter(line => !usdcSplits.some(allocation => allocation.lineIndex === line.lineIndex));
+  const usdcSpreads = parseEventLogs({ abi: cartAbi, logs: cartLogs, eventName: 'ProtocolSpreadCaptured' })
+    .map(event => event.args)
+    .filter(spread => spread.orderId === purchase.orderId && getAddress(spread.currency) === getAddress(fixture.usdcAddress));
+  const recipients = new Set([
+    ...unsplitLines.map(line => line.paymentRecipient.toLowerCase()),
+    ...usdcSplits.map(allocation => allocation.recipient.toLowerCase()),
+    ...usdcSpreads.map(spread => spread.recipient.toLowerCase()),
+  ]);
+  for (const recipient of recipients) {
+    const entitlement = unsplitLines.filter(line => line.paymentRecipient.toLowerCase() === recipient).reduce((sum, line) => sum + BigInt(line.amount), 0n)
+      + usdcSplits.filter(allocation => allocation.recipient.toLowerCase() === recipient).reduce((sum, allocation) => sum + BigInt(allocation.amount), 0n)
+      + usdcSpreads.filter(spread => spread.recipient.toLowerCase() === recipient).reduce((sum, spread) => sum + spread.amount, 0n);
+    const received = transfers.filter(event => event.args.to.toLowerCase() === recipient).reduce((sum, event) => sum + event.args.value, 0n);
+    expect(received).toBe(entitlement);
+  }
+  expect(receipt).not.toHaveProperty('feeAllocations');
+  const feeLines = receipt.lines.filter(line => line.fulfillmentKind === 0);
+  if (!mixedCurrency) expect(feeLines).toHaveLength(physical ? 5 : 2);
+  if (physical) {
+    const production = preview.breakdown?.production;
+    if (production === undefined) throw new Error('Expected a quoted print production cost.');
+    assertSepoliaPrintMarkup(receipt, BigInt(production));
+  }
+  expect(feeLines.every(line => BigInt(line.amount) > 0n)).toBe(true);
+  return receipt;
+}

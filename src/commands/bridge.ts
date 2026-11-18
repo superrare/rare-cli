@@ -1,11 +1,12 @@
+import type { RareClient } from '@rareprotocol/rare-sdk';
 import { Command } from 'commander';
-import { formatEther } from 'viem';
+import { formatEther, parseEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getConfiguredAccountAddress, getPublicClient, getWalletClient } from '../client.js';
-import { isSupportedChain, supportedChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { isSupportedChain, supportedChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
 import { output, log } from '../output.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import { parseOptionalAddress } from '@rareprotocol/rare-sdk/validation';
+import { parseOptionalAddress } from '../input-core.js';
 import { runWithPaymentApprovalConsent } from './approval-consent.js';
 import { addChainOptions, type ChainOptions } from './options.js';
 
@@ -87,7 +88,7 @@ function bridgeSendCommand(): Command {
 
       log(`Bridging RARE from ${plan.sourceChain} to ${plan.destinationChain}...`);
       log(`  Source bridge: ${rare.contracts.rareBridge ?? 'unavailable'}`);
-      log(`  Amount: ${plan.amount} RARE`);
+      log(`  Amount: ${formatEther(plan.amount)} RARE`);
       if (plan.recipient !== undefined) {
         log(`  Recipient: ${plan.recipient}`);
       }
@@ -160,7 +161,7 @@ function parseBridgeRouteOptions(
 ): {
   sourceChain: SupportedChain;
   destinationChain: SupportedChain;
-  amount: string;
+  amount: bigint;
   recipient?: `0x${string}`;
 } {
   if (opts.amount === undefined) {
@@ -173,7 +174,7 @@ function parseBridgeRouteOptions(
   return {
     sourceChain: getActiveChain(opts.chain, opts.chainId),
     destinationChain: parseDestinationChain(opts.destinationChain),
-    amount: opts.amount,
+    amount: parseEther(opts.amount),
     recipient: parseOptionalAddress(opts.recipient, '--recipient'),
   };
 }
@@ -185,7 +186,7 @@ function parseDestinationChain(value: string): SupportedChain {
   return value;
 }
 
-function printBridgeQuote(quote: Awaited<ReturnType<ReturnType<typeof createRareClient>['bridge']['quote']>>): void {
+function printBridgeQuote(quote: Awaited<ReturnType<RareClient['bridge']['quote']>>): void {
   console.log(`\nRARE bridge quote: ${quote.sourceChain} -> ${quote.destinationChain}`);
   console.log(`  Amount:             ${formatEther(quote.amount)} RARE`);
   console.log(`  Recipient:          ${quote.recipient}`);

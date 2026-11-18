@@ -3,20 +3,15 @@ import { formatUnits } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient, tryGetWalletClient } from '../client.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import { ETH_ADDRESS, resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses';
-import {
-  planOfferAcceptLocalInputs,
-  planOfferCancel,
-  planOfferCreateLocalInputs,
-} from '@rareprotocol/rare-sdk/marketplace-core';
-import { parseAddress } from '@rareprotocol/rare-sdk/validation';
+import { ETH_ADDRESS, resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
+import { parseAddress, toNonNegativeInteger, toPositiveWei } from '../input-core.js';
 import { output, log } from '../output.js';
 import { createOfferListCommand } from './account-market-list.js';
-import { resolveCurrencyDecimals } from '@rareprotocol/rare-sdk/payments-shell';
 import { runWithNftApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, formatSplitLines, type SplitAccumulator } from './splits-core.js';
 import { offerBatchCommand } from './batch.js';
 import { offerErc1155Command } from './erc1155.js';
+import { parseBatchAmount } from './batch-amounts.js';
 
 type OfferCreateOptions = {
   contract?: string;
@@ -79,24 +74,26 @@ export function offerCommand(): Command {
         throw new Error('rare offer create requires --price.');
       }
       const contract = parseAddress(opts.contract, '--contract');
-      const localPlan = planOfferCreateLocalInputs({ tokenId: opts.tokenId, price });
+      toPositiveWei(price, 'price');
+      const tokenId = toNonNegativeInteger(opts.tokenId, 'tokenId');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
+      const priceAmount = await parseBatchAmount(publicClient, chain, currency, price);
       const rare = createRareClient({ publicClient, walletClient: client });
 
       log(`Creating offer on ${chain}...`);
       log(`  Marketplace contract: ${rare.contracts.auction}`);
       log(`  NFT contract: ${contract}`);
-      log(`  Token ID: ${localPlan.tokenId.toString()}`);
+      log(`  Token ID: ${tokenId.toString()}`);
       log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
 
       const offerParams = {
         contract,
-        tokenId: localPlan.tokenId,
-        price,
+        tokenId,
+        price: priceAmount,
         currency,
       };
       const result = await runWithPaymentApprovalConsent({
@@ -145,7 +142,7 @@ export function offerCommand(): Command {
       const contract = parseAddress(opts.contract, '--contract');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
-      const localPlan = planOfferCancel({ contract, tokenId: opts.tokenId, currency });
+      const tokenId = toNonNegativeInteger(opts.tokenId, 'tokenId');
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
@@ -154,8 +151,8 @@ export function offerCommand(): Command {
 
       const result = await rare.offer.cancel({
         contract,
-        tokenId: localPlan.tokenId,
-        currency: localPlan.currency,
+        tokenId,
+        currency,
       });
 
       output(
@@ -192,18 +189,20 @@ export function offerCommand(): Command {
         throw new Error('rare offer accept requires --contract.');
       }
       const contract = parseAddress(opts.contract, '--contract');
+      toPositiveWei(price, 'price');
       const splits = finalizeSplits(opts.split);
-      const localPlan = planOfferAcceptLocalInputs({ tokenId: opts.tokenId, price });
+      const tokenId = toNonNegativeInteger(opts.tokenId, 'tokenId');
       const chain = getActiveChain(opts.chain, opts.chainId);
       const currency = opts.currency ? resolveCurrency(opts.currency, chain) : ETH_ADDRESS;
       const isEth = currency === ETH_ADDRESS;
       const { client } = getWalletClient(chain);
       const publicClient = getPublicClient(chain);
+      const priceAmount = await parseBatchAmount(publicClient, chain, currency, price);
       const rare = createRareClient({ publicClient, walletClient: client });
 
       log(`Accepting offer on ${chain}...`);
       log(`  NFT contract: ${contract}`);
-      log(`  Token ID: ${localPlan.tokenId.toString()}`);
+      log(`  Token ID: ${tokenId.toString()}`);
       log(`  Price: ${price} ${isEth ? 'ETH' : currency}`);
       if (splits) {
         log('  Splits:');
@@ -214,8 +213,8 @@ export function offerCommand(): Command {
 
       const acceptParams = {
         contract,
-        tokenId: localPlan.tokenId,
-        price,
+        tokenId,
+        price: priceAmount,
         currency,
         splitAddresses: splits?.addresses,
         splitRatios: splits?.ratios,
@@ -281,7 +280,7 @@ export function offerCommand(): Command {
       });
       const amount = formatUnits(
         result.amount,
-        await resolveCurrencyDecimals(publicClient, chain, result.currency),
+        (await rare.currency.resolveDecimals(result.currency)).decimals,
       );
 
       output(result, () => {

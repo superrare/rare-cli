@@ -1,7 +1,10 @@
 /* eslint-disable functional/immutable-data */
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { MinterApprovalRequiredError, NftApprovalRequiredError } from '@rareprotocol/rare-sdk/approvals-shell';
-import { PaymentApprovalRequiredError } from '@rareprotocol/rare-sdk/payments-shell';
+import {
+  MinterApprovalRequiredError,
+  NftApprovalRequiredError,
+  PaymentApprovalRequiredError,
+} from '@rareprotocol/rare-sdk';
 import {
   runWithMinterApprovalConsent,
   runWithNftApprovalConsent,

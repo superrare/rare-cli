@@ -699,7 +699,8 @@ describe('built CLI deterministic behavior', () => {
       const lazyErc721 = await runCli(['collection', 'deploy', 'lazy-erc721', '--help'], { home });
       expect(lazyErc721.code).toBe(0);
       expect(lazyErc721.stdout).toContain('Usage: rare collection deploy lazy-erc721 [options] <name> <symbol>');
-      expect(lazyErc721.stdout).toContain('--contract-type <type>');
+      expect(lazyErc721.stdout).toContain('--variant <variant>');
+      expect(lazyErc721.stdout).not.toContain('--contract-type');
       expect(lazyErc721.stdout).toContain('--max-tokens <number>');
       expect(lazyErc721.stderr).toBe('');
 
@@ -1324,11 +1325,13 @@ describe('built CLI deterministic behavior', () => {
           'create',
           '--input',
           input,
+          '--price',
+          '1',
           '--chain',
           'sepolia',
         ];
       },
-      'Error: root must be a 0x-prefixed bytes32 hex string',
+      'Error: Batch token JSON must be an array of token objects or an object with a tokens array.',
     );
     await expectLocalValidationBeforeWalletSetup(
       async (home) => {
@@ -1350,11 +1353,13 @@ describe('built CLI deterministic behavior', () => {
           'create',
           '--input',
           input,
+          '--price',
+          '1',
           '--chain',
           'sepolia',
         ];
       },
-      'Error: splitAddresses and splitRatios must have the same length.',
+      'Error: Legacy batch listing registration artifacts are not accepted in V2.',
     );
     await expectLocalValidationBeforeWalletSetup(
       async (home) => {
@@ -1370,7 +1375,7 @@ describe('built CLI deterministic behavior', () => {
           'sepolia',
         ];
       },
-      'Error: rare listing batch create requires --price when --input is a token tree artifact from rare utils tree build.',
+      "error: required option '--price <amount>' not specified",
     );
     await expectLocalValidationBeforeWalletSetup(
       async (home) => {
@@ -2141,9 +2146,15 @@ describe('built CLI deterministic behavior', () => {
 
       const userHelp = await runCli(['user', 'get', '--help'], { home });
       expect(userHelp.code).toBe(0);
-      expect(userHelp.stdout).toContain('Usage: rare user get [options] <address>');
+      expect(userHelp.stdout).toContain('Usage: rare user get [options] [address]');
+      expect(userHelp.stdout).toContain('--username <value>');
+      expect(userHelp.stdout).toContain('--user-id <value>');
       expect(userHelp.stdout).not.toContain('--chain <chain>');
       expect(userHelp.stdout).not.toContain('--chain-id <id>');
+
+      const removedUserResolveCommand = await runCli(['user', 'resolve'], { home });
+      expect(removedUserResolveCommand.code).toBe(1);
+      expect(removedUserResolveCommand.stderr).toContain("unknown command 'resolve'");
 
       const removedUserLookupCommand = await runCli(['user', 'lookup'], { home });
       expect(removedUserLookupCommand.code).toBe(1);
@@ -3081,6 +3092,7 @@ describe('built CLI deterministic behavior', () => {
       expect(mintHelp.stdout).not.toContain('--amount <number>');
       expect(mintHelp.stdout).toContain('--proof <file>');
       expect(mintHelp.stdout).toContain('--chain-id <id>');
+      expect(mintHelp.stdout).not.toContain('--recipient');
 
       const allowlistProofHelp = await runCli(['listing', 'release', 'allowlist', 'proof', '--help'], { home });
       expect(allowlistProofHelp.code).toBe(0);

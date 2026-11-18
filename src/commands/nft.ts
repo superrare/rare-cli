@@ -1,9 +1,10 @@
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
+import { DEFAULT_RARE_API_BASE_URL } from '@rareprotocol/rare-sdk/data-access';
 import { getActiveChain } from '../config.js';
 import { getPublicClient } from '../client.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import type { RareClientNftGetParams } from '@rareprotocol/rare-sdk/client';
-import { parseAddress } from '@rareprotocol/rare-sdk/validation';
+import { parseAddress } from '../input-core.js';
 import { log, output, printNft } from '../output.js';
 
 type NftReadOptions = {
@@ -36,6 +37,20 @@ export function nftCommand(): Command {
         printNft(result);
       });
 
+    });
+
+  cmd.command('favorite-count').description('Read the public favorite count for an artwork')
+    .requiredOption('--contract <address>', 'NFT contract address')
+    .requiredOption('--token-id <id>', 'token ID')
+    .option('--chain <chain>', 'chain to use')
+    .option('--chain-id <id>', 'chain ID')
+    .addOption(new Option('--api-url <url>', 'Rare API base URL').default(DEFAULT_RARE_API_BASE_URL).env('RARE_API_URL'))
+    .action(async (options: NftReadOptions & { apiUrl: string }): Promise<void> => {
+      const chain = getActiveChain(options.chain, options.chainId);
+      const nft = parseNftIdentityOptions(options);
+      const rare = createRareClient({ publicClient: getPublicClient(chain), apiBaseUrl: options.apiUrl });
+      const count = await rare.nft.favoriteCount(nft);
+      output({ count }, () => { console.log(`Favorited ${count} times.`); });
     });
 
   return cmd;

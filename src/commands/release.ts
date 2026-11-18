@@ -6,24 +6,21 @@ import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient, type RareClient } from '@rareprotocol/rare-sdk/client';
 import {
-  buildReleaseAllowlistArtifactFromInput,
+  buildReleaseAllowlistArtifact,
   getReleaseAllowlistProof,
   normalizeReleaseAllowlistProof,
   normalizeReleasePrice,
   normalizeReleaseStartTime,
-  planReleaseAllowlistConfig,
-  parseReleaseAllowlistArtifactJson,
-} from '@rareprotocol/rare-sdk/release-core';
-import type {
-  ReleaseAllowlistArtifact,
-  ReleaseAllowlistInputFormat,
-} from '@rareprotocol/rare-sdk/types/release';
-import { toInteger, toNonNegativeInteger, toPositiveInteger } from '@rareprotocol/rare-sdk/amounts-core';
-import { resolveCurrencyDecimals } from '@rareprotocol/rare-sdk/payments-shell';
-import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts/addresses';
+  normalizeReleaseAllowlistConfig,
+  parseReleaseAllowlistArtifact,
+} from '@rareprotocol/rare-sdk/utils';
+import type { ReleaseAllowlistArtifact, ReleaseAllowlistInputFormat } from '@rareprotocol/rare-sdk';
+import { toInteger, toNonNegativeInteger, toPositiveInteger } from '../input-core.js';
+import { resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 import { output, log } from '../output.js';
 import { runWithMinterApprovalConsent, runWithPaymentApprovalConsent } from './approval-consent.js';
 import { collectSplit, finalizeSplits, type SplitAccumulator } from './splits-core.js';
+import { parseBatchAmount } from './batch-amounts.js';
 
 const ETH_ADDRESS = zeroAddress;
 
@@ -80,7 +77,6 @@ type ReleaseMintOptions = ReleaseContractOptions & {
   currency?: string;
   price?: string;
   proof?: string;
-  recipient?: string;
   yes?: boolean;
   autoApprove?: boolean;
 };
@@ -154,7 +150,7 @@ function assertBytes32Option(value: string, label: string): asserts value is Hex
 }
 
 function loadAllowlistArtifact(filePath: string): ReleaseAllowlistArtifact {
-  return parseReleaseAllowlistArtifactJson(readTextFile(filePath, 'allowlist artifact'));
+  return parseReleaseAllowlistArtifact(readTextFile(filePath, 'allowlist artifact'));
 }
 
 function readProofFile(filePath: string): Hex[] {
@@ -222,10 +218,8 @@ export function releaseCommand(): Command {
       const chain = getActiveChain(opts.chain, opts.chainId);
       const publicClient = getPublicClient(chain);
       const currency = opts.currency === undefined ? ETH_ADDRESS : resolveCurrency(opts.currency, chain);
-      const currencyDecimals = currency === ETH_ADDRESS
-        ? null
-        : await resolveCurrencyDecimals(publicClient, chain, currency);
-      normalizeReleasePrice({ currencyAddress: currency, amount: opts.price, currencyDecimals });
+      const price = await parseBatchAmount(publicClient, chain, currency, opts.price);
+      normalizeReleasePrice({ currencyAddress: currency, amount: price, currencyDecimals: null });
       normalizeReleaseStartTime(opts.startTime, currentUnixTimestamp());
       const { client, account } = getWalletClient(chain);
       const rare = createRareClient({ publicClient, walletClient: client });
@@ -249,7 +243,7 @@ export function releaseCommand(): Command {
       const configureParams = {
         contract: opts.contract,
         currency,
-        price: opts.price,
+        price,
         startTime: opts.startTime,
         maxMints: normalizedMaxMints,
         splitAddresses: splits?.addresses,
@@ -304,15 +298,11 @@ export function releaseCommand(): Command {
     .option('--currency <currency>', 'expected currency: eth, usdc, rare, or ERC20 address (defaults to configured sale currency)')
     .option('--price <amount>', 'expected per-token price in ETH or token units (defaults to configured sale price)')
     .option('--proof <file>', 'allowlist proof JSON from rare listing release allowlist proof')
-    .option('--recipient <address>', 'recipient when supported; RareMinter direct sales mint to the connected wallet')
     .option('--yes', 'yes to all prompts and required approvals')
     .option('--chain <chain>', 'chain to use (mainnet, sepolia, base, base-sepolia)')
     .option('--chain-id <id>', 'chain ID (1, 11155111, 8453, 84532)')
     .action(async (opts: ReleaseMintOptions): Promise<void> => {
       assertAddressOption(opts.contract, 'contract');
-      if (opts.recipient !== undefined) {
-        assertAddressOption(opts.recipient, 'recipient');
-      }
       const proof = opts.proof === undefined ? undefined : readProofFile(opts.proof);
       const quantity = opts.quantity ?? '1';
       const normalizedQuantity = toPositiveInteger(quantity, 'quantity');
@@ -321,17 +311,11 @@ export function releaseCommand(): Command {
       }
       const chain = getActiveChain(opts.chain, opts.chainId);
       const currency = opts.currency === undefined ? undefined : resolveCurrency(opts.currency, chain);
-      if (opts.price !== undefined) {
-        const priceCurrency = currency ?? ETH_ADDRESS;
-        const currencyDecimals = priceCurrency === ETH_ADDRESS
-          ? null
-          : await resolveCurrencyDecimals(getPublicClient(chain), chain, priceCurrency);
-        normalizeReleasePrice({
-          currencyAddress: priceCurrency,
-          amount: opts.price,
-          currencyDecimals,
-        });
-      }
+      const priceCurrency = currency ?? ETH_ADDRESS;
+      const price = opts.price === undefined
+        ? undefined
+        : await parseBatchAmount(getPublicClient(chain), chain, priceCurrency, opts.price);
+      if (price !== undefined) normalizeReleasePrice({ currencyAddress: priceCurrency, amount: price, currencyDecimals: null });
       const rare = releaseWriteClient(chain);
 
       log(`Minting direct sale release on ${chain}...`);
@@ -352,9 +336,8 @@ export function releaseCommand(): Command {
         contract: opts.contract,
         quantity: normalizedQuantity,
         currency,
-        price: opts.price,
+        price,
         proof,
-        recipient: opts.recipient,
       };
       const result = await runWithPaymentApprovalConsent({
         commandName: 'rare listing release mint',
@@ -415,7 +398,7 @@ export function releaseCommand(): Command {
     .action((opts: AllowlistBuildOptions): void => {
       const format = detectAllowlistFormat(opts.input, opts.format);
       const raw = readTextFile(opts.input, 'allowlist input');
-      const artifact = buildReleaseAllowlistArtifactFromInput(raw, format);
+      const artifact = buildReleaseAllowlistArtifact(raw, format);
 
       if (opts.output !== undefined) {
         writeJsonFile(opts.output, artifact);
@@ -493,7 +476,7 @@ export function releaseCommand(): Command {
       }
       const root = opts.root;
       const contract = opts.contract;
-      planReleaseAllowlistConfig({ contract, root, artifact, endTime });
+      normalizeReleaseAllowlistConfig({ contract, root, artifact, endTime });
       const chain = getActiveChain(opts.chain, opts.chainId);
       const rare = releaseWriteClient(chain);
 

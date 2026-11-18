@@ -1,6 +1,7 @@
 /**
- * Compatibility shim: the SDK now lives in @rareprotocol/rare-sdk. This keeps
- * the `@rareprotocol/rare-cli/client` subpath working for existing consumers;
- * new code should import `@rareprotocol/rare-sdk` directly.
+ * Compatibility shim for the former SDK client entry point.
+ *
+ * @deprecated Import from `@rareprotocol/rare-sdk/client` instead. This
+ * re-export remains only for existing `@rareprotocol/rare-cli/client` consumers.
  */
 export * from '@rareprotocol/rare-sdk/client';

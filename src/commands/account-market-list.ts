@@ -1,9 +1,10 @@
+import type { RareClient } from '@rareprotocol/rare-sdk';
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient } from '../client.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import type { Nft } from '@rareprotocol/rare-sdk/api';
-import { parseAddress } from '@rareprotocol/rare-sdk/validation';
+import type { Nft } from '@rareprotocol/rare-sdk';
+import { parseAddress } from '../input-core.js';
 import { parsePositiveInteger } from './pagination-core.js';
 import {
   log,
@@ -220,7 +221,7 @@ export function createAuctionListCommand(): Command {
 
 function createReadClient(opts: { chain?: string; chainId?: string }): {
   chain: ReturnType<typeof getActiveChain>;
-  rare: ReturnType<typeof createRareClient>;
+  rare: RareClient;
 } {
   const chain = getActiveChain(opts.chain, opts.chainId);
   const publicClient = getPublicClient(chain);

@@ -1,3 +1,4 @@
+import type { RareClient } from '@rareprotocol/rare-sdk';
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion, @typescript-eslint/promise-function-async, local/only-parse-unknown, no-restricted-syntax */
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
@@ -8,7 +9,7 @@ import { z } from 'zod';
 import pkg from '../../package.json' with { type: 'json' };
 import { getConfiguredAccountAddress, getConfiguredUniswapApiKey, getPublicClient, tryGetWalletClient } from '../client.js';
 import { getChainConfig, readConfig } from '../config.js';
-import { supportedChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { supportedChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import {
   mcpToolSpecs,
@@ -45,6 +46,7 @@ const nftSearchSortByValues = [
   'recentActivity',
   'bidAsc',
   'bidDesc',
+  'random',
 ] as const;
 const listingTypeValues = ['SALE_PRICE', 'BATCH_SALE_PRICE'] as const;
 const auctionStateValues = ['PENDING', 'RUNNING', 'UNSETTLED'] as const;
@@ -96,6 +98,15 @@ const splitSchema = {
   splitRatios: z.array(z.number()).optional(),
 };
 const autoApproveSchema = { autoApprove: z.boolean().optional() };
+export const listingReleaseMintInputSchema = {
+  ...optionalChain,
+  contract: addressSchema,
+  quantity: integerSchema.optional(),
+  currency: currencySchema,
+  price: amountSchema.optional(),
+  proof: proofSchema.optional(),
+  ...autoApproveSchema,
+};
 const contractTokenSchema = {
   contract: addressSchema,
   tokenId: integerSchema,
@@ -709,7 +720,7 @@ const toolHandlers: Record<string, ToolHandler> = {
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.release.configure(args as never))),
   },
   listing_release_mint: {
-    inputSchema: { ...optionalChain, contract: addressSchema, quantity: integerSchema.optional(), currency: currencySchema, price: amountSchema.optional(), proof: proofSchema.optional(), recipient: addressSchema.optional(), ...autoApproveSchema },
+    inputSchema: listingReleaseMintInputSchema,
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.listing.release.mint(args as never))),
   },
   listing_release_status: {
@@ -785,7 +796,13 @@ const toolHandlers: Record<string, ToolHandler> = {
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.collection.deploy.erc1155(args as never))),
   },
   collection_deploy_lazy_erc721: {
-    inputSchema: { ...optionalChain, name: z.string(), symbol: z.string(), maxTokens: integerSchema, contractType: z.string().optional() },
+    inputSchema: {
+      ...optionalChain,
+      name: z.string(),
+      symbol: z.string(),
+      maxTokens: integerSchema,
+      variant: z.enum(['standard', 'royalty-guard', 'deadman-royalty-guard']).optional(),
+    },
     handler: ({ chain, ...args }) => callWrite(chain, async (rare) => txResult(await rare.collection.deploy.lazyErc721(args as never))),
   },
   collection_deploy_lazy_batch_mint: {
@@ -928,19 +945,19 @@ const toolHandlers: Record<string, ToolHandler> = {
 
 async function callRead(
   chain: unknown,
-  call: (rare: ReturnType<typeof createRareClient>) => unknown,
+  call: (rare: RareClient) => unknown,
 ): Promise<ToolResult> {
   return toolResult(await call(readRare(chain)));
 }
 
 async function callWrite(
   chain: unknown,
-  call: (rare: ReturnType<typeof createRareClient>) => Promise<ToolResult> | ToolResult,
+  call: (rare: RareClient) => Promise<ToolResult> | ToolResult,
 ): Promise<ToolResult> {
   return call(writeRare(chain));
 }
 
-function readRare(chain: unknown): ReturnType<typeof createRareClient> {
+function readRare(chain: unknown): RareClient {
   const selected = resolveChain(chain);
   return createRareClient({
     publicClient: getPublicClient(selected),
@@ -949,7 +966,7 @@ function readRare(chain: unknown): ReturnType<typeof createRareClient> {
   });
 }
 
-function writeRare(chain: unknown): ReturnType<typeof createRareClient> {
+function writeRare(chain: unknown): RareClient {
   const selected = resolveChain(chain);
   const wallet = tryGetWalletClient(selected);
   if (wallet === null) {

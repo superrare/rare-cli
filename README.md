@@ -19,7 +19,7 @@ rare --help
 ```
 
 See [CHANGELOG.md](./CHANGELOG.md) for release notes and migration guidance.
-For generated reference maps, see [rare-cli-commands.md](./rare-cli-commands.md), [rare-cli-sdk-client-functions.md](./rare-cli-sdk-client-functions.md), and [rare-cli-mcp-tools.md](./rare-cli-mcp-tools.md).
+For generated CLI reference maps, see [rare-cli-commands.md](./rare-cli-commands.md) and [rare-cli-mcp-tools.md](./rare-cli-mcp-tools.md). The SDK and its API reference are maintained in the [rare-sdk repository](https://github.com/superrare/rare-sdk#readme).
 
 ## Getting Started
 
@@ -104,6 +104,51 @@ Most chain-aware commands accept `--chain` or `--chain-id` to select a network. 
 Supported chains: `mainnet`, `sepolia`, `base`, `base-sepolia`
 
 Feature deployment varies by chain. Batch listing, batch offer, batch auction, RareMinter release, Liquid Edition, and swap flows are currently available on `mainnet` and `sepolia`.
+
+### Account authentication and profile
+
+Account login is independent of the configured wallet used for transactions. Login never generates a wallet or changes transaction keys. Account and authentication requests share one Rare API base, defaulting to `https://api.superrare.com`; authentication uses its `/auth/v2` route.
+
+```bash
+rare auth login
+rare auth login --wallet --chain sepolia
+rare auth status --verify --json
+rare profile get --json
+rare profile update --bio 'hackin' --full-name 'My name' --json
+rare profile update --website https://example.com --twitter https://x.com/myname
+rare profile update --clear-avatar --clear-masthead
+rare profile avatar upload --file ./avatar.png
+rare user get --username myname
+rare profile update --file ./profile-patch.json --json
+rare auth logout
+```
+
+Device approval grants full account access. `--no-browser` prints instructions without opening a browser. For automation, start a request and pass its local request ID to a later poll or wait; JSON output never contains access/refresh tokens or the device secret:
+
+```bash
+rare auth login --no-wait --json
+rare auth login --poll <request-id> --json
+rare auth login --resume <request-id> --json
+```
+
+Each process returns one JSON value. Polling cadence survives process restarts. `auth status` reports local metadata unless `--verify` is used; verification may refresh credentials. `profile update` accepts individual flags for username, email, full name, bio, avatar URL, website, Twitter/X, Discord, Instagram, YouTube, and masthead artwork. Omitted fields are preserved; empty strings clear optional profile fields. Use `--clear-avatar` and `--clear-masthead` to remove those fields. You can also supply a structured JSON patch with `--stdin` or `--file`, but cannot combine input sources. `profile avatar upload --file` uploads and saves an image through the SDK. Your own email is private and does not appear in public profile lookup results.
+
+The default credential backend is the OS keychain (macOS Keychain or Linux Secret Service). Unavailable/locked stores fail without silently falling back. Headless POSIX hosts may explicitly select `--storage file` or `RARE_AUTH_STORAGE=file`: this stores plaintext credentials under `~/.rare/auth` with private permissions and atomic replacement. Windows auth storage currently fails closed because lock-directory ACL validation is not implemented. Existing transaction commands remain available.
+
+Use `--api-url` or `RARE_API_URL` to select another Rare API deployment; the flag takes precedence. For the development environment:
+
+```bash
+export RARE_API_URL=https://rare-api-devmainnet-784573620320.us-east1.run.app
+rare auth login
+```
+
+The CLI derives the authentication URL from the normalized API base and does not accept a separate auth-service URL. Credentials and pending requests remain bound to the API base, derived auth URL and client. Sessions from a previous direct-auth configuration are not migrated silently; sign in again through the selected API. HTTP is restricted to loopback development; credential-bearing redirects are refused. No credentials are accepted as CLI flags.
+
+Use `--auth-directory /absolute/private/path` or `RARE_AUTH_DIRECTORY` to isolate auth records and locks without changing your home or wallet configuration. The directory must be owned by the current user with private permissions; symlink paths are rejected. With the keychain backend, secrets remain in the OS store, namespaced by this directory, and the directory holds locks. Processes sharing a session must use the same directory.
+
+Refresh/login/logout use a cross-process lock. A crashed process can leave an empty `.lock` directory: the error identifies its path. Stop all CLI auth processes before removing that exact empty directory with `rmdir`; locks are never stolen merely because they are old. Do not remove a live process's lock. A lost refresh response may require login again rather than risking reuse of a spent token.
+
+Logout revokes the server session before removing local tokens; revocation failures retain credentials for retry. `auth logout --local-only` removes local tokens without claiming server revocation. Neither operation deletes wallet config. Logout invalidates previously started device logins; start a new request afterward.
 
 ### MCP Server
 
@@ -456,6 +501,178 @@ rare listing status --contract 0x... --token-id 1
 
 `--split <ADDR=RATIO>` is repeatable. Ratios must sum to exactly 100. If you omit `--split`, the SDK defaults to `[caller, 100]` (100% to your wallet). If you pass any `--split`, you must specify the complete list — the caller is **not** auto-appended.
 
+### Cart
+
+See [Manage purchase eligibility](docs/eligibility.md) for creator rules, SKU claims, and Listing requirements.
+
+Cart Listing creation and checkout use the same saved account session as
+`rare auth login`. Pass `--api-url`, `--storage`, and `--auth-directory` to use
+the same account storage, or set `RARE_API_URL`, `RARE_AUTH_STORAGE`, and
+`RARE_AUTH_DIRECTORY`. Public checkout previews do not require login. Wallet
+configuration remains separate and controls Listing and transaction signatures.
+
+Cart commands publish API-backed listing roots and purchase listings, token swaps, or both in one checkout. Create listings from a JSON intent file such as:
+
+```json
+{
+  "deadline": "2026-12-31T23:59:59Z",
+  "listings": [
+    {
+      "sku": "0x...bytes32",
+      "settlementCurrency": "usdc",
+      "unitPrice": "25",
+      "quantity": "2",
+      "paymentRecipient": "0x...seller"
+    }
+  ]
+}
+```
+
+`quantity` defaults to `"1"`, and `paymentRecipient` defaults to the seller. Amounts and quantities are strings so they remain exact. Named currencies (`eth`, `usdc`, and `rare`) and ERC-20 addresses are supported. Each listing can include `splits: [{"recipient": "0x...", "basisPoints": 7000}, {"recipient": "0x...", "basisPoints": 3000}]`. Omit splits or use `[]` for a single recipient. Nonempty schedules allow at most 16 unique nonzero recipients, must total 10,000 basis points, and must start with `paymentRecipient`. The seller signs each listing's schedule. Secondary shares round down per merchandise line; the first recipient receives the remainder. Fees and currency-swap outputs do not inherit these splits.
+
+```bash
+# Inspect the root, listing digests, and required NFT approvals without writing
+rare cart listing create --input ./cart-listings.json --preview --output ./prepared-cart.json
+
+# Sign and publish the root; approve NFT contracts when needed
+rare cart listing create --input ./cart-listings.json --output ./signed-cart.json --yes
+
+# Preview a multi-listing checkout; quantity defaults to one
+rare cart checkout \
+  --listing 0x...listingDigestA \
+  --listing 0x...listingDigestB=2 \
+  --payment-currency usdc \
+  --preview
+
+# Execute the verified checkout and approve ERC-20 spending when needed
+rare cart checkout \
+  --listing 0x...listingDigestA \
+  --payment-currency usdc \
+  --recipient 0x...recipient \
+  --yes
+
+# Spend an exact ETH budget for RARE, or request an exact RARE output
+rare cart swap --payment-currency eth --output-currency rare --input-amount 0.01 --preview
+rare cart swap --payment-currency eth --output-currency rare --output-amount 100 --yes
+
+# Preview typed items from a JSON document
+rare cart checkout --input ./checkout.json --payment-currency usdc --preview
+
+# Cancel one listing, cancel a whole root, or invalidate the current seller nonce
+rare cart listing cancel --listing-digest 0x... --yes
+rare cart listing cancel-root --root-digest 0x... --yes
+rare cart listing invalidate-nonce --yes
+```
+
+The checkout input contains an `items` array. Each item has one of these forms:
+
+```json
+{
+	"items": [
+		{ "kind": "listing", "listingDigest": "0x...bytes32", "quantity": "1" },
+		{ "kind": "swap", "mode": "exact-output", "outputCurrency": "rare", "outputAmount": "100" }
+	]
+}
+```
+
+For an exact-input swap, use `"mode": "exact-input"` and `"inputAmount": "10"` instead of `outputAmount`.
+Input amounts use the payment currency's units. Output amounts use the output currency's units.
+Every amount is a human-readable decimal string, not an integer in base units.
+Each item can specify a `recipient`; otherwise `--recipient` or the configured account receives the item.
+Use either `--input` or the listing and swap shortcuts, not both.
+
+Both quote directions commit to fixed payment and output amounts when signed. Execution price movement changes the platform spread, not the promised output. A route that cannot deliver the signed output fails.
+Standalone swaps use this routing spread, not the default 3% listing checkout fee.
+The API currently supports ETH, USDC, and RARE as checkout currencies. An ERC-20 address does not bypass that policy.
+CLI amount strings use human-readable units; SDK checkout amounts use `bigint` base units.
+
+`--preview` returns the Rare API quote and SDK preparation without signing, approving, publishing, or submitting a transaction. Before purchase, the SDK verifies the API bundle against the requested items, payment currency, recipients, chain, and connected payer. Routing, proofs, authorization, order construction, and platform signing remain internal to the Rare API and SDK.
+
+### Print drafts
+
+Upload the production file with `rare uploads upload master.png --access private`
+and display photos with `--access public`. Create a draft with
+`rare prints drops create --input print.json`:
+
+```json
+{
+  "chainId": "11155111",
+  "name": "Print edition",
+  "print": {
+    "name": "Print edition",
+    "description": "An archival print",
+    "tags": [],
+    "productionUploadKey": "<private upload key>",
+    "images": ["<public upload URL>"],
+    "specificationId": "GLOBAL-FAP-8X12"
+  }
+}
+```
+
+The CLI generates missing draft keys and listing salts for creator requests.
+It saves the resolved requests in `.rare-print-requests` beside the input file
+before sending them. The SDK retries an uncertain request once. If the result
+is still unconfirmed, keep that directory and rerun with the same input file.
+To start a separate operation with identical terms, use a new input filename
+and omit the generated values.
+
+Validate an owned private master and create a provider preview before publication:
+
+```bash
+rare prints files validate --production-upload-key <key> --specification-id GLOBAL-FAP-8X12
+rare prints mockups create --production-upload-key <key> --specification-id GLOBAL-FAP-8X12
+rare prints mockups get --id <preview-id>
+```
+
+These commands use the signed-in account and never accept arbitrary asset URLs or
+provider IDs. Preview creation returns a job; repeat `get` until it completes or
+fails. Completed jobs include an image URL and pixel dimensions. Validation can
+return warnings even when the provider accepts the file. Use `--json` for structured
+output. `npm run test:print-files:e2e` exercises private upload, validation, preview
+creation and polling against a deployed API; it requires a real completed image.
+
+Get supported print products with `rare prints products list`. Read provider recommended
+artwork dimensions with `rare prints products get --id GLOBAL-FAP-8X12`. Both
+commands support `--json` and work without signing in. Products support automatic
+orientation. `fileRequirements` reports accepted file types and maximum bytes.
+Recommended pixel dimensions are guidance, not upload minimums.
+Use the selected product ID in the existing `specificationId` draft field. Set optional
+`print.sourceUniversalTokenId` to attribute a creator-owned NFT. The production
+file and specification are required for every print draft. NFT attribution does
+not transfer the NFT or configure an eligibility rule or receipt.
+
+Replace a production master on a configured or published print by uploading the
+replacement privately, then running `rare prints drops update --id <drop-id>
+--input replacement.json` with `{ "productionUploadKey": "<new private upload key>" }`.
+New orders use the replacement. Existing authorized and paid orders keep their
+saved production snapshots. Specification edits still require an unconfigured
+draft or a replacement print draft.
+
+Run `npm run test:print-products:e2e` with `RARE_API_BASE_URL` for a public catalog
+check against a deployment containing the product endpoints. This check requires
+no wallet and creates no drafts or orders.
+
+### Print listing eligibility and quantity
+
+`rare prints listing prepare --input listing.json` and `rare prints listing publish --input listing.json --yes` accept these optional fields in the listing JSON:
+
+- `eligibilityRuleId`: an enabled rule owned by the creator that authorizes the print option's SKU. Publication applies the requirement before the listing becomes available.
+- `maxQuantityPerCheckout`: a decimal string from `"1"` to `"1000"`, defaulting to `"1"`. This limits copies in one checkout, independently of `availableQuantity`, which sets total edition supply.
+
+Use generic Cart checkout for prints. For two copies, pass `--listing 0x...listingDigest=2` together with `--saved-address-id` or `--shipping-input`. The API checks the creator's quantity limit and eligibility claims before authorizing payment. `--preview` quotes production and shipping for the selected quantity without paying or submitting a print order. These are buyer-funded charges added on top of the artwork price. Listing preparation does not call Prodigi or subtract production from seller proceeds.
+
+`--authorize-only --yes` also requests the signed checkout authorization without approving tokens or submitting payment. This reserves any required claims until the order expires. Do not combine it with `--preview`.
+
+### Sandbox print fulfillment E2E
+
+`npm run test:prints:e2e` runs print authoring, quotes, and paid Cart checkout against the sandbox deployment. After settlement, the test uses the signed-in buyer's `rare cart orders get` command to check the provider order ID, reconciled production progress, and parcel tracking links. Dispatch does not imply delivery. Successful runs print transaction, Cart order, and provider order IDs.
+
+Set `RARE_API_BASE_URL` and `RARE_ACCOUNT_TEST_API_URL` to the deployed feature API. Rare API and Pipelines must use the same Prodigi v5 sandbox configuration. The Cart contract must be registered and indexing active. The test uses registered Sepolia seller and buyer accounts, and the buyer needs Sepolia ETH and USDC.
+
+The suite covers a print-only checkout and two product journeys. Each product journey deploys and mints its own ERC-721, creates its NFT SKU, uploads a private print master and public photo, configures the print SKU, groups both variants into one published Product, and publishes separate Listings. The mixed journey buys both Listings in one Cart. The primary-sale journey first denies print checkout, purchases the NFT, waits for claim issuance, redeems the print and verifies consumption and denial of reuse while print inventory remains. Both verify NFT ownership, item-level fees, settlement events, seller proceeds and the resulting Prodigi order.
+
+This test makes a Sepolia payment and leaves a visible sandbox order. Missing prerequisites fail the suite. To run only the full fulfillment case after building, use `npx vitest run test/e2e-live/print-fulfillment.test.ts`.
+
 ### Batch Listings
 
 Batch listing roots are built from token sets. For create flows, you can pass a CSV file, a JSON token list, a token tree artifact from `rare utils tree build`, or the older root artifact shape that already includes listing config. Running `rare utils tree build` first is optional; use it when you want a reusable artifact or want to inspect/share the root before registering it.
@@ -680,7 +897,14 @@ rare status --contract 0x...
 rare status --contract 0x... --token-id 1
 ```
 
-## SDK Client Usage
+## TypeScript SDK
+
+The TypeScript SDK is maintained and documented in the [rare-sdk repository](https://github.com/superrare/rare-sdk#readme). Install and import `@rareprotocol/rare-sdk` for new integrations.
+
+The `@rareprotocol/rare-cli/client`, `@rareprotocol/rare-cli/contracts`, and `@rareprotocol/rare-cli/utils` subpaths are deprecated compatibility shims. Existing applications may keep using them while migrating, but this repository no longer generates or owns SDK API reference documentation.
+
+<details>
+<summary>Legacy compatibility examples</summary>
 
 Use the client export when integrating RARE flows directly in your app code.
 
@@ -689,6 +913,26 @@ npm install @rareprotocol/rare-cli viem
 ```
 
 ### Create a client
+
+`createRareClient` supports public API reads and account features without a
+blockchain client. For example, device login uses the same client as profiles
+and messaging:
+
+```ts
+import { createRareClient } from '@rareprotocol/rare-cli/client';
+
+const rare = createRareClient();
+const authorization = await rare.auth.startDeviceAuthorization();
+console.log(authorization.verificationUriComplete ?? authorization.verificationUri);
+console.log(authorization.userCode);
+// Approve in the browser before continuing.
+await rare.auth.waitForDeviceAuthorization(authorization);
+const profile = await rare.profile.get();
+const inbox = await rare.messaging.inbox();
+```
+
+Configure `publicClient` to add chain-bound methods, and `walletClient` for
+blockchain transactions. The existing chain configuration remains supported:
 
 ```ts
 import { createPublicClient, createWalletClient, http } from 'viem';
@@ -716,14 +960,18 @@ Public package subpaths are intentionally scoped:
 ```ts
 import { createRareClient } from '@rareprotocol/rare-cli/client';
 import { contractAddresses, supportedChains } from '@rareprotocol/rare-cli/contracts';
-import { buildUtilsTree, getUtilsTreeProof } from '@rareprotocol/rare-cli/utils';
+import { buildBatchTokenTree, getBatchTokenProof } from '@rareprotocol/rare-cli/utils';
 ```
 
 Use `@rareprotocol/rare-cli/client` for app-level SDK workflows, `@rareprotocol/rare-cli/contracts` for lower-level viem contract metadata and ABIs, and `@rareprotocol/rare-cli/utils` for standalone pure artifact/proof helpers.
 
 ### Search
 
-`RareClient` is bound to the chain on its `publicClient`. Client methods use that chain automatically; create a separate client with a different viem chain to query or write another network.
+When configured with `publicClient`, `RareClient` binds blockchain and NFT search
+methods to that chain. Create another configured client to use another network.
+Without `publicClient`, public search methods accept explicit chain filters and
+NFT lookups require `chain` or `chainId`. Account sessions are independent of
+the blockchain client configuration.
 
 ```ts
 const nfts = await rare.search.nfts({ query: 'portrait', perPage: 10 });
@@ -904,6 +1152,8 @@ await rare.import.erc721({
 });
 ```
 
+</details>
+
 ## Configuration
 
 Config is stored at `~/.rare/config.json`. Each chain has its own key source, RPC URL, and optional Uniswap API key source. A wallet key source can be a plaintext `privateKey` or a 1Password `privateKeyRef` plus a derived public address. A Uniswap API key source can be a plaintext `uniswapApiKey` or a 1Password `uniswapApiKeyRef`. `rare configure --show` prints the account address for configured key sources and masks plaintext secrets.
@@ -1002,6 +1252,8 @@ If you want to inspect the on-chain contracts used by this CLI:
 Most users should use the globally installed package and run `rare ...` commands directly.
 The steps below are only for contributors working on this repository.
 
+The SDK dependency is pinned to an immutable GitHub commit until its account API is released on npm. Installation requires Git and HTTPS access to that repository; npm runs the SDK's prepare build.
+
 ```bash
 git clone https://github.com/superrare/rare-cli.git
 cd rare-cli
@@ -1026,6 +1278,189 @@ rare --help
 
 Requires Node.js 22+. Built with [Commander](https://github.com/tj/commander.js) and [Viem](https://viem.sh).
 
+The account command contract tests run the built CLI against a controlled HTTP fixture; credential storage tests use private temporary directories and multiple Node processes. Run them after building:
+
+```bash
+npx vitest run test/contract/auth-cli.test.ts test/integration/auth-storage.test.ts
+```
+
+Native keychain tests are opt-in because they access the real OS credential store and may trigger its access controls. With an unlocked macOS Keychain or Linux Secret Service, the following creates and removes a uniquely scoped disposable item:
+
+```bash
+RARE_TEST_KEYCHAIN=1 npx vitest run test/integration/auth-keychain.test.ts
+```
+
+The auth/profile E2E suite runs the built CLI against deployed non-production Rare API, Auth, and Connect services. It signs in with a dedicated test wallet, approves a device request through Connect's deployed API, reads and updates the account profile, and revokes both sessions. It writes a stable profile marker on the test account. Run it manually, separate from `npm test`:
+
+```bash
+export RARE_ACCOUNT_TEST_API_URL=https://your-feature-rare-api.example
+export RARE_ACCOUNT_TEST_CONNECT_URL=https://your-feature-connect.example
+export RARE_ACCOUNT_TEST_PRIVATE_KEY=... # dedicated, unfunded wallet with an existing SuperRare account
+npm run test:auth:e2e
+```
+
+The suite also denies a device request and verifies that the CLI cannot sign in or read a profile afterward. It checks that Connect rejects missing or invalid CSRF tokens and a foreign Origin before completing a legitimate approval. Approval uses real HTTP and wallet signatures, not the Reown browser UI.
+
+This command fails if required services or configuration are missing. The default `npm test` remains local. Native keychain testing remains separate.
+
 ## License
 
 [MIT](LICENSE)
+
+Login authenticates the wallet without creating a SuperRare account. Profile commands require an existing account and return `account_required` when signup is needed. The live account suite also checks a fresh wallet that has no account.
+
+Public user queries accept an address or one explicit selector:
+
+```bash
+rare user get --username artist
+rare user get --user-id 123
+rare user followers --username artist --page 1 --per-page 20
+rare user following --address 0x...
+rare user follow --username artist
+rare user unfollow --user-id 123
+```
+
+Reads are public. Follow/unfollow use the existing signed-in account. Run
+`npm run test:follows:e2e` manually after deploying the GQL userId filter and
+Rare API follow routes. Set `RARE_ACCOUNT_TEST_API_URL` and the two dedicated
+wallet keys documented for account E2E. Use disposable accounts with no existing
+follow relationship; the test removes its relationship and logs out afterward.
+
+### Artwork favorites
+
+```bash
+rare favorites list --page 1 --per-page 20
+rare favorites add 1-0xb932a70a57673d89f4acffbe830e8ed7f75fb9e0-12345
+rare favorites status 1-0xb932a70a57673d89f4acffbe830e8ed7f75fb9e0-12345
+rare favorites remove 1-0xb932a70a57673d89f4acffbe830e8ed7f75fb9e0-12345
+rare nft favorite-count --contract 0xb932a70a57673d89f4acffbe830e8ed7f75fb9e0 --token-id 12345 --chain mainnet
+```
+
+The count is public. Every `favorites` command uses your saved account session and an existing SuperRare account.
+Lists include artwork identifiers, favorite timestamps, names, and page metadata. There is no command that lists another account's favorites or people who favorited an artwork.
+
+Run `npm run test:favorites:e2e` manually against deployed test services. Set `RARE_ACCOUNT_TEST_API_URL`,
+`RARE_ACCOUNT_TEST_PRIVATE_KEY`, and `RARE_ACCOUNT_TEST_ARTWORK_ID`. Use an existing disposable account and a dedicated mainnet artwork it does not already favorite.
+The suite runs the built CLI, checks public access before login, and exercises persisted authenticated add, status, list, and removal with cleanup. It runs outside CI and fails on missing fixtures.
+
+### Creator posts
+
+Public posts and comments can be read without signing in:
+
+```bash
+rare posts list --username creator --page 1 --per-page 20
+rare posts list --address 0x... # Or --user-id 123.
+rare posts get 123
+rare posts comments 123 --page 1 --per-page 20
+```
+
+After `rare auth login`, create posts and comments without constructing JSON:
+
+```bash
+rare posts create --title 'Studio update' --body '**New work**'
+rare posts create --title 'Studio update' --body-file ./post.md --image-url https://...
+rare posts comment 123 --body-file ./comment.md
+rare posts favorites add 123
+rare posts favorites status 123
+rare posts favorites list --page 1 --per-page 20
+rare posts favorites remove 123
+rare posts delete-comment 123 456
+rare posts delete 123
+```
+
+`--image-url` accepts shared uploader URLs and can be repeated up to five times.
+Favorite lists belong to the signed-in account. Deletion is limited to your own content.
+
+Run `npm run test:posts:e2e` manually after deploying the creator-post routes. Set
+`RARE_ACCOUNT_TEST_API_URL` to a non-production HTTPS API origin and
+`RARE_ACCOUNT_TEST_PRIVATE_KEY` / `RARE_ACCOUNT_TEST_SECOND_PRIVATE_KEY` to two distinct,
+unfunded test wallets with existing SuperRare accounts. The suite uses the built CLI and
+deployed services, removes its posts and comments, and revokes its sessions. It is not a CI job.
+
+### Drop announcements and calendar
+
+```bash
+rare drops list --from "$FROM" --to "$TO" --username artist
+rare drops get 42
+rare drops create --starts-at "$STARTS_AT" --headline 'New work' --description 'A new release' --image-url "$IMAGE_URL"
+rare drops update 42 --headline 'Updated title'
+rare drops delete 42
+```
+
+Reads are public. Calendar windows are at most 30 days. Use `--address`, `--username` or `--user-id` to filter a creator. Create and update require an existing account and preserve the website's artist rule: approved SuperRare artists on mainnet, with the existing Sepolia/Base Sepolia exception. Deletion requires ownership. Images must be PNG, JPEG, GIF or WebP URLs returned by the shared uploader. Omitted update fields remain unchanged.
+
+Run `npm run test:drops:e2e` manually after deploying the new routes. Configure `RARE_ACCOUNT_TEST_API_URL` and two distinct existing test accounts through `RARE_ACCOUNT_TEST_PRIVATE_KEY` and `RARE_ACCOUNT_TEST_SECOND_PRIVATE_KEY`. The suite signs in on Sepolia, seeds an image through the live SDK uploader and exercises announcement operations through the built CLI. It deletes its announcements afterward, fails on missing prerequisites, and does not run in CI.
+
+### Durable messaging
+
+```bash
+rare messaging inbox
+rare messaging people alice
+rare messaging direct 123 --body 'Hello'
+rare messaging group --title 'Collectors' --invite 123 --invite 456
+rare messaging send CONVERSATION_ID --body-file message.md --reply-to MESSAGE_ID --mention 123
+rare messaging history CONVERSATION_ID
+rare messaging edit CONVERSATION_ID MESSAGE_ID --body 'Updated message'
+rare messaging watch CONVERSATION_ID
+rare messaging preferences CONVERSATION_ID --notification muted
+rare messaging public resolve auction AUCTION_ID
+rare messaging public resolve liquid-edition --chain-id 1 --contract-address 0x...
+rare messaging public resolve drop-announcement DROP_ID
+rare messaging public history ROOM_ID
+rare messaging public watch ROOM_ID
+rare messaging public send ROOM_ID --body 'Hello'
+```
+
+Private commands use the account saved by `rare auth login`. Public room resolution and history do not need login; the first successful send joins the room. System messages are written by trusted backend producers. `public watch` streams newly added entries; reload `public history` to see edits and deletions.
+
+Edits do not require a version number. Use `--expected-version <number>` when editing from a previously read message to reject stale edits. Without it, the latest successful edit wins.
+
+Text accepts `--body` or `--body-file`. Repeat `--mention`, `--attachment` or `--invite` for each account or attachment. Direct, group and send commands generate client UUIDs. For retries, supply the original `--client-message-id` or group `--client-operation-id` with the same payload. Run `rare messaging --help` for read markers, invitations, moderation, previews and image commands.
+
+Run `npm run test:messaging:e2e` manually against a non-production deployment. Set
+`RARE_ACCOUNT_TEST_API_URL` and three distinct existing test-account keys:
+`RARE_ACCOUNT_TEST_PRIVATE_KEY`, `RARE_ACCOUNT_TEST_SECOND_PRIVATE_KEY`, and
+`RARE_ACCOUNT_TEST_THIRD_PRIVATE_KEY`. Keep the first/second pair reserved for
+repeatedly declined direct requests; do not accept the request or follow the first
+account from the second. The first/third pair is used for an accepted conversation.
+Public tests also require `RARE_MESSAGING_TEST_AUCTION_ID`,
+`RARE_MESSAGING_TEST_DROP_ID`, `RARE_MESSAGING_TEST_EDITION_ADDRESS`, and
+`RARE_MESSAGING_TEST_EDITION_CHAIN_ID`.
+
+The command runs messaging, authorization, and public notification delivery
+tests sequentially. It covers thread and member reads, image downloads, access
+revocation, app-inbox delivery, and notification preferences. It also checks that
+ordinary callers cannot write trusted system messages. Public messages and
+transient direct replies are deleted. Request seed messages and closed group
+history remain for repeatable runs.
+
+
+Random NFT sampling uses the existing search command:
+
+```bash
+rare search nfts --chain mainnet --sort-by random --per-page 1
+rare --json search nfts --chain mainnet --query art --sort-by random --per-page 3
+```
+
+The existing chain and market filters still apply. Each request uses native
+Typesense random ordering. Random pages are not a stable traversal; choose a
+nonrandom sort to page through a complete result set.
+
+Run the built-command live check with
+`RARE_ACCOUNT_TEST_API_URL=https://your-feature-api npm run test:nfts:e2e`.
+
+
+Shared application files use one upload command:
+
+```sh
+rare uploads upload ./image.png --access private --content-type image/png
+rare messaging attach-image CONVERSATION_ID UPLOAD_ID --width 100 --height 100
+```
+
+The first command returns a private `uploadId`; the second associates it with a
+conversation and returns an attachment ID for `messaging send --attachment`.
+Attach within 24 hours of upload completion. Subsequent reads use messaging
+permissions. The SDK browser client persists managed login across reloads; the CLI
+continues using its protected persistent credential store.
+
+Live image fixtures use [Picsum](https://picsum.photos/) photographs downloaded during setup and uploaded through the ordinary SDK or CLI paths. The shared `downloadTestImage` helper accepts a seed and dimensions; omitting the seed selects a new photograph. Each download includes a unique JPEG comment so content-addressed cleanup cannot delete another run’s upload. Selected live tests fail if Picsum is unavailable. Local validation and corrupt-file fixtures stay offline.

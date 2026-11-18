@@ -3,15 +3,15 @@ import { basename } from 'node:path';
 import { Command } from 'commander';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
-import { pinMetadata, uploadMedia, type NftMediaEntry } from '@rareprotocol/rare-sdk/api';
+import type { NftMediaEntry } from '@rareprotocol/rare-sdk';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import {
   buildMintPinMetadataParams,
   planMintTokenUri,
   type MintGeneratedMetadataPlan,
   type MintMetadataUploadRole,
-} from '@rareprotocol/rare-sdk/mint-core';
-import { parseAddress, parseOptionalAddress } from '@rareprotocol/rare-sdk/validation';
+} from './mint-input-core.js';
+import { parseAddress, parseOptionalAddress } from '../input-core.js';
 import { output, log } from '../output.js';
 
 type MintOptions = {
@@ -70,7 +70,7 @@ export function mintCommand(): Command {
       const rare = createRareClient({ publicClient, walletClient: client });
       const tokenUri = tokenUriPlan.mode === 'provided'
         ? tokenUriPlan.tokenUri
-        : await uploadAndPinMetadata(tokenUriPlan.metadata);
+        : await uploadAndPinMetadata(rare, tokenUriPlan.metadata);
 
       log(`\nMinting NFT on ${chain}...`);
       log(`  Contract: ${contractAddress}`);
@@ -113,28 +113,28 @@ async function preflightMetadataUploads(plan: MintGeneratedMetadataPlan): Promis
   await Promise.all(plan.uploads.map(async (upload) => readFileOrThrow(upload.path, upload.role)));
 }
 
-async function uploadAndPinMetadata(plan: MintGeneratedMetadataPlan): Promise<string> {
+async function uploadAndPinMetadata(rare: ReturnType<typeof createRareClient>, plan: MintGeneratedMetadataPlan): Promise<string> {
   const imageUpload = plan.uploads.find((upload) => upload.role === 'image');
   if (imageUpload === undefined) {
     throw new Error('Image upload was not planned.');
   }
 
   const videoUpload = plan.uploads.find((upload) => upload.role === 'video');
-  const image = await uploadMetadataMedia(imageUpload);
-  const video = videoUpload === undefined ? undefined : await uploadMetadataMedia(videoUpload);
+  const image = await uploadMetadataMedia(rare, imageUpload);
+  const video = videoUpload === undefined ? undefined : await uploadMetadataMedia(rare, videoUpload);
 
-  return pinMetadata(buildMintPinMetadataParams(plan, {
+  return rare.media.pinMetadata(buildMintPinMetadataParams(plan, {
     image,
     video,
   }));
 }
 
-async function uploadMetadataMedia(upload: { role: MintMetadataUploadRole; path: string }): Promise<NftMediaEntry> {
+async function uploadMetadataMedia(rare: ReturnType<typeof createRareClient>, upload: { role: MintMetadataUploadRole; path: string }): Promise<NftMediaEntry> {
   const buffer = await readFileOrThrow(upload.path, upload.role);
   const filename = basename(upload.path);
   const label = upload.role === 'image' ? 'Image' : 'Video';
   log(`Uploading ${upload.role}: ${filename} (${buffer.byteLength} bytes)`);
-  const media = await uploadMedia(new Uint8Array(buffer), filename);
+  const media = await rare.media.upload(new Uint8Array(buffer), filename);
   log(`  ${label} uploaded: ${media.url}`);
   return media;
 }

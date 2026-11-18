@@ -1,17 +1,14 @@
+import type { RareClient } from '@rareprotocol/rare-sdk';
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { Command } from 'commander';
+import { parseEther } from 'viem';
 import { getActiveChain } from '../config.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import {
-  parseCurveConfig,
-  type LiquidCurvePreview,
-  type LiquidCurveSegment,
-} from '@rareprotocol/rare-sdk/liquid/curve-config';
-import { toPositiveInteger } from '@rareprotocol/rare-sdk/amounts-core';
-import { resolveLiquidFactoryConfigForSupply } from '@rareprotocol/rare-sdk/liquid/factory-config-core';
+import type { LiquidCurvePreview, LiquidCurveSegment } from '@rareprotocol/rare-sdk';
+import { toPositiveInteger } from '../input-core.js';
 import { runLiquidCurveWizard } from '../liquid-wizard.js';
 import { output, log, isJsonMode } from '../output.js';
 import {
@@ -33,7 +30,7 @@ export {
 } from './deploy-core.js';
 
 async function resolveTokenUri(
-  rare: ReturnType<typeof createRareClient>,
+  rare: RareClient,
   tokenName: string,
   opts: {
     tokenUri?: string;
@@ -75,9 +72,9 @@ async function resolveTokenUri(
 }
 
 async function uploadVideoMedia(
-  rare: ReturnType<typeof createRareClient>,
+  rare: RareClient,
   videoPath: string,
-): Promise<Awaited<ReturnType<ReturnType<typeof createRareClient>['media']['upload']>>> {
+): Promise<Awaited<ReturnType<RareClient['media']['upload']>>> {
   const videoBuffer = await readMetadataFile(videoPath, 'video');
   log(`Uploading video: ${basename(videoPath)} (${videoBuffer.byteLength} bytes)`);
   const videoMedia = await rare.media.upload(new Uint8Array(videoBuffer), basename(videoPath));
@@ -158,17 +155,6 @@ async function confirmLiquidEditionDeploy(chain: string, yes?: boolean): Promise
   throw new Error('Aborted.');
 }
 
-function resolveFactoryConfigForSupplyOrThrow(
-  factoryConfig: Awaited<ReturnType<ReturnType<typeof createRareClient>['liquidEdition']['getFactoryConfig']>>,
-  totalSupply?: string,
-): Awaited<ReturnType<ReturnType<typeof createRareClient>['liquidEdition']['getFactoryConfig']>> {
-  const result = resolveLiquidFactoryConfigForSupply(factoryConfig, totalSupply);
-  if (!result.isValid) {
-    throw new Error(result.errorMessage);
-  }
-  return result.factoryConfig;
-}
-
 async function resolveCurves(
   opts: {
     curvesFile?: string;
@@ -178,7 +164,7 @@ async function resolveCurves(
     yes?: boolean;
     targetChain?: string;
   },
-  rare: ReturnType<typeof createRareClient>,
+  rare: RareClient,
 ): Promise<{
   source: string;
   curves: LiquidCurveSegment[];
@@ -186,18 +172,24 @@ async function resolveCurves(
   rarePriceUsd?: number;
 }> {
   const mode = resolveCurveSourceMode(opts, Boolean(process.stdin.isTTY));
+  const totalSupply = opts.totalSupply === undefined ? undefined : parseEther(opts.totalSupply);
 
   if (mode === 'file') {
     if (!opts.curvesFile) {
       throw new Error('--curves-file is required for file curve source.');
     }
-    const factoryConfig = resolveFactoryConfigForSupplyOrThrow(
-      await rare.liquidEdition.getFactoryConfig(),
-      opts.totalSupply,
-    );
+    const liquidEdition = rare.liquidEdition;
+    if (!supportsSupplyAwareFactoryConfig(liquidEdition)) {
+      throw new Error('The installed RARE SDK does not support custom liquid edition supplies.');
+    }
+    const factoryConfig = await liquidEdition.getFactoryConfig({ totalSupply });
     const raw = await readFile(opts.curvesFile, 'utf-8');
-    const curves = parseCurveConfig(raw, factoryConfig.curvePoolSupplyTokens, factoryConfig.poolTickSpacing);
-    const preview = await rare.liquidEdition.validateCurves({ curves, totalSupply: opts.totalSupply });
+    const curves = rare.utils.liquidCurve.parseConfig({
+      value: raw,
+      totalCurveSupplyTokens: factoryConfig.curvePoolSupplyTokens,
+      tickSpacing: factoryConfig.poolTickSpacing,
+    });
+    const preview = await rare.liquidEdition.validateCurves({ curves, totalSupply });
     return {
       source: `file:${opts.curvesFile}`,
       curves,
@@ -212,7 +204,7 @@ async function resolveCurves(
     }
     const generated = await rare.liquidEdition.generatePresetCurves({
       preset: opts.curvePreset,
-      totalSupply: opts.totalSupply,
+      totalSupply,
     });
     await writeGeneratedCurves(opts.writeCurvesFile, generated.curves);
     return {
@@ -226,7 +218,7 @@ async function resolveCurves(
   const wizard = await runLiquidCurveWizard({
     skipConfirmation: opts.yes,
     targetChain: opts.targetChain,
-    generatePresetCurves: async (preset) => rare.liquidEdition.generatePresetCurves({ preset, totalSupply: opts.totalSupply }),
+    generatePresetCurves: async (preset) => rare.liquidEdition.generatePresetCurves({ preset, totalSupply }),
   });
   await writeGeneratedCurves(opts.writeCurvesFile, wizard.curves);
   return {
@@ -235,6 +227,15 @@ async function resolveCurves(
     preview: wizard.preview,
     rarePriceUsd: wizard.rarePriceUsd,
   };
+}
+
+type SupplyAwareLiquidEdition = RareClient['liquidEdition'] & {
+  getFactoryConfig: (params?: { totalSupply?: string }) => Promise<Awaited<ReturnType<RareClient['liquidEdition']['getFactoryConfig']>>>;
+};
+
+function supportsSupplyAwareFactoryConfig(value: unknown): value is SupplyAwareLiquidEdition {
+  return typeof value === 'object' && value !== null &&
+    'getFactoryConfig' in value && typeof value.getFactoryConfig === 'function';
 }
 
 export function deployErc721Command(): Command {
@@ -381,9 +382,10 @@ export function deployLiquidEditionCommand(): Command {
           name,
           symbol,
           tokenUri,
-          initialRareLiquidity: opts.initialRareLiquidity,
-          totalSupply: opts.totalSupply,
+          initialRareLiquidity: opts.initialRareLiquidity === undefined ? undefined : parseEther(opts.initialRareLiquidity),
+          totalSupply: opts.totalSupply === undefined ? undefined : parseEther(opts.totalSupply),
           curves: curves.curves,
+          autoApprove: true,
         });
         const liquidEditionUrl = formatLiquidEditionUrl(rare.chainId, result.contract);
 
