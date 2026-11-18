@@ -503,6 +503,8 @@ rare listing status --contract 0x... --token-id 1
 
 ### Cart
 
+See [Manage purchase eligibility](docs/eligibility.md) for creator rules, SKU claims, and Listing requirements.
+
 Cart Listing creation and checkout use the same saved account session as
 `rare auth login`. Pass `--api-url`, `--storage`, and `--auth-directory` to use
 the same account storage, or set `RARE_API_URL`, `RARE_AUTH_STORAGE`, and
