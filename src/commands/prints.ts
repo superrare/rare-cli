@@ -1,20 +1,24 @@
 import { readFile } from 'node:fs/promises';
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { z } from 'zod';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
-import type { RareClient } from '@rareprotocol/rare-sdk';
+import { createPrintDropRequest, createPrintListingRequest, type PreparePrintListing, type RareClient } from '@rareprotocol/rare-sdk';
 import { accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
 import { createAuthStore } from '../auth-storage.js';
 import { output } from '../output.js';
 import { formatPrintOutput } from './print-output-core.js';
+import { parseCartAmount, parseCartCliCurrency } from './cart-core.js';
+import { savePrintRequest } from './print-request-storage.js';
 import { addChainOptions, type ChainOptions } from './options.js';
 import { parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, printListingInput, printQuoteInput } from './print-input-core.js';
 
 type PrintOptions = AccountCommandOptions & ChainOptions;
 type IdentityOptions = PrintOptions & { id: string };
 type InputOptions = PrintOptions & { input: string };
+type PreparationOptions = PrintOptions & { preparationId: string };
+type PublishOptions = PrintOptions & { preparationId?: string; input?: string };
 type FileToolOptions = PrintOptions & { productionUploadKey: string; specificationId: string };
 
 function command(name: string): Command {
@@ -75,7 +79,9 @@ export function printsCommand(): Command {
   drops.addCommand(command('create').requiredOption('--input <path>', 'JSON draft with chainId, optional productId, and print details: private productionUploadKey, public images and specificationId')
     .action(async (options: InputOptions): Promise<void> => {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
-      print(await client(options).prints.drops.create(printDropInput.parse(input)));
+      const request = await savePrintRequest(options.input, 'draft', printDropInput.parse(input), createPrintDropRequest,
+        value => printDropInput.extend({ idempotencyKey: z.uuid() }).parse(value));
+      print(await client(options).prints.drops.create(request));
     }));
   drops.addCommand(command('update').requiredOption('--id <uuid>', 'owned drop ID')
     .requiredOption('--input <path>', 'JSON patch; replace productionUploadKey even after publication; specification changes require an unconfigured draft')
@@ -94,12 +100,31 @@ export function printsCommand(): Command {
   drops.addCommand(command('archive').requiredOption('--id <uuid>', 'owned drop ID')
     .action(async (options: IdentityOptions): Promise<void> => { print(await client(options).prints.drops.archive(parseCommerceUuid(options.id))); }));
   drops.addCommand(command('configure').requiredOption('--id <uuid>', 'owned drop ID')
-    .requiredOption('--price-usd-cents <amount>', 'collector price, in integer USD cents; Listings settle in USDC')
-    .action(async (options: IdentityOptions & { priceUsdCents: string }): Promise<void> => {
-      const displayPriceUsdCents = parsePrintPrice(options.priceUsdCents);
+    .option('--price-usd-cents <amount>', 'artwork price in integer USD cents, settled in USDC')
+    .option('--price <amount>', 'artwork price in units of the selected currency')
+    .option('--currency <currency>', 'listing currency, such as eth, usdc, or rare')
+    .action(async (options: IdentityOptions & {
+      priceUsdCents?: string; price?: string; currency?: string;
+    }): Promise<void> => {
+      const { priceUsdCents, price, currency } = options;
       const rare = client(options);
       const dropId = parseCommerceUuid(options.id);
-      print(await rare.prints.options.configure({ dropId, input: { displayPriceUsdCents } }));
+      if (priceUsdCents !== undefined && price === undefined && currency === undefined) {
+        print(await rare.prints.options.configure({ dropId, input: {
+          displayPriceUsdCents: parsePrintPrice(priceUsdCents),
+        } }));
+        return;
+      }
+      if (priceUsdCents !== undefined || price === undefined || currency === undefined)
+        throw new Error('Use --price and --currency together, or supply --price-usd-cents.');
+      const selected = parseCartCliCurrency(currency, 'Listing currency');
+      if (!selected.isValid) throw new Error(selected.issues.join(" "));
+      const resolved = await rare.currency.resolveDecimals(selected.value);
+      const amount = parseCartAmount(price, resolved.decimals, 'Print price');
+      if (!amount.isValid) throw new Error(amount.issues.join(" "));
+      print(await rare.prints.options.configure({ dropId, input: {
+        price: { currency: resolved.address, amount: amount.value.toString() },
+      } }));
     }));
   prints.addCommand(drops);
 
@@ -107,20 +132,45 @@ export function printsCommand(): Command {
   listings.addCommand(command('prepare').requiredOption('--input <path>', 'JSON listing terms, including optional eligibilityRuleId, maxQuantityPerCheckout, splits and mintSource')
     .action(async (options: InputOptions): Promise<void> => {
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
-      print(await client(options).prints.listings.prepare(printListingInput.parse(input)));
+      const request = await loadPrintListingRequests(options.input, [input]);
+      const [listing] = request;
+      if (listing === undefined) throw new Error('Expected one print listing.');
+      print(await client(options).prints.listings.prepare(listing));
     }));
-  listings.addCommand(command('publish').requiredOption('--input <path>', 'JSON listing terms or an array of up to 100 print offers to sign together')
+  listings.addCommand(command('review').description('Review a saved print listing before signing')
+    .requiredOption('--preparation-id <uuid>', 'saved listing preparation ID')
+    .action(async (options: PreparationOptions): Promise<void> => {
+      print(await client(options).prints.listings.getPreparation(parseCommerceUuid(options.preparationId)));
+    }));
+  listings.addCommand(command('publish')
+    .addOption(new Option('--preparation-id <uuid>', 'saved listing preparation ID').conflicts('input'))
+    .option('--input <path>', 'JSON listing terms or an array of up to 100 print offers to sign together')
     .option('--yes', 'proceed through all required signing and publication steps')
-    .action(async (options: InputOptions): Promise<void> => {
+    .action(async (options: PublishOptions): Promise<void> => {
+      if (options.preparationId !== undefined) {
+        const printPreparationId = parseCommerceUuid(options.preparationId);
+        print(await client(options, true).cart.listing.publish({ printPreparationId }));
+        return;
+      }
+      if (options.input === undefined) throw new Error('Provide --preparation-id or --input.');
       const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
       const inputs: unknown = Array.isArray(input) ? input : [input];
-      const terms = z.array(printListingInput).min(1).max(100).parse(inputs);
+      const terms = await loadPrintListingRequests(options.input, inputs);
       const rare = client(options, true);
       const preparations = await Promise.all(terms.map(async (item) => rare.prints.listings.prepare(item)));
       print(await rare.cart.listing.publish({ printPreparations: preparations }));
     }));
   prints.addCommand(listings);
   return prints;
+}
+
+async function loadPrintListingRequests(path: string, input: unknown): Promise<PreparePrintListing[]> {
+  const terms = z.array(printListingInput).min(1).max(100).parse(input);
+  return savePrintRequest(path, 'listing', terms, items => items.map(createPrintListingRequest), value =>
+    z.array(printListingInput).min(1).max(100).parse(value).map(item => {
+      if (item.listingSalt === undefined) throw new Error('Saved print listing is missing its salt.');
+      return createPrintListingRequest(item);
+    }));
 }
 
 function client(options: PrintOptions, signing = false): RareClient {
