@@ -20,7 +20,7 @@ import {
   supportedChains,
   viemChains,
   type SupportedChain,
-} from '@rareprotocol/rare-sdk/contracts/addresses';
+} from '@rareprotocol/rare-sdk/contracts';
 import { parseJsonStdout, runCli } from '../../helpers/cli.js';
 import { loadDotEnv, missingLiveEnv } from '../env.mjs';
 import { withLiveWriteConsent } from './live-consent.js';

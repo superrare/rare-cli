@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Command } from 'commander';
-import { chainIds } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { chainIds } from '@rareprotocol/rare-sdk/contracts';
 import { accountClient, accountCommand, continueDeviceLogin, openVerificationUrl, preflightStorage, printAuthorized, printDeviceRequest, safeSession, storageOptions, withCancellation, type AccountCommandOptions } from '../auth-cli.js';
 import { createAuthStore } from '../auth-storage.js';
 import { getConfiguredWalletAccount } from '../client.js';

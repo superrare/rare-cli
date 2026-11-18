@@ -1,6 +1,7 @@
-import type { Address } from 'viem';
-import { MAX_PAYOUT_SPLIT_RECIPIENTS, planProvidedPayoutSplits } from '@rareprotocol/rare-sdk/splits-core';
-import { parseAddress } from '@rareprotocol/rare-sdk/validation';
+import { isAddressEqual, type Address } from 'viem';
+import { parseAddress } from '../input-core.js';
+
+const MAX_PAYOUT_SPLIT_RECIPIENTS = 5;
 
 export type SplitAccumulator = {
   addresses: Address[];
@@ -38,7 +39,18 @@ export function finalizeSplits(acc: SplitAccumulator | undefined): SplitOptions 
     throw new Error(`--split can be provided at most ${MAX_PAYOUT_SPLIT_RECIPIENTS} times.`);
   }
 
-  return planProvidedPayoutSplits(acc.addresses, acc.ratios);
+  const duplicateAddress = acc.addresses.find((address, index) =>
+    acc.addresses.some((otherAddress, otherIndex) => otherIndex < index && isAddressEqual(address, otherAddress)),
+  );
+  if (duplicateAddress !== undefined) throw new Error(`Duplicate split address: "${duplicateAddress}".`);
+  const totalRatio = acc.ratios.reduce((total, ratio) => {
+    if (!Number.isInteger(ratio) || ratio < 1 || ratio > 100) {
+      throw new Error(`Invalid split ratio: "${String(ratio)}". Must be an integer between 1 and 100.`);
+    }
+    return total + ratio;
+  }, 0);
+  if (totalRatio !== 100) throw new Error(`splitRatios must sum to 100 (got ${totalRatio}).`);
+  return { addresses: [...acc.addresses], ratios: [...acc.ratios] };
 }
 
 export function formatSplitLines(splits: SplitOptions): string[] {

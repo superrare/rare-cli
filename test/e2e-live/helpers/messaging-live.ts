@@ -2,7 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { isPrivateKeyString } from '@rareprotocol/rare-sdk/validation';
+import { isPrivateKeyString } from '../../../src/input-core.js';
 import { parseJsonStdout, runCli, withTempHome, type CliResult } from '../../helpers/cli.js';
 
 export const required = (name: string): string => {

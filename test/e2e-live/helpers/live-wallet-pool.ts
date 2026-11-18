@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { Address } from 'viem';
-import { parseHexString } from '@rareprotocol/rare-sdk/validation';
-import { chainIds, type SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { chainIds, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
+import { parsePrivateKey } from '../../../src/input-core.js';
 
 export type LiveWalletRole = 'seller' | 'buyer';
 
@@ -112,7 +112,7 @@ function livePrivateKeys(role: LiveWalletRole): `0x${string}`[] {
     ? []
     : rawPool.split(/[\s,]+/).filter((value) => value.trim() !== '');
 
-  const keys = rawKeys.map((value, index) => parseHexString(value, `${pluralName}[${index}]`));
+  const keys = rawKeys.map((value, index) => parsePrivateKey(value, `${pluralName}[${index}]`));
   if (keys.length === 0) {
     throw new Error(`${pluralName} must provide at least one 0x-prefixed private key.`);
   }

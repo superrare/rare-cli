@@ -3,7 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { afterAll, beforeAll, expect, it } from 'vitest';
 import type { Address } from 'viem';
-import { getContractAddresses } from '@rareprotocol/rare-sdk/contracts/addresses';
+import { getContractAddresses } from '@rareprotocol/rare-sdk/contracts';
 import { describeLive, expectTx, jsonCommand, retryNonceConflict, step, withLiveTransactionLock, type TxResult } from './live-helpers.js';
 import {
   cleanupLiveCliFixture,

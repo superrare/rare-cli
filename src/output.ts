@@ -1,5 +1,5 @@
 import { formatEther } from 'viem';
-import type { Nft, Collection, NftEvent, Pagination, UserProfile } from '@rareprotocol/rare-sdk/api';
+import type { Nft, Collection, NftEvent, Pagination, UserProfile } from '@rareprotocol/rare-sdk';
 
 export function isJsonMode(): boolean {
   return process.argv.includes('--json');

@@ -1,7 +1,7 @@
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { privateKeyToAccount } from 'viem/accounts';
-import { isPrivateKeyString } from '@rareprotocol/rare-sdk/validation';
+import { isPrivateKeyString } from '../../src/input-core.js';
 import { describe, expect, it } from 'vitest';
 import { parseJsonStdout, runCli, withTempHome } from '../helpers/cli.js';
 

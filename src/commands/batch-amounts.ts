@@ -1,19 +1,20 @@
 import { formatUnits, parseUnits, type Address, type PublicClient } from 'viem';
-import type { SupportedChain } from '@rareprotocol/rare-sdk/contracts/addresses';
-import { resolveCurrencyDecimals } from '@rareprotocol/rare-sdk/payments-shell';
-
-type BatchAmountClient = Pick<PublicClient, 'readContract'>;
+import { viemChains, type SupportedChain } from '@rareprotocol/rare-sdk/contracts';
+import { createRareClient } from '@rareprotocol/rare-sdk/client';
 
 export async function getBatchCurrencyDecimals(
-  publicClient: BatchAmountClient,
+  publicClient: PublicClient,
   chain: SupportedChain,
   currency: Address,
 ): Promise<number> {
-  return resolveCurrencyDecimals(publicClient, chain, currency);
+  const chainBoundClient = publicClient.chain === undefined
+    ? { ...publicClient, chain: viemChains[chain] }
+    : publicClient;
+  return (await createRareClient({ publicClient: chainBoundClient }).currency.resolveDecimals(currency)).decimals;
 }
 
 export async function parseBatchAmount(
-  publicClient: BatchAmountClient,
+  publicClient: PublicClient,
   chain: SupportedChain,
   currency: Address,
   amount: string,
@@ -23,7 +24,7 @@ export async function parseBatchAmount(
 }
 
 export async function formatBatchAmount(
-  publicClient: BatchAmountClient,
+  publicClient: PublicClient,
   chain: SupportedChain,
   currency: Address,
   amount: bigint,
