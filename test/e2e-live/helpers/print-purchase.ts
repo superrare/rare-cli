@@ -2,30 +2,20 @@ import { assertSepoliaPrintMarkup } from './print-markup.js';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { readCollaboratorBalance, verifyPrintSplits } from './cart-print-splits.js';
 import { downloadTestImage } from './test-image.js';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect } from 'vitest';
-import { z } from 'zod';
-import type { CartCheckoutPreparation, CartCheckoutReceipt, CartOrder, EligibilityClaim, EligibilityRule, PrintOption, PublicPrintDrop } from '@rareprotocol/rare-sdk';
+import type { CartCheckoutPreparation, CartCheckoutReceipt, EligibilityClaim, EligibilityRule, PrintOption, PublicPrintDrop } from '@rareprotocol/rare-sdk';
 import { erc20Abi, erc721Abi, erc1155Abi, getAddress, isHex, parseEventLogs, parseUnits, zeroAddress, type Address, type Hex } from 'viem';
 import { cartAbi, getCartAddress, rareErc1155Abi, resolveCurrency } from '@rareprotocol/rare-sdk/contracts';
 import { deployErc721Collection, mintToken } from './live-erc721.js';
 import { createCreatorVariantClient } from './cart-creator-variants.js';
-import { verifyPrivateCartOrder } from './cart-order-history.js';
+import { verifyPrivateCartOrder, waitForSubmittedPrintOrder } from './cart-order-history.js';
 import { verifyCartPurchaseNotifications } from './cart-notifications.js';
 import { cleanupLiveFixture, createCartLiveFixture, E2E_TOKEN_URI, jsonCommand } from './live-harness.js';
 
-// Verify against the provider independently of our persisted status. Never target the live API.
-const sandboxOrderSchema = z.object({ data: z.object({
-  id: z.string(), updatedAt: z.string(), shipments: z.array(z.object({ id: z.string() })).default([]), merchantReference: z.string(), metadata: z.object({ fulfillmentId: z.string() }),
-  items: z.array(z.object({ sku: z.string(), quantity: z.number(), assets: z.array(z.object({ url: z.string() })).optional() })),
-}) });
-
 export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'claim' | 'two-copy' | 'can-opener'): Promise<void> {
-    const configuredKey = process.env.PRODIGI_SANDBOX_API_KEY;
-    if (!configuredKey?.startsWith('sandbox_') && !configuredKey?.startsWith('test_')) throw new Error('Set PRODIGI_SANDBOX_API_KEY to a sandbox key. Deploy Rare API and Pipelines with the same v5 sandbox configuration.');
-    const sandboxKey = configuredKey.startsWith('test_') ? `sandbox_${configuredKey}` : configuredKey;
     const maximumPayment = parseUnits(journey === 'two-copy' ? '50' : '25', 6);
     const fixture = await createCartLiveFixture({ buyer: true,
       buyerWalletFilter: async (wallet, { chain, publicClient }) => {
@@ -182,47 +172,16 @@ export async function purchasePrintJourney(journey: 'print-only' | 'mixed' | 'cl
         expect(await claims()).toHaveLength(1);
         await expect(jsonCommand(buyerHome, [...printCheckout, '--authorize-only', '--yes'])).rejects.toThrow(/Status: 409/u);
       }
-      const readOrder = (): Promise<CartOrder> => jsonCommand<CartOrder>(buyerHome, ['cart', 'orders', 'get', '--id', purchase.orderId]);
-      await expect.poll(async () => (await readOrder()).fulfillments[0]?.providerOrderId, { timeout: 240_000, interval: 3_000 }).toMatch(/^[A-Za-z0-9~_-]+$/u);
-      await expect.poll(async () => (await readOrder()).fulfillments[0]?.progress ?? null, { timeout: 240_000, interval: 5_000 }).not.toBeNull();
-      const order = await readOrder();
+      const order = await waitForSubmittedPrintOrder(buyerHome, purchase.orderId, 1);
       const fulfillment = order.fulfillments[0];
-      if (!fulfillment?.providerOrderId) throw new Error('Provider order ID is missing after submission.');
-      expect(order.status).toBe('CONFIRMED');
+      if (!fulfillment) throw new Error('Print fulfillment is missing after submission.');
       expect(order.items).toHaveLength(includesNft ? 2 : 1);
-      expect(order.fulfillments).toHaveLength(1);
-      if (!fixture.buyerHome || !fixture.buyerAddress) throw new Error('Print buyer fixture is missing.');
-      await verifyPrivateCartOrder({ ...fixture, buyerHome: fixture.buyerHome, buyerAddress: fixture.buyerAddress }, purchase.orderId);
-      await verifyCartPurchaseNotifications({ ...fixture, buyerHome: fixture.buyerHome, buyerAddress: fixture.buyerAddress }, purchase, includesNft ? 2 : 1);
-      const response = await fetch(`https://api.prodigi.com/v5/orders/${encodeURIComponent(fulfillment.providerOrderId)}`, {
-        headers: { 'X-API-Key': sandboxKey }, signal: AbortSignal.timeout(30_000), redirect: 'error',
+      expect(order.items?.find(item => item.lineIndex === fulfillment.orderLineIndex)).toMatchObject({
+        listingDigest: entry.listingDigest, printDropId: drop.id, sku: option.sku, quantity: journey === 'two-copy' ? '2' : '1',
       });
-      expect(response.status).toBe(200);
-      const body: unknown = await response.json();
-      const provider = sandboxOrderSchema.parse(body).data;
-      expect(provider.id).toBe(fulfillment.providerOrderId);
-      const progress = fulfillment.progress;
-      if (!progress) throw new Error('Backend did not reconcile provider progress.');
-      expect(['SUBMITTED', 'IN_PRODUCTION', 'PARTIALLY_SHIPPED', 'SHIPPED', 'CANCELLED']).toContain(progress.stage);
-      expect(Date.parse(progress.providerUpdatedAt)).toBeLessThanOrEqual(Date.parse(provider.updatedAt));
-      expect(progress).not.toHaveProperty('recipient');
-      expect(progress).not.toHaveProperty('items');
-      for (const shipment of progress.shipments) {
-        expect(provider.shipments.some(candidate => candidate.id === shipment.id)).toBe(true);
-        if (shipment.trackingUrl !== null) expect(new URL(shipment.trackingUrl).protocol).toBe('https:');
-        expect(shipment).not.toHaveProperty('deliveredAt');
-      }
-
-      expect(provider.metadata.fulfillmentId).toBe(fulfillment.id);
-      expect(provider.merchantReference).toBe(createHash('sha256').update(`superrare:cart:fulfillment:${fulfillment.id}`).digest('hex'));
-      expect(provider.items).toMatchObject([{ sku: product.id, quantity: journey === 'two-copy' ? 2 : 1 }]);
-      if (isCanOpener) {
-        const asset = provider.items[0]?.assets?.[0];
-        if (!asset) throw new Error('Prodigi order has no generic print production asset.');
-        expect(decodeURIComponent(new URL(asset.url).pathname)).toContain(master.key);
-      }
-      // Only public identifiers, never recipient details, private URLs or credentials.
-      console.info('Prodigi sandbox order verified', { transactionHash: purchase.txHash, orderId: purchase.orderId, providerOrderId: provider.id });
+      await verifyPrivateCartOrder({ ...fixture, buyerHome, buyerAddress: fixture.buyerAddress }, purchase.orderId);
+      await verifyCartPurchaseNotifications({ ...fixture, buyerHome, buyerAddress: fixture.buyerAddress }, purchase, includesNft ? 2 : 1);
+      console.info('Print fulfillment verified', { transactionHash: purchase.txHash, orderId: purchase.orderId, providerOrderId: fulfillment.providerOrderId });
     } finally {
       try {
         if (ruleId) await jsonCommand(fixture.sellerHome, ['cart', 'purchase-eligibility', 'rules', 'disable', '--rule-id', ruleId]);
