@@ -36,6 +36,17 @@ describe('built print and shipping CLI', () => {
   it('reviews preparations by ID and reuses generated keys after a failed request', async () => {
     const received = new Map<string, unknown[]>();
     const server = createServer((request, response) => {
+      if (request.method === 'PUT' && request.url?.endsWith('/options/standard')) {
+        void text(request).then(body => {
+          const path = request.url ?? '';
+          const inputs = [...(received.get(path) ?? []), JSON.parse(body)];
+          // eslint-disable-next-line functional/immutable-data -- Record the CLI requests.
+          received.set(path, inputs);
+          response.writeHead(200, { 'Content-Type': 'application/json' });
+          response.end(JSON.stringify({ data: { id: 'configured' } }));
+        });
+        return;
+      }
       if (request.method === 'GET' && request.url === '/v1/prints/listings/preparations/00000000-0000-4000-8000-000000000001') {
         response.writeHead(request.headers.authorization === 'Bearer print-retry-access' ? 200 : 401, { 'Content-Type': 'application/json' });
         response.end(JSON.stringify({ data: { id: '00000000-0000-4000-8000-000000000001' } }));
@@ -68,6 +79,17 @@ describe('built print and shipping CLI', () => {
           '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory], { home });
         expect(parseJsonStdout(review)).toEqual({ id: preparationId });
         expect(received.size).toBe(0);
+        const configure = ['--json', 'prints', 'drops', 'configure', '--id', preparationId,
+          '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory];
+        expect(parseJsonStdout(await runCli([...configure, '--price', '0.025', '--currency', 'eth'], { home })))
+          .toEqual({ id: 'configured' });
+        expect(parseJsonStdout(await runCli([...configure, '--price-usd-cents', '2500'], { home })))
+          .toEqual({ id: 'configured' });
+        expect(received.get(`/v1/prints/drops/${preparationId}/options/standard`)).toEqual([
+          { price: { currency: zeroAddress, amount: '25000000000000000' } },
+          { displayPriceUsdCents: '2500' },
+        ]);
+
         const draft = { chainId: '11155111', name: 'Print', print: { name: 'Print', description: '', tags: [],
           productionUploadKey: 'a'.repeat(64), specificationId: 'GLOBAL-FAP-8X12', images: ['https://example.com/preview.jpg'] } };
         const terms = { deadline: '1999999999', availableQuantity: '2' };
