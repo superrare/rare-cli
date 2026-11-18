@@ -80,9 +80,6 @@ describe('built print and shipping CLI', () => {
           { command: ['listing', 'prepare'], path: '/v1/prints/listings/prepare',
             input: { ...terms, optionId: '00000000-0000-4000-8000-000000000001', seller: '0x1111111111111111111111111111111111111111' },
             generated: { listingSalt: salt } },
-          { command: ['concierge', 'create'], path: '/v1/prints/concierge/drafts',
-            input: { creatorUserId: '17', drop: draft, listing: terms, displayPriceUsdCents: '1000' },
-            generated: { drop: { idempotencyKey: key }, listing: { listingSalt: salt } } },
         ];
         for (const scenario of scenarios) {
           const inputPath = join(home, `${scenario.command[0]}.json`);
@@ -206,6 +203,88 @@ describe('built print and shipping CLI', () => {
         expect(nonceReads).toBe(1);
       });
     } finally { await new Promise<void>((resolve, reject) => { server.close(error => { if (error) reject(error); else resolve(); }); }); }
+  });
+
+  it('uses separate account and Pipelines credentials and replays the same concierge terms', async () => {
+    const dropId = '00000000-0000-4000-8000-000000000001';
+    const optionId = '00000000-0000-4000-8000-000000000002';
+    const result = { dropId, option: { id: optionId } };
+    const requests: unknown[] = [];
+    const account = createServer((request, response) => {
+      if (request.url !== '/v1/me' || request.headers.authorization !== 'Bearer print-operator-access' ||
+          request.headers['x-superrare-support-secret'] !== undefined) {
+        response.writeHead(403).end();
+        return;
+      }
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify({ data: {
+        accountId: '23', address: '0x1111111111111111111111111111111111111111',
+        username: 'staff', email: null, profile: { fullName: null, bio: null, avatar: null },
+      } }));
+    });
+    const pipelines = createServer((request, response) => {
+      if (request.url !== '/prints/concierge/drafts' || request.method !== 'POST' ||
+          request.headers['x-superrare-support-secret'] !== 'fixture-support-secret' ||
+          request.headers.authorization !== undefined) {
+        response.writeHead(403).end();
+        return;
+      }
+      void text(request).then(body => {
+        // eslint-disable-next-line functional/immutable-data -- Capture requests from separate CLI processes.
+        requests.push(JSON.parse(body));
+        response.writeHead(requests.length <= 2 ? 503 : 201, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ data: result }));
+      });
+    });
+    const listen = async (server: ReturnType<typeof createServer>): Promise<string> => {
+      await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+      const address = server.address();
+      if (address === null || typeof address === 'string') throw new Error('Missing fixture address');
+      return `http://127.0.0.1:${address.port}`;
+    };
+    try {
+      const apiBaseUrl = await listen(account);
+      const pipelinesBaseUrl = await listen(pipelines);
+      await withTempHome(async temporary => {
+        const home = await realpath(temporary);
+        const directory = join(home, 'auth');
+        const scope = { apiBaseUrl, authBaseUrl: `${apiBaseUrl}/auth/v2`, clientId: 'rare-sdk' };
+        const store = createAuthStore({ ...scope, backend: 'file', directory });
+        await store.withLock(async () => { await store.set({ ...scope, revision: 'print-operator-session',
+          accessToken: 'print-operator-access', refreshToken: 'print-operator-refresh',
+          expiresAt: Date.now() + 300000, scope: 'rare:account offline_access' }); });
+        const input = join(home, 'concierge.json');
+        await writeFile(input, JSON.stringify({
+          creatorUserId: '17', displayPriceUsdCents: '1000',
+          drop: { chainId: '11155111', name: 'Print', print: { name: 'Print', description: '', tags: [],
+            productionUploadKey: 'a'.repeat(64), specificationId: 'GLOBAL-FAP-8X12', images: ['https://example.com/preview.jpg'] } },
+          listing: { deadline: '1999999999', availableQuantity: '2' },
+        }));
+        const args = ['--json', 'prints', 'concierge', 'create', '--input', input,
+          '--chain', 'sepolia', '--api-url', apiBaseUrl, '--storage', 'file', '--auth-directory', directory];
+        const options = { home, env: { PIPELINES_BASE_URL: pipelinesBaseUrl, GQL_API_KEY: 'fixture-support-secret' } };
+        expect((await runCli(args, { ...options, env: { ...options.env, GQL_API_KEY: 'wrong-secret' } })).stderr).toContain('Status: 403');
+        const failure = await runCli(args, options);
+        expect(failure.stderr).toContain('Rerun the same command with the same input file');
+        expect(failure.stderr).not.toContain('fixture-support-secret');
+        expect(requests).toHaveLength(2);
+        expect(parseJsonStdout(await runCli(args, options))).toEqual(result);
+        const [first, second, third] = requests;
+        expect(first).toMatchObject({
+          creatorUserId: '17', operatorUserId: '23', displayPriceUsdCents: '1000',
+          drop: { idempotencyKey: expect.stringMatching(/^[0-9a-f-]{36}$/u) },
+          listing: { listingSalt: expect.stringMatching(/^0x[0-9a-f]{64}$/u) },
+        });
+        expect(second).toEqual(first);
+        expect(third).toEqual(first);
+      });
+    } finally {
+      await Promise.all([account, pipelines]
+        .filter(server => server.listening)
+        .map(server => new Promise<void>((resolve, reject) => {
+          server.close(error => { if (error) reject(error); else resolve(); });
+        })));
+    }
   });
 
   it('lists and gets public products in human and JSON output without signing in', async () => {
