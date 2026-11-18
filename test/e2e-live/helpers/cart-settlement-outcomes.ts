@@ -1,3 +1,4 @@
+import { assertSepoliaPrintMarkup } from './print-markup.js';
 import { expect } from 'vitest';
 import type { CartCheckoutPreparation, CartCheckoutReceipt, RareClient } from '@rareprotocol/rare-sdk';
 import { cartAbi, getCartAddress } from '@rareprotocol/rare-sdk/contracts';
@@ -40,7 +41,8 @@ export async function verifyUsdcCartSettlement(
   }
   expect(receipt).not.toHaveProperty('feeAllocations');
   const feeLines = receipt.lines.filter(line => line.fulfillmentKind === 0);
-  expect(feeLines).toHaveLength(physical ? 4 : 2);
+  expect(feeLines).toHaveLength(physical ? 5 : 2);
+  if (physical) assertSepoliaPrintMarkup(receipt);
   expect(feeLines.every(line => BigInt(line.amount) > 0n)).toBe(true);
   return receipt;
 }
