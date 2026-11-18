@@ -20,6 +20,9 @@ const sandboxOrder = z.object({ data: z.object({
 type PreparedPrintSize = { dropId: string; printSku: Hex; optionId: string; specificationId: string };
 type PreparedArtwork = PreparedPrintSize & { productId: string; nftSku: Hex; masterKey: string; publicUrl: string; name: string };
 type Purchase = { txHash: Hex; orderId: Hex };
+type CheckoutPreviewLine = Pick<CartCheckoutReceipt['lines'][number],
+  'sku' | 'fulfillmentKind' | 'settlementCurrency' | 'paymentRecipient' | 'amount'>;
+type CheckoutPreview = { paymentAmount: string; lines: CheckoutPreviewLine[] };
 
 // Selected live suites fail when deployment, wallet or provider prerequisites are missing.
 // This test deploys the same LazySovereign contract as release creation, not fixture bytecode.
@@ -139,7 +142,7 @@ describe('ordered blind mint and its physical Product variant', () => {
         preparationId, listingDigest: mintListing, unitIndexes: [0],
       })) });
       const checkout = ['cart', 'checkout', '--input', checkoutFile, '--payment-currency', 'usdc', '--shipping-input', shipping, '--chain', live.chain];
-      const preview = await jsonCommand<{ preparation: { paymentAmount: string } }>(live.buyerHome, [...checkout, '--preview']);
+      const preview = await jsonCommand<{ preparation: CheckoutPreview }>(live.buyerHome, [...checkout, '--preview']);
       expect(BigInt(preview.preparation.paymentAmount)).toBeLessThanOrEqual(50_000_000n);
       const splitBalance = await readCollaboratorBalance(live, collaborator);
       const purchase = await jsonCommand<Purchase>(live.buyerHome, [...checkout, '--yes'], 300_000);
@@ -148,7 +151,7 @@ describe('ordered blind mint and its physical Product variant', () => {
       await expect.poll(async () => (await creator.cart.checkout.receipt(purchase.orderId)).status,
         { timeout: 180_000, interval: 2_000 }).toBe('indexed');
       const receipt = await creator.cart.checkout.receipt(purchase.orderId);
-      assertFees(receipt, preview.preparation.paymentAmount);
+      assertFees(receipt, preview.preparation);
       await verifyPrintSplits(live, purchase, receipt, [mintListing, ...publishedPrints.map(({ listingDigest }) => listingDigest)], collaborator, splitBalance);
       expect(receipt.actions.some(action => action.target.toLowerCase() === collection.contract.toLowerCase() && action.tokenId === '2' && action.unitIndex === '0')).toBe(true);
 
@@ -258,12 +261,23 @@ async function assertMint(live: BuyerLiveFixture, purchase: Purchase, contract: 
   expect(await live.publicClient.readContract({ address: contract, abi: erc721Abi, functionName: 'tokenURI', args: [tokenId] }))
     .toBe(`ipfs://${nftFixtureManifest.metadataCid}/lazy/${tokenId}.json`);
 }
-function assertFees(receipt: CartCheckoutReceipt, paymentAmount: string): void {
+function assertFees(receipt: CartCheckoutReceipt, preview: CheckoutPreview): void {
   expect(receipt.issues).toEqual([]);
-  expect(receipt.paymentAmount).toBe(paymentAmount);
-  expect(receipt.lines.reduce((sum, line) => sum + BigInt(line.amount), 0n)).toBe(BigInt(paymentAmount));
+  expect(receipt.paymentAmount).toBe(preview.paymentAmount);
+  expect(receipt.lines.reduce((sum, line) => sum + BigInt(line.amount), 0n)).toBe(BigInt(preview.paymentAmount));
   expect(receipt).not.toHaveProperty('feeAllocations');
-  const feeLines = receipt.lines.filter(line => line.fulfillmentKind === 0);
-  expect(feeLines).toHaveLength(4);
-  expect(feeLines.every(line => BigInt(line.amount) > 0n)).toBe(true);
+  const feeLines = (lines: readonly CheckoutPreviewLine[]): Array<{
+    sku: string; settlementCurrency: string; paymentRecipient: string; amount: string;
+  }> => lines
+    .filter(line => line.fulfillmentKind === 0)
+    .map(line => ({
+      sku: line.sku.toLowerCase(),
+      settlementCurrency: line.settlementCurrency.toLowerCase(),
+      paymentRecipient: line.paymentRecipient.toLowerCase(),
+      amount: line.amount,
+    }));
+  const expectedFees = feeLines(preview.lines);
+  expect(expectedFees.length).toBeGreaterThan(0);
+  expect(expectedFees.every(line => BigInt(line.amount) > 0n)).toBe(true);
+  expect(feeLines(receipt.lines)).toEqual(expectedFees);
 }
