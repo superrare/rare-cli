@@ -5,16 +5,15 @@ import { Command, Option } from 'commander';
 import { z } from 'zod';
 import { createRareClient } from '@rareprotocol/rare-sdk/client';
 import type { PrintRecoveryStore, RareClient } from '@rareprotocol/rare-sdk';
-import { accountClient, accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
+import { accountCommand, storageOptions, type AccountCommandOptions } from '../auth-cli.js';
 import { getPublicClient, getWalletClient } from '../client.js';
 import { getActiveChain } from '../config.js';
 import { createAuthStore } from '../auth-storage.js';
 import { output } from '../output.js';
 import { formatPrintOutput } from './print-output-core.js';
 import { printRecoveryStore } from './print-request-storage.js';
-import { createConciergeDraft, loadConciergeRequest, requireConciergeConnection } from './print-concierge.js';
 import { addChainOptions, type ChainOptions } from './options.js';
-import { parseCommerceUuid, parsePrintPrice, printConciergeInput, printDraftPatch, printDropInput, printListingInput, printQuoteInput } from './print-input-core.js';
+import { parseCommerceUuid, parsePrintPrice, printDraftPatch, printDropInput, printListingInput, printQuoteInput } from './print-input-core.js';
 
 type PrintOptions = AccountCommandOptions & ChainOptions;
 type IdentityOptions = PrintOptions & { id: string };
@@ -79,18 +78,6 @@ export function printsCommand(): Command {
     .action(async (options: PrintOptions & { universalTokenId: string }): Promise<void> => {
       print(await client(options).prints.releases.list({ universalTokenId: options.universalTokenId }));
     }));
-
-  const concierge = new Command('concierge').description('Set up prints on behalf of a creator using PIPELINES_BASE_URL and GQL_API_KEY');
-  concierge.addCommand(command('create').requiredOption('--input <path>', 'JSON creatorUserId, drop, displayPriceUsdCents and optional listing terms')
-    .action(async (options: InputOptions): Promise<void> => {
-      const input: unknown = JSON.parse(await readFile(options.input, 'utf8'));
-      const terms = printConciergeInput.parse(input);
-      const connection = requireConciergeConnection(process.env);
-      const { accountId: operatorUserId } = await accountClient(storageOptions(options)).profile.get();
-      const request = await loadConciergeRequest(options.input, terms);
-      print(await createConciergeDraft(connection, { ...request, operatorUserId }));
-    }));
-  prints.addCommand(concierge);
 
   const drops = new Command('drops').description('Manage your creator print drafts');
   drops.addCommand(command('create').requiredOption('--input <path>', 'JSON draft with chainId, optional productId, and print details: private productionUploadKey, public images and specificationId')
