@@ -1,27 +1,38 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import type { PrintDrop } from '@rareprotocol/rare-sdk';
-import { requireConciergeConnection } from '../../src/commands/print-concierge.js';
+import { z } from 'zod';
 import { cleanupLiveFixture, createCartLiveFixture, jsonCommand, requireBuyerFixture } from './helpers/live-harness.js';
 import { downloadTestImage } from './helpers/test-image.js';
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
 
-type ConciergePrintDraft = {
-  dropId: string;
-  option: PrintDrop['options'][number];
-  listing?: { optionId: string; listingSalt: string; seller: string };
-  preparationId?: string;
-};
+const conciergeDraftSchema = z.object({
+  data: z.object({
+    dropId: z.uuid(),
+    option: z.object({ id: z.uuid(), metadata: z.record(z.string(), z.unknown()) }).passthrough(),
+    listing: z.object({ optionId: z.uuid(), listingSalt: z.string(), seller: z.string() }).passthrough(),
+    preparationId: z.uuid(),
+  }),
+});
 
 it('lets an operator with the Pipelines support key set up a print that only its creator can publish', async () => {
-  const { endpoint } = requireConciergeConnection(process.env);
-  for (const supportKey of [undefined, randomUUID()]) {
+  const origin = URL.parse(process.env['PIPELINES_BASE_URL'] ?? '');
+  const supportKey = process.env['GQL_API_KEY'];
+  if (origin === null || origin.username !== '' ||
+      origin.password !== '' || origin.search !== '' || origin.hash !== '' ||
+      (origin.protocol !== 'https:' &&
+        !(origin.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(origin.hostname))) ||
+      supportKey === undefined || supportKey.trim() === '') {
+    throw new Error('Set PIPELINES_BASE_URL (HTTPS or loopback) and GQL_API_KEY for the concierge live test.');
+  }
+  const endpoint = new URL('/prints/concierge/drafts', origin);
+  for (const invalidKey of [undefined, randomUUID()]) {
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json',
-        ...(supportKey === undefined ? {} : { 'x-superrare-support-secret': supportKey }) },
+        ...(invalidKey === undefined ? {} : { 'x-superrare-support-secret': invalidKey }) },
       body: '{}', redirect: 'error', signal: AbortSignal.timeout(15_000),
     });
     expect(response.status).toBe(403);
@@ -32,7 +43,10 @@ it('lets an operator with the Pipelines support key set up a print that only its
   let dropId: string | undefined;
   try {
     expect(fixture.chain).toBe('sepolia');
-    const creator = await jsonCommand<{ accountId: string }>(creatorHome, ['profile', 'get']);
+    const [operator, creator] = await Promise.all([
+      jsonCommand<{ accountId: string }>(adminHome, ['profile', 'get']),
+      jsonCommand<{ accountId: string }>(creatorHome, ['profile', 'get']),
+    ]);
     const artist = { ...fixture, sellerHome: creatorHome, sellerAddress: fixture.buyerAddress };
     const collection = await deployErc721Collection(artist, '1');
     const token = await mintToken(artist, collection.contract);
@@ -45,25 +59,35 @@ it('lets an operator with the Pipelines support key set up a print that only its
     const preview = await jsonCommand<{ url: string }>(adminHome, [
       'uploads', 'upload', image, '--access', 'public', '--content-type', 'image/jpeg',
     ]);
-    const input = join(fixture.tempDir, 'concierge.json');
     const name = `Concierge print ${randomUUID()}`;
     const listingTerms = {
       availableQuantity: '3', maxQuantityPerCheckout: '2',
       deadline: String(Math.floor(Date.now() / 1000) + 3600),
     };
-    await writeFile(input, JSON.stringify({
+    const body = JSON.stringify({
+      operatorUserId: operator.accountId,
       creatorUserId: creator.accountId,
       drop: {
-        chainId: String(fixture.chainId), name,
+        chainId: String(fixture.chainId), idempotencyKey: randomUUID(), name,
         print: { name, description: '', tags: ['test'], productionUploadKey: master.key,
           images: [preview.url], specificationId: 'GLOBAL-FAP-8X12', sourceUniversalTokenId },
       },
-      displayPriceUsdCents: '100', listing: listingTerms,
-    }));
-    const setup = ['prints', 'concierge', 'create', '--input', input];
-    const draft = await jsonCommand<ConciergePrintDraft>(adminHome, setup);
+      displayPriceUsdCents: '100',
+      listing: { ...listingTerms, listingSalt: `0x${randomBytes(32).toString('hex')}` },
+    });
+    const createDraft = async (): Promise<z.infer<typeof conciergeDraftSchema>['data']> => {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-superrare-support-secret': supportKey },
+        body, redirect: 'error', signal: AbortSignal.timeout(30_000),
+      });
+      expect(response.status).toBe(201);
+      const payload: unknown = await response.json();
+      return conciergeDraftSchema.parse(payload).data;
+    };
+    const draft = await createDraft();
     dropId = draft.dropId;
-    expect(await jsonCommand(adminHome, setup)).toEqual(draft);
+    expect(await createDraft()).toEqual(draft);
     const owned = await jsonCommand<PrintDrop>(creatorHome, ['prints', 'drops', 'get', '--id', dropId]);
     expect(owned.status).toBe('DRAFT');
     expect(owned.options).toEqual([draft.option]);
@@ -74,7 +98,7 @@ it('lets an operator with the Pipelines support key set up a print that only its
     expect(draft.preparationId).toBeTruthy();
     expect(owned.metadata).toMatchObject({ productionUploadKey: master.key, images: [preview.url], sourceUniversalTokenId });
     await expect(jsonCommand(adminHome, ['prints', 'drops', 'get', '--id', dropId])).rejects.toThrow(/Status: 404/u);
-    const review = ['prints', 'listing', 'review', '--preparation-id', draft.preparationId ?? '', '--chain', fixture.chain];
+    const review = ['prints', 'listing', 'review', '--preparation-id', draft.preparationId, '--chain', fixture.chain];
     await expect(jsonCommand(adminHome, review)).rejects.toThrow(/Status: 404/u);
     const preparation = await jsonCommand<{ id: string; option_id: string }>(creatorHome, review);
     expect(preparation).toMatchObject({ id: draft.preparationId, option_id: draft.option.id });

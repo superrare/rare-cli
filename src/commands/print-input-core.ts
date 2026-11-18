@@ -57,20 +57,6 @@ const printListingFields = z.object({
     .pipe(z.string().refine(value => BigInt(value) <= 1000n, 'Print checkouts support at most 1000 copies')).optional(),
 }).strict();
 
-export const conciergePrintListingInput = printListingFields.omit({
-  seller: true,
-  optionId: true,
-  mintSource: true,
-});
-
-export const printConciergeInput = z.object({
-  creatorUserId: z.string().regex(/^[1-9][0-9]{0,18}$/u)
-    .pipe(z.string().refine(value => BigInt(value) <= 9223372036854775807n, 'Invalid creator account ID')),
-  drop: printDropInput,
-  listing: conciergePrintListingInput.optional(),
-  displayPriceUsdCents: z.string().transform(parsePrintPrice),
-}).strict();
-
 export const printListingInput = printListingFields.refine(value => value.splits?.[0] === undefined ||
   !isAddress(value.seller, { strict: false }) || !isAddress(value.splits[0].recipient, { strict: false }) ||
   isAddressEqual(value.splits[0].recipient, value.seller),
