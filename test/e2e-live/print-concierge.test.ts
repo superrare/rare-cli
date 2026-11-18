@@ -2,12 +2,30 @@ import { randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
-import type { ConciergePrintDraft, PrintDrop } from '@rareprotocol/rare-sdk';
+import type { PrintDrop } from '@rareprotocol/rare-sdk';
+import { requireConciergeConnection } from '../../src/commands/print-concierge.js';
 import { cleanupLiveFixture, createCartLiveFixture, jsonCommand, requireBuyerFixture } from './helpers/live-harness.js';
 import { downloadTestImage } from './helpers/test-image.js';
 import { deployErc721Collection, mintToken } from './helpers/live-erc721.js';
 
-it('lets a Cart administrator set up a print that only its creator can publish', async () => {
+type ConciergePrintDraft = {
+  dropId: string;
+  option: PrintDrop['options'][number];
+  listing?: { optionId: string; listingSalt: string; seller: string };
+  preparationId?: string;
+};
+
+it('lets an operator with the Pipelines support key set up a print that only its creator can publish', async () => {
+  const { endpoint } = requireConciergeConnection(process.env);
+  for (const supportKey of [undefined, randomUUID()]) {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json',
+        ...(supportKey === undefined ? {} : { 'x-superrare-support-secret': supportKey }) },
+      body: '{}', redirect: 'error', signal: AbortSignal.timeout(15_000),
+    });
+    expect(response.status).toBe(403);
+  }
   const fixture = requireBuyerFixture(await createCartLiveFixture({ buyer: true }));
   const adminHome = fixture.sellerHome;
   const creatorHome = fixture.buyerHome;
@@ -43,7 +61,6 @@ it('lets a Cart administrator set up a print that only its creator can publish',
       displayPriceUsdCents: '100', listing: listingTerms,
     }));
     const setup = ['prints', 'concierge', 'create', '--input', input];
-    await expect(jsonCommand(creatorHome, setup)).rejects.toThrow(/Status: 403/u);
     const draft = await jsonCommand<ConciergePrintDraft>(adminHome, setup);
     dropId = draft.dropId;
     expect(await jsonCommand(adminHome, setup)).toEqual(draft);
@@ -61,9 +78,11 @@ it('lets a Cart administrator set up a print that only its creator can publish',
     await expect(jsonCommand(adminHome, review)).rejects.toThrow(/Status: 404/u);
     const preparation = await jsonCommand<{ id: string; option_id: string }>(creatorHome, review);
     expect(preparation).toMatchObject({ id: draft.preparationId, option_id: draft.option.id });
-    const published = await jsonCommand<{ signedArtifact: { entries: { listingDigest: string }[] } }>(creatorHome, [
+    const publish = [
       'prints', 'listing', 'publish', '--preparation-id', preparation.id, '--chain', fixture.chain, '--yes',
-    ]);
+    ];
+    await expect(jsonCommand(adminHome, publish)).rejects.toThrow(/Status: 404/u);
+    const published = await jsonCommand<{ signedArtifact: { entries: { listingDigest: string }[] } }>(creatorHome, publish);
     expect(published.signedArtifact.entries).toHaveLength(1);
     await expect.poll(async () => (await jsonCommand<PrintDrop>(creatorHome, ['prints', 'drops', 'get', '--id', dropId ?? ''])).status)
       .toBe('PUBLISHED');
